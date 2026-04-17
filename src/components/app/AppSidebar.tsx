@@ -56,8 +56,8 @@ export function AppSidebar() {
         <Logo className="h-7 w-7 shrink-0 text-brand-400" />
         {!collapsed && (
           <div className="flex flex-col leading-tight">
-            <span className="font-serif text-[17px] font-medium text-sidebar-accent-foreground">Psicomorfosis</span>
-            <span className="text-[11px] text-sidebar-foreground/70 tracking-wide">Cambiar es posible</span>
+              <span className="font-serif text-[17px] font-medium text-sidebar-accent-foreground">Psicomorfosis</span>
+              <span className="text-[11px] text-sidebar-foreground/70 tracking-wide">Psic. Nathaly Ferrer</span>
           </div>
         )}
       </div>
@@ -103,11 +103,11 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="flex items-center gap-3 rounded-md px-2 py-2">
             <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold">
-              LM
+              NF
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-sidebar-accent-foreground truncate">Dra. Lucía Méndez</div>
-              <div className="text-[11px] text-sidebar-foreground/65 truncate">Psicóloga clínica</div>
+              <div className="text-sm text-sidebar-accent-foreground truncate">Psic. Nathaly Ferrer Pacheco</div>
+              <div className="text-[11px] text-sidebar-foreground/65 truncate">Terapia cognitivo-conductual</div>
             </div>
             <button className="text-sidebar-foreground/60 hover:text-sidebar-accent-foreground" title="Soporte">
               <LifeBuoy className="h-4 w-4" />

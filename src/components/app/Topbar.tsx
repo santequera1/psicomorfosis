@@ -52,8 +52,8 @@ export function Topbar() {
           <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-risk-high ring-2 ring-surface" />
         </button>
 
-        <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold border border-line-200">
-          LM
+        <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold border border-line-200" title="Psic. Nathaly Ferrer Pacheco">
+          NF
         </div>
       </div>
     </header>
