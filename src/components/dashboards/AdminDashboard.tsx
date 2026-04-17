@@ -93,7 +93,7 @@ export function AdminDashboard() {
                 <Tooltip
                   cursor={{ stroke: "oklch(0.76 0.035 200)", strokeWidth: 1 }}
                   contentStyle={{ borderRadius: 10, border: "1px solid oklch(0.91 0.005 130)", fontSize: 12, boxShadow: "0 6px 18px rgb(31 57 63 / 0.09)" }}
-                  formatter={(v: number) => fmtCOP(v)}
+                  formatter={(v) => fmtCOP(Number(v))}
                 />
                 <Area type="monotone" dataKey="value" stroke="oklch(0.53 0.045 200)" strokeWidth={2} fill="url(#g1)" />
               </AreaChart>
