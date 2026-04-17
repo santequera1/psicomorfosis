@@ -1,26 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppShell } from "@/components/app/AppShell";
+import { AdminDashboard } from "@/components/dashboards/AdminDashboard";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Inicio · Psicomorfosis" },
+      { name: "description", content: "Panorama clínico y administrativo de la clínica de salud mental Psicomorfosis." },
+      { property: "og:title", content: "Psicomorfosis — Sistema clínico de salud mental" },
+      { property: "og:description", content: "Dashboard humano y contenido para gestionar pacientes, agenda y atención en salud mental." },
+    ],
+  }),
+  component: IndexPage,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function IndexPage() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <AppShell>
+      <AdminDashboard />
+    </AppShell>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
