@@ -51,10 +51,10 @@ function FacturacionPage() {
         </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <KpiCard icon={Wallet} label="Recaudado mes" value={fmt(18420000)} delta="+12.4%" tone="success" />
-          <KpiCard icon={TrendingUp} label="Por cobrar" value={fmt(2880000)} delta="6 facturas" tone="default" />
-          <KpiCard icon={AlertCircle} label="Vencidas" value={fmt(220000)} delta="1 factura" tone="warning" />
-          <KpiCard icon={Receipt} label="Emitidas" value="184" delta="este mes" tone="default" />
+          <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado mes" value={fmt(18420000)} delta={{ value: "+12.4%", positive: true }} />
+          <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(2880000)} hint="6 facturas" />
+          <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidas" value={fmt(220000)} hint="1 factura" emphasis="risk" />
+          <KpiCard icon={<Receipt className="h-4 w-4" />} label="Emitidas" value="184" hint="este mes" />
         </div>
 
         <section className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">

@@ -38,10 +38,10 @@ function ReportesPage() {
         </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <KpiCard icon={Users} label="Pacientes activos" value="186" delta="+8 vs mes anterior" tone="success" />
-          <KpiCard icon={CalendarCheck} label="Sesiones realizadas" value="256" delta="92% asistencia" tone="default" />
-          <KpiCard icon={HeartHandshake} label="Adherencia tratamiento" value="78%" delta="+4 pts" tone="success" />
-          <KpiCard icon={TrendingUp} label="Reducción GAD-7 promedio" value="-6.2 pts" delta="bloque cerrado" tone="success" />
+          <KpiCard icon={<Users className="h-4 w-4" />} label="Pacientes activos" value="186" delta={{ value: "+8", positive: true }} hint="vs mes anterior" />
+          <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones realizadas" value="256" hint="92% asistencia" />
+          <KpiCard icon={<HeartHandshake className="h-4 w-4" />} label="Adherencia" value="78%" delta={{ value: "+4 pts", positive: true }} />
+          <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Reducción GAD-7" value="-6.2 pts" delta={{ value: "mejora", positive: true }} />
         </div>
 
         <div className="grid lg:grid-cols-3 gap-5 mb-6">
