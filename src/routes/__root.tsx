@@ -29,14 +29,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Psicomorfosis" },
+      { name: "description", content: "App para gestión de pacientes" },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Psicomorfosis" },
+      { property: "og:description", content: "App para gestión de pacientes" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Psicomorfosis" },
+      { name: "twitter:description", content: "App para gestión de pacientes" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/oCUtea0FP6ZFARffyd2m1qWiCKF2/social-images/social-1776401942633-nathy-psicomorfos.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/oCUtea0FP6ZFARffyd2m1qWiCKF2/social-images/social-1776401942633-nathy-psicomorfos.webp" },
     ],
     links: [
       {
