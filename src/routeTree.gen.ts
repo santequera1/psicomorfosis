@@ -9,13 +9,37 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReportesRouteImport } from './routes/reportes'
 import { Route as PacientesRouteImport } from './routes/pacientes'
+import { Route as HistoriaRouteImport } from './routes/historia'
+import { Route as FacturacionRouteImport } from './routes/facturacion'
+import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ReportesRoute = ReportesRouteImport.update({
+  id: '/reportes',
+  path: '/reportes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacientesRoute = PacientesRouteImport.update({
   id: '/pacientes',
   path: '/pacientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoriaRoute = HistoriaRouteImport.update({
+  id: '/historia',
+  path: '/historia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FacturacionRoute = FacturacionRouteImport.update({
+  id: '/facturacion',
+  path: '/facturacion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracionRoute = ConfiguracionRouteImport.update({
+  id: '/configuracion',
+  path: '/configuracion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgendaRoute = AgendaRouteImport.update({
@@ -32,40 +56,106 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/facturacion': typeof FacturacionRoute
+  '/historia': typeof HistoriaRoute
   '/pacientes': typeof PacientesRoute
+  '/reportes': typeof ReportesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/facturacion': typeof FacturacionRoute
+  '/historia': typeof HistoriaRoute
   '/pacientes': typeof PacientesRoute
+  '/reportes': typeof ReportesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agenda': typeof AgendaRoute
+  '/configuracion': typeof ConfiguracionRoute
+  '/facturacion': typeof FacturacionRoute
+  '/historia': typeof HistoriaRoute
   '/pacientes': typeof PacientesRoute
+  '/reportes': typeof ReportesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agenda' | '/pacientes'
+  fullPaths:
+    | '/'
+    | '/agenda'
+    | '/configuracion'
+    | '/facturacion'
+    | '/historia'
+    | '/pacientes'
+    | '/reportes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agenda' | '/pacientes'
-  id: '__root__' | '/' | '/agenda' | '/pacientes'
+  to:
+    | '/'
+    | '/agenda'
+    | '/configuracion'
+    | '/facturacion'
+    | '/historia'
+    | '/pacientes'
+    | '/reportes'
+  id:
+    | '__root__'
+    | '/'
+    | '/agenda'
+    | '/configuracion'
+    | '/facturacion'
+    | '/historia'
+    | '/pacientes'
+    | '/reportes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgendaRoute: typeof AgendaRoute
+  ConfiguracionRoute: typeof ConfiguracionRoute
+  FacturacionRoute: typeof FacturacionRoute
+  HistoriaRoute: typeof HistoriaRoute
   PacientesRoute: typeof PacientesRoute
+  ReportesRoute: typeof ReportesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reportes': {
+      id: '/reportes'
+      path: '/reportes'
+      fullPath: '/reportes'
+      preLoaderRoute: typeof ReportesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacientes': {
       id: '/pacientes'
       path: '/pacientes'
       fullPath: '/pacientes'
       preLoaderRoute: typeof PacientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historia': {
+      id: '/historia'
+      path: '/historia'
+      fullPath: '/historia'
+      preLoaderRoute: typeof HistoriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/facturacion': {
+      id: '/facturacion'
+      path: '/facturacion'
+      fullPath: '/facturacion'
+      preLoaderRoute: typeof FacturacionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracion': {
+      id: '/configuracion'
+      path: '/configuracion'
+      fullPath: '/configuracion'
+      preLoaderRoute: typeof ConfiguracionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agenda': {
@@ -88,7 +178,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgendaRoute: AgendaRoute,
+  ConfiguracionRoute: ConfiguracionRoute,
+  FacturacionRoute: FacturacionRoute,
+  HistoriaRoute: HistoriaRoute,
   PacientesRoute: PacientesRoute,
+  ReportesRoute: ReportesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
