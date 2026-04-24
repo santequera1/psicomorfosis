@@ -36,12 +36,16 @@ function LoginPage() {
       const { token, user } = await api.login(username, password);
       setSession(token, user);
       const redirect = search.redirect ?? "/";
-      navigate({ to: redirect as any });
+      // Usamos hard redirect en lugar de navigate() porque TanStack Router con
+      // rutas arbitrarias (search.redirect viene del usuario) puede fallar silenciosamente
+      // y dejar el botón en estado "cargando" para siempre. El hard redirect fuerza el
+      // re-mount completo de AppShell, que ya encuentra el token en localStorage y pasa.
+      window.location.assign(redirect);
     } catch (error) {
       const msg =
         error instanceof ApiError
           ? error.message
-          : "No se pudo conectar al servidor. ¿Está corriendo el backend en http://localhost:3002?";
+          : "No se pudo conectar al servidor. Verifica que el backend esté corriendo.";
       setErr(msg);
       setLoading(false);
     }
