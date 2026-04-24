@@ -2,18 +2,16 @@
 
 /**
  * Resuelve la URL base del backend.
- * - En build SSR: usa localhost.
- * - En navegador: toma el hostname actual y le concatena :3002.
- *   Así funciona en local (localhost:5173 → localhost:3002) y en LAN
- *   (192.168.1.24:5173 → 192.168.1.24:3002) sin configuración.
+ * - En build SSR: usa localhost al puerto del backend (3002 por defecto).
+ * - En navegador: usa el mismo origen — vite dev o nginx proxean /api y /socket.io
+ *   al backend. Funciona igual en local, LAN y detrás de dominio/HTTPS.
  * - Se puede sobrescribir con window.__PSM_API_BASE__ o VITE_API_BASE.
  */
 function resolveApiBase(): string {
   if (typeof window === "undefined") return "http://localhost:3002";
   const override = (window as any).__PSM_API_BASE__ ?? (import.meta as any).env?.VITE_API_BASE;
   if (override) return override;
-  const { hostname, protocol } = window.location;
-  return `${protocol}//${hostname}:3002`;
+  return "";
 }
 
 const API_BASE = resolveApiBase();
