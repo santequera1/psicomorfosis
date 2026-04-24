@@ -1,24 +1,16 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState } from "react";
-import { api, setSession, ApiError } from "@/lib/api";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { api, setSession, getToken, ApiError } from "@/lib/api";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check } from "lucide-react";
-
-type LoginSearch = { redirect?: string };
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Ingresar · Psicomorfosis" }] }),
-  validateSearch: (s: Record<string, unknown>): LoginSearch => ({
-    redirect: typeof s.redirect === "string" ? s.redirect : undefined,
-  }),
   component: LoginPage,
 });
 
 type Tab = "login" | "signup";
 
 function LoginPage() {
-  const search = useSearch({ from: "/login" });
-  const navigate = useNavigate();
-
   const [tab, setTab] = useState<Tab>("login");
   const [username, setUsername] = useState("nathaly");
   const [password, setPassword] = useState("nathaly123");
@@ -28,6 +20,12 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Si ya hay sesión activa, saltar directo al dashboard. Evita que un usuario
+  // logueado vea el formulario de login si pone /login manualmente en la URL.
+  useEffect(() => {
+    if (getToken()) window.location.replace("/");
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -35,12 +33,10 @@ function LoginPage() {
     try {
       const { token, user } = await api.login(username, password);
       setSession(token, user);
-      const redirect = search.redirect ?? "/";
-      // Usamos hard redirect en lugar de navigate() porque TanStack Router con
-      // rutas arbitrarias (search.redirect viene del usuario) puede fallar silenciosamente
-      // y dejar el botón en estado "cargando" para siempre. El hard redirect fuerza el
-      // re-mount completo de AppShell, que ya encuentra el token en localStorage y pasa.
-      window.location.assign(redirect);
+      // Hard redirect al home. Siempre "/" — es el dashboard y punto de entrada
+      // natural tras autenticar. Evitamos cualquier ?redirect= del query para no
+      // generar loops con rutas mal formadas.
+      window.location.assign("/");
     } catch (error) {
       const msg =
         error instanceof ApiError

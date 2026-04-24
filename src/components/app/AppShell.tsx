@@ -1,23 +1,34 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { AppSidebar } from "./AppSidebar";
 import { Topbar } from "./Topbar";
 import { SidebarProvider } from "./SidebarContext";
 import { getToken } from "@/lib/api";
 
+/**
+ * Guard de autenticación que envuelve a cada ruta protegida.
+ *
+ * Dos optimizaciones clave de UX:
+ * 1. El estado `checked` se inicializa de forma sincrónica leyendo localStorage.
+ *    En cliente, si hay token, la app se renderiza directamente sin mostrar
+ *    la pantalla "Verificando sesión…".
+ * 2. Si no hay token, hacemos `window.location.replace("/login")` en vez de
+ *    navigate() de TanStack Router. El hard redirect evita loops entre rutas
+ *    causados por la hidratación de SSR, y no deja entrada en el history
+ *    (el usuario no puede "back" y caer otra vez en el estado sin sesión).
+ */
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate();
-  const { location } = useRouterState();
-  const [checked, setChecked] = useState(false);
+  const [checked, setChecked] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false; // SSR
+    return getToken() !== null;
+  });
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      navigate({ to: "/login", search: { redirect: location.pathname } as any });
+    if (!getToken()) {
+      window.location.replace("/login");
       return;
     }
     setChecked(true);
-  }, [navigate, location.pathname]);
+  }, []);
 
   if (!checked) {
     return (
