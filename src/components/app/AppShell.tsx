@@ -31,11 +31,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (!checked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-bg-50">
-        <div className="text-sm text-ink-500">Verificando sesión…</div>
-      </div>
-    );
+    // Pantalla vacía durante la transición SSR → hidratación.
+    // El script de __root.tsx ya redirigió si no había token, así que esto
+    // solo lo ven usuarios válidos durante unos milisegundos.
+    return <div className="min-h-screen bg-bg-50" aria-hidden />;
   }
 
   return (

@@ -67,11 +67,38 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundComponent,
 });
 
+/**
+ * Script de pre-hidratación que corre ANTES de que React se ejecute.
+ * Redirige a /login si no hay token y la ruta actual no es pública.
+ * Esto elimina el flash de "Verificando sesión…" entre el SSR y la
+ * hidratación del cliente: si no hay sesión, el browser cancela el parse
+ * del HTML y navega a /login antes de renderizar la página protegida.
+ */
+const AUTH_BOOTSTRAP_SCRIPT = `
+(function(){
+  try {
+    var token = localStorage.getItem('psm.token');
+    var path = location.pathname;
+    // Rutas que NO requieren autenticación
+    var publicPaths = ['/login'];
+    var isPublic = publicPaths.indexOf(path) !== -1;
+    if (!token && !isPublic) {
+      location.replace('/login');
+    } else if (token && path === '/login') {
+      // Ya autenticado entrando a /login → saltar al home
+      location.replace('/');
+    }
+  } catch(e) {}
+})();
+`;
+
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <head>
         <HeadContent />
+        {/* Debe ir antes que <Scripts /> para correr primero */}
+        <script dangerouslySetInnerHTML={{ __html: AUTH_BOOTSTRAP_SCRIPT }} />
       </head>
       <body>
         {children}
