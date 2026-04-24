@@ -1,6 +1,19 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 import appCss from "../styles.css?url";
+
+/** Aplica el tema guardado antes del primer render para evitar flash de tema claro. */
+function useAppliedTheme() {
+  useEffect(() => {
+    const pref = (window.localStorage.getItem("psm.theme") as "claro" | "oscuro" | "auto" | null) ?? "claro";
+    const shouldDark =
+      pref === "oscuro" ||
+      (pref === "auto" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+    document.documentElement.classList.toggle("dark", shouldDark);
+  }, []);
+}
 
 function NotFoundComponent() {
   return (
@@ -69,5 +82,20 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  useAppliedTheme();
+  const [client] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5_000,
+        retry: 1,
+        refetchOnWindowFocus: true,
+        refetchOnMount: true,
+      },
+    },
+  }));
+  return (
+    <QueryClientProvider client={client}>
+      <Outlet />
+    </QueryClientProvider>
+  );
 }

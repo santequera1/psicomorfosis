@@ -30,3 +30,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code local state
+.claude/
+
+# Backend runtime
+server/node_modules
+server/data.db
+server/data.db-shm
+server/data.db-wal
+server/uploads/
+
+# Exports y archivos temporales del usuario
+pacientes-*.csv
+facturacion-*.csv
+vista-tareas.md
