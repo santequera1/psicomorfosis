@@ -34,6 +34,12 @@ dist-ssr
 # Claude Code local state
 .claude/
 
+# Variables de entorno (NUNCA commitear secretos)
+.env
+.env.local
+.env.*.local
+server/.env
+
 # Backend runtime
 server/node_modules
 server/data.db
