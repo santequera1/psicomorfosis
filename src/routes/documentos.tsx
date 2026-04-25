@@ -101,60 +101,62 @@ function DocumentosPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="space-y-6 sm:space-y-8">
+        <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm text-ink-500">Biblioteca documental · consentimientos, informes y certificados</p>
+            <p className="text-sm text-ink-500">Biblioteca documental</p>
             <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Documentos clínicos</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setUploadOpen(true)}
-              className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2"
+              className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-2"
             >
-              <Upload className="h-4 w-4" /> Subir archivo
+              <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Subir archivo</span><span className="sm:hidden">Subir</span>
             </button>
-            <button className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2">
-              <FilePlus className="h-4 w-4" /> Nuevo documento
+            <button className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2">
+              <FilePlus className="h-4 w-4" /> <span className="hidden sm:inline">Nuevo documento</span><span className="sm:hidden">Nuevo</span>
             </button>
           </div>
         </header>
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard label="Total de documentos" value={String(kpis.total)} hint="en la biblioteca" icon={<FileText className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
-          <KpiCard label="Pendientes de firma" value={String(kpis.pendingSign)} emphasis={kpis.pendingSign > 0 ? "risk" : "default"} hint="requieren acción" icon={<FileClock className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
-          <KpiCard label="Firmados este mes" value={String(kpis.signed)} hint="completados" icon={<FileCheck2 className="h-4 w-4" />} delta={{ value: "+8", positive: true }} />
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <KpiCard label="Total" value={String(kpis.total)} hint="en biblioteca" icon={<FileText className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
+          <KpiCard label="Pendientes firma" value={String(kpis.pendingSign)} emphasis={kpis.pendingSign > 0 ? "risk" : "default"} hint="acción" icon={<FileClock className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
+          <KpiCard label="Firmados" value={String(kpis.signed)} hint="este mes" icon={<FileCheck2 className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Borradores" value={String(kpis.drafts)} hint="sin finalizar" icon={<FileWarning className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
         </section>
 
-        <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-5">
           <div className="xl:col-span-2 rounded-xl border border-line-200 bg-surface">
-            <div className="p-4 border-b border-line-100 flex flex-wrap items-center gap-2">
-              <div className="flex-1 min-w-[240px] flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40">
-                <Search className="h-4 w-4 text-ink-400" />
+            <div className="p-3 sm:p-4 border-b border-line-100 space-y-2">
+              <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40">
+                <Search className="h-4 w-4 text-ink-400 shrink-0" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Buscar por nombre o paciente…"
-                  className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none"
+                  className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
                 />
               </div>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as DocType | "todos")}
-                className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400"
-              >
-                <option value="todos">Todos los tipos</option>
-                {(Object.keys(TYPE_LABEL) as DocType[]).map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
-              </select>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as DocStatus | "todos")}
-                className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400"
-              >
-                <option value="todos">Todos los estados</option>
-                {(Object.keys(STATUS_STYLE) as DocStatus[]).map((k) => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as DocType | "todos")}
+                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0"
+                >
+                  <option value="todos">Todos los tipos</option>
+                  {(Object.keys(TYPE_LABEL) as DocType[]).map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
+                </select>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as DocStatus | "todos")}
+                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0"
+                >
+                  <option value="todos">Todos los estados</option>
+                  {(Object.keys(STATUS_STYLE) as DocStatus[]).map((k) => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
+                </select>
+              </div>
             </div>
 
             <ul className="divide-y divide-line-100">
@@ -162,30 +164,30 @@ function DocumentosPage() {
                 const s = STATUS_STYLE[d.status];
                 const TIcon = TYPE_ICON[d.type];
                 return (
-                  <li key={d.id} className="px-5 py-4 hover:bg-brand-50/40 transition-colors group">
-                    <div className="flex items-start gap-4">
-                      <div className="h-10 w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+                  <li key={d.id} className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors group">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
                         <TIcon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-sm font-medium text-ink-900 truncate">{d.name}</div>
-                          <span className={"inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium " + s.bg + " " + s.text}>
+                        <div className="flex items-start sm:items-center gap-1.5 flex-col sm:flex-row sm:flex-wrap">
+                          <div className="text-sm font-medium text-ink-900 line-clamp-2 sm:truncate">{d.name}</div>
+                          <span className={"inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0 " + s.bg + " " + s.text}>
                             <s.Icon className="h-3 w-3" /> {s.label}
                           </span>
                         </div>
-                        <div className="text-xs text-ink-500 mt-1 flex items-center gap-3 flex-wrap">
+                        <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
                           <span>{TYPE_LABEL[d.type]}</span>
-                          {d.patient_name && <><span className="text-ink-300">·</span><span>{d.patient_name}</span></>}
+                          {d.patient_name && <><span className="text-ink-300">·</span><span className="truncate max-w-[160px]">{d.patient_name}</span></>}
                           <span className="text-ink-300">·</span>
                           <span className="tabular">{d.updated_at}</span>
-                          <span className="text-ink-300">·</span>
-                          <span className="tabular">{d.size_kb} KB</span>
-                          <span className="text-ink-300">·</span>
-                          <span>{d.professional}</span>
+                          <span className="text-ink-300 hidden sm:inline">·</span>
+                          <span className="tabular hidden sm:inline">{d.size_kb} KB</span>
+                          <span className="text-ink-300 hidden md:inline">·</span>
+                          <span className="hidden md:inline truncate max-w-[140px]">{d.professional}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
                         {d.status === "pendiente_firma" && (
                           <button
                             onClick={() => setSignOpen(d.id)}

@@ -37,38 +37,41 @@ function ConfiguracionPage() {
 
   return (
     <AppShell>
-      <div className="px-8 py-8 max-w-[1180px] mx-auto">
-        <header className="mb-7">
+      <div className="max-w-[1180px] mx-auto">
+        <header className="mb-5 sm:mb-7">
           <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Ajustes · {workspace?.name ?? "Workspace"}</div>
-          <h1 className="font-serif text-3xl text-ink-900 mt-1">Configuración</h1>
+          <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Configuración</h1>
           <p className="text-sm text-ink-500 mt-1">
-            Modo <span className="font-medium text-ink-900">{isOrg ? "Organización" : "Individual"}</span> · personaliza cuenta y operación.
+            Modo <span className="font-medium text-ink-900">{isOrg ? "Organización" : "Individual"}</span>
           </p>
         </header>
 
-        <div className="grid grid-cols-[260px_1fr] gap-6">
-          <aside className="rounded-xl bg-surface border border-line-200 shadow-soft p-2 h-fit sticky top-20">
-            {secciones.map((s) => {
-              const Icon = s.icon;
-              const isActive = active === s.id;
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => setActive(s.id)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left",
-                    isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100"
-                  )}
-                >
-                  <Icon className={cn("h-4 w-4", isActive ? "text-brand-700" : "text-ink-400")} />
-                  <span className="flex-1">{s.label}</span>
-                  {isActive && <ChevronRight className="h-4 w-4 text-brand-700" />}
-                </button>
-              );
-            })}
+        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:gap-6">
+          {/* Tabs horizontales con scroll en mobile, sidebar sticky en desktop */}
+          <aside className="md:rounded-xl md:bg-surface md:border md:border-line-200 md:shadow-soft md:p-2 md:h-fit md:sticky md:top-20 -mx-4 sm:-mx-6 md:mx-0 px-4 sm:px-6 md:px-0 overflow-x-auto md:overflow-visible no-scrollbar">
+            <div className="flex md:flex-col gap-1 md:gap-0 pb-1 md:pb-0">
+              {secciones.map((s) => {
+                const Icon = s.icon;
+                const isActive = active === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActive(s.id)}
+                    className={cn(
+                      "flex items-center gap-2 md:gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors shrink-0 md:w-full md:text-left whitespace-nowrap",
+                      isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100"
+                    )}
+                  >
+                    <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-700" : "text-ink-400")} />
+                    <span className="md:flex-1">{s.label}</span>
+                    {isActive && <ChevronRight className="h-4 w-4 text-brand-700 hidden md:inline-block" />}
+                  </button>
+                );
+              })}
+            </div>
           </aside>
 
-          <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-7">
+          <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-4 sm:p-6 md:p-7">
             {active === "perfil" && <PerfilPanel />}
             {active === "workspace" && <WorkspacePanel />}
             {active === "sedes" && <SedesPanel />}
@@ -163,7 +166,7 @@ function PerfilPanel() {
         onSubmit={(e) => { e.preventDefault(); profMu.mutate(); }}
         className="space-y-5"
       >
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <LabeledInput label="Nombre completo" value={profForm.name} onChange={(v) => setProfForm((p) => ({ ...p, name: v }))} />
           <LabeledInput label="Título profesional" value={profForm.title} onChange={(v) => setProfForm((p) => ({ ...p, title: v }))} />
           <LabeledInput label="Enfoque terapéutico" value={profForm.approach} onChange={(v) => setProfForm((p) => ({ ...p, approach: v }))} />
@@ -187,7 +190,7 @@ function PerfilPanel() {
               className="space-y-5"
             >
               <LabeledInput label="Nombre del consultorio" placeholder="Consultorio Psic. Nathaly Ferrer" value={consultorio.consultorio_name} onChange={(v) => setConsultorio((p) => ({ ...p, consultorio_name: v }))} />
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <LabeledInput label="Dirección" placeholder="Cra 15 # 93-10, Oficina 402" value={consultorio.address} onChange={(v) => setConsultorio((p) => ({ ...p, address: v }))} />
                 <LabeledInput label="Ciudad" placeholder="Bogotá" value={consultorio.city} onChange={(v) => setConsultorio((p) => ({ ...p, city: v }))} />
               </div>

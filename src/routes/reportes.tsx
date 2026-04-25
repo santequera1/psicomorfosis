@@ -41,15 +41,15 @@ function ReportesPage() {
 
   return (
     <AppShell>
-      <div className="px-8 py-8 max-w-[1280px] mx-auto">
-        <header className="flex items-end justify-between mb-6 flex-wrap gap-3">
+      <div className="max-w-7xl mx-auto">
+        <header className="flex items-end justify-between mb-5 sm:mb-6 flex-wrap gap-3">
           <div>
             <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Inteligencia clínica</div>
-            <h1 className="font-serif text-3xl text-ink-900 mt-1">Reportes</h1>
-            <p className="text-sm text-ink-500 mt-1">Indicadores operativos y clínicos del workspace</p>
+            <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Reportes</h1>
+            <p className="text-sm text-ink-500 mt-1">Indicadores operativos del workspace</p>
           </div>
-          <button className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 flex items-center gap-2">
-            <Download className="h-4 w-4" /> Exportar PDF
+          <button className="h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 flex items-center gap-2">
+            <Download className="h-4 w-4" /> <span>Exportar PDF</span>
           </button>
         </header>
 

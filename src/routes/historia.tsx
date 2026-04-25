@@ -107,55 +107,59 @@ function HistoriaPage() {
 function PatientHeader({ patient, isOrg, patients, onPickPatient, onOpenNote }: { patient: Patient; isOrg: boolean; patients: Patient[]; onPickPatient: () => void; onOpenNote: () => void }) {
   const initialsLetters = (patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
   return (
-    <section className="rounded-2xl bg-surface border border-line-200 shadow-soft overflow-hidden mb-8">
-      <div className="bg-gradient-to-r from-brand-700 to-brand-600 h-20" />
-      <div className="px-6 md:px-8 pb-7 -mt-10">
-        <div className="flex flex-wrap items-end gap-5">
-          <div className="h-20 w-20 rounded-2xl bg-brand-100 border-4 border-surface flex items-center justify-center text-2xl font-serif text-brand-800 shadow-card shrink-0">
+    <section className="rounded-2xl bg-surface border border-line-200 shadow-soft overflow-hidden mb-6 sm:mb-8">
+      <div className="bg-gradient-to-r from-brand-700 to-brand-600 h-12 sm:h-20" />
+      <div className="px-4 sm:px-6 md:px-8 pb-5 sm:pb-7 -mt-8 sm:-mt-10">
+        <div className="flex flex-wrap items-start sm:items-end gap-3 sm:gap-5">
+          <div className="h-14 w-14 sm:h-20 sm:w-20 rounded-2xl bg-brand-100 border-4 border-surface flex items-center justify-center text-base sm:text-2xl font-serif text-brand-800 shadow-card shrink-0">
             {initialsLetters}
           </div>
-          <div className="flex-1 pb-2 min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-serif text-ink-900">{patient.name}</h1>
-              {patient.preferredName && <span className="text-sm text-ink-500">"{patient.preferredName}" · {patient.pronouns}</span>}
-              <RiskBadge risk={patient.risk} />
-              <button
-                onClick={onPickPatient}
-                className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
-              >
-                Cambiar paciente <ChevronDown className="h-3.5 w-3.5" />
-              </button>
+          <div className="flex-1 pb-1 sm:pb-2 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-serif text-ink-900 leading-tight">{patient.name}</h1>
+              <RiskBadge risk={patient.risk} compact />
             </div>
-            <div className="text-sm text-ink-500 mt-1">{patient.age ? `${patient.age} años · ` : ""}{patient.doc}</div>
+            <div className="mt-1 flex items-center gap-2 flex-wrap text-xs sm:text-sm text-ink-500">
+              {patient.preferredName && <span>"{patient.preferredName}" · {patient.pronouns}</span>}
+              <span>{patient.age ? `${patient.age} años · ` : ""}{patient.doc}</span>
+            </div>
+            <button
+              onClick={onPickPatient}
+              className="mt-2 h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+            >
+              Cambiar paciente <ChevronDown className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <div className="pb-2 flex flex-wrap gap-2">
+          <div className="w-full sm:w-auto pb-1 sm:pb-2 flex flex-wrap gap-2">
             <Link
               to="/pacientes/$id"
               params={{ id: patient.id }}
-              className="h-9 px-4 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+              className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
             >
-              Ver ficha completa <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Ver ficha completa</span>
+              <span className="sm:hidden">Ficha</span>
             </Link>
             <button
               onClick={onOpenNote}
-              className="h-9 px-4 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+              className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
             >
-              <Edit3 className="h-3.5 w-3.5" /> Nueva nota
+              <Edit3 className="h-3.5 w-3.5" /> Nota
             </button>
-            <Link to="/agenda" className="h-9 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm hover:bg-brand-800 inline-flex items-center gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> Agendar sesión
+            <Link to="/agenda" className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Agendar
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-line-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-line-100">
           <InfoItem icon={Phone} label="Teléfono" value={patient.phone} />
           <InfoItem icon={Mail} label="Correo" value={patient.email} />
           <InfoItem icon={MapPin} label="Ciudad" value="Bogotá · Chapinero" />
           <InfoItem icon={IdCard} label="Identificación" value={patient.doc} />
         </div>
 
-        <div className={cn("grid gap-4 mt-4", isOrg ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3")}>
+        <div className={cn("grid gap-3 sm:gap-4 mt-4", isOrg ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3")}>
           {isOrg && <Stat label="Profesional" value={patient.professional} />}
           <Stat label="Modalidad" value={patient.modality} />
           <Stat label="Último contacto" value={patient.lastContact} />

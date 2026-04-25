@@ -89,15 +89,16 @@ export function AdminDashboard() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible no-scrollbar">
           {(["Hoy", "Semana", "Mes", "Trimestre", "Año"] as Period[]).map((r) => (
             <button
               key={r}
               onClick={() => setPeriod(r)}
               className={
-                period === r
-                  ? "h-9 px-3.5 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium"
-                  : "h-9 px-3.5 rounded-md border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400"
+                "h-9 px-3.5 rounded-md text-sm font-medium shrink-0 transition-colors " +
+                (period === r
+                  ? "bg-brand-700 text-primary-foreground"
+                  : "border border-line-200 bg-surface text-ink-700 hover:border-brand-400")
               }
             >
               {r}

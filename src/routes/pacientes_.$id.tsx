@@ -96,52 +96,56 @@ function PatientDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Volver a pacientes
         </Link>
 
-        <header className="rounded-xl border border-line-200 bg-surface p-6">
-          <div className="flex flex-wrap items-start gap-5">
-            <div className="h-20 w-20 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-serif text-2xl shrink-0">
+        <header className="rounded-xl border border-line-200 bg-surface p-4 sm:p-6">
+          <div className="flex items-start gap-3 sm:gap-5">
+            <div className="h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-serif text-base sm:text-2xl shrink-0">
               {(patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-serif text-[28px] leading-tight text-ink-900">{patient.name}</h1>
-                {patient.preferredName && <span className="text-sm text-ink-500">({patient.preferredName} · {patient.pronouns})</span>}
-                <RiskBadge risk={patient.risk} />
+                <h1 className="font-serif text-lg sm:text-[28px] leading-tight text-ink-900">{patient.name}</h1>
+                <RiskBadge risk={patient.risk} compact />
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-700">
-                <span className="inline-flex items-center gap-1.5"><IdCard className="h-4 w-4 text-ink-400" /> {patient.doc}</span>
-                <span className="inline-flex items-center gap-1.5"><User className="h-4 w-4 text-ink-400" /> {patient.age ? `${patient.age} años` : "—"}</span>
-                <span className="inline-flex items-center gap-1.5"><Phone className="h-4 w-4 text-ink-400" /> {patient.phone}</span>
-                <span className="inline-flex items-center gap-1.5"><Mail className="h-4 w-4 text-ink-400" /> {patient.email}</span>
+              {patient.preferredName && <p className="text-xs sm:text-sm text-ink-500 mt-0.5">({patient.preferredName} · {patient.pronouns})</p>}
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-ink-700">
+                <span className="inline-flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.doc}</span>
+                <span className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.age ? `${patient.age} años` : "—"}</span>
+                <span className="hidden sm:inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.phone}</span>
+                <span className="hidden sm:inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.email}</span>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-1.5">
                 {(patient.tags ?? []).map((t) => (
-                  <span key={t} className="text-[11px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-medium">{t}</span>
+                  <span key={t} className="text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-medium">{t}</span>
                 ))}
-                <span className="text-[11px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium capitalize">{patient.status}</span>
+                <span className="text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium capitalize">{patient.status}</span>
               </div>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <Link to="/historia" search={{ id: patient.id }} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2">
-                <Plus className="h-4 w-4" /> Nueva nota
-              </Link>
-              <button
-                onClick={() => setEditing(true)}
-                className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2"
-              >
-                <Edit3 className="h-4 w-4" /> Editar
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm(`¿Archivar a ${patient.preferredName ?? patient.name}? Deja de aparecer en listados activos pero su historia clínica se conserva. Podrás restaurarlo desde la lista.`)) {
-                    archiveMu.mutate();
-                  }
-                }}
-                className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-risk-moderate hover:text-risk-moderate inline-flex items-center gap-2"
-                title="Archivar paciente"
-              >
-                <Trash2 className="h-4 w-4" /> Archivar
-              </button>
-            </div>
+          </div>
+
+          {/* Acciones: full-width grid en mobile, fila normal en desktop */}
+          <div className="mt-4 grid grid-cols-3 sm:flex sm:justify-end gap-2">
+            <Link to="/historia" search={{ id: patient.id }} className="h-10 px-2 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Nueva nota</span>
+              <span className="sm:hidden">Nota</span>
+            </Link>
+            <button
+              onClick={() => setEditing(true)}
+              className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+            >
+              <Edit3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Editar
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`¿Archivar a ${patient.preferredName ?? patient.name}? Deja de aparecer en listados activos pero su historia clínica se conserva.`)) {
+                  archiveMu.mutate();
+                }
+              }}
+              className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-risk-moderate hover:text-risk-moderate inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+              title="Archivar paciente"
+            >
+              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Archivar
+            </button>
           </div>
 
           <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3 pt-5 border-t border-line-100">

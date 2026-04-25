@@ -276,7 +276,12 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute right-0 top-12 w-[380px] rounded-xl border border-line-200 bg-surface shadow-modal z-50 max-h-[560px] flex flex-col overflow-hidden">
+      {/*
+        En mobile: panel ocupa todo el ancho disponible con margen, anclado al
+        borde derecho del topbar. En desktop: ancho fijo 380px.
+        Usamos right-2 sm:right-0 para que no se salga al borde de la pantalla.
+      */}
+      <div className="fixed sm:absolute right-2 left-2 sm:left-auto sm:right-0 top-16 sm:top-12 sm:w-[380px] rounded-xl border border-line-200 bg-surface shadow-modal z-50 max-h-[70vh] sm:max-h-[560px] flex flex-col overflow-hidden">
         <header className="px-4 py-3 border-b border-line-100 flex items-center justify-between">
           <div>
             <h3 className="font-serif text-base text-ink-900">Notificaciones</h3>

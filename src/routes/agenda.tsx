@@ -333,8 +333,13 @@ function WeekView({ onPick }: { onPick: (s: any) => void }) {
   }
 
   return (
-    <div className="p-5">
-      <div className="grid grid-cols-[50px_repeat(7,1fr)] text-xs">
+    <div className="p-3 sm:p-5 overflow-x-auto">
+      {/*
+        En mobile el grid de 7 días no cabe (50px hora + 7 columnas).
+        Forzamos un ancho mínimo de 700px y permitimos scroll horizontal:
+        el usuario desliza para ver toda la semana sin que la columna se aplaste.
+      */}
+      <div className="grid grid-cols-[50px_repeat(7,minmax(80px,1fr))] text-xs min-w-[700px]">
         <div />
         {WEEK_DAYS_LOCAL.map((d) => (
           <div key={d.iso} className={"px-2 pb-2 text-center border-b " + (d.isToday ? "border-brand-700" : "border-line-100")}>
@@ -405,11 +410,11 @@ function MonthView() {
   };
 
   return (
-    <div className="p-5">
-      <div className="grid grid-cols-7 text-center text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-1">
-        {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (<div key={d} className="py-2">{d}</div>))}
+    <div className="p-3 sm:p-5">
+      <div className="grid grid-cols-7 text-center text-[10px] sm:text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-1">
+        {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((d) => (<div key={d} className="py-2">{d.slice(0, 1)}<span className="hidden sm:inline">{d.slice(1)}</span></div>))}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {cells.map((d, i) => {
           const isToday = d === 18;
           const ev = d ? withEvents[d] : undefined;

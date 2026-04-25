@@ -65,23 +65,23 @@ function FacturacionPage() {
   return (
     <AppShell>
       <div className="max-w-7xl mx-auto">
-        <header className="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <header className="flex items-end justify-between mb-5 sm:mb-6 flex-wrap gap-3">
           <div>
             <div className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Gestión financiera</div>
-            <h1 className="font-serif text-3xl text-ink-900 mt-1">Facturación</h1>
-            <p className="text-sm text-ink-500 mt-1">Movimientos del mes en curso · Abril 2026</p>
+            <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Facturación</h1>
+            <p className="text-sm text-ink-500 mt-1">Movimientos del mes en curso</p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={exportCSV} className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 flex items-center gap-2">
-              <Download className="h-4 w-4" /> Exportar CSV
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button onClick={exportCSV} className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 flex items-center justify-center gap-2">
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">CSV</span>
             </button>
-            <button onClick={() => setCreateOpen(true)} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm hover:bg-brand-800 flex items-center gap-2">
-              <Plus className="h-4 w-4" /> Nueva factura
+            <button onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 flex items-center justify-center gap-2">
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nueva factura</span><span className="sm:hidden">Nueva</span>
             </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado" value={fmt(recaudado)} delta={{ value: "+12.4%", positive: true }} />
           <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} facturas`} />
           <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidas" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} factura(s)`} emphasis={vencidas > 0 ? "risk" : "default"} />
@@ -89,23 +89,23 @@ function FacturacionPage() {
         </div>
 
         <section className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
-          <div className="px-5 py-4 border-b border-line-100 flex flex-wrap items-center gap-3">
-            <h2 className="font-serif text-lg text-ink-900 mr-auto">Movimientos recientes</h2>
-            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-line-200 bg-bg-100/40 w-64">
-              <Search className="h-3.5 w-3.5 text-ink-400" />
+          <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-line-100 space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+            <h2 className="font-serif text-base sm:text-lg text-ink-900 sm:mr-auto">Movimientos recientes</h2>
+            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-line-200 bg-bg-100/40 sm:w-64">
+              <Search className="h-3.5 w-3.5 text-ink-400 shrink-0" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar factura o paciente…"
-                className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none"
+                className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <div className="flex gap-1 p-1 rounded-md bg-bg-100 text-xs">
+            <div className="flex gap-1 p-1 rounded-md bg-bg-100 text-xs overflow-x-auto no-scrollbar">
               {(["Todas", "Pagadas", "Pendientes", "Vencidas"] as Filter[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setFilter(t)}
-                  className={cn("px-3 py-1.5 rounded transition-colors", filter === t ? "bg-surface text-ink-900 font-medium shadow-xs" : "text-ink-500 hover:text-ink-900")}
+                  className={cn("px-3 py-1.5 rounded transition-colors shrink-0", filter === t ? "bg-surface text-ink-900 font-medium shadow-xs" : "text-ink-500 hover:text-ink-900")}
                 >
                   {t}
                 </button>

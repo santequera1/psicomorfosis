@@ -243,4 +243,9 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  /* Oculta el scrollbar de navegadores manteniendo la funcionalidad de scroll.
+     Útil en filtros de scroll horizontal en mobile (segmentadores de período,
+     pestañas que no caben, etc.) — evita que el scrollbar gris robe altura. */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }

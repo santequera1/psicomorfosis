@@ -105,51 +105,113 @@ function PatientsPage() {
         </header>
 
         <div className="rounded-xl border border-line-200 bg-surface">
-          <div className="p-4 flex flex-wrap items-center gap-2 border-b border-line-100">
-            <div className="flex-1 min-w-[260px] flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/50">
-              <Search className="h-4 w-4 text-ink-400" />
+          {/* Buscador siempre full width en mobile, filtros agrupados debajo */}
+          <div className="p-3 sm:p-4 space-y-2 border-b border-line-100">
+            <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/50">
+              <Search className="h-4 w-4 text-ink-400 shrink-0" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nombre, documento o motivo de consulta…"
-                className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none"
+                placeholder="Buscar nombre, documento o motivo…"
+                className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <div className="relative inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400">
-              <Filter className="h-3.5 w-3.5 text-ink-400" />
-              <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize">
-                <option value="todos">Estado: Todos</option>
-                <option value="activo">Estado: Activo</option>
-                <option value="pausa">Estado: Pausa</option>
-                <option value="alta">Estado: Alta</option>
-                <option value="derivado">Estado: Derivado</option>
-              </select>
-            </div>
-            <div className="relative inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400">
-              <Filter className="h-3.5 w-3.5 text-ink-400" />
-              <select value={modality} onChange={(e) => setModality(e.target.value as Modality | "todas")} className="bg-transparent outline-none cursor-pointer capitalize">
-                <option value="todas">Modalidad: Todas</option>
-                <option value="individual">Individual</option>
-                <option value="pareja">Pareja</option>
-                <option value="familiar">Familiar</option>
-                <option value="grupal">Grupal</option>
-                <option value="tele">Telepsicología</option>
-              </select>
-            </div>
-            <div className="relative inline-flex items-center gap-1.5 h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400">
-              <Filter className="h-3.5 w-3.5 text-ink-400" />
-              <select value={riskFilter} onChange={(e) => setRiskFilter(e.target.value as Risk | "todos")} className="bg-transparent outline-none cursor-pointer capitalize">
-                <option value="todos">Bandera: Todas</option>
-                <option value="none">Sin bandera</option>
-                <option value="low">Bajo</option>
-                <option value="moderate">Moderado</option>
-                <option value="high">Alto</option>
-                <option value="critical">Crítico</option>
-              </select>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
+                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+                <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
+                  <option value="todos">Estado</option>
+                  <option value="activo">Activo</option>
+                  <option value="pausa">Pausa</option>
+                  <option value="alta">Alta</option>
+                  <option value="derivado">Derivado</option>
+                </select>
+              </div>
+              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
+                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+                <select value={modality} onChange={(e) => setModality(e.target.value as Modality | "todas")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
+                  <option value="todas">Modalidad</option>
+                  <option value="individual">Individual</option>
+                  <option value="pareja">Pareja</option>
+                  <option value="familiar">Familiar</option>
+                  <option value="grupal">Grupal</option>
+                  <option value="tele">Tele</option>
+                </select>
+              </div>
+              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
+                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+                <select value={riskFilter} onChange={(e) => setRiskFilter(e.target.value as Risk | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
+                  <option value="todos">Bandera</option>
+                  <option value="none">Sin bandera</option>
+                  <option value="low">Bajo</option>
+                  <option value="moderate">Moderado</option>
+                  <option value="high">Alto</option>
+                  <option value="critical">Crítico</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Vista de cards en mobile */}
+          <ul className="md:hidden divide-y divide-line-100">
+            {filtered.map((p) => (
+              <li key={p.id} className="relative">
+                <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-start gap-3 p-3 hover:bg-brand-50/60 transition-colors">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarTone(p.name)}`}>
+                    {initials(p.preferredName ?? p.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-ink-900 truncate">
+                        {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-ink-500 truncate tabular mt-0.5">{p.doc} · {p.id}</div>
+                    <div className="text-xs text-ink-700 truncate mt-1">{p.reason}</div>
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${STATUS_STYLE[p.status]}`}>
+                        {p.status}
+                      </span>
+                      <RiskBadge risk={p.risk} compact />
+                      <span className="text-[10px] text-ink-400">· {MODALITY_LABEL[p.modality]}</span>
+                    </div>
+                    {p.nextSession && (
+                      <div className="text-[11px] text-brand-700 mt-1 tabular">Próxima: {p.nextSession}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(menuOpen === p.id ? null : p.id); }}
+                    className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center shrink-0"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </Link>
+                {menuOpen === p.id && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenuOpen(null); }} />
+                    <div className="absolute right-3 top-10 z-40 w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1">
+                      <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenuOpen(null)}>
+                        <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha
+                      </Link>
+                      <button onClick={(e) => { e.stopPropagation(); setEditing(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
+                        <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar
+                      </button>
+                      <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenuOpen(null)}>
+                        <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
+                      </Link>
+                      <div className="my-1 h-px bg-line-100" />
+                      <button onClick={(e) => { e.stopPropagation(); setRemoving(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
+                        <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {/* Vista de tabla solo en desktop */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.08em] text-ink-500 bg-bg-100/50 border-b border-line-100">
