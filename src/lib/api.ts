@@ -136,6 +136,163 @@ export const BLOCK_LABELS: Record<Exclude<NoteKind, "sesion" | "evolucion" | "pr
   plan: "Plan de tratamiento",
 };
 
+// ─── Tareas (organización interna del equipo) ──────────────────────────────
+export type TareaStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+export type TareaPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type TareaVisibility = "private" | "team" | "workspace";
+export type TareaType =
+  | "Sesión clínica"
+  | "Documentación"
+  | "Llamada / Seguimiento"
+  | "Administrativo"
+  | "Capacitación"
+  | "Auto-cuidado"
+  | "Reunión equipo"
+  | "Reporte";
+
+export type TrackingPreset =
+  | "POMODORO_25" | "DEEP_50" | "STRATEGIC_90" | "SHORT_BREAK" | "LONG_BREAK";
+
+export const TRACKING_PRESETS: { id: TrackingPreset; label: string; minutes: number }[] = [
+  { id: "POMODORO_25", label: "25 min · Pomodoro", minutes: 25 },
+  { id: "DEEP_50", label: "50 min · Sesión profunda", minutes: 50 },
+  { id: "STRATEGIC_90", label: "90 min · Bloque estratégico", minutes: 90 },
+  { id: "SHORT_BREAK", label: "Pausa corta", minutes: 5 },
+  { id: "LONG_BREAK", label: "Pausa larga", minutes: 15 },
+];
+
+export const TAREA_TYPES: TareaType[] = [
+  "Sesión clínica",
+  "Documentación",
+  "Llamada / Seguimiento",
+  "Administrativo",
+  "Capacitación",
+  "Auto-cuidado",
+  "Reunión equipo",
+  "Reporte",
+];
+
+export interface RecurrenceConfig {
+  enabled: boolean;
+  frequency: "daily" | "weekly" | "biweekly" | "monthly";
+  day_of_week?: number;
+  day_of_month?: number;
+  next_occurrence?: string;
+  last_generated?: string;
+}
+
+export interface TareaComment {
+  id: number;
+  task_id: number;
+  workspace_id: number;
+  author_id: number;
+  author_name: string;
+  text: string;
+  created_at: string;
+}
+
+export interface TareaChecklistItem {
+  id: number;
+  task_id: number;
+  text: string;
+  completed: boolean;
+  position: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface TareaImage {
+  id: number;
+  task_id: number;
+  filename: string;
+  url: string;
+  size: number | null;
+  mime: string | null;
+  position: number;
+}
+
+export interface TareaPomodoroSession {
+  id: number;
+  task_id: number;
+  user_id: number;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  completed: boolean;
+  type: "work" | "break";
+  date: string;
+}
+
+export interface Tarea {
+  id: number;
+  workspace_id: number;
+  title: string;
+  description: string | null;
+  type: TareaType | null;
+  status: TareaStatus;
+  priority: TareaPriority;
+  assignee_id: number | null;
+  creator_id: number;
+  project_id: number | null;
+  patient_id: string | null;
+  visibility: TareaVisibility;
+  start_date: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
+  tracking_preset: TrackingPreset | null;
+  total_pomodoros: number;
+  current_pomodoro_time: number | null;
+  pomodoro_status: "idle" | "running" | "paused" | "break" | null;
+  recurrence: RecurrenceConfig | null;
+  recurring_template_id: number | null;
+  is_recurring_instance: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  comments?: TareaComment[];
+  checklist?: TareaChecklistItem[];
+  images?: TareaImage[];
+  pomodoro_sessions?: TareaPomodoroSession[];
+}
+
+export interface TareaProject {
+  id: number;
+  workspace_id: number;
+  name: string;
+  color: string;
+  description: string | null;
+  category: string | null;
+  folder_id: number | null;
+  archived: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TareaFolder {
+  id: number;
+  workspace_id: number;
+  name: string;
+  color: string;
+  position: number;
+  expanded: boolean;
+  created_at: string;
+}
+
+export interface TareaColumn {
+  id: number;
+  workspace_id: number;
+  name: string;
+  color: string;
+  icon: string | null;
+  status: TareaStatus;
+  position: number;
+  is_default: boolean;
+  created_at: string;
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(TOKEN_KEY);
@@ -269,6 +426,54 @@ export const api = {
   // Settings
   getSettings: () => request<Record<string, string>>("/api/settings"),
   updateSettings: (body: Record<string, string>) => request("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+
+  // Tareas (organización interna del equipo) — distinto de tasks (terapéuticas)
+  listTareas: (params: { include?: ("archived" | "deleted")[] } = {}) => {
+    const q = params.include?.length ? `?include=${params.include.join(",")}` : "";
+    return request<Tarea[]>(`/api/tareas${q}`);
+  },
+  getTarea: (id: number) => request<Tarea>(`/api/tareas/${id}`),
+  createTarea: (body: Partial<Tarea>) =>
+    request<Tarea>("/api/tareas", { method: "POST", body: JSON.stringify(body) }),
+  updateTarea: (id: number, body: Partial<Tarea>) =>
+    request<Tarea>(`/api/tareas/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTarea: (id: number) => request<void>(`/api/tareas/${id}`, { method: "DELETE" }),
+  restoreTarea: (id: number) => request<Tarea>(`/api/tareas/${id}/restore`, { method: "POST" }),
+  archiveTarea: (id: number) => request<void>(`/api/tareas/${id}/archive`, { method: "POST" }),
+  moveTarea: (id: number, status: TareaStatus, position: number) =>
+    request<Tarea>(`/api/tareas/${id}/move`, { method: "POST", body: JSON.stringify({ status, position }) }),
+  duplicateTarea: (id: number) => request<Tarea>(`/api/tareas/${id}/duplicate`, { method: "POST" }),
+
+  // Comentarios
+  addTareaComment: (taskId: number, text: string) =>
+    request<TareaComment>(`/api/tareas/${taskId}/comments`, { method: "POST", body: JSON.stringify({ text }) }),
+  deleteTareaComment: (taskId: number, commentId: number) =>
+    request<void>(`/api/tareas/${taskId}/comments/${commentId}`, { method: "DELETE" }),
+
+  // Checklist
+  addTareaChecklistItem: (taskId: number, text: string) =>
+    request<TareaChecklistItem>(`/api/tareas/${taskId}/checklist`, { method: "POST", body: JSON.stringify({ text }) }),
+  updateTareaChecklistItem: (taskId: number, itemId: number, body: Partial<TareaChecklistItem>) =>
+    request<TareaChecklistItem>(`/api/tareas/${taskId}/checklist/${itemId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTareaChecklistItem: (taskId: number, itemId: number) =>
+    request<void>(`/api/tareas/${taskId}/checklist/${itemId}`, { method: "DELETE" }),
+
+  // Pomodoro
+  recordTareaPomodoro: (taskId: number, body: Omit<TareaPomodoroSession, "id" | "task_id" | "user_id">) =>
+    request<TareaPomodoroSession>(`/api/tareas/${taskId}/pomodoro`, { method: "POST", body: JSON.stringify(body) }),
+
+  // Proyectos / columnas / carpetas
+  listTareaProjects: () => request<TareaProject[]>("/api/tareas/projects"),
+  createTareaProject: (body: Partial<TareaProject>) =>
+    request<TareaProject>("/api/tareas/projects", { method: "POST", body: JSON.stringify(body) }),
+  updateTareaProject: (id: number, body: Partial<TareaProject>) =>
+    request<TareaProject>(`/api/tareas/projects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTareaProject: (id: number) => request<void>(`/api/tareas/projects/${id}`, { method: "DELETE" }),
+  reorderTareaProjects: (ordered_ids: number[]) =>
+    request<void>("/api/tareas/projects/reorder", { method: "POST", body: JSON.stringify({ ordered_ids }) }),
+
+  listTareaColumns: () => request<TareaColumn[]>("/api/tareas/columns"),
+  listTareaFolders: () => request<TareaFolder[]>("/api/tareas/folders"),
 
   // Clinical notes (historia clínica editable)
   listNotes: (patientId: string, params: { kind?: NoteKind; include_superseded?: boolean } = {}) =>

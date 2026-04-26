@@ -23,6 +23,7 @@ router.post("/login", (req, res) => {
     username: user.username,
     role: user.role,
     name: user.name,
+    professional_id: user.professional_id ?? null,
   });
   res.json({
     token,

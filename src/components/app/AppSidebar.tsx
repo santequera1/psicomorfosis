@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
-  Pill, FileText, Receipt, BarChart3, Settings,
+  Pill, FileText, Receipt, BarChart3, Settings, ListTodo,
   ChevronsLeft, ChevronsRight, X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -20,6 +20,7 @@ const groups: Array<{
       { to: "/", label: "Inicio", icon: LayoutDashboard },
       { to: "/agenda", label: "Agenda", icon: CalendarDays },
       { to: "/pacientes", label: "Pacientes", icon: Users },
+      { to: "/tareas", label: "Tareas", icon: ListTodo },
     ],
   },
   {

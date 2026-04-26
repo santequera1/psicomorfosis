@@ -27,8 +27,10 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   email TEXT,
   role TEXT NOT NULL DEFAULT 'psicologa',
+  professional_id INTEGER,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sedes (
@@ -229,6 +231,133 @@ CREATE TABLE IF NOT EXISTS clinical_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_clinical_notes_patient_kind ON clinical_notes(patient_id, kind);
 CREATE INDEX IF NOT EXISTS idx_clinical_notes_workspace ON clinical_notes(workspace_id);
+
+-- Vista de Tareas (organización interna del equipo)
+CREATE TABLE IF NOT EXISTS tareas_folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  position INTEGER DEFAULT 0,
+  expanded INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tareas_projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  folder_id INTEGER,
+  archived INTEGER DEFAULT 0,
+  position INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (folder_id) REFERENCES tareas_folders(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS tareas_columns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL,
+  icon TEXT,
+  status TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  is_default INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tareas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  type TEXT,
+  status TEXT NOT NULL DEFAULT 'TODO',
+  priority TEXT NOT NULL DEFAULT 'MEDIUM',
+  assignee_id INTEGER,
+  creator_id INTEGER NOT NULL,
+  project_id INTEGER,
+  patient_id TEXT,
+  visibility TEXT NOT NULL DEFAULT 'team',
+  start_date TEXT,
+  due_date TEXT,
+  completed_at TEXT,
+  archived_at TEXT,
+  deleted_at TEXT,
+  tracking_preset TEXT,
+  total_pomodoros INTEGER DEFAULT 0,
+  current_pomodoro_time INTEGER,
+  pomodoro_status TEXT,
+  recurrence TEXT,
+  recurring_template_id INTEGER,
+  is_recurring_instance INTEGER DEFAULT 0,
+  position INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (assignee_id) REFERENCES professionals(id) ON DELETE SET NULL,
+  FOREIGN KEY (project_id) REFERENCES tareas_projects(id) ON DELETE SET NULL,
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tareas_workspace ON tareas(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_tareas_status ON tareas(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_tareas_assignee ON tareas(assignee_id);
+CREATE INDEX IF NOT EXISTS idx_tareas_project ON tareas(project_id);
+
+CREATE TABLE IF NOT EXISTS tareas_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  workspace_id INTEGER NOT NULL,
+  author_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES tareas(id) ON DELETE CASCADE,
+  FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tareas_checklist (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  completed INTEGER DEFAULT 0,
+  position INTEGER NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT,
+  FOREIGN KEY (task_id) REFERENCES tareas(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tareas_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  filename TEXT NOT NULL,
+  size INTEGER,
+  mime TEXT,
+  position INTEGER NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (task_id) REFERENCES tareas(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tareas_pomodoro_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  start_time TEXT NOT NULL,
+  end_time TEXT NOT NULL,
+  duration_minutes INTEGER NOT NULL,
+  completed INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  date TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES tareas(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 `;
 
 /**
@@ -240,6 +369,8 @@ function runMigrations() {
   const migrations = [
     // Añadida en tanda del 20 de abril (soft delete de pacientes)
     "ALTER TABLE patients ADD COLUMN archived_at TEXT",
+    // Añadida en tanda del 26 de abril (vista de Tareas — vinculo user↔professional para JWT)
+    "ALTER TABLE users ADD COLUMN professional_id INTEGER REFERENCES professionals(id) ON DELETE SET NULL",
   ];
   for (const sql of migrations) {
     try {
@@ -259,6 +390,69 @@ export function initDb() {
   runMigrations();
   if (isFresh || db.prepare("SELECT COUNT(*) AS n FROM workspaces").get().n === 0) {
     seed();
+  } else {
+    backfillExisting();
+  }
+}
+
+/**
+ * Backfills idempotentes para BDs existentes (producción).
+ * Se ejecuta en cada arranque cuando NO es un seed fresh.
+ *  - Siembra columnas default de tareas para workspaces que no las tengan.
+ *  - Vincula users.professional_id por match de nombre cuando esté null.
+ *  - Actualiza la info de la psic. Nathaly Ferrer en su workspace individual.
+ */
+function backfillExisting() {
+  // 1. Columnas de tareas faltantes
+  const wsRows = db.prepare("SELECT id FROM workspaces").all();
+  const colCount = db.prepare("SELECT COUNT(*) AS n FROM tareas_columns WHERE workspace_id = ?");
+  for (const ws of wsRows) {
+    if (colCount.get(ws.id).n === 0) {
+      seedTaskColumns(ws.id);
+      console.log(`[db] backfill: seeded tareas_columns para workspace ${ws.id}`);
+    }
+  }
+
+  // 2. Vincular users.professional_id si está vacío y hay match exacto por nombre
+  try {
+    const r = db.prepare(`
+      UPDATE users SET professional_id = (
+        SELECT p.id FROM professionals p
+        WHERE p.workspace_id = users.workspace_id AND p.name = users.name
+        LIMIT 1
+      )
+      WHERE professional_id IS NULL
+    `).run();
+    if (r.changes > 0) console.log(`[db] backfill: vinculé professional_id en ${r.changes} usuarios`);
+  } catch (err) {
+    console.warn("[db] backfill professional_id falló:", err.message);
+  }
+
+  // 3. Info de Nathaly (workspace individual): actualizar solo si los valores actuales son los antiguos
+  try {
+    const ind = db.prepare("SELECT id FROM workspaces WHERE mode = 'individual' LIMIT 1").get();
+    if (ind) {
+      // professionals.phone
+      db.prepare(`UPDATE professionals SET phone = '+57 304 219 0650'
+                  WHERE workspace_id = ? AND name = 'Nathaly Ferrer Pacheco' AND phone = '+57 318 442 0098'`)
+        .run(ind.id);
+      // settings (upsert ligero)
+      const upsert = db.prepare(`
+        INSERT INTO settings (workspace_id, key, value) VALUES (?, ?, ?)
+        ON CONFLICT(workspace_id, key) DO UPDATE SET value = excluded.value
+      `);
+      // Solo actualizar si está con el valor antiguo, o crear si no existe
+      const phone = db.prepare("SELECT value FROM settings WHERE workspace_id = ? AND key = 'phone'").get(ind.id);
+      if (!phone || phone.value === "+57 318 442 0098") upsert.run(ind.id, "phone", "+57 304 219 0650");
+      const addr = db.prepare("SELECT value FROM settings WHERE workspace_id = ? AND key = 'address'").get(ind.id);
+      if (!addr || addr.value === "Bogotá · Chapinero") upsert.run(ind.id, "address", "Cartagena de Indias · Torices");
+      const office = db.prepare("SELECT 1 FROM settings WHERE workspace_id = ? AND key = 'consultorio_name'").get(ind.id);
+      if (!office) upsert.run(ind.id, "consultorio_name", "Consultorio en Torices");
+      const city = db.prepare("SELECT 1 FROM settings WHERE workspace_id = ? AND key = 'city'").get(ind.id);
+      if (!city) upsert.run(ind.id, "city", "Cartagena");
+    }
+  } catch (err) {
+    console.warn("[db] backfill info Nathaly falló:", err.message);
   }
 }
 
@@ -315,7 +509,13 @@ function seedIndividualWorkspace() {
 
   // Profesional único
   const profId = db.prepare("INSERT INTO professionals (workspace_id, name, title, email, phone, approach, active) VALUES (?, ?, ?, ?, ?, ?, 1)")
-    .run(wsId, "Nathaly Ferrer Pacheco", "Psicóloga clínica", "nathaly@psicomorfosis.co", "+57 318 442 0098", "Terapia cognitivo-conductual").lastInsertRowid;
+    .run(wsId, "Nathaly Ferrer Pacheco", "Psicóloga clínica", "nathaly@psicomorfosis.co", "+57 304 219 0650", "Terapia cognitivo-conductual").lastInsertRowid;
+
+  // Vincular el usuario al profesional para que el JWT lleve professional_id
+  db.prepare("UPDATE users SET professional_id = ? WHERE workspace_id = ? AND username = ?").run(profId, wsId, "nathaly");
+
+  // Columnas default del kanban de tareas
+  seedTaskColumns(wsId);
 
   // Pacientes (5)
   const patients = [
@@ -340,8 +540,10 @@ function seedIndividualWorkspace() {
   // Settings
   const sIns = db.prepare("INSERT INTO settings (workspace_id, key, value) VALUES (?, ?, ?)");
   for (const [k, v] of [
-    ["phone", "+57 318 442 0098"],
-    ["address", "Bogotá · Chapinero"],
+    ["phone", "+57 304 219 0650"],
+    ["address", "Cartagena de Indias · Torices"],
+    ["consultorio_name", "Consultorio en Torices"],
+    ["city", "Cartagena"],
     ["session_price_cop", "180000"],
     ["session_duration_min", "50"],
   ]) sIns.run(wsId, k, v);
@@ -376,6 +578,9 @@ function seedOrganizationWorkspace() {
   psIns.run(lucia, chapId);                                // Lucía solo Chapinero
   psIns.run(mateo, chapId); psIns.run(mateo, cedId);       // Mateo en ambas
   psIns.run(sofia, cedId);                                 // Sofía solo Cedritos
+
+  // Columnas default del kanban de tareas
+  seedTaskColumns(wsId);
 
   // 10 pacientes repartidos
   const patients = [
@@ -504,5 +709,22 @@ function seedClinicalDataFor(wsId, patients, singleProfessional) {
   nIns.run(`N-${wsId}-1`, wsId, "cita", "Próxima cita en 30 min", "Revisa la sala asignada.", "hace 8 min", 0, 0);
   if (patients.some((p) => p.risk === "critical")) {
     nIns.run(`N-${wsId}-2`, wsId, "alerta", "Paciente con riesgo crítico", "Activa protocolo si es necesario.", "hoy", 0, 1);
+  }
+}
+
+// ─── Columnas default del kanban de tareas (organización del equipo) ───────
+function seedTaskColumns(wsId) {
+  const ins = db.prepare(`
+    INSERT INTO tareas_columns (workspace_id, name, color, icon, status, position, is_default)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `);
+  const cols = [
+    ["Por hacer",    "var(--lavender-400)", "Circle",       "TODO",        0],
+    ["En progreso",  "var(--brand-700)",    "Clock",        "IN_PROGRESS", 1],
+    ["En revisión",  "var(--warning)",      "AlertCircle",  "IN_REVIEW",   2],
+    ["Hecho",        "var(--sage-500)",     "CheckCircle2", "DONE",        3],
+  ];
+  for (const [name, color, icon, status, pos] of cols) {
+    ins.run(wsId, name, color, icon, status, pos);
   }
 }
