@@ -6,7 +6,8 @@ import { type Patient, type PatientStatus, type Modality, type Risk } from "@/li
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye } from "lucide-react";
+import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, MessageCircle } from "lucide-react";
+import { whatsappUrl } from "@/lib/display";
 
 export const Route = createFileRoute("/pacientes")({
   head: () => ({
@@ -255,13 +256,28 @@ function PatientsPage() {
                     <td className="px-3 py-3.5"><RiskBadge risk={p.risk} compact /></td>
                     <td className="px-3 py-3.5 text-ink-700 tabular">{p.nextSession ?? <span className="text-ink-400">—</span>}</td>
                     <td className="px-3 py-3.5 relative">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === p.id ? null : p.id); }}
-                        className="h-7 w-7 rounded-md hover:bg-bg-100 text-ink-500 inline-flex items-center justify-center"
-                        aria-label="Acciones"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-0.5">
+                        {(() => {
+                          const wa = whatsappUrl(p.phone);
+                          return wa ? (
+                            <a
+                              href={wa} target="_blank" rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`WhatsApp ${p.phone}`}
+                              className="h-7 w-7 rounded-md hover:bg-sage-200/30 text-sage-500 hover:text-sage-700 inline-flex items-center justify-center"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </a>
+                          ) : null;
+                        })()}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === p.id ? null : p.id); }}
+                          className="h-7 w-7 rounded-md hover:bg-bg-100 text-ink-500 inline-flex items-center justify-center"
+                          aria-label="Acciones"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </div>
                       {menuOpen === p.id && (
                         <>
                           <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenuOpen(null); }} />

@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import mammoth from "mammoth";
 import { db } from "../db.js";
 import { requireAuth, verifyToken } from "../auth.js";
 
@@ -34,12 +35,13 @@ router.use((req, res, next) => {
 
 // ─── Almacenamiento en disco ────────────────────────────────────────────────
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const UPLOAD_ROOT = path.join(__dirname, "..", "..", "uploads", "documents");
+const DOCS_DIR = path.join(__dirname, "..", "..", "uploads", "documents");
+const ASSETS_DIR = path.join(__dirname, "..", "..", "uploads", "assets");
 
-const upload = multer({
-  storage: multer.diskStorage({
+function makeDiskStorage(rootDir) {
+  return multer.diskStorage({
     destination: (req, _file, cb) => {
-      const dir = path.join(UPLOAD_ROOT, String(req.user.workspace_id));
+      const dir = path.join(rootDir, String(req.user.workspace_id));
       fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
@@ -48,16 +50,217 @@ const upload = multer({
       const id = crypto.randomBytes(6).toString("hex");
       cb(null, `${Date.now()}-${id}${ext}`);
     },
-  }),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+  });
+}
+
+// Validamos por extensión + mime para mayor robustez. Algunos browsers envían
+// mimes inconsistentes (ej Word desde Windows = application/octet-stream), así
+// que el .ext es la fuente de verdad principal.
+const ALLOWED_EXTS = /\.(pdf|docx?|jpe?g|png|webp|gif|txt)$/i;
+const IMG_EXTS = /\.(jpe?g|png|webp|gif)$/i;
+const DOCX_EXTS = /\.docx$/i;
+
+// Documents: PDFs, DOCX, imágenes adjuntas, txt.
+const upload = multer({
+  storage: makeDiskStorage(DOCS_DIR),
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const allowed = /^(application\/(pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document)|image\/(jpeg|png|webp|gif)|text\/plain)$/;
-    if (!allowed.test(file.mimetype)) {
-      return cb(new Error("Tipo de archivo no permitido (PDF, DOCX, JPG, PNG, TXT)"));
+    if (!ALLOWED_EXTS.test(file.originalname)) {
+      return cb(new Error("Tipo de archivo no permitido. Acepta: PDF, DOC, DOCX, JPG, PNG, WEBP, GIF, TXT."));
     }
     cb(null, true);
   },
 });
+
+// Solo Word para plantillas y "Subir Word para edición".
+const uploadDocx = multer({
+  storage: makeDiskStorage(DOCS_DIR),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!DOCX_EXTS.test(file.originalname)) {
+      return cb(new Error("Solo se permite .docx (Microsoft Word moderno). Si tu archivo es .doc, ábrelo en Word y guárdalo como .docx."));
+    }
+    cb(null, true);
+  },
+});
+
+// Assets inline (imágenes del editor). Solo imagen.
+const uploadAsset = multer({
+  storage: makeDiskStorage(ASSETS_DIR),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!IMG_EXTS.test(file.originalname) && !file.mimetype.startsWith("image/")) {
+      return cb(new Error("Solo imágenes para assets inline (jpg, png, webp, gif)"));
+    }
+    cb(null, true);
+  },
+});
+
+/**
+ * Convierte un .docx a TipTap doc state usando mammoth.
+ * Mammoth genera HTML semántico; lo parseamos a una estructura TipTap simple.
+ * Pierde formato visual avanzado (columnas, tablas complejas, fuentes custom)
+ * pero conserva: encabezados H1-H3, párrafos, negrita/cursiva/subrayado,
+ * listas con viñetas, listas numeradas, tablas básicas, imágenes (omitidas
+ * en esta versión).
+ */
+async function docxToTipTap(buffer) {
+  const result = await mammoth.convertToHtml(
+    { buffer },
+    {
+      styleMap: [
+        "p[style-name='Heading 1'] => h1",
+        "p[style-name='Heading 2'] => h2",
+        "p[style-name='Heading 3'] => h3",
+        "p[style-name='Title'] => h1",
+        "b => strong",
+        "i => em",
+      ],
+      ignoreEmptyParagraphs: false,
+      // Omitimos imágenes embebidas (el flujo de imágenes va por assets inline)
+      convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: "" })),
+    }
+  );
+  const html = result.value;
+  return htmlToTipTap(html);
+}
+
+/** HTML → TipTap doc state (parser simple, no DOM). */
+function htmlToTipTap(html) {
+  // Sanitizar básico
+  let h = html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<script[\s\S]*?<\/script>/gi, "");
+  // Decodificar entidades comunes
+  const decode = (s) => s
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+
+  // Tokenizar bloques top-level
+  const blocks = [];
+  const blockRegex = /<(h1|h2|h3|h4|p|ul|ol|table|hr|blockquote)([^>]*)>([\s\S]*?)<\/\1>|<(hr|br)\s*\/?>/gi;
+  let m;
+  while ((m = blockRegex.exec(h)) !== null) {
+    const tag = (m[1] || m[4]).toLowerCase();
+    const inner = m[3] ?? "";
+    if (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4") {
+      const level = Math.min(parseInt(tag.slice(1), 10), 3);
+      blocks.push({ type: "heading", attrs: { level }, content: parseInline(inner, decode) });
+    } else if (tag === "p") {
+      const content = parseInline(inner, decode);
+      blocks.push(content.length === 0 ? { type: "paragraph" } : { type: "paragraph", content });
+    } else if (tag === "ul") {
+      blocks.push({ type: "bulletList", content: parseListItems(inner, decode) });
+    } else if (tag === "ol") {
+      blocks.push({ type: "orderedList", content: parseListItems(inner, decode) });
+    } else if (tag === "blockquote") {
+      blocks.push({ type: "blockquote", content: [{ type: "paragraph", content: parseInline(inner, decode) }] });
+    } else if (tag === "hr") {
+      blocks.push({ type: "horizontalRule" });
+    } else if (tag === "table") {
+      const rows = parseTableRows(inner, decode);
+      if (rows.length > 0) blocks.push({ type: "table", content: rows });
+    }
+  }
+  return { type: "doc", content: blocks.length > 0 ? blocks : [{ type: "paragraph" }] };
+}
+
+function parseListItems(html, decode) {
+  const items = [];
+  const r = /<li([^>]*)>([\s\S]*?)<\/li>/gi;
+  let m;
+  while ((m = r.exec(html)) !== null) {
+    const content = parseInline(m[2], decode);
+    items.push({
+      type: "listItem",
+      content: [{ type: "paragraph", content: content.length > 0 ? content : [] }],
+    });
+  }
+  return items;
+}
+
+function parseTableRows(html, decode) {
+  const rows = [];
+  const r = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let m;
+  while ((m = r.exec(html)) !== null) {
+    const cells = [];
+    const cr = /<(td|th)[^>]*>([\s\S]*?)<\/\1>/gi;
+    let cm;
+    while ((cm = cr.exec(m[1])) !== null) {
+      const isHeader = cm[1].toLowerCase() === "th";
+      cells.push({
+        type: isHeader ? "tableHeader" : "tableCell",
+        attrs: { colspan: 1, rowspan: 1, colwidth: null },
+        content: [{ type: "paragraph", content: parseInline(cm[2], decode) }],
+      });
+    }
+    if (cells.length > 0) rows.push({ type: "tableRow", content: cells });
+  }
+  return rows;
+}
+
+function parseInline(html, decode) {
+  // Estrategia: parser muy simple: convierto cada segmento de texto a node
+  // {type:'text', text, marks: [...]} con marcas según las tags que lo envuelvan.
+  // Soporta strong, em, u, s, a (link), code.
+  const out = [];
+  const len = html.length;
+  let i = 0;
+  const stack = []; // marcas activas
+  const buf = [];
+  const flush = () => {
+    if (buf.length === 0) return;
+    const text = decode(buf.join(""));
+    if (text.length === 0) { buf.length = 0; return; }
+    const marks = stack.map((m) => ({ type: m.type, attrs: m.attrs }));
+    out.push(marks.length > 0 ? { type: "text", text, marks } : { type: "text", text });
+    buf.length = 0;
+  };
+  while (i < len) {
+    if (html[i] === "<") {
+      const close = html.indexOf(">", i);
+      if (close === -1) { buf.push(html.slice(i)); break; }
+      const tagBody = html.slice(i + 1, close).trim();
+      flush();
+      if (tagBody.startsWith("/")) {
+        // cierre
+        stack.pop();
+      } else if (/^br\s*\/?$/i.test(tagBody)) {
+        out.push({ type: "hardBreak" });
+      } else {
+        const m = tagBody.match(/^([a-z0-9]+)(\s+(.*))?$/i);
+        if (m) {
+          const tag = m[1].toLowerCase();
+          const attrs = m[3] ?? "";
+          if (tag === "strong" || tag === "b") stack.push({ type: "bold" });
+          else if (tag === "em" || tag === "i") stack.push({ type: "italic" });
+          else if (tag === "u") stack.push({ type: "underline" });
+          else if (tag === "s" || tag === "del" || tag === "strike") stack.push({ type: "strike" });
+          else if (tag === "code") stack.push({ type: "code" });
+          else if (tag === "a") {
+            const hrefM = attrs.match(/href=["']?([^"'\s>]+)/i);
+            stack.push({ type: "link", attrs: { href: hrefM ? hrefM[1] : "" } });
+          } else {
+            stack.push({ type: "_ignored", attrs: {} });
+          }
+        }
+      }
+      i = close + 1;
+    } else {
+      buf.push(html[i]);
+      i++;
+    }
+  }
+  flush();
+  // Filtrar marks _ignored
+  return out.map((n) => {
+    if (n.marks) {
+      const filtered = n.marks.filter((m) => m.type !== "_ignored");
+      return filtered.length === 0 ? { type: n.type, text: n.text } : { ...n, marks: filtered };
+    }
+    return n;
+  });
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
@@ -77,7 +280,7 @@ function rowToDoc(r) {
     // URL pública para imágenes (img tags no pueden mandar Authorization).
     // Solo se calcula para mime image/* — el resto debe pasar por /api/.../file.
     public_url: r.kind === "file" && r.mime?.startsWith("image/") && r.filename
-      ? `/uploads/documents/${r.workspace_id}/${r.filename}`
+      ? `/api/uploads/documents/${r.workspace_id}/${r.filename}`
       : null,
   };
 }
@@ -219,9 +422,68 @@ router.post("/templates", (req, res) => {
   res.status(201).json({ ...row, body_json: safeJSON(row.body_json), archived: !!row.archived });
 });
 
+/**
+ * Clona una plantilla del sistema al workspace. Útil para personalizar:
+ * cambiar el nombre del profesional, ajustar texto legal, etc., sin tocar
+ * la del sistema (que sirve de base para todos los workspaces).
+ */
+router.post("/templates/:id/clone", (req, res) => {
+  const orig = db.prepare(`
+    SELECT * FROM document_templates
+    WHERE id = ? AND (workspace_id IS NULL OR workspace_id = ?)
+  `).get(req.params.id, ws(req));
+  if (!orig) return res.status(404).json({ error: "Plantilla no encontrada" });
+  const ins = db.prepare(`
+    INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_by_user_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'workspace', ?, ?, ?, ?, ?, ?)
+  `).run(
+    ws(req),
+    orig.name + (orig.scope === "system" ? " (personalizada)" : " (copia)"),
+    orig.description, orig.category,
+    orig.body_json, orig.body_text, orig.legal_disclaimer,
+    req.user.id, now(), now()
+  );
+  const row = db.prepare("SELECT * FROM document_templates WHERE id = ?").get(ins.lastInsertRowid);
+  res.status(201).json({ ...row, body_json: safeJSON(row.body_json), archived: !!row.archived });
+});
+
+/**
+ * Crea una plantilla nueva desde un .docx. Solo Word permitido.
+ * El archivo se conserva en disco para descarga futura, y body_json se rellena
+ * convirtiendo el texto vía mammoth.
+ */
+router.post("/templates/from-docx", uploadDocx.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Archivo .docx requerido" });
+  const { name, description, category } = req.body ?? {};
+  const finalName = name || req.file.originalname.replace(/\.[^.]+$/, "");
+  try {
+    const buf = fs.readFileSync(path.join(DOCS_DIR, String(ws(req)), req.file.filename));
+    const doc = await docxToTipTap(buf);
+    const text = extractText(doc);
+    const ins = db.prepare(`
+      INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, created_by_user_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'workspace', ?, ?, ?, ?, ?)
+    `).run(
+      ws(req), finalName, description ?? null, category ?? "otro",
+      JSON.stringify(doc), text, req.user.id, now(), now()
+    );
+    const row = db.prepare("SELECT * FROM document_templates WHERE id = ?").get(ins.lastInsertRowid);
+    res.status(201).json({ ...row, body_json: safeJSON(row.body_json), archived: !!row.archived });
+  } catch (err) {
+    console.error("[templates/from-docx] parse failed:", err);
+    res.status(400).json({ error: "No se pudo leer el archivo .docx. Verifica que esté en formato Word moderno." });
+  }
+});
+
 router.patch("/templates/:id", (req, res) => {
+  // Permite editar plantillas del workspace. Si es del sistema, devolvemos
+  // un hint para que el frontend la clone primero.
   const t = db.prepare("SELECT * FROM document_templates WHERE id = ? AND workspace_id = ?").get(req.params.id, ws(req));
-  if (!t) return res.status(404).json({ error: "Plantilla no encontrada o pertenece al sistema" });
+  if (!t) {
+    const sys = db.prepare("SELECT id FROM document_templates WHERE id = ? AND workspace_id IS NULL").get(req.params.id);
+    if (sys) return res.status(409).json({ error: "Plantilla del sistema. Clónala primero (POST /templates/:id/clone) para personalizarla.", needs_clone: true });
+    return res.status(404).json({ error: "Plantilla no encontrada" });
+  }
 
   const fields = [];
   const params = [];
@@ -250,31 +512,90 @@ router.delete("/templates/:id", (req, res) => {
 // UPLOAD de archivo físico
 // ════════════════════════════════════════════════════════════════════════════
 
-router.post("/upload", upload.single("file"), (req, res) => {
+router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Archivo requerido" });
   const { patient_id, patient_name, type } = req.body ?? {};
   const id = newDocId(ws(req));
-  const ext = path.extname(req.file.originalname).toLowerCase().replace(".", "") || "file";
-  const name = req.body.name || req.file.originalname.replace(/\.[^.]+$/, "");
+  const baseName = req.body.name || req.file.originalname.replace(/\.[^.]+$/, "");
+  const isDocx = /\.docx$/i.test(req.file.originalname) ||
+    req.file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-  db.prepare(`
-    INSERT INTO documents (
-      id, workspace_id, name, type, kind,
-      patient_id, patient_name,
-      filename, original_name, mime, size_bytes, size_kb,
-      status, professional, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, 'file', ?, ?, ?, ?, ?, ?, ?, 'firmado', ?, ?, ?)
-  `).run(
-    id, ws(req), name, type ?? "otro",
-    patient_id || null, patient_name || null,
-    req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
-    Math.round(req.file.size / 1024),
-    req.user.name ?? "",
-    now(), now()
-  );
+  // Si es Word: convertir a TipTap doc state y guardar como kind=editor.
+  // El archivo .docx original se conserva en disco (filename) por si se quiere descargar.
+  if (isDocx) {
+    try {
+      const buf = fs.readFileSync(path.join(DOCS_DIR, String(ws(req)), req.file.filename));
+      const doc = await docxToTipTap(buf);
+      const text = extractText(doc);
+      db.prepare(`
+        INSERT INTO documents (
+          id, workspace_id, name, type, kind,
+          patient_id, patient_name,
+          body_json, body_text,
+          filename, original_name, mime, size_bytes, size_kb,
+          status, professional, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'editor', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'borrador', ?, ?, ?)
+      `).run(
+        id, ws(req), baseName, type ?? "informe",
+        patient_id || null, patient_name || null,
+        JSON.stringify(doc), text,
+        req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
+        Math.round(req.file.size / 1024),
+        req.user.name ?? "",
+        now(), now()
+      );
+    } catch (err) {
+      console.warn("[documents] docx parse failed, falling back to file:", err.message);
+      // fallback a kind=file
+      db.prepare(`
+        INSERT INTO documents (id, workspace_id, name, type, kind, patient_id, patient_name, filename, original_name, mime, size_bytes, size_kb, status, professional, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'file', ?, ?, ?, ?, ?, ?, ?, 'firmado', ?, ?, ?)
+      `).run(id, ws(req), baseName, type ?? "otro", patient_id || null, patient_name || null,
+             req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
+             Math.round(req.file.size / 1024), req.user.name ?? "", now(), now());
+    }
+  } else {
+    db.prepare(`
+      INSERT INTO documents (
+        id, workspace_id, name, type, kind,
+        patient_id, patient_name,
+        filename, original_name, mime, size_bytes, size_kb,
+        status, professional, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'file', ?, ?, ?, ?, ?, ?, ?, 'firmado', ?, ?, ?)
+    `).run(
+      id, ws(req), baseName, type ?? "otro",
+      patient_id || null, patient_name || null,
+      req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
+      Math.round(req.file.size / 1024),
+      req.user.name ?? "",
+      now(), now()
+    );
+  }
+
   const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(id);
   req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:created", rowToDoc(row));
   res.status(201).json(rowToDoc(row));
+});
+
+// ─── Assets inline (imágenes del editor) ────────────────────────────────────
+// Separados de Documents para que no contaminen la lista principal.
+router.post("/assets", uploadAsset.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Imagen requerida" });
+  const { document_id } = req.body ?? {};
+  const ins = db.prepare(`
+    INSERT INTO document_assets (workspace_id, document_id, filename, original_name, mime, size_bytes, uploaded_by_user_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    ws(req), document_id || null,
+    req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
+    req.user.id, now()
+  );
+  res.status(201).json({
+    id: ins.lastInsertRowid,
+    public_url: `/api/uploads/assets/${ws(req)}/${req.file.filename}`,
+    mime: req.file.mimetype,
+    size_bytes: req.file.size,
+  });
 });
 
 // Servir archivo con autenticación. content-disposition inline para preview,

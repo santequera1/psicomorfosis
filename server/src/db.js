@@ -197,6 +197,26 @@ CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents(patient_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 
+-- Assets inline del editor (imágenes pegadas en docs). NO van en la lista
+-- principal de Documentos para no contaminar; son archivos pequeños referenciados
+-- por URL pública desde el body_json. Se asocian a un documento si fue donde se
+-- usaron, permitiendo limpieza al borrar el documento.
+CREATE TABLE IF NOT EXISTS document_assets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  document_id TEXT,
+  filename TEXT NOT NULL,
+  original_name TEXT,
+  mime TEXT NOT NULL,
+  size_bytes INTEGER,
+  uploaded_by_user_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL,
+  FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_doc_assets_workspace ON document_assets(workspace_id);
+
 CREATE TABLE IF NOT EXISTS document_templates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id INTEGER,               -- NULL = sistema (visible en todos los workspaces)

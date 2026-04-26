@@ -176,15 +176,11 @@ function DocumentDetailPage() {
           editable={!isLocked}
           onChange={(d, t) => { setBody(d); setText(t); }}
           onUploadImage={async (file) => {
-            // Las imágenes inline necesitan URL sin token (img tags no envían
-            // Authorization). El backend devuelve public_url para mime image/*
-            // sirviéndolo desde /uploads/ con filename random unguessable.
-            const meta = { name: file.name, type: "imagen", patient_id: doc.patient_id ?? undefined };
-            const uploaded = await api.uploadDocument(file, meta);
-            const publicUrl = uploaded.public_url;
-            if (!publicUrl) throw new Error("No se pudo obtener URL pública para la imagen");
-            // Construir URL absoluta para que funcione tanto en dev como en SSR
-            return publicUrl.startsWith("http") ? publicUrl : `${window.location.origin}${publicUrl}`;
+            // Las imágenes inline van a una tabla aparte (document_assets) — NO
+            // contaminan la lista de Documentos. Se sirven via /api/uploads/...
+            // como static (sin token, filename unguessable).
+            const asset = await api.uploadDocumentAsset(file, doc.id);
+            return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
           }}
         />
       </div>

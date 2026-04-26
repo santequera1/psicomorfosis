@@ -200,32 +200,38 @@ function DocumentosPage() {
                 <h3 className="font-serif text-lg text-ink-900">Plantillas</h3>
                 <Sparkles className="h-4 w-4 text-brand-700" />
               </div>
-              <p className="text-xs text-ink-500">9 plantillas legales para Colombia. Variables se rellenan automáticamente con los datos del paciente.</p>
+              <p className="text-xs text-ink-500">Variables se rellenan automáticamente con los datos del paciente. Personaliza las del sistema o sube las tuyas en Word.</p>
               <ul className="mt-4 space-y-2">
                 {templates.slice(0, 6).map((t) => (
                   <li key={t.id}>
-                    <button
-                      onClick={() => createFromTemplate(navigate, qc, t, filterPatient, patient ?? null)}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-line-200 hover:border-brand-400 hover:bg-brand-50/40 text-left transition-colors group"
-                    >
-                      <div className="h-8 w-8 rounded-md bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
-                        {(() => { const TIcon = TYPE_ICON[t.category] ?? FileText; return <TIcon className="h-4 w-4" />; })()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-ink-900 truncate">{t.name}</div>
-                        <div className="text-[11px] text-ink-500">{t.uses_count} usos · {t.scope === "system" ? "Sistema" : t.scope === "personal" ? "Personal" : "Workspace"}</div>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-ink-400 group-hover:text-brand-700 shrink-0" />
-                    </button>
+                    <TemplateRow
+                      template={t}
+                      onUse={() => createFromTemplate(navigate, qc, t, filterPatient, patient ?? null)}
+                      onEdit={async () => {
+                        // Si es del sistema, clonar primero al workspace y abrir el clon en editor
+                        if (t.scope === "system") {
+                          try {
+                            const cloned = await api.cloneDocumentTemplate(t.id);
+                            qc.invalidateQueries({ queryKey: ["document-templates"] });
+                            navigate({ to: "/documentos/plantilla/$id", params: { id: String(cloned.id) } });
+                          } catch (e: any) { toast.error(e.message); }
+                        } else {
+                          navigate({ to: "/documentos/plantilla/$id", params: { id: String(t.id) } });
+                        }
+                      }}
+                    />
                   </li>
                 ))}
               </ul>
-              <button
-                onClick={() => setNewOpen(true)}
-                className="mt-3 w-full text-xs text-brand-700 hover:underline text-center"
-              >
-                Ver todas las plantillas →
-              </button>
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  onClick={() => setNewOpen(true)}
+                  className="w-full text-xs text-brand-700 hover:underline text-center"
+                >
+                  Ver todas las plantillas →
+                </button>
+                <UploadTemplateButton onUploaded={() => qc.invalidateQueries({ queryKey: ["document-templates"] })} />
+              </div>
             </div>
 
             <div className="rounded-xl border border-brand-700/20 bg-brand-50/40 p-5">
@@ -706,6 +712,76 @@ function Field({ label, required, children }: { label: string; required?: boolea
       </span>
       {children}
     </label>
+  );
+}
+
+function TemplateRow({ template, onUse, onEdit }: { template: DocumentTemplate; onUse: () => void; onEdit: () => void }) {
+  const TIcon = TYPE_ICON[template.category] ?? FileText;
+  return (
+    <div className="flex items-center gap-2 p-3 rounded-lg border border-line-200 hover:border-brand-400 hover:bg-brand-50/40 transition-colors group">
+      <div className="h-8 w-8 rounded-md bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
+        <TIcon className="h-4 w-4" />
+      </div>
+      <button onClick={onUse} className="flex-1 min-w-0 text-left">
+        <div className="text-sm text-ink-900 truncate">{template.name}</div>
+        <div className="text-[11px] text-ink-500">
+          {template.uses_count} usos · {template.scope === "system" ? "Sistema" : template.scope === "personal" ? "Personal" : "Personalizada"}
+        </div>
+      </button>
+      <button
+        onClick={onEdit}
+        title={template.scope === "system" ? "Personalizar (crea una copia editable)" : "Editar plantilla"}
+        className="h-7 w-7 rounded-md text-ink-500 hover:bg-bg-100 hover:text-brand-700 flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function UploadTemplateButton({ onUploaded }: { onUploaded: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(file: File) {
+    if (!/\.docx$/i.test(file.name)) {
+      toast.error("Solo se permiten archivos .docx (Microsoft Word)");
+      return;
+    }
+    setUploading(true);
+    try {
+      await api.uploadTemplateDocx(file, { name: file.name.replace(/\.[^.]+$/, ""), category: "otro" });
+      toast.success("Plantilla creada desde Word");
+      onUploaded();
+    } catch (e: any) {
+      toast.error(e.message ?? "No se pudo crear la plantilla");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        className="w-full h-9 px-3 rounded-md border border-dashed border-line-200 text-xs text-ink-700 hover:border-brand-400 hover:bg-brand-50/40 inline-flex items-center justify-center gap-2 disabled:opacity-50"
+      >
+        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+        Subir plantilla desde Word
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) handleFile(f);
+        }}
+      />
+    </>
   );
 }
 

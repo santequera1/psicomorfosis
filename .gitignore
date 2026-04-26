@@ -51,3 +51,7 @@ server/uploads/
 pacientes-*.csv
 facturacion-*.csv
 vista-tareas.md
+
+# Test fixtures locales (no tracked)
+valoracion_inicial_psicologica.docx
+valoracion_inicial_psicologica.pdf

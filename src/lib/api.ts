@@ -532,7 +532,47 @@ export const api = {
     request<DocumentTemplate>("/api/documents/templates", { method: "POST", body: JSON.stringify(body) }),
   updateDocumentTemplate: (id: number, body: Partial<DocumentTemplate>) =>
     request<DocumentTemplate>(`/api/documents/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  cloneDocumentTemplate: (id: number) =>
+    request<DocumentTemplate>(`/api/documents/templates/${id}/clone`, { method: "POST" }),
   deleteDocumentTemplate: (id: number) => request<{ ok: true }>(`/api/documents/templates/${id}`, { method: "DELETE" }),
+  /** Sube .docx y crea plantilla del workspace con su contenido convertido a TipTap. */
+  uploadTemplateDocx: async (file: File, meta: { name?: string; description?: string; category?: TemplateCategory } = {}) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (meta.name) fd.append("name", meta.name);
+    if (meta.description) fd.append("description", meta.description);
+    if (meta.category) fd.append("category", meta.category);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/documents/templates/from-docx`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new ApiError(res.status, body.error ?? "Upload failed");
+    }
+    return res.json() as Promise<DocumentTemplate>;
+  },
+
+  // Assets inline del editor (imágenes que se pegan en el cuerpo del doc).
+  // Devuelve URL pública sin token (sirve directo via /api/uploads/...).
+  uploadDocumentAsset: async (file: File, document_id?: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (document_id) fd.append("document_id", document_id);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/documents/assets`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new ApiError(res.status, body.error ?? "Upload failed");
+    }
+    return res.json() as Promise<{ id: number; public_url: string; mime: string; size_bytes: number }>;
+  },
 
   // Invoices
   listInvoices: (params: Record<string, string> = {}) => request<Invoice[]>(`/api/invoices${qs(params)}`),

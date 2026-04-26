@@ -9,8 +9,9 @@ import { Trash2 } from "lucide-react";
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, ClipboardList, FileText, Pill,
   MessagesSquare, Receipt, Brain, Plus, User, IdCard, ChevronRight, Edit3,
-  TrendingDown, CheckCircle2, Clock, AlertCircle,
+  TrendingDown, CheckCircle2, Clock, AlertCircle, MessageCircle,
 } from "lucide-react";
+import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 
 export const Route = createFileRoute("/pacientes_/$id")({
@@ -59,11 +60,17 @@ function PatientDetailPage() {
   // React exige que el número y orden de hooks sea idéntico entre renders.
   const { data: allTests = [] } = useQuery({ queryKey: ["test-applications"], queryFn: () => api.listTestApplications() as Promise<any> });
   const { data: allTasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() as Promise<any> });
-  const { data: allDocs = [] } = useQuery({ queryKey: ["documents"], queryFn: () => api.listDocuments() as Promise<any> });
+  // Filtrar documentos por paciente directo en el backend para que el listado
+  // sea consistente sin importar el cache global. La queryKey incluye el id
+  // para que se invalide cuando navegues entre pacientes.
+  const { data: docs = [] } = useQuery({
+    queryKey: ["documents", { patient_id: id }],
+    queryFn: () => api.listDocuments({ patient_id: id }),
+    enabled: !!id,
+  });
 
   const tests = (allTests as any[]).filter((t) => t.patient_id === id);
   const tasks = (allTasks as any[]).filter((t) => t.patient_id === id);
-  const docs = (allDocs as any[]).filter((d) => d.patient_id === id);
 
   if (isLoading) {
     return (
@@ -110,7 +117,18 @@ function PatientDetailPage() {
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-ink-700">
                 <span className="inline-flex items-center gap-1.5"><IdCard className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.doc}</span>
                 <span className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.age ? `${patient.age} años` : "—"}</span>
-                <span className="hidden sm:inline-flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.phone}</span>
+                <span className="hidden sm:inline-flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.phone}
+                  {patient.phone && (() => {
+                    const wa = whatsappUrl(patient.phone);
+                    return wa ? (
+                      <a href={wa} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp"
+                        className="ml-1 h-5 w-5 rounded text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 inline-flex items-center justify-center">
+                        <MessageCircle className="h-3 w-3" />
+                      </a>
+                    ) : null;
+                  })()}
+                </span>
                 <span className="hidden sm:inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-ink-400 shrink-0" /> {patient.email}</span>
               </div>
               <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-1.5">
@@ -314,7 +332,21 @@ function TabDatos({ patient }: { patient: import("@/lib/api").ApiPatient }) {
             <div><dt className="text-xs text-ink-500">Documento</dt><dd className="text-ink-900 mt-0.5 tabular">{patient.doc}</dd></div>
             <div><dt className="text-xs text-ink-500">Edad</dt><dd className="text-ink-900 mt-0.5">{patient.age || "—"}</dd></div>
             <div><dt className="text-xs text-ink-500">Pronombres</dt><dd className="text-ink-900 mt-0.5">{patient.pronouns}</dd></div>
-            <div><dt className="text-xs text-ink-500">Teléfono</dt><dd className="text-ink-900 mt-0.5 tabular">{patient.phone}</dd></div>
+            <div>
+              <dt className="text-xs text-ink-500">Teléfono</dt>
+              <dd className="text-ink-900 mt-0.5 tabular flex items-center gap-2">
+                {patient.phone || "—"}
+                {patient.phone && (() => {
+                  const wa = whatsappUrl(patient.phone);
+                  return wa ? (
+                    <a href={wa} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp"
+                      className="h-6 w-6 rounded text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 inline-flex items-center justify-center">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null;
+                })()}
+              </dd>
+            </div>
             <div className="col-span-2"><dt className="text-xs text-ink-500">Correo</dt><dd className="text-ink-900 mt-0.5">{patient.email}</dd></div>
           </dl>
         </Section>

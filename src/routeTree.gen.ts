@@ -23,6 +23,7 @@ import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
+import { Route as DocumentosPlantillaIdRouteImport } from './routes/documentos_.plantilla.$id'
 
 const TestsRoute = TestsRouteImport.update({
   id: '/tests',
@@ -94,6 +95,11 @@ const DocumentosIdRoute = DocumentosIdRouteImport.update({
   path: '/documentos/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocumentosPlantillaIdRoute = DocumentosPlantillaIdRouteImport.update({
+  id: '/documentos_/plantilla/$id',
+  path: '/documentos/plantilla/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/tests': typeof TestsRoute
   '/documentos_/$id': typeof DocumentosIdRoute
   '/pacientes_/$id': typeof PacientesIdRoute
+  '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos/$id'
     | '/pacientes/$id'
+    | '/documentos/plantilla/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos/$id'
     | '/pacientes/$id'
+    | '/documentos/plantilla/$id'
   id:
     | '__root__'
     | '/'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos_/$id'
     | '/pacientes_/$id'
+    | '/documentos_/plantilla/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +222,7 @@ export interface RootRouteChildren {
   TestsRoute: typeof TestsRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
   PacientesIdRoute: typeof PacientesIdRoute
+  DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentosIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/documentos_/plantilla/$id': {
+      id: '/documentos_/plantilla/$id'
+      path: '/documentos/plantilla/$id'
+      fullPath: '/documentos/plantilla/$id'
+      preLoaderRoute: typeof DocumentosPlantillaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +350,7 @@ const rootRouteChildren: RootRouteChildren = {
   TestsRoute: TestsRoute,
   DocumentosIdRoute: DocumentosIdRoute,
   PacientesIdRoute: PacientesIdRoute,
+  DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

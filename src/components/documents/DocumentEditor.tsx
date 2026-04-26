@@ -105,14 +105,30 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   }
 
   function setLink() {
-    const prev = editor?.getAttributes("link").href as string | undefined;
+    if (!editor) return;
+    const prev = editor.getAttributes("link").href as string | undefined;
     const url = window.prompt("URL del enlace:", prev ?? "https://");
     if (url === null) return;
+
     if (url === "") {
-      editor?.chain().focus().extendMarkRange("link").unsetLink().run();
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    editor?.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    // Normalizar: si el usuario escribe "google.com" sin protocolo, prepend https://
+    const normalized = /^https?:\/\//i.test(url) || url.startsWith("mailto:") || url.startsWith("tel:")
+      ? url : `https://${url}`;
+
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      // Sin selección activa → insertar el texto del link en la posición del cursor
+      const linkText = window.prompt("Texto a mostrar:", normalized) ?? normalized;
+      editor.chain().focus().insertContent([
+        { type: "text", text: linkText, marks: [{ type: "link", attrs: { href: normalized } }] },
+      ]).run();
+    } else {
+      // Con selección → marcar la selección como link
+      editor.chain().focus().extendMarkRange("link").setLink({ href: normalized }).run();
+    }
   }
 
   return (

@@ -38,12 +38,13 @@ app.use(express.json({ limit: "4mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 
-// Servir archivos subidos como static. Las URLs incluyen 12 bytes random en el
-// filename, lo que las hace efectivamente unguessable. Esto se usa para
-// imágenes inline del editor TipTap (img tags no pueden enviar Authorization).
-// PDFs y archivos sensibles siguen pasando por /api/documents/:id/file con auth.
+// Servir assets subidos como static bajo /api/uploads para que nginx (que solo
+// proxea /api/*) los entregue. Las URLs incluyen 12 bytes random en el filename
+// (unguessable). Esto sirve imágenes inline del editor TipTap (img tags no
+// pueden enviar Authorization). PDFs y archivos sensibles siguen pasando por
+// /api/documents/:id/file con auth.
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
-app.use("/uploads", express.static(UPLOADS_DIR, {
+app.use("/api/uploads", express.static(UPLOADS_DIR, {
   maxAge: "1d",
   fallthrough: false,
   setHeaders: (res) => { res.setHeader("Cache-Control", "private, max-age=86400"); },

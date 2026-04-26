@@ -5,12 +5,13 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Phone, Mail, IdCard, MapPin, Stethoscope, Brain, Pill, FileText,
-  ClipboardList, MessageSquareText,
+  ClipboardList, MessageSquareText, MessageCircle,
   ChevronDown, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, BLOCK_LABELS, type SoapContent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { whatsappUrl } from "@/lib/display";
 
 type Patient = ApiPatient;
 
@@ -87,13 +88,21 @@ function HistoriaPage() {
   return (
     <AppShell>
       <div className="px-2 lg:px-0 max-w-7xl mx-auto">
-        <div className="mb-5 flex items-center gap-2 text-xs">
+        <div className="mb-5 flex items-center gap-2 text-xs flex-wrap">
           <Link to="/pacientes" className="text-ink-500 hover:text-brand-700">Pacientes</Link>
           <span className="text-ink-300">/</span>
           <span className="text-ink-700">Historia clínica</span>
+          <span className="text-ink-300">·</span>
+          <button
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-ink-700 hover:bg-bg-100 hover:text-brand-700 transition-colors"
+            title="Cambiar paciente"
+          >
+            {patient.preferredName ?? patient.name.split(" ")[0]} <ChevronDown className="h-3 w-3" />
+          </button>
         </div>
 
-        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onPickPatient={() => setPickerOpen(true)} onOpenNote={() => setNoteOpen(true)} />
+        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteOpen(true)} />
         <ClinicalBlocks patientId={patient.id} />
         <SessionNotes patientId={patient.id} onOpenNew={() => setNoteOpen(true)} />
       </div>
@@ -104,89 +113,137 @@ function HistoriaPage() {
   );
 }
 
-function PatientHeader({ patient, isOrg, patients, onPickPatient, onOpenNote }: { patient: Patient; isOrg: boolean; patients: Patient[]; onPickPatient: () => void; onOpenNote: () => void }) {
+function PatientHeader({ patient, isOrg, onOpenNote }: { patient: Patient; isOrg: boolean; patients: Patient[]; onOpenNote: () => void }) {
   const initialsLetters = (patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const wa = whatsappUrl(patient.phone);
   return (
     <section className="rounded-2xl bg-surface border border-line-200 shadow-soft overflow-hidden mb-6 sm:mb-8">
-      <div className="bg-gradient-to-r from-brand-700 to-brand-600 h-12 sm:h-20" />
-      <div className="px-4 sm:px-6 md:px-8 pb-5 sm:pb-7 -mt-8 sm:-mt-10">
-        <div className="flex flex-wrap items-start sm:items-end gap-3 sm:gap-5">
-          <div className="h-14 w-14 sm:h-20 sm:w-20 rounded-2xl bg-brand-100 border-4 border-surface flex items-center justify-center text-base sm:text-2xl font-serif text-brand-800 shadow-card shrink-0">
+      <div className="px-5 sm:px-7 py-5 sm:py-6">
+        {/* Fila 1: avatar + nombre + acciones */}
+        <div className="flex items-start gap-4 flex-wrap">
+          <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center text-base sm:text-lg font-serif text-brand-800 shrink-0">
             {initialsLetters}
           </div>
-          <div className="flex-1 pb-1 sm:pb-2 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <h1 className="text-lg sm:text-2xl font-serif text-ink-900 leading-tight">{patient.name}</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-serif text-ink-900 leading-tight">
+                {patient.name}
+              </h1>
               <RiskBadge risk={patient.risk} compact />
             </div>
-            <div className="mt-1 flex items-center gap-2 flex-wrap text-xs sm:text-sm text-ink-500">
-              {patient.preferredName && <span>"{patient.preferredName}" · {patient.pronouns}</span>}
-              <span>{patient.age ? `${patient.age} años · ` : ""}{patient.doc}</span>
-            </div>
-            <button
-              onClick={onPickPatient}
-              className="mt-2 h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
-            >
-              Cambiar paciente <ChevronDown className="h-3.5 w-3.5" />
-            </button>
+            <p className="mt-0.5 text-xs sm:text-sm text-ink-500">
+              {patient.preferredName ? <>"{patient.preferredName}" · </> : null}
+              {patient.pronouns ? `${patient.pronouns} · ` : ""}
+              {patient.age ? `${patient.age} años · ` : ""}
+              {patient.doc}
+            </p>
           </div>
-          <div className="w-full sm:w-auto pb-1 sm:pb-2 flex flex-wrap gap-2">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Link
-              to="/pacientes/$id"
-              params={{ id: patient.id }}
-              className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              to="/pacientes/$id" params={{ id: patient.id }}
+              className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Ver ficha completa</span>
-              <span className="sm:hidden">Ficha</span>
+              <ExternalLink className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Ver ficha</span>
+            </Link>
+            <Link
+              to="/documentos" search={{ paciente: patient.id }}
+              className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+            >
+              <FileText className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Documentos</span>
             </Link>
             <button
               onClick={onOpenNote}
-              className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
             >
               <Edit3 className="h-3.5 w-3.5" /> Nota
             </button>
-            <Link to="/agenda" className="flex-1 sm:flex-none h-9 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
+            <Link
+              to="/agenda"
+              className="h-9 px-3 rounded-md bg-brand-700 text-white text-xs sm:text-sm hover:bg-brand-800 inline-flex items-center justify-center gap-1.5"
+            >
               <Plus className="h-3.5 w-3.5" /> Agendar
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-5 sm:mt-6 pt-5 sm:pt-6 border-t border-line-100">
-          <InfoItem icon={Phone} label="Teléfono" value={patient.phone} />
-          <InfoItem icon={Mail} label="Correo" value={patient.email} />
-          <InfoItem icon={MapPin} label="Ciudad" value="Bogotá · Chapinero" />
-          <InfoItem icon={IdCard} label="Identificación" value={patient.doc} />
+        {/* Fila 2: contacto compacto */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 mt-5 pt-5 border-t border-line-100 text-xs sm:text-sm">
+          <ContactItem
+            icon={Phone}
+            label="Teléfono"
+            value={patient.phone}
+            actions={
+              patient.phone ? (
+                <>
+                  <a href={`tel:${patient.phone.replace(/\s/g, "")}`} title="Llamar"
+                    className="h-6 w-6 rounded text-ink-500 hover:text-brand-700 hover:bg-bg-100 inline-flex items-center justify-center">
+                    <Phone className="h-3 w-3" />
+                  </a>
+                  {wa && (
+                    <a href={wa} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp"
+                      className="h-6 w-6 rounded text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 inline-flex items-center justify-center">
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </>
+              ) : null
+            }
+          />
+          <ContactItem
+            icon={Mail} label="Correo" value={patient.email}
+            actions={patient.email ? (
+              <a href={`mailto:${patient.email}`} title="Enviar correo"
+                className="h-6 w-6 rounded text-ink-500 hover:text-brand-700 hover:bg-bg-100 inline-flex items-center justify-center">
+                <Mail className="h-3 w-3" />
+              </a>
+            ) : null}
+          />
+          <ContactItem icon={MapPin} label="Ciudad" value="Bogotá · Chapinero" />
+          <ContactItem icon={IdCard} label="Identificación" value={patient.doc} />
         </div>
 
-        <div className={cn("grid gap-3 sm:gap-4 mt-4", isOrg ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2 md:grid-cols-3")}>
+        {/* Fila 3: stats clínicas */}
+        <div className={cn("grid gap-2 mt-4", isOrg ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 sm:grid-cols-3")}>
           {isOrg && <Stat label="Profesional" value={patient.professional} />}
           <Stat label="Modalidad" value={patient.modality} />
-          <Stat label="Último contacto" value={patient.lastContact} />
-          <Stat label="Próxima sesión" value={patient.nextSession ?? "Sin agendar"} />
+          <Stat label="Último contacto" value={patient.lastContact ?? "Sin registro"} />
+          <Stat label="Próxima sesión" value={patient.nextSession ?? "Sin agendar"} highlight={!!patient.nextSession} />
         </div>
       </div>
     </section>
   );
 }
 
-function InfoItem({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function ContactItem({ icon: Icon, label, value, actions }: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  actions?: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-2.5 min-w-0">
-      <Icon className="h-4 w-4 text-brand-700 mt-0.5 shrink-0" />
-      <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-wide text-ink-400">{label}</div>
-        <div className="text-sm text-ink-900 break-words" title={value}>{value}</div>
+    <div className="min-w-0 group">
+      <div className="text-[10px] uppercase tracking-[0.08em] text-ink-500 inline-flex items-center gap-1.5">
+        <Icon className="h-3 w-3" /> {label}
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        <span className="text-ink-900 truncate">{value || <span className="text-ink-400">—</span>}</span>
+        {actions && <span className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">{actions}</span>}
       </div>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="rounded-lg bg-bg-100 border border-line-100 px-3 py-2.5">
-      <div className="text-[11px] uppercase tracking-wide text-ink-400">{label}</div>
-      <div className="text-sm font-medium text-ink-900 mt-0.5">{value}</div>
+    <div className={cn(
+      "rounded-lg border px-3 py-2 transition-colors",
+      highlight ? "bg-sage-50 border-sage-200" : "bg-bg-100 border-line-100"
+    )}>
+      <div className="text-[10px] uppercase tracking-[0.08em] text-ink-500">{label}</div>
+      <div className={cn(
+        "text-sm font-medium mt-0.5 capitalize",
+        highlight ? "text-sage-700" : "text-ink-900"
+      )}>{value}</div>
     </div>
   );
 }
