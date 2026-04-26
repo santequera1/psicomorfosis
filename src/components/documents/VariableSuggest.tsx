@@ -1,6 +1,11 @@
 import { Extension } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer, type Editor } from "@tiptap/react";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+
+/** PluginKey único — sin esto, dos extensiones que usan @tiptap/suggestion
+ *  crashean con "Adding different instances of a keyed plugin (suggestion$)". */
+const variableKey = new PluginKey("psm-variable-suggestion");
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 
 /**
@@ -160,6 +165,7 @@ export const VariableSuggest = Extension.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: variableKey,
         ...this.options.suggestion,
         items: ({ query }) => {
           const q = query.toLowerCase().trim();

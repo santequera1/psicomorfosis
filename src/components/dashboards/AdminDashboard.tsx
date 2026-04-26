@@ -107,12 +107,11 @@ export function AdminDashboard() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiLink to="/agenda"><KpiCard label="Sesiones hoy" value={String(kpis.sessionsToday)} delta={{ neutral: true, value: "" }} hint={`${kpis.sessionsAttended} atendidas`} icon={<CalendarCheck2 className="h-4 w-4" />} /></KpiLink>
         <KpiLink to="/pacientes"><KpiCard label="Pacientes activos" value={String(kpis.patients)} delta={{ neutral: true, value: "" }} hint={`${kpis.patientsTotal} en total`} icon={<Users className="h-4 w-4" />} /></KpiLink>
         <KpiLink to="/facturacion"><KpiCard label="Recaudado" value={fmtCOP(kpis.revenue)} delta={{ neutral: true, value: "" }} hint={kpis.pending > 0 ? `${fmtCOP(kpis.pending)} por cobrar` : "al día"} icon={<Wallet className="h-4 w-4" />} /></KpiLink>
         <KpiLink to="/agenda"><KpiCard label="Telepsicología" value={String(kpis.tele)} delta={{ neutral: true, value: "" }} hint="pacientes remotos" icon={<Video className="h-4 w-4" />} /></KpiLink>
-        <button onClick={openCrisis} className="text-left"><KpiCard label="Riesgo activo" value={String(kpis.risk)} emphasis={kpis.risk > 0 ? "risk" : "default"} delta={{ neutral: true, value: "" }} hint={kpis.risk > 0 ? "alto + crítico · abrir protocolo" : "sin alertas"} icon={<ShieldAlert className="h-4 w-4" />} /></button>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -157,12 +156,12 @@ export function AdminDashboard() {
               const colors = ["bg-brand-700", "bg-sage-500", "bg-lavender-400", "bg-brand-400", "bg-warning"];
               return (
                 <div key={m.modality}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-ink-700 inline-flex items-center gap-2 capitalize">
-                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${colors[i]}`} aria-hidden />
+                  <div className="flex items-center justify-between text-sm mb-1.5">
+                    <span className="text-ink-900 inline-flex items-center gap-2.5 capitalize font-medium">
+                      <span className={`h-3 w-3 rounded-full shrink-0 ${colors[i]}`} aria-hidden />
                       {m.modality}
                     </span>
-                    <span className="text-ink-500 tabular">{m.value}</span>
+                    <span className="text-ink-700 tabular text-xs font-semibold">{m.value}</span>
                   </div>
                   <div className="h-2 rounded-full bg-bg-100 overflow-hidden">
                     <div className={`h-full rounded-full ${colors[i]}`} style={{ width: `${pct}%` }} />

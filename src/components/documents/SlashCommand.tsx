@@ -1,6 +1,11 @@
 import { Extension } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer, type Editor } from "@tiptap/react";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+
+/** PluginKey único — sin esto, dos extensiones que usan @tiptap/suggestion
+ *  crashean con "Adding different instances of a keyed plugin (suggestion$)". */
+const slashKey = new PluginKey("psm-slash-suggestion");
 import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   Quote, Code, Minus, Type, Image as ImageIcon, Table as TableIcon,
@@ -227,6 +232,7 @@ export const SlashCommand = Extension.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: slashKey,
         ...this.options.suggestion,
         items: ({ query }) => {
           const q = query.toLowerCase().trim();

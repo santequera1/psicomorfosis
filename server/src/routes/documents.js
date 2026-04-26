@@ -608,7 +608,7 @@ router.get("/:id/file", (req, res) => {
   const d = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?").get(req.params.id, ws(req));
   if (!d) return res.status(404).json({ error: "Documento no encontrado" });
   if (d.kind !== "file" || !d.filename) return res.status(400).json({ error: "Este documento no tiene archivo asociado" });
-  const filePath = path.join(UPLOAD_ROOT, String(d.workspace_id), d.filename);
+  const filePath = path.join(DOCS_DIR, String(d.workspace_id), d.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Archivo no encontrado en disco" });
   const niceName = `${(d.name || "documento").replace(/[^\w\-. ]/g, "_")}${path.extname(d.original_name || d.filename)}`;
   res.setHeader("Content-Type", d.mime || "application/octet-stream");
@@ -758,7 +758,7 @@ router.delete("/:id", (req, res) => {
   if (!d) return res.status(404).json({ error: "Documento no encontrado" });
   // Si tiene archivo físico, lo borramos también
   if (d.kind === "file" && d.filename) {
-    const filePath = path.join(UPLOAD_ROOT, String(d.workspace_id), d.filename);
+    const filePath = path.join(DOCS_DIR, String(d.workspace_id), d.filename);
     fs.promises.unlink(filePath).catch(() => null);
   }
   db.prepare("DELETE FROM documents WHERE id = ?").run(req.params.id);
