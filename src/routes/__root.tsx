@@ -1,19 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import appCss from "../styles.css?url";
-
-/** Aplica el tema guardado antes del primer render para evitar flash de tema claro. */
-function useAppliedTheme() {
-  useEffect(() => {
-    const pref = (window.localStorage.getItem("psm.theme") as "claro" | "oscuro" | "auto" | null) ?? "claro";
-    const shouldDark =
-      pref === "oscuro" ||
-      (pref === "auto" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
-    document.documentElement.classList.toggle("dark", shouldDark);
-  }, []);
-}
 
 function NotFoundComponent() {
   return (
@@ -42,6 +31,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "color-scheme", content: "light dark" },
       { title: "Psicomorfosis" },
       { name: "description", content: "App para gestión de pacientes" },
       { name: "author", content: "Lovable" },
@@ -69,23 +59,29 @@ export const Route = createRootRoute({
 
 /**
  * Script de pre-hidratación que corre ANTES de que React se ejecute.
- * Redirige a /login si no hay token y la ruta actual no es pública.
- * Esto elimina el flash de "Verificando sesión…" entre el SSR y la
- * hidratación del cliente: si no hay sesión, el browser cancela el parse
- * del HTML y navega a /login antes de renderizar la página protegida.
+ *  1) Aplica .dark al <html> según preferencia guardada (claro/oscuro/auto)
+ *     ANTES del primer paint, eliminando el flash de tema claro al entrar
+ *     en una página oscura.
+ *  2) Redirige a /login si no hay token y la ruta actual no es pública.
+ *     Elimina el flash de "Verificando sesión…" entre SSR e hidratación.
  */
-const AUTH_BOOTSTRAP_SCRIPT = `
+const BOOTSTRAP_SCRIPT = `
 (function(){
+  try {
+    var pref = localStorage.getItem('psm.theme') || 'claro';
+    var dark = pref === 'oscuro' ||
+      (pref === 'auto' && window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', dark);
+  } catch(e) {}
   try {
     var token = localStorage.getItem('psm.token');
     var path = location.pathname;
-    // Rutas que NO requieren autenticación
     var publicPaths = ['/login'];
     var isPublic = publicPaths.indexOf(path) !== -1;
     if (!token && !isPublic) {
       location.replace('/login');
     } else if (token && path === '/login') {
-      // Ya autenticado entrando a /login → saltar al home
       location.replace('/');
     }
   } catch(e) {}
@@ -98,7 +94,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
         {/* Debe ir antes que <Scripts /> para correr primero */}
-        <script dangerouslySetInnerHTML={{ __html: AUTH_BOOTSTRAP_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: BOOTSTRAP_SCRIPT }} />
       </head>
       <body>
         {children}
@@ -109,7 +105,6 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  useAppliedTheme();
   const [client] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {

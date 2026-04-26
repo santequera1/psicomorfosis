@@ -201,11 +201,14 @@
 }
 
 .dark {
+  color-scheme: dark;
+
+  /* shadcn map */
   --background: oklch(0.17 0.018 200);
   --foreground: oklch(0.94 0.01 180);
-  --card: oklch(0.22 0.022 200);
+  --card: oklch(0.24 0.022 200); /* algo más claro que el bg para que las cards se despeguen */
   --card-foreground: oklch(0.94 0.01 180);
-  --popover: oklch(0.22 0.022 200);
+  --popover: oklch(0.24 0.022 200);
   --popover-foreground: oklch(0.94 0.01 180);
   --primary: var(--brand-400);
   --primary-foreground: oklch(0.18 0.02 200);
@@ -215,12 +218,49 @@
   --muted-foreground: oklch(0.72 0.012 200);
   --accent: oklch(0.3 0.025 200);
   --accent-foreground: oklch(0.94 0.01 180);
-  --border: oklch(1 0 0 / 0.08);
-  --input: oklch(1 0 0 / 0.12);
+  --border: oklch(1 0 0 / 0.13);
+  --input: oklch(1 0 0 / 0.14);
   --ring: var(--brand-400);
+
+  /* Backgrounds y superficie */
   --bg-50: oklch(0.17 0.018 200);
-  --bg-100: oklch(0.2 0.02 200);
-  --surface: oklch(0.22 0.022 200);
+  --bg-100: oklch(0.21 0.02 200);
+  --surface: oklch(0.24 0.022 200);
+
+  /* Tinta neutra invertida — ink-900 = texto más fuerte (claro) en oscuro.
+     Mantiene la jerarquía: 900 > 700 > 500 > 400 > 300. */
+  --ink-900: oklch(0.96 0.01 180);
+  --ink-700: oklch(0.88 0.012 190);
+  --ink-500: oklch(0.72 0.012 200);
+  --ink-400: oklch(0.6 0.015 200);
+  --ink-300: oklch(0.48 0.018 210);
+
+  /* Líneas: convertirlas en alphas blancos para que se distingan sobre fondo oscuro */
+  --line-100: oklch(1 0 0 / 0.07);
+  --line-200: oklch(1 0 0 / 0.13);
+
+  /* Tonos de marca para fondos sutiles en cards/badges sobre oscuro */
+  --brand-50: oklch(0.27 0.03 200);
+  --brand-100: oklch(0.32 0.04 200);
+
+  /* Sage sobre fondo oscuro: pasamos los tints a versiones tenues */
+  --sage-50: oklch(0.27 0.022 155);
+  --sage-200: oklch(0.4 0.04 155);
+
+  /* Lavanda */
+  --lavender-100: oklch(0.32 0.04 305);
+
+  /* Riesgo: más saturado y luminoso para resaltar contra fondo oscuro */
+  --risk-low: oklch(0.78 0.1 155);
+  --risk-moderate: oklch(0.78 0.13 75);
+  --risk-high: oklch(0.74 0.16 35);
+  --risk-critical: oklch(0.72 0.18 28);
+
+  /* Soft semánticos: translúcidos saturados para que destaquen sin lavarse */
+  --success-soft: oklch(0.4 0.08 155 / 0.25);
+  --warning-soft: oklch(0.42 0.1 70 / 0.28);
+  --error-soft: oklch(0.4 0.13 28 / 0.28);
+  --info-soft: oklch(0.4 0.07 230 / 0.25);
 }
 
 @layer base {
@@ -248,4 +288,28 @@
      pestañas que no caben, etc.) — evita que el scrollbar gris robe altura. */
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Números de KPI con ancho tabular para mejor lectura comparativa */
+  .font-serif {
+    font-feature-settings: "ss01", "cv11", "tnum";
+  }
+
+  /* Scrollbar adaptado a tema oscuro (Firefox + WebKit) */
+  .dark {
+    scrollbar-color: oklch(0.35 0.02 200) transparent;
+  }
+  .dark ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.35 0.02 200);
+    border-radius: 8px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.42 0.025 200);
+  }
 }
