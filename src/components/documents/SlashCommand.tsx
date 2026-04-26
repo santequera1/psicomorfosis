@@ -9,6 +9,7 @@ const slashKey = new PluginKey("psm-slash-suggestion");
 import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   Quote, Code, Minus, Type, Image as ImageIcon, Table as TableIcon,
+  Brain, ClipboardList, Stethoscope, ShieldAlert, Users,
 } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 
@@ -17,7 +18,39 @@ export interface SlashItem {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   keywords: string[];
+  group?: string;
   command: ({ editor, range }: { editor: Editor; range: { from: number; to: number } }) => void;
+}
+
+// ─── Helpers para construir bloques TipTap ─────────────────────────────────
+const h2 = (text: string) => ({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text }] });
+const h3 = (text: string) => ({ type: "heading", attrs: { level: 3 }, content: [{ type: "text", text }] });
+const p = (text?: string) => text
+  ? { type: "paragraph", content: [{ type: "text", text }] }
+  : { type: "paragraph" };
+
+/** Construye un párrafo "Etiqueta: " con la etiqueta en negrita y el resto vacío para llenar. */
+const labeledP = (label: string) => ({
+  type: "paragraph",
+  content: [
+    { type: "text", text: label, marks: [{ type: "bold" }] },
+    { type: "text", text: " " },
+  ],
+});
+const ulItems = (items: string[]) => ({
+  type: "bulletList",
+  content: items.map((t) => ({
+    type: "listItem",
+    content: [labeledP(t)],
+  })),
+});
+
+/**
+ * Inserta un fragmento de bloques TipTap reemplazando el rango del slash
+ * command. Usado por todos los bloques clínicos prearmados.
+ */
+function insertFragment(editor: Editor, range: { from: number; to: number }, content: any[]) {
+  editor.chain().focus().deleteRange(range).insertContent(content).run();
 }
 
 export const SLASH_ITEMS: SlashItem[] = [
@@ -109,6 +142,160 @@ export const SLASH_ITEMS: SlashItem[] = [
       editor.chain().focus().deleteRange(range).setImage({ src: url }).run();
     },
   },
+
+  // ───────────────── Bloques clínicos prearmados ─────────────────
+  {
+    title: "Examen mental",
+    description: "Apariencia, conducta, lenguaje, afecto, pensamiento, percepción, juicio, insight",
+    icon: Brain,
+    keywords: ["examen", "mental", "clinico", "psicopatologia", "psp"],
+    group: "Clínico",
+    command: ({ editor, range }) => insertFragment(editor, range, [
+      h2("Examen mental"),
+      ulItems([
+        "Apariencia:",
+        "Conducta:",
+        "Lenguaje:",
+        "Afecto:",
+        "Pensamiento (curso, contenido):",
+        "Percepción:",
+        "Juicio y prueba de realidad:",
+        "Insight:",
+        "Memoria y atención:",
+        "Riesgo auto/heterolesivo:",
+      ]),
+      p(),
+    ]),
+  },
+  {
+    title: "Anamnesis",
+    description: "Antecedentes personales, familiares, médicos, sustancias y sociales",
+    icon: ClipboardList,
+    keywords: ["anamnesis", "antecedentes", "historia"],
+    group: "Clínico",
+    command: ({ editor, range }) => insertFragment(editor, range, [
+      h2("Anamnesis"),
+      h3("Antecedentes personales"),
+      p(),
+      h3("Antecedentes familiares (psiquiátricos / médicos)"),
+      p(),
+      h3("Antecedentes médicos"),
+      p(),
+      h3("Consumo de sustancias"),
+      ulItems([
+        "Tabaco:",
+        "Alcohol:",
+        "Otras sustancias:",
+      ]),
+      h3("Antecedentes psicoterapéuticos"),
+      p(),
+      h3("Red de apoyo y contexto social"),
+      p(),
+    ]),
+  },
+  {
+    title: "Plan terapéutico TCC",
+    description: "Objetivos, técnicas, frecuencia y metas",
+    icon: Stethoscope,
+    keywords: ["plan", "tratamiento", "tcc", "terapia", "objetivos"],
+    group: "Clínico",
+    command: ({ editor, range }) => insertFragment(editor, range, [
+      h2("Plan terapéutico"),
+      h3("Objetivos terapéuticos"),
+      ulItems([
+        "Corto plazo (4-6 sesiones):",
+        "Mediano plazo (8-12 sesiones):",
+        "Largo plazo:",
+      ]),
+      h3("Enfoque y técnicas"),
+      ulItems([
+        "Modelo:",
+        "Técnicas a implementar:",
+        "Tareas terapéuticas previstas:",
+      ]),
+      h3("Frecuencia y duración"),
+      labeledP("Frecuencia de sesiones:"),
+      labeledP("Duración estimada del proceso:"),
+      h3("Indicadores de progreso"),
+      ulItems([
+        "Escalas de medición:",
+        "Hitos clínicos:",
+      ]),
+      h3("Criterios de revisión / alta"),
+      p(),
+    ]),
+  },
+  {
+    title: "Riesgo / Protocolo de crisis",
+    description: "Evaluación de riesgo + plan de seguridad",
+    icon: ShieldAlert,
+    keywords: ["riesgo", "crisis", "suicida", "autolesion", "protocolo", "seguridad"],
+    group: "Clínico",
+    command: ({ editor, range }) => insertFragment(editor, range, [
+      h2("Evaluación de riesgo"),
+      labeledP("Nivel de riesgo (sin riesgo / bajo / moderado / alto / crítico):"),
+      h3("Factores de riesgo"),
+      ulItems([
+        "Ideación (frecuencia, intensidad, plan, método):",
+        "Antecedentes de intentos:",
+        "Síntomas activos:",
+        "Estresores recientes:",
+        "Aislamiento social:",
+      ]),
+      h3("Factores protectores"),
+      ulItems([
+        "Red de apoyo:",
+        "Razones para vivir:",
+        "Adherencia al tratamiento:",
+        "Acceso a medios:",
+      ]),
+      h3("Plan de seguridad"),
+      ulItems([
+        "Señales de alerta tempranas:",
+        "Estrategias de afrontamiento internas:",
+        "Personas de contacto en crisis:",
+        "Profesionales / servicios disponibles:",
+        "Líneas oficiales: 106 Bogotá, 123 emergencias, 192 MinSalud",
+        "Limitación de medios letales:",
+      ]),
+      h3("Compromiso terapéutico"),
+      p(),
+    ]),
+  },
+  {
+    title: "Genograma · datos familiares",
+    description: "Composición familiar y dinámica",
+    icon: Users,
+    keywords: ["genograma", "familia", "familiar", "sistemico"],
+    group: "Clínico",
+    command: ({ editor, range }) => insertFragment(editor, range, [
+      h2("Composición familiar y genograma"),
+      h3("Núcleo familiar"),
+      ulItems([
+        "Padre:",
+        "Madre:",
+        "Hermanos/as:",
+        "Pareja actual:",
+        "Hijos/as:",
+      ]),
+      h3("Familia extensa relevante"),
+      p(),
+      h3("Dinámica familiar"),
+      ulItems([
+        "Estilo de comunicación:",
+        "Roles y jerarquías:",
+        "Conflictos significativos:",
+        "Antecedentes de salud mental en la familia:",
+      ]),
+      h3("Hechos vitales relevantes"),
+      ulItems([
+        "Pérdidas / duelos:",
+        "Cambios de domicilio:",
+        "Eventos traumáticos:",
+      ]),
+      p("💡 Si tienes el genograma dibujado, súbelo como imagen con el slash menu."),
+    ]),
+  },
 ];
 
 export type SlashListRef = {
@@ -152,30 +339,54 @@ export const SlashList = forwardRef<SlashListRef, SlashListProps>(({ items, comm
     );
   }
 
+  // Agrupar por sección. Items sin grupo van a "Bloques básicos".
+  const groups: Record<string, { items: SlashItem[]; firstIndex: number }> = {};
+  items.forEach((it, idx) => {
+    const g = it.group ?? "Bloques básicos";
+    if (!groups[g]) groups[g] = { items: [], firstIndex: idx };
+    groups[g].items.push(it);
+  });
+  // Mantener el orden de inserción de grupos (Bloques básicos primero, después
+  // Clínico si es que aparece): ordenar por firstIndex.
+  const orderedGroups = Object.entries(groups).sort((a, b) => a[1].firstIndex - b[1].firstIndex);
+
+  let runningIdx = 0;
   return (
-    <div className="rounded-lg border border-line-200 bg-surface shadow-card max-h-72 overflow-y-auto w-72 p-1">
-      {items.map((it, i) => {
-        const Icon = it.icon;
-        return (
-          <button
-            key={it.title}
-            type="button"
-            onClick={() => command(it)}
-            className={
-              "w-full flex items-start gap-3 px-2 py-2 rounded-md text-left transition-colors " +
-              (i === selected ? "bg-brand-50" : "hover:bg-bg-100")
-            }
-          >
-            <span className="h-8 w-8 rounded-md bg-bg flex items-center justify-center shrink-0 mt-0.5">
-              <Icon className="h-4 w-4 text-ink-700" />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm text-ink-900 font-medium">{it.title}</span>
-              <span className="block text-xs text-ink-500 truncate">{it.description}</span>
-            </span>
-          </button>
-        );
-      })}
+    <div className="rounded-lg border border-line-200 bg-surface shadow-card max-h-96 overflow-y-auto w-80 p-1">
+      {orderedGroups.map(([groupName, { items: groupItems }]) => (
+        <div key={groupName}>
+          <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium">
+            {groupName}
+          </div>
+          {groupItems.map((it) => {
+            const myIdx = runningIdx++;
+            const Icon = it.icon;
+            const isClinical = it.group === "Clínico";
+            return (
+              <button
+                key={it.title}
+                type="button"
+                onClick={() => command(it)}
+                className={
+                  "w-full flex items-start gap-3 px-2 py-2 rounded-md text-left transition-colors " +
+                  (myIdx === selected ? "bg-brand-50" : "hover:bg-bg-100")
+                }
+              >
+                <span className={
+                  "h-8 w-8 rounded-md flex items-center justify-center shrink-0 mt-0.5 " +
+                  (isClinical ? "bg-lavender-100 text-lavender-500" : "bg-bg text-ink-700")
+                }>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm text-ink-900 font-medium">{it.title}</span>
+                  <span className="block text-xs text-ink-500 truncate">{it.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 });
