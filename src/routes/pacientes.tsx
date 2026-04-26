@@ -595,7 +595,14 @@ function NewPatientModal({ onClose }: { onClose: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: (body: Partial<Patient> & { professionalId?: number }) => api.createPatient(body),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Update inmediato del cache: el paciente aparece en la lista al cerrar el modal,
+      // sin esperar al refetch. invalidateQueries dispara el refetch a continuación
+      // para que el orden y los campos derivados (next_session, etc) queden consistentes.
+      qc.setQueryData<Patient[]>(["patients"], (old = []) => {
+        if (old.some((p) => p.id === created.id)) return old;
+        return [...old, created].sort((a, b) => a.name.localeCompare(b.name));
+      });
       qc.invalidateQueries({ queryKey: ["patients"] });
       qc.invalidateQueries({ queryKey: ["workspace"] });
       qc.invalidateQueries({ queryKey: ["appointments"] });

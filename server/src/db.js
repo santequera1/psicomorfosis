@@ -428,7 +428,39 @@ function backfillExisting() {
     console.warn("[db] backfill professional_id falló:", err.message);
   }
 
-  // 3. Info de Nathaly (workspace individual): actualizar solo si los valores actuales son los antiguos
+  // 3. Limpiar strings vencidos de next_session/last_contact en pacientes.
+  // Estos campos ahora se DERIVAN de la tabla appointments en el endpoint;
+  // los strings literales del seed ("Hoy · 10:30", "Hace 2 días") quedan vencidos
+  // y confunden al usuario. Los matamos para que la fuente de verdad sea appointments.
+  try {
+    const r = db.prepare(`
+      UPDATE patients SET next_session = NULL, last_contact = NULL
+      WHERE next_session IS NOT NULL OR last_contact IS NOT NULL
+    `).run();
+    if (r.changes > 0) console.log(`[db] backfill: limpiados strings de next_session/last_contact en ${r.changes} pacientes`);
+  } catch (err) {
+    console.warn("[db] backfill clean session strings falló:", err.message);
+  }
+
+  // 4. Desfirmar los bloques de historia clínica sembrados de oficio.
+  // El seed inicial los marcaba como firmados sin acción del profesional, lo cual viola
+  // el espíritu de la Res. 1995/1999. Si signed_at == created_at en notas tipo "bloque"
+  // creadas el día del seed (2025-11-04), las pasamos a borrador. Un sign() humano deja
+  // signed_at != created_at, así que esto no afecta firmas reales.
+  try {
+    const r = db.prepare(`
+      UPDATE clinical_notes SET signed_at = NULL
+      WHERE signed_at IS NOT NULL
+        AND signed_at = created_at
+        AND created_at = '2025-11-04T10:00:00.000Z'
+        AND kind IN ('motivo', 'antecedentes', 'examen_mental', 'cie11', 'plan')
+    `).run();
+    if (r.changes > 0) console.log(`[db] backfill: desfirmé ${r.changes} bloques de historia (sembrados de oficio)`);
+  } catch (err) {
+    console.warn("[db] backfill desfirmar bloques falló:", err.message);
+  }
+
+  // 5. Info de Nathaly (workspace individual): actualizar solo si los valores actuales son los antiguos
   try {
     const ind = db.prepare("SELECT id FROM workspaces WHERE mode = 'individual' LIMIT 1").get();
     if (ind) {
@@ -519,11 +551,13 @@ function seedIndividualWorkspace() {
 
   // Pacientes (5)
   const patients = [
-    { id: "P-0101", name: "María Camila Rondón", preferred_name: "Cami", pronouns: "ella", doc: "CC 1.024.587.331", age: 28, phone: "+57 310 482 1290", email: "cami.rondon@correo.co", modality: "individual", status: "activo", reason: "Ansiedad generalizada", last_contact: "Hace 2 días", next_session: "Hoy · 10:30", risk: "low", tags: "TCC" },
-    { id: "P-0102", name: "Andrés Felipe Galeano", preferred_name: null, pronouns: "él", doc: "CC 79.554.012", age: 41, phone: "+57 312 998 0021", email: "afgaleano@correo.co", modality: "individual", status: "activo", reason: "Episodio depresivo mayor", last_contact: "Ayer", next_session: "Hoy · 11:30", risk: "high", tags: "psiquiatría" },
-    { id: "P-0103", name: "Laura Restrepo Vélez", preferred_name: null, pronouns: "ella", doc: "CC 1.152.337.044", age: 34, phone: "+57 320 441 9928", email: "laura.rv@correo.co", modality: "tele", status: "activo", reason: "Duelo complicado", last_contact: "Hace 3 días", next_session: "Mañana · 09:00", risk: "low", tags: null },
-    { id: "P-0104", name: "Valentina Soto Cárdenas", preferred_name: "Val", pronouns: "elle", doc: "TI 1.030.998.221", age: 16, phone: "+57 301 776 8812", email: "vsoto.fam@correo.co", modality: "individual", status: "activo", reason: "Autolesión no suicida · regulación emocional", last_contact: "Hoy", next_session: "Mañana · 11:00", risk: "critical", tags: "DBT,menor" },
-    { id: "P-0105", name: "Marta Inés Cifuentes", preferred_name: null, pronouns: "ella", doc: "CC 41.998.220", age: 67, phone: "+57 311 220 7788", email: "marta.cif@correo.co", modality: "tele", status: "alta", reason: "Adaptación a jubilación", last_contact: "Hace 2 meses", next_session: null, risk: "none", tags: null },
+    // last_contact y next_session se DERIVAN de la tabla appointments al consultar.
+    // No se siembran aquí para evitar strings vencidos cuando la BD no es fresca.
+    { id: "P-0101", name: "María Camila Rondón", preferred_name: "Cami", pronouns: "ella", doc: "CC 1.024.587.331", age: 28, phone: "+57 310 482 1290", email: "cami.rondon@correo.co", modality: "individual", status: "activo", reason: "Ansiedad generalizada", last_contact: null, next_session: null, risk: "low", tags: "TCC" },
+    { id: "P-0102", name: "Andrés Felipe Galeano", preferred_name: null, pronouns: "él", doc: "CC 79.554.012", age: 41, phone: "+57 312 998 0021", email: "afgaleano@correo.co", modality: "individual", status: "activo", reason: "Episodio depresivo mayor", last_contact: null, next_session: null, risk: "high", tags: "psiquiatría" },
+    { id: "P-0103", name: "Laura Restrepo Vélez", preferred_name: null, pronouns: "ella", doc: "CC 1.152.337.044", age: 34, phone: "+57 320 441 9928", email: "laura.rv@correo.co", modality: "tele", status: "activo", reason: "Duelo complicado", last_contact: null, next_session: null, risk: "low", tags: null },
+    { id: "P-0104", name: "Valentina Soto Cárdenas", preferred_name: "Val", pronouns: "elle", doc: "TI 1.030.998.221", age: 16, phone: "+57 301 776 8812", email: "vsoto.fam@correo.co", modality: "individual", status: "activo", reason: "Autolesión no suicida · regulación emocional", last_contact: null, next_session: null, risk: "critical", tags: "DBT,menor" },
+    { id: "P-0105", name: "Marta Inés Cifuentes", preferred_name: null, pronouns: "ella", doc: "CC 41.998.220", age: 67, phone: "+57 311 220 7788", email: "marta.cif@correo.co", modality: "tele", status: "alta", reason: "Adaptación a jubilación", last_contact: null, next_session: null, risk: "none", tags: null },
   ];
   const pIns = db.prepare(`
     INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, tags)
@@ -584,16 +618,16 @@ function seedOrganizationWorkspace() {
 
   // 10 pacientes repartidos
   const patients = [
-    { id: "P-1042", name: "María Camila Rondón", preferred_name: "Cami", pronouns: "ella", doc: "CC 1.024.587.331", age: 28, phone: "+57 310 482 1290", email: "cami.rondon@correo.co", modality: "individual", status: "activo", reason: "Ansiedad generalizada", last_contact: "Hace 2 días", next_session: "Hoy · 10:30", risk: "low", tags: "TCC", professional_id: lucia, professional: "Dra. Lucía Méndez", sede_id: chapId },
-    { id: "P-1011", name: "Andrés Felipe Galeano", preferred_name: null, pronouns: "él", doc: "CC 79.554.012", age: 41, phone: "+57 312 998 0021", email: "afgaleano@correo.co", modality: "individual", status: "activo", reason: "Episodio depresivo mayor", last_contact: "Ayer", next_session: "Hoy · 11:30", risk: "high", tags: "psiquiatría", professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: chapId },
-    { id: "P-0987", name: "Familia Ortega-Pinilla", preferred_name: null, pronouns: "—", doc: "—", age: 0, phone: "+57 318 220 4410", email: "ortega.fam@correo.co", modality: "familiar", status: "activo", reason: "Dinámica familiar · adolescente", last_contact: "Hace 5 días", next_session: "Hoy · 14:00", risk: "moderate", tags: null, professional_id: sofia, professional: "Mg. Sofía Quintana", sede_id: cedId },
-    { id: "P-1098", name: "Valentina Soto Cárdenas", preferred_name: "Val", pronouns: "elle", doc: "TI 1.030.998.221", age: 16, phone: "+57 301 776 8812", email: "vsoto.fam@correo.co", modality: "individual", status: "activo", reason: "Autolesión no suicida · regulación emocional", last_contact: "Hoy", next_session: "Mañana · 09:00", risk: "critical", tags: "DBT,menor", professional_id: lucia, professional: "Dra. Lucía Méndez", sede_id: chapId },
-    { id: "P-0876", name: "Jorge & Patricia Lemus", preferred_name: null, pronouns: "—", doc: "—", age: 0, phone: "+57 315 110 4477", email: "jpl.pareja@correo.co", modality: "pareja", status: "activo", reason: "Crisis de pareja · comunicación", last_contact: "Hace 1 semana", next_session: "Hoy · 17:00", risk: "none", tags: null, professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: cedId },
-    { id: "P-1120", name: "Laura Restrepo Vélez", preferred_name: null, pronouns: "ella", doc: "CC 1.152.337.044", age: 34, phone: "+57 320 441 9928", email: "laura.rv@correo.co", modality: "tele", status: "activo", reason: "Duelo complicado", last_contact: "Hace 3 días", next_session: "Hoy · 18:00", risk: "low", tags: null, professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: null },
-    { id: "P-0712", name: "Camilo Esteban Ruiz", preferred_name: null, pronouns: "él", doc: "CC 80.221.554", age: 52, phone: "+57 313 668 1192", email: "ce.ruiz@correo.co", modality: "individual", status: "pausa", reason: "Trastorno bipolar II · seguimiento", last_contact: "Hace 3 semanas", next_session: null, risk: "moderate", tags: "psiquiatría", professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: chapId },
-    { id: "P-0998", name: "Sara Liliana Beltrán", preferred_name: null, pronouns: "ella", doc: "CC 1.014.778.092", age: 24, phone: "+57 319 002 7766", email: "s.beltran@correo.co", modality: "individual", status: "activo", reason: "TCA · anorexia restrictiva", last_contact: "Hace 2 días", next_session: "Mañana · 11:00", risk: "high", tags: "interdisciplinar", professional_id: sofia, professional: "Mg. Sofía Quintana", sede_id: cedId },
-    { id: "P-0654", name: "Tomás Aristizábal", preferred_name: null, pronouns: "él", doc: "CC 1.085.221.001", age: 19, phone: "+57 314 998 1212", email: "tomi.a@correo.co", modality: "individual", status: "activo", reason: "Adicción a sustancias · cannabis", last_contact: "Hace 4 días", next_session: "Jueves · 16:00", risk: "moderate", tags: null, professional_id: nathaly, professional: "Nathaly Ferrer Pacheco", sede_id: cedId },
-    { id: "P-0532", name: "Marta Inés Cifuentes", preferred_name: null, pronouns: "ella", doc: "CC 41.998.220", age: 67, phone: "+57 311 220 7788", email: "marta.cif@correo.co", modality: "tele", status: "alta", reason: "Adaptación a jubilación", last_contact: "Hace 2 meses", next_session: null, risk: "none", tags: null, professional_id: nathaly, professional: "Nathaly Ferrer Pacheco", sede_id: null },
+    { id: "P-1042", name: "María Camila Rondón", preferred_name: "Cami", pronouns: "ella", doc: "CC 1.024.587.331", age: 28, phone: "+57 310 482 1290", email: "cami.rondon@correo.co", modality: "individual", status: "activo", reason: "Ansiedad generalizada", last_contact: null, next_session: null, risk: "low", tags: "TCC", professional_id: lucia, professional: "Dra. Lucía Méndez", sede_id: chapId },
+    { id: "P-1011", name: "Andrés Felipe Galeano", preferred_name: null, pronouns: "él", doc: "CC 79.554.012", age: 41, phone: "+57 312 998 0021", email: "afgaleano@correo.co", modality: "individual", status: "activo", reason: "Episodio depresivo mayor", last_contact: null, next_session: null, risk: "high", tags: "psiquiatría", professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: chapId },
+    { id: "P-0987", name: "Familia Ortega-Pinilla", preferred_name: null, pronouns: "—", doc: "—", age: 0, phone: "+57 318 220 4410", email: "ortega.fam@correo.co", modality: "familiar", status: "activo", reason: "Dinámica familiar · adolescente", last_contact: null, next_session: null, risk: "moderate", tags: null, professional_id: sofia, professional: "Mg. Sofía Quintana", sede_id: cedId },
+    { id: "P-1098", name: "Valentina Soto Cárdenas", preferred_name: "Val", pronouns: "elle", doc: "TI 1.030.998.221", age: 16, phone: "+57 301 776 8812", email: "vsoto.fam@correo.co", modality: "individual", status: "activo", reason: "Autolesión no suicida · regulación emocional", last_contact: null, next_session: null, risk: "critical", tags: "DBT,menor", professional_id: lucia, professional: "Dra. Lucía Méndez", sede_id: chapId },
+    { id: "P-0876", name: "Jorge & Patricia Lemus", preferred_name: null, pronouns: "—", doc: "—", age: 0, phone: "+57 315 110 4477", email: "jpl.pareja@correo.co", modality: "pareja", status: "activo", reason: "Crisis de pareja · comunicación", last_contact: null, next_session: null, risk: "none", tags: null, professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: cedId },
+    { id: "P-1120", name: "Laura Restrepo Vélez", preferred_name: null, pronouns: "ella", doc: "CC 1.152.337.044", age: 34, phone: "+57 320 441 9928", email: "laura.rv@correo.co", modality: "tele", status: "activo", reason: "Duelo complicado", last_contact: null, next_session: null, risk: "low", tags: null, professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: null },
+    { id: "P-0712", name: "Camilo Esteban Ruiz", preferred_name: null, pronouns: "él", doc: "CC 80.221.554", age: 52, phone: "+57 313 668 1192", email: "ce.ruiz@correo.co", modality: "individual", status: "pausa", reason: "Trastorno bipolar II · seguimiento", last_contact: null, next_session: null, risk: "moderate", tags: "psiquiatría", professional_id: mateo, professional: "Dr. Mateo Rivas", sede_id: chapId },
+    { id: "P-0998", name: "Sara Liliana Beltrán", preferred_name: null, pronouns: "ella", doc: "CC 1.014.778.092", age: 24, phone: "+57 319 002 7766", email: "s.beltran@correo.co", modality: "individual", status: "activo", reason: "TCA · anorexia restrictiva", last_contact: null, next_session: null, risk: "high", tags: "interdisciplinar", professional_id: sofia, professional: "Mg. Sofía Quintana", sede_id: cedId },
+    { id: "P-0654", name: "Tomás Aristizábal", preferred_name: null, pronouns: "él", doc: "CC 1.085.221.001", age: 19, phone: "+57 314 998 1212", email: "tomi.a@correo.co", modality: "individual", status: "activo", reason: "Adicción a sustancias · cannabis", last_contact: null, next_session: null, risk: "moderate", tags: null, professional_id: nathaly, professional: "Nathaly Ferrer Pacheco", sede_id: cedId },
+    { id: "P-0532", name: "Marta Inés Cifuentes", preferred_name: null, pronouns: "ella", doc: "CC 41.998.220", age: 67, phone: "+57 311 220 7788", email: "marta.cif@correo.co", modality: "tele", status: "alta", reason: "Adaptación a jubilación", last_contact: null, next_session: null, risk: "none", tags: null, professional_id: nathaly, professional: "Nathaly Ferrer Pacheco", sede_id: null },
   ];
 
   const pIns = db.prepare(`
@@ -686,13 +720,15 @@ function seedClinicalDataFor(wsId, patients, singleProfessional) {
       iIns.run(`F-2026-${String(wsId * 100 + idx * 2 + 1).padStart(4, "0")}`, wsId, p.id, p.name, prof, "Sesión individual TCC", 180000, "PSE", "pendiente", "2026-04-16");
     }
 
-    // Bloques de historia clínica iniciales (firmados)
+    // Bloques de historia clínica iniciales (BORRADORES — el profesional debe revisarlos y firmarlos
+    // antes de que queden como historia oficial. La Resolución 1995/1999 exige que la firma sea
+    // un acto consciente del profesional, no del seed automático).
     const firstDay = "2025-11-04T10:00:00.000Z";
-    noteIns.run(wsId, p.id, prof, "motivo", `${p.reason}. Inicio de síntomas hace varios meses con impacto funcional moderado.`, firstDay, firstDay);
-    noteIns.run(wsId, p.id, prof, "antecedentes", "Sin antecedentes psiquiátricos previos relevantes. Historia médica sin particularidades. Red de apoyo funcional. Se descarta consumo problemático de sustancias.", firstDay, firstDay);
-    noteIns.run(wsId, p.id, prof, "examen_mental", "Paciente alerta, orientado en las tres esferas. Lenguaje fluido. Afecto congruente con contenido. Pensamiento lógico y organizado. Sin ideación auto/heterolesiva. Insight preservado.", firstDay, firstDay);
-    noteIns.run(wsId, p.id, prof, "cie11", `Diagnóstico presuntivo según tamizaje inicial. Estado actual: ${p.status}. Revisión con pruebas psicométricas pendiente.`, firstDay, firstDay);
-    noteIns.run(wsId, p.id, prof, "plan", `Psicoterapia ${p.modality === "tele" ? "por telepsicología" : "presencial"} con enfoque TCC. Sesiones semanales. Aplicación periódica de PHQ-9/GAD-7. Revisión de plan cada 4 sesiones.`, firstDay, firstDay);
+    noteIns.run(wsId, p.id, prof, "motivo", `${p.reason}. Inicio de síntomas hace varios meses con impacto funcional moderado.`, firstDay, null);
+    noteIns.run(wsId, p.id, prof, "antecedentes", "Sin antecedentes psiquiátricos previos relevantes. Historia médica sin particularidades. Red de apoyo funcional. Se descarta consumo problemático de sustancias.", firstDay, null);
+    noteIns.run(wsId, p.id, prof, "examen_mental", "Paciente alerta, orientado en las tres esferas. Lenguaje fluido. Afecto congruente con contenido. Pensamiento lógico y organizado. Sin ideación auto/heterolesiva. Insight preservado.", firstDay, null);
+    noteIns.run(wsId, p.id, prof, "cie11", `Diagnóstico presuntivo según tamizaje inicial. Estado actual: ${p.status}. Revisión con pruebas psicométricas pendiente.`, firstDay, null);
+    noteIns.run(wsId, p.id, prof, "plan", `Psicoterapia ${p.modality === "tele" ? "por telepsicología" : "presencial"} con enfoque TCC. Sesiones semanales. Aplicación periódica de PHQ-9/GAD-7. Revisión de plan cada 4 sesiones.`, firstDay, null);
 
     // Nota SOAP de sesión reciente (firmada)
     const recent = "2026-04-09T15:30:00.000Z";

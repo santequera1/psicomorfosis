@@ -84,8 +84,8 @@ export function AdminDashboard() {
           {workspace && (
             <p className="text-xs text-ink-400 mt-1">
               {isOrg
-                ? `${workspace.sedes.length} sedes · ${workspace.professionals.length} profesionales · ${patients.length} pacientes`
-                : `Modo individual · ${patients.length} pacientes activos`}
+                ? `${workspace.sedes.length} sedes · ${workspace.professionals.length} profesionales · ${activePatients.length} activos / ${patients.length} total`
+                : `Modo individual · ${activePatients.length} pacientes activos${patients.length > activePatients.length ? ` · ${patients.length - activePatients.length} en alta/pausa` : ""}`}
             </p>
           )}
         </div>

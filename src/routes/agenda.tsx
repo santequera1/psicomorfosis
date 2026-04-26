@@ -531,7 +531,11 @@ function NewAppointmentModal({ patients, onClose }: { patients: ApiPatient[]; on
       notes,
     } as any),
     onSuccess: () => {
+      // Invalidar TODAS las queries de citas (incluyendo las que llevan fecha en el key)
+      // y los pacientes (porque derivamos next_session/last_contact de appointments).
       qc.invalidateQueries({ queryKey: ["appointments"] });
+      qc.invalidateQueries({ queryKey: ["all-appointments"] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
       onClose();
     },
   });
