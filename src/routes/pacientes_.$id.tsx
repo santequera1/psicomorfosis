@@ -192,7 +192,7 @@ function PatientDetailPage() {
         {tab === "historia" && <TabHistoria patient={patient} />}
         {tab === "tests" && <TabTests rows={tests} />}
         {tab === "prescripcion" && <TabPrescripcion rows={tasks} />}
-        {tab === "documentos" && <TabDocumentos rows={docs} />}
+        {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
         {tab === "facturacion" && <TabFacturacion />}
       </div>
 
@@ -547,32 +547,61 @@ function TabPrescripcion({ rows }: { rows: any[] }) {
   );
 }
 
-function TabDocumentos({ rows }: { rows: any[] }) {
+function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) {
   return (
     <div className="rounded-xl border border-line-200 bg-surface">
-      <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between flex-wrap gap-2">
         <h3 className="font-serif text-base text-ink-900">Documentos del paciente</h3>
-        <Link to="/documentos" className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5">
-          Ver biblioteca <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/documentos"
+            search={{ paciente: patientId }}
+            className="h-9 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+          >
+            Nuevo documento <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            to="/documentos"
+            search={{ paciente: patientId }}
+            className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            Ver biblioteca filtrada
+          </Link>
+        </div>
       </div>
       {rows.length === 0 ? (
-        <div className="p-10 text-center text-sm text-ink-500">Este paciente aún no tiene documentos.</div>
+        <div className="p-10 text-center text-sm text-ink-500">
+          Este paciente aún no tiene documentos.
+          <Link to="/documentos" search={{ paciente: patientId }} className="block mt-2 text-brand-700 text-xs hover:underline">
+            Crea el primero (consentimiento, evolución, informe…)
+          </Link>
+        </div>
       ) : (
         <ul className="divide-y divide-line-100">
           {rows.map((d) => (
-            <li key={d.id} className="px-5 py-3 flex items-center gap-3 hover:bg-bg-100/40">
-              <div className="h-9 w-9 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-ink-900 truncate">{d.name}</div>
-                <div className="text-xs text-ink-500 tabular">{d.updated_at} · {d.size_kb} KB</div>
-              </div>
-              <span className="text-[11px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success capitalize">
-                {d.status.replace("_", " ")}
-              </span>
-            </li>
+            <Link key={d.id} to="/documentos/$id" params={{ id: d.id }} className="contents">
+              <li className="px-5 py-3 flex items-center gap-3 hover:bg-bg-100/40 cursor-pointer">
+                <div className="h-9 w-9 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-ink-900 truncate">{d.name}</div>
+                  <div className="text-xs text-ink-500 tabular">
+                    {new Date(d.updated_at).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+                    {d.size_kb ? ` · ${d.size_kb} KB` : ""}
+                    {d.kind === "file" ? " · 📎 Archivo" : " · ✍ Editor"}
+                  </div>
+                </div>
+                <span className={
+                  "text-[11px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium capitalize " +
+                  (d.status === "firmado" ? "bg-success-soft text-success"
+                    : d.status === "pendiente_firma" ? "bg-warning-soft text-risk-moderate"
+                      : "bg-bg-100 text-ink-500")
+                }>
+                  {(d.status ?? "borrador").replace("_", " ")}
+                </span>
+              </li>
+            </Link>
           ))}
         </ul>
       )}

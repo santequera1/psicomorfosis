@@ -1,8 +1,12 @@
 import express from "express";
 import cors from "cors";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import "dotenv/config";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import { initDb } from "./db.js";
 import { verifyToken } from "./auth.js";
@@ -33,6 +37,17 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "4mb" }));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+// Servir archivos subidos como static. Las URLs incluyen 12 bytes random en el
+// filename, lo que las hace efectivamente unguessable. Esto se usa para
+// imágenes inline del editor TipTap (img tags no pueden enviar Authorization).
+// PDFs y archivos sensibles siguen pasando por /api/documents/:id/file con auth.
+const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
+app.use("/uploads", express.static(UPLOADS_DIR, {
+  maxAge: "1d",
+  fallthrough: false,
+  setHeaders: (res) => { res.setHeader("Cache-Control", "private, max-age=86400"); },
+}));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/workspace", workspaceRoutes);

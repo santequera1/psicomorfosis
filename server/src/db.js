@@ -164,18 +164,59 @@ CREATE TABLE IF NOT EXISTS documents (
   id TEXT PRIMARY KEY,
   workspace_id INTEGER NOT NULL,
   name TEXT,
-  type TEXT,
+  type TEXT,                          -- 'consentimiento' | 'informe' | 'certificado' | 'remision' | 'evolucion' | 'contrato' | 'otro'
+  kind TEXT NOT NULL DEFAULT 'editor', -- 'editor' (in-app) | 'file' (subido)
   patient_id TEXT,
   patient_name TEXT,
-  created_at TEXT,
-  updated_at TEXT,
-  size_kb INTEGER,
-  status TEXT,
+  -- Para kind='file' (archivo subido)
+  filename TEXT,                      -- nombre en disco: <ws>/<uuid>.<ext>
+  original_name TEXT,                 -- nombre original que subió el usuario
+  mime TEXT,
+  size_bytes INTEGER,
+  -- Para kind='editor' (documento creado in-app)
+  body_json TEXT,                     -- TipTap doc state (JSON)
+  body_text TEXT,                     -- texto plano para búsqueda/preview
+  template_id INTEGER,                -- referencia a plantilla origen (nullable)
+  -- Estado y firma
+  status TEXT,                        -- 'borrador' | 'pendiente_firma' | 'firmado' | 'archivado'
   professional TEXT,
   signed_at TEXT,
+  signed_by_user_id INTEGER,
+  -- Soft delete
+  archived_at TEXT,
+  -- Timestamps
+  size_kb INTEGER,                    -- legacy, derivable de size_bytes / 1024
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL,
+  FOREIGN KEY (signed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (template_id) REFERENCES document_templates(id) ON DELETE SET NULL
 );
+CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents(patient_id);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
+
+CREATE TABLE IF NOT EXISTS document_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER,               -- NULL = sistema (visible en todos los workspaces)
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT,                      -- 'consentimiento' | 'informe' | 'contrato' | 'certificado' | 'otro'
+  scope TEXT NOT NULL DEFAULT 'workspace', -- 'system' | 'workspace' | 'personal'
+  body_json TEXT NOT NULL,            -- TipTap doc state (JSON)
+  body_text TEXT,
+  legal_disclaimer TEXT,              -- Aviso de revisión legal cuando aplique
+  archived INTEGER DEFAULT 0,
+  uses_count INTEGER DEFAULT 0,
+  created_by_user_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_doc_templates_workspace ON document_templates(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_doc_templates_category ON document_templates(category);
 
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY,
@@ -371,6 +412,17 @@ function runMigrations() {
     "ALTER TABLE patients ADD COLUMN archived_at TEXT",
     // Añadida en tanda del 26 de abril (vista de Tareas — vinculo user↔professional para JWT)
     "ALTER TABLE users ADD COLUMN professional_id INTEGER REFERENCES professionals(id) ON DELETE SET NULL",
+    // Añadidas en tanda del 26 de abril noche (módulo Documentos — gestión de contenido)
+    "ALTER TABLE documents ADD COLUMN kind TEXT NOT NULL DEFAULT 'file'",
+    "ALTER TABLE documents ADD COLUMN filename TEXT",
+    "ALTER TABLE documents ADD COLUMN original_name TEXT",
+    "ALTER TABLE documents ADD COLUMN mime TEXT",
+    "ALTER TABLE documents ADD COLUMN size_bytes INTEGER",
+    "ALTER TABLE documents ADD COLUMN body_json TEXT",
+    "ALTER TABLE documents ADD COLUMN body_text TEXT",
+    "ALTER TABLE documents ADD COLUMN template_id INTEGER",
+    "ALTER TABLE documents ADD COLUMN signed_by_user_id INTEGER",
+    "ALTER TABLE documents ADD COLUMN archived_at TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -411,6 +463,16 @@ function backfillExisting() {
       seedTaskColumns(ws.id);
       console.log(`[db] backfill: seeded tareas_columns para workspace ${ws.id}`);
     }
+  }
+
+  // 1b. Plantillas de documentos del sistema (compartidas, workspace_id IS NULL)
+  try {
+    const tCount = db.prepare("SELECT COUNT(*) AS n FROM document_templates WHERE workspace_id IS NULL").get().n;
+    if (tCount === 0) {
+      seedSystemDocumentTemplates();
+    }
+  } catch (err) {
+    console.warn("[db] backfill seed templates falló:", err.message);
   }
 
   // 2. Vincular users.professional_id si está vacío y hay match exacto por nombre
@@ -491,6 +553,7 @@ function backfillExisting() {
 function seed() {
   console.log("[db] seeding fresh database…");
   seedPsychTestCatalog();
+  seedSystemDocumentTemplates();
   const wsIndividual = seedIndividualWorkspace();
   const wsOrg = seedOrganizationWorkspace();
   console.log(`[db] seed done — WS individual=${wsIndividual}, WS organización=${wsOrg}`);
@@ -746,6 +809,322 @@ function seedClinicalDataFor(wsId, patients, singleProfessional) {
   if (patients.some((p) => p.risk === "critical")) {
     nIns.run(`N-${wsId}-2`, wsId, "alerta", "Paciente con riesgo crítico", "Activa protocolo si es necesario.", "hoy", 0, 1);
   }
+}
+
+// ─── Plantillas de documentos del sistema (visibles en todos los workspaces) ─
+// Formato body_json: TipTap doc state {type:"doc", content:[...]}.
+// Variables soportadas en interpolación: {{paciente.nombre}}, {{paciente.documento}},
+// {{paciente.edad}}, {{profesional.nombre}}, {{profesional.tarjeta_profesional}},
+// {{clinica.razon_social}}, {{clinica.direccion}}, {{clinica.telefono}},
+// {{fecha.hoy}}, {{fecha.larga}}, {{sesion.fecha}}.
+function seedSystemDocumentTemplates() {
+  // Helper para construir bloques TipTap de forma legible
+  const h1 = (text) => ({ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text }] });
+  const h2 = (text) => ({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text }] });
+  const p = (text) => ({ type: "paragraph", content: text ? [{ type: "text", text }] : [] });
+  const ul = (items) => ({ type: "bulletList", content: items.map((t) => ({ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: t }] }] })) });
+  const hr = () => ({ type: "horizontalRule" });
+
+  const DISCLAIMER = "⚠️ Este documento es un borrador de referencia generado por Psicomorfosis. Antes de usarlo con pacientes reales, hágalo revisar por su asesoría legal y ajústelo a su contexto particular.";
+
+  const templates = [
+    {
+      name: "Consentimiento informado de psicoterapia",
+      description: "Consentimiento general según Ley 1090/2006 y código deontológico del psicólogo en Colombia.",
+      category: "consentimiento",
+      legal_disclaimer: DISCLAIMER,
+      body: {
+        type: "doc",
+        content: [
+          h1("Consentimiento informado de psicoterapia"),
+          p("Yo, {{paciente.nombre}}, identificado(a) con {{paciente.documento}}, mayor de edad, declaro de manera libre, voluntaria y consciente que he sido informado(a) por {{profesional.nombre}} (Tarjeta profesional {{profesional.tarjeta_profesional}}) sobre el proceso psicoterapéutico que iniciaré en {{clinica.razon_social}}."),
+          h2("Naturaleza del servicio"),
+          p("La psicoterapia es un proceso en el que profesional y consultante trabajan colaborativamente para identificar, comprender y abordar dificultades emocionales, conductuales o relacionales. Las sesiones tienen una duración aproximada de 50 minutos y la frecuencia se acuerda según necesidad clínica."),
+          h2("Objetivos y método"),
+          p("El profesional emplea un enfoque psicológico ajustado a las necesidades del consultante. Los objetivos se definirán de forma conjunta y se revisarán periódicamente. La participación activa del consultante es indispensable para el avance del proceso."),
+          h2("Confidencialidad y excepciones"),
+          p("La información compartida en sesión es estrictamente confidencial conforme a la Ley 1090 de 2006 y el secreto profesional. Las excepciones contempladas por la ley son: (i) riesgo grave para la vida o integridad propia o de terceros, (ii) requerimiento judicial competente y (iii) maltrato a menores o personas en condición de vulnerabilidad."),
+          h2("Tratamiento de datos personales"),
+          p("Autorizo el tratamiento de mis datos personales y de mi historia clínica conforme a la Ley 1581 de 2012 y la Resolución 1995 de 1999. La información se conservará por un periodo mínimo de veinte (20) años contados desde la última atención."),
+          h2("Honorarios y política de cancelación"),
+          p("El valor de cada sesión y la política de cancelación con antelación serán informados antes del inicio del proceso."),
+          h2("Derecho a interrumpir el proceso"),
+          p("Tengo derecho a finalizar el proceso terapéutico en cualquier momento, idealmente con una sesión de cierre. El profesional puede igualmente proponer derivación si lo considera más adecuado para mis necesidades."),
+          hr(),
+          p("Lugar y fecha: {{clinica.direccion}}, {{fecha.larga}}."),
+          p(""),
+          p("Firma del consultante: ____________________________"),
+          p(""),
+          p("Firma del profesional: ____________________________"),
+          p("{{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+        ],
+      },
+    },
+    {
+      name: "Consentimiento informado de telepsicología",
+      description: "Consentimiento específico para servicios virtuales según Resolución 2654 de 2019.",
+      category: "consentimiento",
+      legal_disclaimer: DISCLAIMER,
+      body: {
+        type: "doc",
+        content: [
+          h1("Consentimiento informado de telepsicología"),
+          p("De acuerdo con la Resolución 2654 de 2019 del Ministerio de Salud y Protección Social, que regula la telesalud y los servicios de telemedicina en Colombia, yo {{paciente.nombre}}, identificado(a) con {{paciente.documento}}, autorizo expresamente recibir atención psicológica modalidad telepsicología por parte de {{profesional.nombre}}."),
+          h2("Naturaleza de la modalidad virtual"),
+          p("La telepsicología es una modalidad válida de atención que utiliza tecnologías de la información y comunicación. Se realiza por videollamada en plataformas que cumplen estándares de privacidad y seguridad."),
+          h2("Limitaciones y condiciones técnicas"),
+          ul([
+            "Es responsabilidad del consultante disponer de un espacio privado, libre de interrupciones y con conexión estable.",
+            "En caso de fallas técnicas durante la sesión, se intentará reconexión hasta tres veces; de persistir el problema, se reprogramará sin costo adicional.",
+            "Algunos cuadros clínicos pueden requerir atención presencial; el profesional indicará si la modalidad virtual no es adecuada para mi caso.",
+          ]),
+          h2("Confidencialidad ampliada"),
+          p("Tomo conocimiento de los riesgos asociados a la transmisión de datos por internet. El profesional se compromete a usar herramientas con cifrado de extremo a extremo en la medida de lo posible. Me comprometo a no grabar las sesiones sin autorización escrita."),
+          h2("Protocolo en caso de crisis"),
+          p("En caso de emergencia psicológica durante una sesión virtual, autorizo al profesional a contactar a las personas o servicios indicados a continuación, así como a las líneas oficiales (Línea 106 Bogotá, 123 emergencias, 192 MinSalud)."),
+          p("Contacto de emergencia: ____________________________________________"),
+          hr(),
+          p("Firma del consultante: ____________________________  Fecha: {{fecha.hoy}}"),
+          p("Firma del profesional: ____________________________"),
+          p("{{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+        ],
+      },
+    },
+    {
+      name: "Autorización de tratamiento de datos personales (Habeas Data)",
+      description: "Autorización conforme a la Ley 1581 de 2012 y Decreto 1377 de 2013.",
+      category: "consentimiento",
+      legal_disclaimer: DISCLAIMER,
+      body: {
+        type: "doc",
+        content: [
+          h1("Autorización para el tratamiento de datos personales"),
+          p("En cumplimiento de la Ley 1581 de 2012, el Decreto 1377 de 2013 y demás normas concordantes, yo {{paciente.nombre}}, identificado(a) con {{paciente.documento}}, autorizo de manera libre, expresa, informada e inequívoca a {{clinica.razon_social}} para recolectar, almacenar, usar, circular y suprimir mis datos personales para los siguientes fines:"),
+          ul([
+            "Prestación del servicio de atención psicológica y conformación de mi historia clínica.",
+            "Facturación, cobro de servicios y reportes ante entidades de control cuando corresponda.",
+            "Envío de recordatorios de citas, materiales psicoeducativos y comunicaciones del proceso terapéutico.",
+            "Cumplimiento de obligaciones legales y regulatorias del sector salud.",
+          ]),
+          h2("Datos sensibles"),
+          p("Acepto que parte de la información que entrego es de naturaleza sensible (salud, creencias, hábitos, contenido de sesiones) y autorizo su tratamiento bajo medidas reforzadas de seguridad y confidencialidad."),
+          h2("Derechos del titular"),
+          p("Conozco mis derechos a conocer, actualizar, rectificar, suprimir mis datos y a revocar esta autorización en cualquier momento, comunicándome al correo o teléfono dispuestos por {{clinica.razon_social}}."),
+          hr(),
+          p("Firma del titular: ____________________________  Fecha: {{fecha.hoy}}"),
+        ],
+      },
+    },
+    {
+      name: "Consentimiento de menor de edad (firma del cuidador)",
+      description: "Para pacientes menores de 18 años, firmado por padre, madre o representante legal.",
+      category: "consentimiento",
+      legal_disclaimer: DISCLAIMER,
+      body: {
+        type: "doc",
+        content: [
+          h1("Consentimiento informado · paciente menor de edad"),
+          p("Yo, ____________________________________, identificado(a) con C.C. ____________________, en calidad de ☐ padre  ☐ madre  ☐ representante legal del/la menor {{paciente.nombre}} (documento {{paciente.documento}}, edad {{paciente.edad}} años), autorizo el inicio del proceso de atención psicológica con {{profesional.nombre}} en {{clinica.razon_social}}."),
+          h2("Asentimiento del/la menor"),
+          p("Hemos explicado al/la menor, en lenguaje adecuado a su edad, el propósito y el carácter de las sesiones. El/la menor manifiesta su asentimiento voluntario para participar."),
+          h2("Confidencialidad y comunicación con el cuidador"),
+          p("Las sesiones individuales del/la menor son confidenciales. El profesional informará al cuidador sobre temas que pongan en riesgo la integridad del/la menor o de terceros, así como sobre el progreso global del proceso, respetando la intimidad de los contenidos clínicos detallados."),
+          h2("Compromiso del cuidador"),
+          ul([
+            "Garantizar la asistencia del/la menor a las sesiones programadas.",
+            "Participar en las sesiones de orientación familiar cuando el profesional lo indique.",
+            "Cumplir con los honorarios y políticas de cancelación.",
+          ]),
+          hr(),
+          p("Firma del cuidador: ____________________________  Fecha: {{fecha.hoy}}"),
+          p("Asentimiento del/la menor: ____________________________"),
+          p("Firma del profesional: ____________________________"),
+        ],
+      },
+    },
+    {
+      name: "Contrato terapéutico",
+      description: "Acuerdo de marco terapéutico, frecuencia, honorarios y política de cancelación.",
+      category: "contrato",
+      legal_disclaimer: DISCLAIMER,
+      body: {
+        type: "doc",
+        content: [
+          h1("Contrato terapéutico"),
+          p("Entre {{profesional.nombre}}, identificado(a) con T.P. {{profesional.tarjeta_profesional}} (en adelante 'el profesional'), y {{paciente.nombre}}, identificado(a) con {{paciente.documento}} (en adelante 'el consultante'), se establece el siguiente acuerdo de trabajo terapéutico:"),
+          h2("1. Objetivo"),
+          p("Iniciar un proceso psicoterapéutico orientado a abordar las dificultades expresadas por el consultante en la consulta inicial. Los objetivos específicos se definirán y revisarán de manera conjunta."),
+          h2("2. Frecuencia y duración"),
+          p("Las sesiones tendrán una duración de 50 minutos y se realizarán con frecuencia semanal, salvo acuerdo distinto. La duración total del proceso se estima entre 12 y 24 sesiones, sujeto a evolución clínica."),
+          h2("3. Honorarios"),
+          p("El valor por sesión es de $____________ COP. El pago se realiza el día de la sesión por los medios autorizados por {{clinica.razon_social}}."),
+          h2("4. Política de cancelación"),
+          p("Las cancelaciones con menos de 24 horas de anticipación generan el cobro del 50% del valor de la sesión. La inasistencia sin aviso genera el cobro del 100%."),
+          h2("5. Confidencialidad"),
+          p("Aplican los términos del Consentimiento informado y la Ley 1090 de 2006."),
+          h2("6. Vigencia y revisión"),
+          p("Este contrato se revisará cada 12 sesiones. Cualquiera de las partes puede solicitar su modificación o terminación con preaviso razonable."),
+          hr(),
+          p("Firma del consultante: ____________________________"),
+          p("Firma del profesional: ____________________________  Fecha: {{fecha.hoy}}"),
+        ],
+      },
+    },
+    {
+      name: "Certificado de asistencia psicológica",
+      description: "Constancia para terceros (empresa, EPS, institución educativa).",
+      category: "certificado",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Certificado de asistencia"),
+          p(""),
+          p("La suscrita {{profesional.nombre}}, psicóloga(o) con tarjeta profesional {{profesional.tarjeta_profesional}}, en ejercicio de sus funciones en {{clinica.razon_social}},"),
+          h2("CERTIFICA QUE"),
+          p("{{paciente.nombre}}, identificado(a) con {{paciente.documento}}, asiste a proceso de atención psicológica en esta institución desde la fecha indicada en su historia clínica y se encuentra en seguimiento profesional."),
+          p("Esta certificación se expide a solicitud del interesado(a) para los fines que estime pertinentes, sin que pueda extenderse a información clínica detallada que se encuentra protegida por el secreto profesional."),
+          hr(),
+          p("Dado en {{clinica.direccion}}, a los {{fecha.larga}}."),
+          p(""),
+          p("____________________________"),
+          p("{{profesional.nombre}}"),
+          p("T.P. {{profesional.tarjeta_profesional}}"),
+        ],
+      },
+    },
+    {
+      name: "Remisión a psiquiatría",
+      description: "Carta de remisión a profesional médico psiquiatra.",
+      category: "remision",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Remisión a psiquiatría"),
+          p("Fecha: {{fecha.larga}}"),
+          p(""),
+          p("Estimado(a) colega:"),
+          p("Por medio de la presente remito a su consulta a {{paciente.nombre}}, identificado(a) con {{paciente.documento}}, edad {{paciente.edad}} años, paciente que se encuentra en proceso psicoterapéutico bajo mi atención."),
+          h2("Motivo de remisión"),
+          p("[Describir cuadro clínico, hallazgos relevantes, riesgo, sintomatología que justifica valoración psiquiátrica.]"),
+          h2("Antecedentes clínicos relevantes"),
+          ul([
+            "[Antecedentes médicos / psiquiátricos]",
+            "[Medicación actual si existe]",
+            "[Resultados de pruebas psicométricas relevantes]",
+          ]),
+          h2("Plan terapéutico actual"),
+          p("[Enfoque, frecuencia, objetivos en curso.]"),
+          h2("Información solicitada"),
+          p("Agradezco su valoración para descartar / confirmar diagnóstico clínico, evaluar pertinencia de tratamiento farmacológico y aportar pautas de manejo conjunto. Quedo atenta(o) para articular el plan integral."),
+          hr(),
+          p("Cordialmente,"),
+          p("{{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+          p("{{clinica.razon_social}} — {{clinica.telefono}}"),
+        ],
+      },
+    },
+    {
+      name: "Informe psicológico",
+      description: "Plantilla estructurada para informes a EPS, juzgados o instituciones.",
+      category: "informe",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Informe psicológico"),
+          p("Profesional: {{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+          p("Institución: {{clinica.razon_social}}"),
+          p("Fecha de emisión: {{fecha.larga}}"),
+          hr(),
+          h2("1. Identificación del consultante"),
+          ul([
+            "Nombre: {{paciente.nombre}}",
+            "Identificación: {{paciente.documento}}",
+            "Edad: {{paciente.edad}} años",
+          ]),
+          h2("2. Motivo de consulta"),
+          p("[Descripción del motivo y antecedentes inmediatos.]"),
+          h2("3. Antecedentes relevantes"),
+          ul([
+            "Personales:",
+            "Familiares:",
+            "Médicos / psiquiátricos:",
+            "Académicos / laborales:",
+          ]),
+          h2("4. Examen mental"),
+          p("[Apariencia, conducta, lenguaje, afecto, pensamiento, percepción, juicio, insight.]"),
+          h2("5. Pruebas aplicadas"),
+          p("[Listar instrumentos psicométricos con puntajes e interpretación.]"),
+          h2("6. Análisis e impresión clínica"),
+          p("[Integración de hallazgos. Diagnóstico presuntivo CIE-11 si corresponde.]"),
+          h2("7. Plan de intervención y recomendaciones"),
+          p("[Enfoque, frecuencia, objetivos, derivaciones, recomendaciones para la red de apoyo.]"),
+          hr(),
+          p("____________________________"),
+          p("{{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+        ],
+      },
+    },
+    {
+      name: "Alta terapéutica",
+      description: "Cierre formal del proceso con resumen de logros y recomendaciones.",
+      category: "informe",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Alta terapéutica"),
+          p("Profesional: {{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
+          p("Consultante: {{paciente.nombre}} ({{paciente.documento}}) — {{paciente.edad}} años"),
+          p("Fecha de alta: {{fecha.larga}}"),
+          hr(),
+          h2("Motivo de consulta inicial"),
+          p("[Resumen breve.]"),
+          h2("Trabajo terapéutico realizado"),
+          p("[Número de sesiones, enfoque, herramientas trabajadas.]"),
+          h2("Logros alcanzados"),
+          ul([
+            "[Logro 1]",
+            "[Logro 2]",
+            "[Logro 3]",
+          ]),
+          h2("Recomendaciones de continuidad"),
+          p("[Mantenimiento, autocuidado, señales para retomar acompañamiento.]"),
+          h2("Disponibilidad para seguimiento"),
+          p("Se entrega alta con apertura para sesiones de seguimiento o retorno al proceso si el consultante lo requiere en el futuro."),
+          hr(),
+          p("Firma del consultante: ____________________________"),
+          p("Firma del profesional: ____________________________"),
+        ],
+      },
+    },
+  ];
+
+  const ins = db.prepare(`
+    INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_at, updated_at)
+    VALUES (NULL, ?, ?, ?, 'system', ?, ?, ?, datetime('now'), datetime('now'))
+  `);
+  for (const t of templates) {
+    const text = extractTextFromTipTap(t.body);
+    ins.run(t.name, t.description, t.category, JSON.stringify(t.body), text, t.legal_disclaimer ?? null);
+  }
+  console.log(`[db] seeded ${templates.length} system document templates`);
+}
+
+/**
+ * Extrae el texto plano de un doc TipTap recursivamente.
+ * Útil para body_text (búsqueda full-text futura) y previews cortos.
+ */
+function extractTextFromTipTap(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (node.type === "text") return node.text ?? "";
+  if (Array.isArray(node.content)) {
+    return node.content.map(extractTextFromTipTap).join(" ");
+  }
+  return "";
 }
 
 // ─── Columnas default del kanban de tareas (organización del equipo) ───────

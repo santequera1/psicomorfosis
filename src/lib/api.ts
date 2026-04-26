@@ -281,6 +281,67 @@ export interface TareaFolder {
   created_at: string;
 }
 
+// ─── Documentos & Plantillas ───────────────────────────────────────────────
+export type DocumentKind = "editor" | "file";
+export type DocumentStatus = "borrador" | "pendiente_firma" | "firmado";
+export type DocumentType =
+  | "consentimiento" | "informe" | "certificado" | "remision"
+  | "contrato" | "evolucion" | "otro";
+
+/** Doc state de TipTap. Estructura: { type:"doc", content:[...] }. */
+export type TipTapDoc = { type: string; content?: any[]; attrs?: Record<string, any>; text?: string; marks?: any[] };
+
+export interface PsmDocument {
+  id: string;
+  workspace_id: number;
+  name: string;
+  type: DocumentType | string;
+  kind: DocumentKind;
+  patient_id: string | null;
+  patient_name: string | null;
+  // Para kind='file'
+  filename: string | null;
+  original_name: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  /** URL pública para imágenes (sin token); null para otros tipos. */
+  public_url: string | null;
+  // Para kind='editor'
+  body_json: TipTapDoc | null;
+  body_text: string | null;
+  template_id: number | null;
+  // Estado y firma
+  status: DocumentStatus | null;
+  professional: string | null;
+  signed_at: string | null;
+  signed_by_user_id: number | null;
+  // Soft delete
+  archived_at: string | null;
+  // Timestamps
+  size_kb: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TemplateScope = "system" | "workspace" | "personal";
+export type TemplateCategory = "consentimiento" | "informe" | "contrato" | "certificado" | "remision" | "otro";
+
+export interface DocumentTemplate {
+  id: number;
+  workspace_id: number | null;
+  name: string;
+  description: string | null;
+  category: TemplateCategory;
+  scope: TemplateScope;
+  body_json: TipTapDoc;
+  body_text: string | null;
+  legal_disclaimer: string | null;
+  archived: boolean;
+  uses_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TareaColumn {
   id: number;
   workspace_id: number;
@@ -407,10 +468,71 @@ export const api = {
   listTasks: (params: Record<string, string> = {}) =>
     request<Array<Record<string, unknown>>>(`/api/tasks${qs(params)}`),
 
-  // Documents
-  listDocuments: (params: Record<string, string> = {}) =>
-    request<Array<Record<string, unknown>>>(`/api/documents${qs(params)}`),
-  signDocument: (id: string) => request(`/api/documents/${id}/sign`, { method: "POST" }),
+  // Documentos
+  listDocuments: (params: { patient_id?: string; type?: string; status?: string; q?: string; include_archived?: boolean } = {}) =>
+    request<PsmDocument[]>(`/api/documents${qs({
+      patient_id: params.patient_id,
+      type: params.type,
+      status: params.status,
+      q: params.q,
+      include_archived: params.include_archived ? "true" : undefined,
+    })}`),
+  getDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}`),
+  createDocument: (body: { name: string; type?: string; patient_id?: string | null; patient_name?: string | null; template_id?: number; body_json?: TipTapDoc }) =>
+    request<PsmDocument>("/api/documents", { method: "POST", body: JSON.stringify(body) }),
+  updateDocument: (id: string, body: Partial<PsmDocument>) =>
+    request<PsmDocument>(`/api/documents/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  signDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}/sign`, { method: "POST" }),
+  archiveDocument: (id: string) => request<{ ok: true }>(`/api/documents/${id}/archive`, { method: "POST" }),
+  restoreDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}/restore`, { method: "POST" }),
+  deleteDocument: (id: string) => request<{ ok: true }>(`/api/documents/${id}`, { method: "DELETE" }),
+  /**
+   * URL absoluta para abrir el archivo físico (PDF/img).
+   * Por defecto incluye el token como ?t=<token> para que pueda usarse
+   * directamente en <img src=...> o <iframe src=...> sin Authorization header.
+   * Si se prefiere usar headers, pasar `withToken: false`.
+   */
+  documentFileUrl: (id: string, opts?: { download?: boolean; withToken?: boolean }) => {
+    const useToken = opts?.withToken !== false;
+    const params = new URLSearchParams();
+    if (opts?.download) params.set("download", "1");
+    if (useToken) {
+      const t = getToken();
+      if (t) params.set("t", t);
+    }
+    const qs = params.toString();
+    return `${API_BASE}/api/documents/${id}/file${qs ? "?" + qs : ""}`;
+  },
+  /** Sube un archivo y devuelve el documento creado. */
+  uploadDocument: async (file: File, meta: { name?: string; type?: string; patient_id?: string | null; patient_name?: string | null } = {}) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (meta.name) fd.append("name", meta.name);
+    if (meta.type) fd.append("type", meta.type);
+    if (meta.patient_id) fd.append("patient_id", meta.patient_id);
+    if (meta.patient_name) fd.append("patient_name", meta.patient_name);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/documents/upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new ApiError(res.status, body.error ?? "Upload failed");
+    }
+    return res.json() as Promise<PsmDocument>;
+  },
+
+  // Plantillas
+  listDocumentTemplates: (params: { category?: TemplateCategory } = {}) =>
+    request<DocumentTemplate[]>(`/api/documents/templates${qs({ category: params.category })}`),
+  getDocumentTemplate: (id: number) => request<DocumentTemplate>(`/api/documents/templates/${id}`),
+  createDocumentTemplate: (body: { name: string; description?: string; category?: TemplateCategory; body_json: TipTapDoc; scope?: "workspace" | "personal" }) =>
+    request<DocumentTemplate>("/api/documents/templates", { method: "POST", body: JSON.stringify(body) }),
+  updateDocumentTemplate: (id: number, body: Partial<DocumentTemplate>) =>
+    request<DocumentTemplate>(`/api/documents/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteDocumentTemplate: (id: number) => request<{ ok: true }>(`/api/documents/templates/${id}`, { method: "DELETE" }),
 
   // Invoices
   listInvoices: (params: Record<string, string> = {}) => request<Invoice[]>(`/api/invoices${qs(params)}`),
