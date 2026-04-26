@@ -151,4 +151,26 @@ router.post("/notes/:id/supersede", (req, res) => {
   res.status(201).json(toNote(row));
 });
 
+/**
+ * Eliminar una nota — SOLO permitido si es borrador (signed_at IS NULL).
+ * Las notas firmadas no se pueden borrar por la Resolución 1995/1999;
+ * para corregirlas, usar /supersede.
+ */
+router.delete("/notes/:id", (req, res) => {
+  const existing = db.prepare("SELECT * FROM clinical_notes WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.workspace_id);
+  if (!existing) return res.status(404).json({ error: "Nota no encontrada" });
+  if (existing.signed_at) {
+    return res.status(409).json({
+      error: "Las notas firmadas no se pueden eliminar por Resolución 1995/1999. Usa 'Crear nueva versión' para corregirla.",
+    });
+  }
+  if (existing.superseded_by_id) {
+    return res.status(409).json({ error: "Esta nota ya fue reemplazada por otra versión." });
+  }
+  db.prepare("DELETE FROM clinical_notes WHERE id = ?").run(req.params.id);
+  req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("note:deleted", { id: Number(req.params.id) });
+  res.json({ ok: true });
+});
+
 export default router;

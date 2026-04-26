@@ -447,6 +447,8 @@ function TemplateGrid({
 }) {
   const [patientId, setPatientId] = useState<string>(presetPatientId ?? "");
   const [creating, setCreating] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const qc = useQueryClient();
 
   async function pick(t: DocumentTemplate) {
     setCreating(t.id);
@@ -468,33 +470,72 @@ function TemplateGrid({
     }
   }
 
+  async function removeTemplate(t: DocumentTemplate, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`¿Eliminar la plantilla "${t.name}"? Esta acción no se puede deshacer.`)) return;
+    setDeleting(t.id);
+    try {
+      await api.deleteDocumentTemplate(t.id);
+      qc.invalidateQueries({ queryKey: ["document-templates"] });
+      toast.success("Plantilla eliminada");
+    } catch (err: any) {
+      toast.error(err.message ?? "No se pudo eliminar");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <PatientSelect patients={patients} value={patientId} onChange={setPatientId} preset={presetPatient} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {templates.map((t) => {
           const TIcon = TYPE_ICON[t.category] ?? FileText;
+          const canDelete = t.scope !== "system";
           return (
-            <button
+            <div
               key={t.id}
-              onClick={() => pick(t)}
-              disabled={creating !== null}
-              className="text-left p-3 rounded-lg border border-line-200 hover:border-brand-400 hover:bg-brand-50/40 transition-colors disabled:opacity-50 group"
+              className="relative text-left p-3 rounded-lg border border-line-200 hover:border-brand-400 hover:bg-brand-50/40 transition-colors group"
             >
-              <div className="flex items-start gap-3">
-                <div className="h-9 w-9 rounded-md bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
-                  <TIcon className="h-4 w-4" />
+              <button
+                onClick={() => pick(t)}
+                disabled={creating !== null}
+                className="text-left w-full disabled:opacity-50"
+              >
+                <div className="flex items-start gap-3 pr-7">
+                  <div className="h-9 w-9 rounded-md bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
+                    <TIcon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-ink-900 line-clamp-2">{t.name}</div>
+                    <div className="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{t.description}</div>
+                    <div className="text-[10px] text-ink-400 mt-1 inline-flex items-center gap-1.5">
+                      <span className={cn(
+                        "inline-block px-1.5 py-0.5 rounded font-medium",
+                        t.scope === "system" ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-700"
+                      )}>
+                        {t.scope === "system" ? "Sistema" : t.scope === "personal" ? "Personal" : "Workspace"}
+                      </span>
+                      <span>· {t.uses_count} usos</span>
+                    </div>
+                    {t.legal_disclaimer && (
+                      <div className="text-[10px] text-amber-700 mt-1">⚠️ Borrador · revisar con asesoría legal</div>
+                    )}
+                  </div>
+                  {creating === t.id ? <Loader2 className="h-4 w-4 animate-spin text-brand-700 shrink-0 mt-1" /> : <ChevronRight className="h-4 w-4 text-ink-400 group-hover:text-brand-700 shrink-0 mt-1" />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-ink-900 line-clamp-2">{t.name}</div>
-                  <div className="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{t.description}</div>
-                  {t.legal_disclaimer && (
-                    <div className="text-[10px] text-amber-700 mt-1">⚠️ Borrador · revisar con asesoría legal</div>
-                  )}
-                </div>
-                {creating === t.id ? <Loader2 className="h-4 w-4 animate-spin text-brand-700 shrink-0 mt-1" /> : <ChevronRight className="h-4 w-4 text-ink-400 group-hover:text-brand-700 shrink-0 mt-1" />}
-              </div>
-            </button>
+              </button>
+              {canDelete && (
+                <button
+                  onClick={(e) => removeTemplate(t, e)}
+                  disabled={deleting === t.id}
+                  title="Eliminar plantilla"
+                  className="absolute top-2 right-2 h-6 w-6 rounded text-ink-400 hover:bg-rose-500/10 hover:text-rose-700 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                >
+                  {deleting === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

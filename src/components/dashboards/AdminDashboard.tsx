@@ -153,18 +153,27 @@ export function AdminDashboard() {
             {SESSIONS_BY_MODALITY.map((m, i) => {
               const max = Math.max(...SESSIONS_BY_MODALITY.map((x) => x.value));
               const pct = (m.value / max) * 100;
-              const colors = ["bg-brand-700", "bg-sage-500", "bg-lavender-400", "bg-brand-400", "bg-warning"];
+              // Colores como los del PieChart de Reportes (mismas tokens CSS)
+              const dotColors = [
+                "var(--brand-700)", "var(--sage-500)",
+                "var(--lavender-400)", "var(--brand-400)", "var(--warning)",
+              ];
+              const barColors = ["bg-brand-700", "bg-sage-500", "bg-lavender-400", "bg-brand-400", "bg-warning"];
               return (
                 <div key={m.modality}>
                   <div className="flex items-center justify-between text-sm mb-1.5">
                     <span className="text-ink-900 inline-flex items-center gap-2.5 capitalize font-medium">
-                      <span className={`h-3 w-3 rounded-full shrink-0 ${colors[i]}`} aria-hidden />
+                      <span
+                        className="inline-block h-3.5 w-3.5 rounded-full shrink-0 ring-2 ring-bg-50"
+                        style={{ backgroundColor: dotColors[i] }}
+                        aria-hidden
+                      />
                       {m.modality}
                     </span>
                     <span className="text-ink-700 tabular text-xs font-semibold">{m.value}</span>
                   </div>
                   <div className="h-2 rounded-full bg-bg-100 overflow-hidden">
-                    <div className={`h-full rounded-full ${colors[i]}`} style={{ width: `${pct}%` }} />
+                    <div className={`h-full rounded-full ${barColors[i]}`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -177,7 +186,7 @@ export function AdminDashboard() {
         <div className="rounded-xl border border-line-200 bg-surface p-5">
           <h3 className="font-serif text-lg text-ink-900 mb-1">Motivos de consulta</h3>
           <p className="text-xs text-ink-500 mb-4">Distribución del trimestre</p>
-          <div className="h-[280px]">
+          <div className="h-70">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={REASONS} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.94 0.004 130)" horizontal={false} />
@@ -201,7 +210,7 @@ export function AdminDashboard() {
           {todayAppointments.length === 0 ? (
             <div className="py-8 text-center text-xs text-ink-500">Sin citas para hoy.</div>
           ) : (
-            <ul className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+            <ul className="space-y-2.5 max-h-70 overflow-y-auto pr-1">
               {todayAppointments.map((s: any) => (
                 <li key={s.id}>
                   <Link to="/agenda" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-brand-50 transition-colors">

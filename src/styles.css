@@ -368,7 +368,13 @@
     position: relative;
   }
   .psm-editor-content table th { background: var(--bg-100); font-weight: 600; text-align: left; }
-  .psm-editor-content img { border-radius: 8px; max-width: 100%; height: auto; margin: 0.5rem 0; }
+  .psm-editor-content img { border-radius: 8px; max-width: 100%; height: auto; margin: 0.5rem 0; display: block; }
+  .psm-editor-content img[data-align="center"] { margin-left: auto; margin-right: auto; }
+  .psm-editor-content img[data-align="right"] { margin-left: auto; }
+  .psm-editor-content img.ProseMirror-selectednode {
+    outline: 2px solid var(--brand-700);
+    outline-offset: 2px;
+  }
   .psm-editor-content .ProseMirror-focused { outline: none; }
 
   /* ────────────────────────────────────────────────────────────────────────

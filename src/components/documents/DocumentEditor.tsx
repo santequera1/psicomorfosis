@@ -2,6 +2,34 @@ import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Image } from "@tiptap/extension-image";
 import { Placeholder } from "@tiptap/extension-placeholder";
+
+/**
+ * Extiende el Image extension de TipTap para soportar `width` (en %) y `align`
+ * como atributos. Permite redimensionar imágenes desde un floating menu.
+ */
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("width") || el.style.width || null,
+        renderHTML: (attrs) => {
+          if (!attrs.width) return {};
+          return { style: `width: ${attrs.width}` };
+        },
+      },
+      align: {
+        default: "left",
+        parseHTML: (el) => el.getAttribute("data-align") || "left",
+        renderHTML: (attrs) => {
+          if (!attrs.align || attrs.align === "left") return {};
+          return { "data-align": attrs.align };
+        },
+      },
+    };
+  },
+});
 import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
 import { Table } from "@tiptap/extension-table";
@@ -49,7 +77,7 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       Placeholder.configure({
         placeholder: placeholder ?? "Escribe \"/\" para insertar bloques o \"{{\" para insertar variables…",
       }),
-      Image.configure({ HTMLAttributes: { class: "rounded-lg max-w-full" } }),
+      ResizableImage.configure({ HTMLAttributes: { class: "psm-editor-image rounded-lg max-w-full" } }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Table.configure({ resizable: true }),
@@ -140,12 +168,99 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-line-200">
+    <div className="bg-surface rounded-xl border border-line-200 relative">
       {editable && <Toolbar editor={editor} onSetLink={setLink} onPickImage={pickAndUploadImage} />}
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onFileChosen} />
       <div className="px-6 sm:px-10">
         <EditorContent editor={editor} />
       </div>
+      {editable && <ImageResizeBubble editor={editor} />}
+    </div>
+  );
+}
+
+/**
+ * Floating menu que aparece encima de una imagen seleccionada con presets
+ * de tamaño (25/50/75/100%) y alineación (izq/centro/der).
+ */
+function ImageResizeBubble({ editor }: { editor: Editor }) {
+  const [state, setState] = useState<{ top: number; left: number; width: string | null; align: string } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const { selection, doc } = editor.state;
+      const node = (selection as any).node;
+      const isImage = node?.type?.name === "image";
+      if (!isImage) { setState(null); return; }
+      // posición del nodo
+      const dom = editor.view.nodeDOM(selection.from) as HTMLElement | null;
+      if (!dom) { setState(null); return; }
+      const r = dom.getBoundingClientRect();
+      setState({
+        top: r.top + window.scrollY - 42,
+        left: r.left + window.scrollX,
+        width: node.attrs.width ?? null,
+        align: node.attrs.align ?? "left",
+      });
+      void doc;
+    };
+    editor.on("selectionUpdate", update);
+    editor.on("update", update);
+    return () => {
+      editor.off("selectionUpdate", update);
+      editor.off("update", update);
+    };
+  }, [editor]);
+
+  if (!state) return null;
+
+  const setSize = (w: string | null) => {
+    editor.chain().focus().updateAttributes("image", { width: w }).run();
+  };
+  const setAlign = (a: "left" | "center" | "right") => {
+    editor.chain().focus().updateAttributes("image", { align: a }).run();
+  };
+
+  const sizeBtn = (w: string | null, label: string) => (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); setSize(w); }}
+      className={cn(
+        "h-7 px-2 rounded text-[11px] font-medium transition-colors",
+        state.width === w ? "bg-brand-700 text-white" : "text-ink-700 hover:bg-bg-100"
+      )}
+    >
+      {label}
+    </button>
+  );
+  const alignBtn = (a: "left" | "center" | "right", icon: string) => (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); setAlign(a); }}
+      className={cn(
+        "h-7 w-7 rounded text-[11px] font-medium inline-flex items-center justify-center transition-colors",
+        state.align === a ? "bg-brand-700 text-white" : "text-ink-700 hover:bg-bg-100"
+      )}
+      title={`Alinear ${a}`}
+    >
+      {icon}
+    </button>
+  );
+
+  return (
+    <div
+      className="fixed z-50 bg-surface border border-line-200 rounded-lg shadow-modal p-1 inline-flex items-center gap-0.5"
+      style={{ top: state.top, left: state.left }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {sizeBtn("25%", "S")}
+      {sizeBtn("50%", "M")}
+      {sizeBtn("75%", "L")}
+      {sizeBtn(null, "Auto")}
+      <span className="h-5 w-px bg-line-200 mx-1" />
+      {alignBtn("left", "⇤")}
+      {alignBtn("center", "⇔")}
+      {alignBtn("right", "⇥")}
     </div>
   );
 }

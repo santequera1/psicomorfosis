@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Phone, Mail, IdCard, MapPin, Stethoscope, Brain, Pill, FileText,
   ClipboardList, MessageSquareText, MessageCircle,
-  ChevronDown, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle,
+  ChevronDown, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, BLOCK_LABELS, type SoapContent } from "@/lib/api";
@@ -504,6 +504,11 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
     mutationFn: () => api.signNote(note.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", patientId] }),
   });
+  const deleteMu = useMutation({
+    mutationFn: () => api.deleteNote(note.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", patientId] }),
+    onError: (e: Error) => alert(e.message),
+  });
 
   return (
     <article className="rounded-xl bg-surface border border-line-200 shadow-xs hover:shadow-soft transition-shadow">
@@ -545,6 +550,18 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
 
         {!editing && note.isDraft && (
           <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={() => {
+                if (confirm("¿Eliminar esta nota borrador? Esta acción no se puede deshacer.")) {
+                  deleteMu.mutate();
+                }
+              }}
+              disabled={deleteMu.isPending}
+              className="h-8 px-3 rounded-md border border-line-200 text-xs text-rose-700 hover:border-rose-400 hover:bg-rose-500/5 disabled:opacity-50 inline-flex items-center gap-1.5"
+              title="Eliminar borrador"
+            >
+              <Trash2 className="h-3 w-3" /> Eliminar
+            </button>
             <button
               onClick={() => setEditing(true)}
               className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"

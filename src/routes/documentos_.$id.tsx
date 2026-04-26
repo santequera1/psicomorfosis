@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft, FileSignature, Printer, Archive, Trash2, AlertCircle, Loader2,
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
-import { api, type PsmDocument, type TipTapDoc } from "@/lib/api";
+import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 
 export const Route = createFileRoute("/documentos_/$id")({
@@ -154,14 +154,7 @@ function DocumentDetailPage() {
               <span>Firmado el {formatDateTime(doc.signed_at!)}. Documento inmodificable según Resolución 1995/1999.</span>
             </div>
           )}
-          {doc.patient_name && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-ink-500">
-              <User className="h-3.5 w-3.5" />
-              <Link to="/pacientes/$id" params={{ id: doc.patient_id! }} className="hover:text-brand-700">
-                {doc.patient_name} <span className="text-ink-400">· {doc.patient_id}</span>
-              </Link>
-            </div>
-          )}
+          <PatientLinkRow doc={doc} disabled={isLocked} />
         </header>
 
         {/* Print header (solo visible al imprimir) */}
@@ -306,15 +299,29 @@ function SaveStatus({ saving, savedAt, locked }: { saving: boolean; savedAt: Dat
 
 function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
     setTimeout(() => document.addEventListener("click", close, { once: true }), 0);
     return () => document.removeEventListener("click", close);
   }, [open]);
+
+  // Posicionar el menú con coordenadas absolutas viewport (fixed) para que
+  // nunca se tape por el header sticky o el overflow del contenedor padre.
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }
+  }, [open]);
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="h-9 w-9 rounded-md border border-line-200 hover:border-brand-400 flex items-center justify-center text-ink-700"
@@ -322,8 +329,12 @@ function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete:
       >
         <span className="font-bold text-base leading-none">···</span>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-20">
+      {open && pos && (
+        <div
+          className="fixed w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1 z-50"
+          style={{ top: pos.top, right: pos.right }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <button onClick={onArchive} className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
             <Archive className="h-4 w-4" /> Archivar
           </button>
@@ -331,6 +342,96 @@ function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete:
             <Trash2 className="h-4 w-4" /> Eliminar
           </button>
         </div>
+      )}
+    </>
+  );
+}
+
+/** Fila para vincular o cambiar el paciente del documento desde el editor. */
+function PatientLinkRow({ doc, disabled }: { doc: PsmDocument; disabled?: boolean }) {
+  const qc = useQueryClient();
+  const [picking, setPicking] = useState(false);
+
+  const { data: patients = [] } = useQuery({
+    queryKey: ["patients"],
+    queryFn: () => api.listPatients(),
+    enabled: picking,
+  });
+
+  const setPatientMu = useMutation({
+    mutationFn: async (patient: ApiPatient | null) => {
+      return api.updateDocument(doc.id, {
+        patient_id: patient?.id ?? null,
+        patient_name: patient?.name ?? null,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["document", doc.id] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      setPicking(false);
+      toast.success(doc.patient_id ? "Paciente actualizado" : "Paciente vinculado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!doc.patient_name && !picking) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-xs text-ink-500 flex-wrap">
+        <User className="h-3.5 w-3.5" />
+        <span className="text-ink-400">Sin paciente vinculado</span>
+        {!disabled && (
+          <button
+            onClick={() => setPicking(true)}
+            className="text-brand-700 hover:underline"
+          >
+            Enlazar paciente
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (picking) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
+        <User className="h-3.5 w-3.5 text-ink-500" />
+        <select
+          autoFocus
+          defaultValue={doc.patient_id ?? ""}
+          onChange={(e) => {
+            const p = patients.find((x) => x.id === e.target.value);
+            setPatientMu.mutate(p ?? null);
+          }}
+          className="h-7 px-2 rounded border border-line-200 bg-bg text-xs text-ink-900 focus:outline-none focus:border-brand-400"
+        >
+          <option value="">— Sin paciente —</option>
+          {patients.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.preferredName ?? p.name} ({p.id})
+            </option>
+          ))}
+        </select>
+        <button onClick={() => setPicking(false)} className="text-ink-500 hover:text-ink-700">
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2 text-xs text-ink-500 flex-wrap">
+      <User className="h-3.5 w-3.5" />
+      <Link to="/pacientes/$id" params={{ id: doc.patient_id! }} className="hover:text-brand-700">
+        {doc.patient_name} <span className="text-ink-400">· {doc.patient_id}</span>
+      </Link>
+      {!disabled && (
+        <button
+          onClick={() => setPicking(true)}
+          className="text-ink-400 hover:text-brand-700"
+          title="Cambiar o quitar paciente"
+        >
+          (cambiar)
+        </button>
       )}
     </div>
   );

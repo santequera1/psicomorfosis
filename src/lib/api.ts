@@ -649,4 +649,5 @@ export const api = {
   signNote: (id: number) => request<ClinicalNote>(`/api/notes/${id}/sign`, { method: "POST" }),
   supersedeNote: (id: number, body: { content: string; sign?: boolean }) =>
     request<ClinicalNote>(`/api/notes/${id}/supersede`, { method: "POST", body: JSON.stringify(body) }),
+  deleteNote: (id: number) => request<{ ok: true }>(`/api/notes/${id}`, { method: "DELETE" }),
 };
