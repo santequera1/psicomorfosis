@@ -1,6 +1,5 @@
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import { Image } from "@tiptap/extension-image";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { TaskList } from "@tiptap/extension-task-list";
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlashCommand } from "./SlashCommand";
+import { VariableSuggest } from "./VariableSuggest";
 import type { TipTapDoc } from "@/lib/api";
 
 interface Props {
@@ -37,13 +37,18 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Mantener defaults del starter (heading, lists, blockquote, codeBlock, hr, etc.)
+        // Configuramos Link aquí (StarterKit v3 lo incluye) con autolink desactivado
+        // para evitar que TipTap interprete URLs data:image/... como enlaces.
+        link: {
+          openOnClick: false,
+          autolink: false,
+          HTMLAttributes: { class: "text-brand-700 underline" },
+        },
       }),
       Typography,
       Placeholder.configure({
-        placeholder: placeholder ?? "Escribe \"/\" para insertar bloques o empieza a redactar…",
+        placeholder: placeholder ?? "Escribe \"/\" para insertar bloques o \"{{\" para insertar variables…",
       }),
-      Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { class: "text-brand-700 underline" } }),
       Image.configure({ HTMLAttributes: { class: "rounded-lg max-w-full" } }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -52,12 +57,13 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       TableHeader,
       TableCell,
       SlashCommand,
+      VariableSuggest,
     ],
     content: initialDoc ?? EMPTY_DOC,
     editable,
     editorProps: {
       attributes: {
-        class: "psm-editor-content focus:outline-none min-h-[400px] py-6",
+        class: "psm-editor-content focus:outline-none min-h-100 py-6",
       },
     },
     onUpdate: ({ editor }) => {
@@ -81,7 +87,7 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
     }
   }, [initialDoc, editor]);
 
-  if (!editor) return <div className="min-h-[400px] flex items-center justify-center text-sm text-ink-500">Cargando editor…</div>;
+  if (!editor) return <div className="min-h-100 flex items-center justify-center text-sm text-ink-500">Cargando editor…</div>;
 
   async function pickAndUploadImage() {
     fileInputRef.current?.click();
@@ -114,9 +120,11 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
     }
-    // Normalizar: si el usuario escribe "google.com" sin protocolo, prepend https://
-    const normalized = /^https?:\/\//i.test(url) || url.startsWith("mailto:") || url.startsWith("tel:")
-      ? url : `https://${url}`;
+    // Normalizar: si el usuario escribe "google.com" sin protocolo, prepend https://.
+    // Respeta cualquier scheme conocido (data:, blob:, file:, mailto:, tel:, etc.)
+    // para no romper URLs base64 ni esquemas de sistema.
+    const hasProtocol = /^[a-z][a-z0-9+.-]*:/i.test(url);
+    const normalized = hasProtocol ? url : `https://${url}`;
 
     const { from, to } = editor.state.selection;
     if (from === to) {

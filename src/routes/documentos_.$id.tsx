@@ -193,8 +193,10 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
   // Con token en query no hace falta blob: iframe e img cargan directo.
   const fileUrl = api.documentFileUrl(doc.id);
   const downloadUrl = api.documentFileUrl(doc.id, { download: true });
-  const isPdf = doc.mime === "application/pdf";
+  const isPdf = doc.mime === "application/pdf" || /\.pdf$/i.test(doc.original_name ?? "");
   const isImage = doc.mime?.startsWith("image/");
+  const isDocLegacy = /\.doc$/i.test(doc.original_name ?? "") &&
+    !/\.docx$/i.test(doc.original_name ?? "");
 
   const ext = doc.original_name?.split(".").pop() ?? "bin";
   const safeName = (doc.name || "documento").replace(/[^\w\-. ]/g, "_");
@@ -225,6 +227,19 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
             <iframe src={fileUrl} className="w-full h-[80vh] rounded-lg border border-line-100" title={doc.name} />
           ) : isImage ? (
             <img src={fileUrl} alt={doc.name} className="max-w-full mx-auto rounded-lg" />
+          ) : isDocLegacy ? (
+            <div className="text-center py-16 max-w-md mx-auto">
+              <FileText className="h-10 w-10 mx-auto text-ink-300 mb-3" />
+              <p className="text-ink-700 font-medium">Word formato antiguo (.doc)</p>
+              <p className="text-ink-500 text-sm mt-2">
+                Para ver y editar este archivo dentro de Psicomorfosis, ábrelo en Word
+                y guárdalo como <strong>.docx</strong> (Archivo → Guardar como → Documento de Word).
+                Luego súbelo de nuevo y se abrirá en el editor inline.
+              </p>
+              <p className="text-ink-400 text-xs mt-3">
+                Mientras tanto, puedes descargarlo y abrirlo en tu equipo.
+              </p>
+            </div>
           ) : (
             <div className="text-center py-20">
               <FileText className="h-10 w-10 mx-auto text-ink-300 mb-3" />

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { KpiCard } from "@/components/app/KpiCard";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video, UsersRound, ArrowUpRight } from "lucide-react";
+import { CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video, UsersRound } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
@@ -107,23 +107,6 @@ export function AdminDashboard() {
         </div>
       </header>
 
-      <div className="rounded-xl border border-risk-high/30 bg-error-soft/50 px-5 py-3 flex items-start gap-3">
-        <div className="h-8 w-8 rounded-md bg-risk-high/15 text-risk-high flex items-center justify-center shrink-0">
-          <ShieldAlert className="h-4 w-4" />
-        </div>
-        <div className="flex-1">
-          <div className="text-sm text-ink-900 font-medium">
-            {riskActive.length} pacientes con bandera de riesgo activo requieren seguimiento esta semana.
-          </div>
-          <div className="text-xs text-ink-500 mt-0.5">
-            Protocolo de crisis disponible en el menú superior · línea 24/7 #106 visible para el paciente.
-          </div>
-        </div>
-        <button onClick={openCrisis} className="text-sm text-risk-high font-medium hover:underline shrink-0 inline-flex items-center gap-1">
-          Ver protocolo <ArrowUpRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
       <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiLink to="/agenda"><KpiCard label="Sesiones hoy" value={String(kpis.sessionsToday)} delta={{ neutral: true, value: "" }} hint={`${kpis.sessionsAttended} atendidas`} icon={<CalendarCheck2 className="h-4 w-4" />} /></KpiLink>
         <KpiLink to="/pacientes"><KpiCard label="Pacientes activos" value={String(kpis.patients)} delta={{ neutral: true, value: "" }} hint={`${kpis.patientsTotal} en total`} icon={<Users className="h-4 w-4" />} /></KpiLink>
@@ -175,7 +158,10 @@ export function AdminDashboard() {
               return (
                 <div key={m.modality}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-ink-700">{m.modality}</span>
+                    <span className="text-ink-700 inline-flex items-center gap-2 capitalize">
+                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${colors[i]}`} aria-hidden />
+                      {m.modality}
+                    </span>
                     <span className="text-ink-500 tabular">{m.value}</span>
                   </div>
                   <div className="h-2 rounded-full bg-bg-100 overflow-hidden">

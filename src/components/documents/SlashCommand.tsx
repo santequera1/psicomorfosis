@@ -176,17 +176,34 @@ export const SlashList = forwardRef<SlashListRef, SlashListProps>(({ items, comm
 });
 SlashList.displayName = "SlashList";
 
-/** Minimal floating-element holder used by TipTap suggestion render. No tippy.js. */
+/**
+ * Floating-element holder usado por la suggestion de TipTap. Sin tippy.js.
+ * Decide flip arriba/abajo según el espacio disponible — importante cerca del
+ * borde inferior (taskbar Windows, barra Safari mobile, etc).
+ */
 function makePopover() {
   const el = document.createElement("div");
-  el.style.cssText = "position:fixed;z-index:9999;display:none;";
+  el.style.cssText = "position:fixed;z-index:9999;display:none;visibility:hidden;overflow:auto;";
   document.body.appendChild(el);
   return {
     el,
     show: (rect: DOMRect) => {
       el.style.display = "block";
-      el.style.left = `${rect.left}px`;
-      el.style.top = `${rect.bottom + 6}px`;
+      el.style.visibility = "hidden";
+      // Limitamos left a viewport
+      el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 320))}px`;
+      el.style.top = "0";
+      requestAnimationFrame(() => {
+        const menuH = el.offsetHeight;
+        const viewH = window.innerHeight;
+        const spaceBelow = viewH - rect.bottom;
+        const spaceAbove = rect.top;
+        const goUp = spaceBelow < menuH + 16 && spaceAbove > spaceBelow;
+        const top = goUp ? Math.max(8, rect.top - menuH - 6) : rect.bottom + 6;
+        el.style.top = `${top}px`;
+        el.style.maxHeight = `${Math.max(160, (goUp ? spaceAbove : spaceBelow) - 16)}px`;
+        el.style.visibility = "visible";
+      });
     },
     hide: () => { el.style.display = "none"; },
     destroy: () => { el.remove(); },

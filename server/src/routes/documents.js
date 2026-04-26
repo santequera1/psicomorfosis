@@ -56,9 +56,13 @@ function makeDiskStorage(rootDir) {
 // Validamos por extensión + mime para mayor robustez. Algunos browsers envían
 // mimes inconsistentes (ej Word desde Windows = application/octet-stream), así
 // que el .ext es la fuente de verdad principal.
+// Aceptamos .doc legacy en uploads pero NO se intenta parsear (mammoth no lo
+// soporta, requiere LibreOffice headless). Se guarda como archivo binario y la
+// UI muestra "Vista previa no disponible · convierte a .docx para editar".
 const ALLOWED_EXTS = /\.(pdf|docx?|jpe?g|png|webp|gif|txt)$/i;
 const IMG_EXTS = /\.(jpe?g|png|webp|gif)$/i;
 const DOCX_EXTS = /\.docx$/i;
+const DOC_LEGACY_EXTS = /\.doc$/i;
 
 // Documents: PDFs, DOCX, imágenes adjuntas, txt.
 const upload = multer({
