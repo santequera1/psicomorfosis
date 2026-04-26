@@ -38,14 +38,20 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { Typography } from "@tiptap/extension-typography";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { SignatureModal } from "./SignatureModal";
 import {
   Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Link2,
-  Image as ImageIcon, Undo, Redo, Type,
+  Image as ImageIcon, Undo, Redo, Type, Paperclip, FileSignature,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlashCommand } from "./SlashCommand";
 import { VariableSuggest } from "./VariableSuggest";
+import { Callout } from "./CalloutExtension";
+import { Attachment } from "./AttachmentExtension";
+import { Signature } from "./SignatureExtension";
 import type { TipTapDoc } from "@/lib/api";
 
 interface Props {
@@ -55,12 +61,16 @@ interface Props {
   placeholder?: string;
   /** Callback al subir imagen (devuelve URL). Si no se provee, el botón pide URL manualmente. */
   onUploadImage?: (file: File) => Promise<string>;
+  /** Callback al adjuntar archivo (PDF/Word/etc). Devuelve datos para insertar como bloque. */
+  onUploadAttachment?: (file: File) => Promise<{ url: string; name: string; mime: string; sizeBytes: number }>;
 }
 
 const EMPTY_DOC: TipTapDoc = { type: "doc", content: [{ type: "paragraph" }] };
 
-export function DocumentEditor({ initialDoc, onChange, editable = true, placeholder, onUploadImage }: Props) {
+export function DocumentEditor({ initialDoc, onChange, editable = true, placeholder, onUploadImage, onUploadAttachment }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [signatureOpen, setSignatureOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -84,6 +94,9 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       TableRow,
       TableHeader,
       TableCell,
+      Callout,
+      Attachment,
+      Signature,
       SlashCommand,
       VariableSuggest,
     ],
@@ -114,6 +127,40 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       }
     }
   }, [initialDoc, editor]);
+
+  // Eventos custom emitidos desde los slash commands para abrir pickers/modal.
+  useEffect(() => {
+    if (!editable) return;
+    const onPickAttachment = () => attachmentInputRef.current?.click();
+    const onInsertSignature = async () => {
+      try {
+        const sig = await api.getMySignature();
+        if (sig.signature_url) {
+          (editor?.chain() as any).focus().setSignature({
+            url: sig.signature_url.startsWith("http") ? sig.signature_url : `${window.location.origin}${sig.signature_url}`,
+            name: sig.name,
+            tarjetaProfesional: sig.tarjeta_profesional ?? "",
+          }).run();
+        } else {
+          // No hay firma guardada → abrir modal para crearla
+          toast.message("No tienes firma guardada. Crea una primero.");
+          setSignatureOpen(true);
+        }
+      } catch (e: any) {
+        if (e?.status === 404) {
+          toast.error("Tu usuario no está vinculado a un perfil profesional.");
+        } else {
+          toast.error(e?.message ?? "No se pudo cargar la firma");
+        }
+      }
+    };
+    window.addEventListener("psm:editor:pick-attachment", onPickAttachment);
+    window.addEventListener("psm:editor:insert-signature", onInsertSignature);
+    return () => {
+      window.removeEventListener("psm:editor:pick-attachment", onPickAttachment);
+      window.removeEventListener("psm:editor:insert-signature", onInsertSignature);
+    };
+  }, [editor, editable]);
 
   if (!editor) return <div className="min-h-100 flex items-center justify-center text-sm text-ink-500">Cargando editor…</div>;
 
@@ -167,14 +214,121 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
     }
   }
 
+  async function onAttachmentChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !onUploadAttachment) return;
+    try {
+      const att = await onUploadAttachment(file);
+      (editor?.chain() as any).focus().setAttachment(att).run();
+    } catch (err: any) {
+      toast.error("No se pudo subir el archivo: " + (err?.message ?? err));
+    }
+  }
+
   return (
     <div className="bg-surface rounded-xl border border-line-200 relative">
-      {editable && <Toolbar editor={editor} onSetLink={setLink} onPickImage={pickAndUploadImage} />}
+      {editable && (
+        <Toolbar
+          editor={editor}
+          onSetLink={setLink}
+          onPickImage={pickAndUploadImage}
+          onPickAttachment={() => attachmentInputRef.current?.click()}
+          onOpenSignature={() => setSignatureOpen(true)}
+        />
+      )}
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onFileChosen} />
+      <input ref={attachmentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" hidden onChange={onAttachmentChosen} />
       <div className="px-6 sm:px-10">
         <EditorContent editor={editor} />
       </div>
       {editable && <ImageResizeBubble editor={editor} />}
+      {editable && <TableToolbar editor={editor} />}
+      {signatureOpen && (
+        <SignatureModal
+          onSaved={(url) => {
+            setSignatureOpen(false);
+            if (url) {
+              api.getMySignature().then((sig) => {
+                (editor?.chain() as any).focus().setSignature({
+                  url: url.startsWith("http") ? url : `${window.location.origin}${url}`,
+                  name: sig.name,
+                  tarjetaProfesional: sig.tarjeta_profesional ?? "",
+                }).run();
+              }).catch(() => {/* ya se guardó, basta */});
+            }
+          }}
+          onClose={() => setSignatureOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Floating toolbar que aparece cuando el cursor está dentro de una tabla.
+ * Permite agregar/quitar filas y columnas, togglear header y eliminar la tabla.
+ */
+function TableToolbar({ editor }: { editor: Editor }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      if (!editor.isActive("table")) { setPos(null); return; }
+      // Buscar el DOM de la tabla más cercana al cursor
+      const { from } = editor.state.selection;
+      const domInfo = editor.view.domAtPos(from);
+      const dom = domInfo?.node as Node | undefined;
+      if (!dom) { setPos(null); return; }
+      const el = (dom.nodeType === 1 ? (dom as HTMLElement) : (dom.parentElement as HTMLElement | null));
+      const tableEl = el?.closest("table");
+      if (!tableEl) { setPos(null); return; }
+      const r = tableEl.getBoundingClientRect();
+      setPos({ top: r.top + window.scrollY - 42, left: r.left + window.scrollX });
+    };
+    editor.on("selectionUpdate", update);
+    editor.on("update", update);
+    return () => {
+      editor.off("selectionUpdate", update);
+      editor.off("update", update);
+    };
+  }, [editor]);
+
+  if (!pos) return null;
+
+  const btn = (label: string, title: string, action: () => void, danger?: boolean) => (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); action(); }}
+      title={title}
+      className={cn(
+        "h-7 px-2 rounded text-[11px] font-medium whitespace-nowrap transition-colors",
+        danger ? "text-rose-700 hover:bg-rose-500/10" : "text-ink-700 hover:bg-bg-100"
+      )}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div
+      className="fixed z-50 bg-surface border border-line-200 rounded-lg shadow-modal p-1 inline-flex items-center gap-0.5 flex-wrap max-w-[90vw]"
+      style={{ top: pos.top, left: pos.left }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {btn("+ Fila ↑", "Agregar fila arriba", () => editor.chain().focus().addRowBefore().run())}
+      {btn("+ Fila ↓", "Agregar fila abajo", () => editor.chain().focus().addRowAfter().run())}
+      {btn("+ Col ←", "Agregar columna izquierda", () => editor.chain().focus().addColumnBefore().run())}
+      {btn("+ Col →", "Agregar columna derecha", () => editor.chain().focus().addColumnAfter().run())}
+      <span className="h-5 w-px bg-line-200 mx-0.5" />
+      {btn("− Fila", "Eliminar fila", () => editor.chain().focus().deleteRow().run(), true)}
+      {btn("− Col", "Eliminar columna", () => editor.chain().focus().deleteColumn().run(), true)}
+      <span className="h-5 w-px bg-line-200 mx-0.5" />
+      {btn("Header", "Toggle fila de encabezado", () => editor.chain().focus().toggleHeaderRow().run())}
+      <span className="h-5 w-px bg-line-200 mx-0.5" />
+      {btn("× Tabla", "Eliminar tabla completa", () => {
+        if (confirm("¿Eliminar la tabla completa?")) editor.chain().focus().deleteTable().run();
+      }, true)}
     </div>
   );
 }
@@ -265,7 +419,13 @@ function ImageResizeBubble({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor, onSetLink, onPickImage }: { editor: Editor; onSetLink: () => void; onPickImage: () => void }) {
+function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSignature }: {
+  editor: Editor;
+  onSetLink: () => void;
+  onPickImage: () => void;
+  onPickAttachment: () => void;
+  onOpenSignature: () => void;
+}) {
   return (
     <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
       <BtnGroup>
@@ -334,6 +494,12 @@ function Toolbar({ editor, onSetLink, onPickImage }: { editor: Editor; onSetLink
         </Btn>
         <Btn onClick={onPickImage} title="Imagen">
           <ImageIcon className="h-4 w-4" />
+        </Btn>
+        <Btn onClick={onPickAttachment} title="Adjuntar archivo (PDF, Word, etc)">
+          <Paperclip className="h-4 w-4" />
+        </Btn>
+        <Btn onClick={onOpenSignature} title="Firma del profesional">
+          <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
     </div>

@@ -10,6 +10,7 @@ import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   Quote, Code, Minus, Type, Image as ImageIcon, Table as TableIcon,
   Brain, ClipboardList, Stethoscope, ShieldAlert, Users,
+  Info, AlertTriangle, AlertOctagon, CheckCircle2, Paperclip, FileSignature,
 } from "lucide-react";
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 
@@ -262,6 +263,90 @@ export const SLASH_ITEMS: SlashItem[] = [
       p(),
     ]),
   },
+  // ───────────────── Callouts ─────────────────
+  {
+    title: "Nota informativa",
+    description: "Bloque azul para información de contexto",
+    icon: Info,
+    keywords: ["callout", "info", "nota", "informativa"],
+    group: "Avisos",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent({
+        type: "callout",
+        attrs: { type: "info" },
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Información a destacar…" }] }],
+      }).run();
+    },
+  },
+  {
+    title: "Aviso importante",
+    description: "Bloque amarillo para advertencias",
+    icon: AlertTriangle,
+    keywords: ["callout", "warning", "aviso", "importante", "atencion"],
+    group: "Avisos",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent({
+        type: "callout",
+        attrs: { type: "warning" },
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Tomar en cuenta que…" }] }],
+      }).run();
+    },
+  },
+  {
+    title: "Riesgo / Alerta clínica",
+    description: "Bloque rojo para riesgo o crisis",
+    icon: AlertOctagon,
+    keywords: ["callout", "riesgo", "alerta", "danger", "crisis", "suicida"],
+    group: "Avisos",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent({
+        type: "callout",
+        attrs: { type: "danger" },
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Riesgo identificado:" }] }],
+      }).run();
+    },
+  },
+  {
+    title: "Observación clínica",
+    description: "Bloque verde para hallazgos positivos",
+    icon: CheckCircle2,
+    keywords: ["callout", "observacion", "success", "logro", "hallazgo"],
+    group: "Avisos",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertContent({
+        type: "callout",
+        attrs: { type: "success" },
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Observación:" }] }],
+      }).run();
+    },
+  },
+
+  // ───────────────── Adjuntos / Firma ─────────────────
+  {
+    title: "Adjuntar archivo",
+    description: "PDF, Word, Excel, ZIP… inline en el documento",
+    icon: Paperclip,
+    keywords: ["adjunto", "archivo", "pdf", "word", "attachment", "subir"],
+    group: "Insertar",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      // Disparamos un evento custom que el componente DocumentEditor escucha
+      // y abre el file picker. La inserción la hace cuando el upload termina.
+      window.dispatchEvent(new CustomEvent("psm:editor:pick-attachment"));
+    },
+  },
+  {
+    title: "Firma del profesional",
+    description: "Insertar tu firma digital con sello de fecha",
+    icon: FileSignature,
+    keywords: ["firma", "signature", "sello", "rubrica"],
+    group: "Insertar",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      window.dispatchEvent(new CustomEvent("psm:editor:insert-signature"));
+    },
+  },
+
   {
     title: "Genograma · datos familiares",
     description: "Composición familiar y dinámica",

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import express from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 
@@ -118,6 +119,73 @@ router.delete("/professionals/:id", (req, res) => {
   const r = db.prepare("DELETE FROM professionals WHERE id = ? AND workspace_id = ?").run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "No encontrado" });
   res.status(204).end();
+});
+
+/**
+ * Devuelve la firma del profesional vinculado al usuario actual (vía
+ * users.professional_id). Útil para que el editor de documentos sepa si ya
+ * hay firma guardada. Devuelve { signature_url, name, tarjeta_profesional }.
+ */
+router.get("/me/signature", (req, res) => {
+  if (!req.user.professional_id) {
+    return res.status(404).json({ error: "Tu usuario no está vinculado a un profesional", linked: false });
+  }
+  const row = db.prepare("SELECT id, name, title, signature_url FROM professionals WHERE id = ? AND workspace_id = ?")
+    .get(req.user.professional_id, req.user.workspace_id);
+  if (!row) return res.status(404).json({ error: "Profesional no encontrado" });
+  res.json({
+    professional_id: row.id,
+    name: row.name,
+    tarjeta_profesional: row.title,
+    signature_url: row.signature_url,
+  });
+});
+
+/**
+ * Guarda la firma del profesional como dataURL (base64). Acepta:
+ *  - dataUrl: string "data:image/png;base64,..." (canvas o subida)
+ *  - typed:   { text: "Firma de Juan", style?: "italic" } → genera SVG simple
+ * La firma se almacena en disco bajo uploads/signatures/<professional_id>.png
+ * para servir vía /api/uploads/signatures/... sin token (filename estable).
+ */
+router.put("/me/signature", express.json({ limit: "2mb" }), async (req, res) => {
+  if (!req.user.professional_id) {
+    return res.status(404).json({ error: "Tu usuario no está vinculado a un profesional" });
+  }
+  const { dataUrl, clear } = req.body ?? {};
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const sigDir = path.join(process.cwd(), "uploads", "signatures");
+  fs.mkdirSync(sigDir, { recursive: true });
+
+  if (clear) {
+    db.prepare("UPDATE professionals SET signature_url = NULL WHERE id = ?").run(req.user.professional_id);
+    return res.json({ ok: true, signature_url: null });
+  }
+
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    return res.status(400).json({ error: "dataUrl inválida (esperado data:image/...;base64,...)" });
+  }
+  const m = dataUrl.match(/^data:image\/(png|jpeg|webp|svg\+xml);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: "Formato de imagen no soportado" });
+  const ext = m[1] === "jpeg" ? "jpg" : m[1] === "svg+xml" ? "svg" : m[1];
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 1024 * 1024) {
+    return res.status(413).json({ error: "Firma demasiado grande (>1MB)" });
+  }
+  const filename = `${req.user.professional_id}.${ext}`;
+  fs.writeFileSync(path.join(sigDir, filename), buf);
+  // Borrar otras extensiones del mismo professional_id (por si cambia el formato)
+  for (const e of ["png", "jpg", "webp", "svg"]) {
+    if (e !== ext) {
+      const old = path.join(sigDir, `${req.user.professional_id}.${e}`);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+  }
+  // Cache-buster para que el navegador refresque tras cambios
+  const url = `/api/uploads/signatures/${filename}?v=${Date.now()}`;
+  db.prepare("UPDATE professionals SET signature_url = ? WHERE id = ?").run(url, req.user.professional_id);
+  res.json({ ok: true, signature_url: url });
 });
 
 export default router;

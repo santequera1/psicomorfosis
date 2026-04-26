@@ -424,6 +424,12 @@ export const api = {
 
   // Workspace
   getWorkspace: () => request<Workspace>("/api/workspace"),
+  /** Firma del profesional vinculado al usuario actual. */
+  getMySignature: () => request<{ professional_id: number; name: string; tarjeta_profesional: string | null; signature_url: string | null }>("/api/workspace/me/signature"),
+  setMySignature: (dataUrl: string) =>
+    request<{ ok: true; signature_url: string }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ dataUrl }) }),
+  clearMySignature: () =>
+    request<{ ok: true; signature_url: null }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ clear: true }) }),
   updateWorkspace: (body: { name?: string; mode?: WorkspaceMode }) =>
     request<{ id: number; name: string; mode: WorkspaceMode }>("/api/workspace", { method: "PATCH", body: JSON.stringify(body) }),
 

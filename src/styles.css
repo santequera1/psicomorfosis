@@ -375,6 +375,121 @@
     outline: 2px solid var(--brand-700);
     outline-offset: 2px;
   }
+
+  /* Callouts: bloques destacados con icono + color de fondo. Los iconos
+     se inyectan via ::before para no requerir JSX dentro del NodeView. */
+  .psm-editor-content .psm-callout {
+    position: relative;
+    border-radius: 10px;
+    padding: 0.85rem 1rem 0.85rem 2.6rem;
+    margin: 0.75rem 0;
+    border: 1px solid;
+  }
+  .psm-editor-content .psm-callout::before {
+    position: absolute;
+    left: 0.85rem;
+    top: 0.85rem;
+    font-size: 1.05rem;
+    line-height: 1.3;
+  }
+  .psm-editor-content .psm-callout > * { margin: 0.25rem 0; }
+  .psm-editor-content .psm-callout > *:first-child { margin-top: 0; }
+  .psm-editor-content .psm-callout > *:last-child { margin-bottom: 0; }
+
+  .psm-editor-content .psm-callout[data-callout="info"] {
+    background: oklch(0.96 0.01 200);
+    border-color: oklch(0.85 0.045 200);
+    color: oklch(0.32 0.045 200);
+  }
+  .psm-editor-content .psm-callout[data-callout="info"]::before { content: "ℹ️"; }
+
+  .psm-editor-content .psm-callout[data-callout="warning"] {
+    background: oklch(0.96 0.04 80);
+    border-color: oklch(0.82 0.1 70);
+    color: oklch(0.4 0.12 60);
+  }
+  .psm-editor-content .psm-callout[data-callout="warning"]::before { content: "⚠️"; }
+
+  .psm-editor-content .psm-callout[data-callout="danger"] {
+    background: oklch(0.95 0.04 27);
+    border-color: oklch(0.78 0.13 27);
+    color: oklch(0.42 0.14 27);
+  }
+  .psm-editor-content .psm-callout[data-callout="danger"]::before { content: "🚨"; }
+
+  .psm-editor-content .psm-callout[data-callout="success"] {
+    background: oklch(0.95 0.025 155);
+    border-color: oklch(0.78 0.06 155);
+    color: oklch(0.4 0.085 155);
+  }
+  .psm-editor-content .psm-callout[data-callout="success"]::before { content: "✅"; }
+
+  /* Bloque de firma del profesional */
+  .psm-editor-content .psm-signature {
+    margin: 1.25rem 0;
+    padding: 1rem 1.25rem;
+    border: 1px dashed var(--line-200);
+    border-radius: 10px;
+    background: var(--bg-100);
+  }
+  .psm-editor-content .psm-signature img {
+    max-height: 90px;
+    width: auto;
+    margin: 0;
+    display: block;
+    background: white;
+    padding: 4px;
+    border-radius: 4px;
+  }
+  .psm-editor-content .psm-signature-meta {
+    font-size: 11px;
+    color: var(--ink-500);
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--line-100);
+    padding-top: 0.4rem;
+  }
+
+  /* Bloque de archivo adjunto inline */
+  .psm-editor-content .psm-attachment {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid var(--line-200);
+    border-radius: 10px;
+    background: var(--bg-100);
+    text-decoration: none;
+    color: var(--ink-700);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .psm-editor-content .psm-attachment:hover {
+    border-color: var(--brand-400);
+    background: var(--surface);
+  }
+  .psm-editor-content .psm-attachment-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--brand-50);
+    color: var(--brand-700);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+  }
+  .psm-editor-content .psm-attachment-info {
+    flex: 1; min-width: 0;
+  }
+  .psm-editor-content .psm-attachment-name {
+    font-weight: 500;
+    color: var(--ink-900);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .psm-editor-content .psm-attachment-meta {
+    font-size: 11px;
+    color: var(--ink-500);
+  }
   .psm-editor-content .ProseMirror-focused { outline: none; }
 
   /* ────────────────────────────────────────────────────────────────────────

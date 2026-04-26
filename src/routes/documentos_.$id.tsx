@@ -175,6 +175,16 @@ function DocumentDetailPage() {
             const asset = await api.uploadDocumentAsset(file, doc.id);
             return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
           }}
+          onUploadAttachment={async (file) => {
+            const asset = await api.uploadDocumentAsset(file, doc.id);
+            const absoluteUrl = asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
+            return {
+              url: absoluteUrl,
+              name: file.name,
+              mime: file.type || asset.mime,
+              sizeBytes: file.size,
+            };
+          }}
         />
       </div>
     </AppShell>

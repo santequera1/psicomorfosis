@@ -88,13 +88,14 @@ const uploadDocx = multer({
   },
 });
 
-// Assets inline (imágenes del editor). Solo imagen.
+// Assets inline del editor: imágenes Y adjuntos (PDF/DOCX/etc).
+const ASSET_EXTS = /\.(jpe?g|png|webp|gif|pdf|docx?|xlsx?|pptx?|txt|csv|zip)$/i;
 const uploadAsset = multer({
   storage: makeDiskStorage(ASSETS_DIR),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (!IMG_EXTS.test(file.originalname) && !file.mimetype.startsWith("image/")) {
-      return cb(new Error("Solo imágenes para assets inline (jpg, png, webp, gif)"));
+    if (!ASSET_EXTS.test(file.originalname)) {
+      return cb(new Error("Tipo no permitido. Acepta: imagen, PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP."));
     }
     cb(null, true);
   },

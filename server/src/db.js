@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS professionals (
   phone TEXT,
   approach TEXT,
   active INTEGER DEFAULT 1,
+  signature_url TEXT,
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
@@ -432,6 +433,8 @@ function runMigrations() {
     "ALTER TABLE patients ADD COLUMN archived_at TEXT",
     // Añadida en tanda del 26 de abril (vista de Tareas — vinculo user↔professional para JWT)
     "ALTER TABLE users ADD COLUMN professional_id INTEGER REFERENCES professionals(id) ON DELETE SET NULL",
+    // Firma del profesional (canvas dibujado, imagen subida o tipográfica)
+    "ALTER TABLE professionals ADD COLUMN signature_url TEXT",
     // Añadidas en tanda del 26 de abril noche (módulo Documentos — gestión de contenido)
     "ALTER TABLE documents ADD COLUMN kind TEXT NOT NULL DEFAULT 'file'",
     "ALTER TABLE documents ADD COLUMN filename TEXT",
