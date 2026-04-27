@@ -422,6 +422,45 @@ export const api = {
     }),
   me: () => request<{ user: ApiUser }>("/api/auth/me"),
 
+  // Portal del paciente — invitación + activación + login (públicos)
+  invitePatient: (patientId: string) =>
+    request<{ token: string; url: string; expires_at: string; days_valid: number; whatsapp_text: string }>(
+      `/api/patients/${patientId}/invite`,
+      { method: "POST" }
+    ),
+  validatePatientInvite: (token: string) =>
+    request<{
+      valid: boolean;
+      patient: { id: string; name: string; preferred_name: string | null; email: string };
+      professional: { name: string; title: string | null } | null;
+      clinic: { name: string; city: string | null; address: string | null };
+      expires_at: string;
+    }>(`/api/patient-invite/${token}`),
+  activatePatientInvite: (token: string, password: string) =>
+    request<{ token: string; user: { id: number; name: string; email: string; role: "paciente"; patient_id: string; workspace_id: number } }>(
+      `/api/patient-invite/${token}/activate`,
+      { method: "POST", body: JSON.stringify({ password }) }
+    ),
+  loginPatient: (email: string, password: string) =>
+    request<{ token: string; user: { id: number; name: string; email: string; role: "paciente"; patient_id: string; workspace_id: number } }>(
+      "/api/auth/patient/login",
+      { method: "POST", body: JSON.stringify({ email, password }) }
+    ),
+
+  // Portal del paciente — endpoints autenticados
+  portalMe: () =>
+    request<{
+      patient: ApiPatient & { address?: string | null; photo_url?: string | null };
+      professional: { id: number; name: string; title: string | null; phone: string | null; email: string | null; signature_url: string | null } | null;
+      clinic: { name: string | null; city: string | null; address: string | null; phone: string | null; consultorio: string | null };
+    }>("/api/portal/me"),
+  portalUpdateMe: (body: Partial<{ phone: string; email: string; address: string; photo_url: string; preferred_name: string; pronouns: string }>) =>
+    request<{ ok: true }>("/api/portal/me", { method: "PATCH", body: JSON.stringify(body) }),
+  portalAppointments: () => request<Array<Record<string, any>>>("/api/portal/appointments"),
+  portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
+  portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),
+  portalDocuments: () => request<Array<Record<string, any>>>("/api/portal/documents"),
+
   // Workspace
   getWorkspace: () => request<Workspace>("/api/workspace"),
   /** Firma del profesional vinculado al usuario actual. */

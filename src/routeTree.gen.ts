@@ -22,7 +22,14 @@ import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
+import { Route as PTareasRouteImport } from './routes/p_.tareas'
+import { Route as PPerfilRouteImport } from './routes/p_.perfil'
+import { Route as PLoginRouteImport } from './routes/p_.login'
+import { Route as PInicioRouteImport } from './routes/p_.inicio'
+import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
+import { Route as PCitasRouteImport } from './routes/p_.citas'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
+import { Route as PActivarTokenRouteImport } from './routes/p_.activar.$token'
 import { Route as DocumentosPlantillaIdRouteImport } from './routes/documentos_.plantilla.$id'
 
 const TestsRoute = TestsRouteImport.update({
@@ -90,9 +97,44 @@ const PacientesIdRoute = PacientesIdRouteImport.update({
   path: '/pacientes/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PTareasRoute = PTareasRouteImport.update({
+  id: '/p_/tareas',
+  path: '/p/tareas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PPerfilRoute = PPerfilRouteImport.update({
+  id: '/p_/perfil',
+  path: '/p/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PLoginRoute = PLoginRouteImport.update({
+  id: '/p_/login',
+  path: '/p/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PInicioRoute = PInicioRouteImport.update({
+  id: '/p_/inicio',
+  path: '/p/inicio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PDocumentosRoute = PDocumentosRouteImport.update({
+  id: '/p_/documentos',
+  path: '/p/documentos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PCitasRoute = PCitasRouteImport.update({
+  id: '/p_/citas',
+  path: '/p/citas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocumentosIdRoute = DocumentosIdRouteImport.update({
   id: '/documentos_/$id',
   path: '/documentos/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PActivarTokenRoute = PActivarTokenRouteImport.update({
+  id: '/p_/activar/$token',
+  path: '/p/activar/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocumentosPlantillaIdRoute = DocumentosPlantillaIdRouteImport.update({
@@ -115,8 +157,15 @@ export interface FileRoutesByFullPath {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
+  '/p/citas': typeof PCitasRoute
+  '/p/documentos': typeof PDocumentosRoute
+  '/p/inicio': typeof PInicioRoute
+  '/p/login': typeof PLoginRoute
+  '/p/perfil': typeof PPerfilRoute
+  '/p/tareas': typeof PTareasRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
+  '/p/activar/$token': typeof PActivarTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,8 +181,15 @@ export interface FileRoutesByTo {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
+  '/p/citas': typeof PCitasRoute
+  '/p/documentos': typeof PDocumentosRoute
+  '/p/inicio': typeof PInicioRoute
+  '/p/login': typeof PLoginRoute
+  '/p/perfil': typeof PPerfilRoute
+  '/p/tareas': typeof PTareasRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
+  '/p/activar/$token': typeof PActivarTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -150,8 +206,15 @@ export interface FileRoutesById {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos_/$id': typeof DocumentosIdRoute
+  '/p_/citas': typeof PCitasRoute
+  '/p_/documentos': typeof PDocumentosRoute
+  '/p_/inicio': typeof PInicioRoute
+  '/p_/login': typeof PLoginRoute
+  '/p_/perfil': typeof PPerfilRoute
+  '/p_/tareas': typeof PTareasRoute
   '/pacientes_/$id': typeof PacientesIdRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
+  '/p_/activar/$token': typeof PActivarTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -169,8 +232,15 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos/$id'
+    | '/p/citas'
+    | '/p/documentos'
+    | '/p/inicio'
+    | '/p/login'
+    | '/p/perfil'
+    | '/p/tareas'
     | '/pacientes/$id'
     | '/documentos/plantilla/$id'
+    | '/p/activar/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -186,8 +256,15 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos/$id'
+    | '/p/citas'
+    | '/p/documentos'
+    | '/p/inicio'
+    | '/p/login'
+    | '/p/perfil'
+    | '/p/tareas'
     | '/pacientes/$id'
     | '/documentos/plantilla/$id'
+    | '/p/activar/$token'
   id:
     | '__root__'
     | '/'
@@ -203,8 +280,15 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos_/$id'
+    | '/p_/citas'
+    | '/p_/documentos'
+    | '/p_/inicio'
+    | '/p_/login'
+    | '/p_/perfil'
+    | '/p_/tareas'
     | '/pacientes_/$id'
     | '/documentos_/plantilla/$id'
+    | '/p_/activar/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -221,8 +305,15 @@ export interface RootRouteChildren {
   TareasRoute: typeof TareasRoute
   TestsRoute: typeof TestsRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
+  PCitasRoute: typeof PCitasRoute
+  PDocumentosRoute: typeof PDocumentosRoute
+  PInicioRoute: typeof PInicioRoute
+  PLoginRoute: typeof PLoginRoute
+  PPerfilRoute: typeof PPerfilRoute
+  PTareasRoute: typeof PTareasRoute
   PacientesIdRoute: typeof PacientesIdRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
+  PActivarTokenRoute: typeof PActivarTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -318,11 +409,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PacientesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p_/tareas': {
+      id: '/p_/tareas'
+      path: '/p/tareas'
+      fullPath: '/p/tareas'
+      preLoaderRoute: typeof PTareasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/perfil': {
+      id: '/p_/perfil'
+      path: '/p/perfil'
+      fullPath: '/p/perfil'
+      preLoaderRoute: typeof PPerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/login': {
+      id: '/p_/login'
+      path: '/p/login'
+      fullPath: '/p/login'
+      preLoaderRoute: typeof PLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/inicio': {
+      id: '/p_/inicio'
+      path: '/p/inicio'
+      fullPath: '/p/inicio'
+      preLoaderRoute: typeof PInicioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/documentos': {
+      id: '/p_/documentos'
+      path: '/p/documentos'
+      fullPath: '/p/documentos'
+      preLoaderRoute: typeof PDocumentosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/citas': {
+      id: '/p_/citas'
+      path: '/p/citas'
+      fullPath: '/p/citas'
+      preLoaderRoute: typeof PCitasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/documentos_/$id': {
       id: '/documentos_/$id'
       path: '/documentos/$id'
       fullPath: '/documentos/$id'
       preLoaderRoute: typeof DocumentosIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/p_/activar/$token': {
+      id: '/p_/activar/$token'
+      path: '/p/activar/$token'
+      fullPath: '/p/activar/$token'
+      preLoaderRoute: typeof PActivarTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/documentos_/plantilla/$id': {
@@ -349,8 +489,15 @@ const rootRouteChildren: RootRouteChildren = {
   TareasRoute: TareasRoute,
   TestsRoute: TestsRoute,
   DocumentosIdRoute: DocumentosIdRoute,
+  PCitasRoute: PCitasRoute,
+  PDocumentosRoute: PDocumentosRoute,
+  PInicioRoute: PInicioRoute,
+  PLoginRoute: PLoginRoute,
+  PPerfilRoute: PPerfilRoute,
+  PTareasRoute: PTareasRoute,
   PacientesIdRoute: PacientesIdRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
+  PActivarTokenRoute: PActivarTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

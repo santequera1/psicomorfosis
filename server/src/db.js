@@ -26,11 +26,13 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
   email TEXT,
-  role TEXT NOT NULL DEFAULT 'psicologa',
+  role TEXT NOT NULL DEFAULT 'psicologa', -- 'super_admin' | 'admin' | 'psicologa' | 'paciente'
   professional_id INTEGER,
+  patient_id TEXT,                         -- FK a patients.id, solo para role='paciente'
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-  FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL
+  FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL,
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS sedes (
@@ -84,6 +86,8 @@ CREATE TABLE IF NOT EXISTS patients (
   next_session TEXT,
   risk TEXT,
   tags TEXT,
+  photo_url TEXT,
+  address TEXT,
   archived_at TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -294,6 +298,23 @@ CREATE TABLE IF NOT EXISTS clinical_notes (
 CREATE INDEX IF NOT EXISTS idx_clinical_notes_patient_kind ON clinical_notes(patient_id, kind);
 CREATE INDEX IF NOT EXISTS idx_clinical_notes_workspace ON clinical_notes(workspace_id);
 
+-- Portal del paciente: invitaciones por token (one-time activation)
+CREATE TABLE IF NOT EXISTS patient_invites (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  patient_id TEXT NOT NULL,
+  token TEXT UNIQUE NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_patient_invites_token ON patient_invites(token);
+CREATE INDEX IF NOT EXISTS idx_patient_invites_patient ON patient_invites(patient_id);
+
 -- Vista de Tareas (organización interna del equipo)
 CREATE TABLE IF NOT EXISTS tareas_folders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -446,6 +467,10 @@ function runMigrations() {
     "ALTER TABLE documents ADD COLUMN template_id INTEGER",
     "ALTER TABLE documents ADD COLUMN signed_by_user_id INTEGER",
     "ALTER TABLE documents ADD COLUMN archived_at TEXT",
+    // Portal del paciente (26 abril noche)
+    "ALTER TABLE users ADD COLUMN patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE",
+    "ALTER TABLE patients ADD COLUMN photo_url TEXT",
+    "ALTER TABLE patients ADD COLUMN address TEXT",
   ];
   for (const sql of migrations) {
     try {

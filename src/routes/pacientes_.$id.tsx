@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
 import { RiskBadge } from "@/components/app/RiskBadge";
@@ -9,7 +11,7 @@ import { Trash2 } from "lucide-react";
 import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, ClipboardList, FileText, Pill,
   MessagesSquare, Receipt, Brain, Plus, User, IdCard, ChevronRight, Edit3,
-  TrendingDown, CheckCircle2, Clock, AlertCircle, MessageCircle,
+  TrendingDown, CheckCircle2, Clock, AlertCircle, MessageCircle, UserPlus,
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
@@ -40,6 +42,7 @@ function PatientDetailPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>("datos");
   const [editing, setEditing] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const { data: patient, isLoading, error } = useQuery({
     queryKey: ["patient", id],
@@ -141,12 +144,19 @@ function PatientDetailPage() {
           </div>
 
           {/* Acciones: full-width grid en mobile, fila normal en desktop */}
-          <div className="mt-4 grid grid-cols-3 sm:flex sm:justify-end gap-2">
+          <div className="mt-4 grid grid-cols-2 sm:flex sm:justify-end gap-2 flex-wrap">
             <Link to="/historia" search={{ id: patient.id }} className="h-10 px-2 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
               <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Nueva nota</span>
               <span className="sm:hidden">Nota</span>
             </Link>
+            <button
+              onClick={() => setInviteOpen(true)}
+              className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              title="Invitar al portal del paciente"
+            >
+              <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Invitar al portal</span><span className="sm:hidden">Portal</span>
+            </button>
             <button
               onClick={() => setEditing(true)}
               className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
@@ -215,6 +225,7 @@ function PatientDetailPage() {
       </div>
 
       {editing && patient && <EditPatientInlineModal patient={patient} onClose={() => setEditing(false)} />}
+      {inviteOpen && patient && <InvitePortalModal patient={patient} onClose={() => setInviteOpen(false)} />}
     </AppShell>
   );
 }
@@ -675,6 +686,122 @@ function TabFacturacion() {
           <li className="flex items-center justify-between text-ink-700"><span>Pendiente</span><span className="tabular text-risk-moderate">$180.000</span></li>
           <li className="flex items-center justify-between text-ink-700"><span>Método preferido</span><span>PSE</span></li>
         </ul>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal: Invitar al portal del paciente ─────────────────────────────────
+function InvitePortalModal({ patient, onClose }: { patient: import("@/lib/api").ApiPatient; onClose: () => void }) {
+  const [invite, setInvite] = useState<{ url: string; expires_at: string; days_valid: number; whatsapp_text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [alreadyActive, setAlreadyActive] = useState(false);
+  const [generating, setGenerating] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    api.invitePatient(patient.id)
+      .then((res) => { if (mounted) setInvite(res); })
+      .catch((e: any) => {
+        if (!mounted) return;
+        if (e?.status === 409) setAlreadyActive(true);
+        setError(e?.message ?? "Error al generar invitación");
+      })
+      .finally(() => { if (mounted) setGenerating(false); });
+    return () => { mounted = false; };
+  }, [patient.id]);
+
+  function copy(text: string, label: string) {
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success(`${label} copiado`),
+      () => toast.error("No se pudo copiar")
+    );
+  }
+
+  const wa = whatsappUrl(patient.phone, invite?.whatsapp_text);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Portal del paciente</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Invitar a {patient.preferredName ?? patient.name}</h3>
+            <p className="text-xs text-ink-500 mt-1">{patient.email ? `Se generará un link único para que cree su contraseña.` : "Este paciente no tiene email registrado. Edítalo primero."}</p>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400">×</button>
+        </header>
+
+        <div className="p-5">
+          {generating && (
+            <div className="text-center py-8 text-ink-500">
+              <Clock className="h-5 w-5 mx-auto mb-2 animate-spin" />
+              Generando invitación…
+            </div>
+          )}
+
+          {alreadyActive && (
+            <div className="rounded-lg border border-brand-400/30 bg-brand-50 p-4">
+              <p className="text-sm text-ink-900 font-medium">Este paciente ya tiene cuenta activa.</p>
+              <p className="text-xs text-ink-500 mt-1">Si olvidó la contraseña, dile que use "¿Olvidaste tu contraseña?" en la pantalla de login del portal.</p>
+            </div>
+          )}
+
+          {error && !alreadyActive && (
+            <div className="rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-xs text-rose-700">{error}</div>
+          )}
+
+          {invite && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-line-200 bg-bg-100 p-4 flex flex-col items-center gap-3">
+                <QRCodeSVG value={invite.url} size={180} marginSize={2} />
+                <p className="text-[11px] text-ink-500">Escanea con la cámara del celular</p>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-ink-500 mb-1">Enlace de activación</label>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={invite.url}
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                    className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-bg text-xs text-ink-900 font-mono"
+                  />
+                  <button onClick={() => copy(invite.url, "Enlace")} className="h-10 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800">
+                    Copiar
+                  </button>
+                </div>
+                <p className="text-[11px] text-ink-500 mt-1">Válido por {invite.days_valid} días — expira el {new Date(invite.expires_at).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}.</p>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-ink-500 mb-1">Mensaje sugerido para WhatsApp</label>
+                <textarea
+                  readOnly
+                  value={invite.whatsapp_text}
+                  className="w-full h-32 px-3 py-2 rounded-md border border-line-200 bg-bg text-xs text-ink-700 font-mono resize-none"
+                />
+                <div className="mt-2 flex gap-2">
+                  <button onClick={() => copy(invite.whatsapp_text, "Mensaje")} className="flex-1 h-10 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400">
+                    Copiar mensaje
+                  </button>
+                  {wa && (
+                    <a
+                      href={wa}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 h-10 px-3 rounded-md bg-sage-500 text-white text-xs font-medium hover:bg-sage-700 inline-flex items-center justify-center gap-1.5"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" /> Abrir WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <footer className="px-5 py-4 border-t border-line-100 flex justify-end">
+          <button onClick={onClose} className="h-10 px-4 rounded-lg bg-bg text-sm text-ink-700 border border-line-200 hover:border-brand-400">Cerrar</button>
+        </footer>
       </div>
     </div>
   );

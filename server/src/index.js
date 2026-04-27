@@ -23,6 +23,7 @@ import invoicesRoutes from "./routes/invoices.js";
 import notificationsRoutes from "./routes/notifications.js";
 import settingsRoutes from "./routes/settings.js";
 import notesRoutes from "./routes/notes.js";
+import portalRoutes from "./routes/portal.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -61,7 +62,11 @@ app.use("/api/documents", documentsRoutes);
 app.use("/api/invoices", invoicesRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/settings", settingsRoutes);
-app.use("/api", notesRoutes); // rutas son /patients/:id/notes y /notes/:id
+// portalRoutes va ANTES que notesRoutes porque expone endpoints públicos
+// (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
+// requireAuth global, así que si va primero intercepta cualquier /api/*.
+app.use("/api", portalRoutes); // /patients/:id/invite, /patient-invite/*, /auth/patient/login, /portal/*
+app.use("/api", notesRoutes);  // /patients/:id/notes y /notes/:id (require auth)
 
 app.use((err, _req, res, _next) => {
   console.error("[api error]", err);

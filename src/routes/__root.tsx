@@ -76,13 +76,29 @@ const BOOTSTRAP_SCRIPT = `
   } catch(e) {}
   try {
     var token = localStorage.getItem('psm.token');
+    var user = JSON.parse(localStorage.getItem('psm.user') || 'null');
     var path = location.pathname;
-    var publicPaths = ['/login'];
-    var isPublic = publicPaths.indexOf(path) !== -1;
-    if (!token && !isPublic) {
-      location.replace('/login');
-    } else if (token && path === '/login') {
-      location.replace('/');
+    // Las rutas /p/* son del portal del paciente — viven con sus propias reglas.
+    // Las páginas públicas (/login y /p/activar/* y /p/login) no requieren token.
+    var isPatientPortal = path === '/p' || path.indexOf('/p/') === 0;
+    var publicPaths = ['/login', '/p/login'];
+    var isPublic = publicPaths.indexOf(path) !== -1
+      || path.indexOf('/p/activar/') === 0;
+    if (isPatientPortal) {
+      // Portal del paciente: si requiere auth y no hay token o el token no es de paciente → /p/login
+      var needsAuth = !isPublic;
+      var isPatient = user && user.role === 'paciente';
+      if (needsAuth && (!token || !isPatient)) location.replace('/p/login');
+      else if (token && isPatient && path === '/p/login') location.replace('/p/inicio');
+    } else {
+      // Staff: token de paciente entra al portal, no al staff
+      if (token && user && user.role === 'paciente' && !isPublic) {
+        location.replace('/p/inicio');
+      } else if (!token && !isPublic) {
+        location.replace('/login');
+      } else if (token && user && user.role !== 'paciente' && path === '/login') {
+        location.replace('/');
+      }
     }
   } catch(e) {}
 })();
