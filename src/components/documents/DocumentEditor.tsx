@@ -73,6 +73,10 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   const [signatureOpen, setSignatureOpen] = useState(false);
 
   const editor = useEditor({
+    // Crítico para SSR: TipTap necesita el DOM real. Si renderiza inmediatamente
+    // en server-render, el HTML no coincide con el cliente y React tira #418
+    // (hydration mismatch). Con esto, el editor solo se inicializa en client.
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         // Configuramos Link aquí (StarterKit v3 lo incluye) con autolink desactivado
