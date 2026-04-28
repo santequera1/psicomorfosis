@@ -3,11 +3,17 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient } from "../auth.js";
+import { calculateScore } from "../psych_test_definitions.js";
 
 const router = Router();
 
 const INVITE_DAYS = 5;
 const TOKEN_BYTES = 24;
+
+function safeJSON(s) {
+  if (!s) return null;
+  try { return JSON.parse(s); } catch { return null; }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // GENERAR INVITACIÓN (staff)
@@ -320,6 +326,113 @@ router.post("/portal/tasks/:id/complete", requirePatient, (req, res) => {
   `).run(req.params.id, req.user.patient_id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "Tarea no encontrada" });
   res.json({ ok: true });
+});
+
+/**
+ * GET /api/portal/tests — tests asignados al paciente.
+ * Devuelve tanto pendientes como completados (para histórico). Cada uno trae
+ * la definición completa del test inline para que la UI pueda renderizar el
+ * aplicador sin un fetch extra.
+ */
+router.get("/portal/tests", requirePatient, (req, res) => {
+  const apps = db.prepare(`
+    SELECT * FROM test_applications
+    WHERE patient_id = ? AND workspace_id = ?
+    ORDER BY status = 'pendiente' DESC, COALESCE(completed_at, assigned_at, date) DESC
+  `).all(req.user.patient_id, req.user.workspace_id);
+
+  // Anotar cada aplicación con la definición completa de su test
+  const testCache = new Map();
+  const result = apps.map((a) => {
+    let def = testCache.get(a.test_code);
+    if (def === undefined) {
+      const t = db.prepare("SELECT * FROM psych_tests WHERE code = ?").get(a.test_code);
+      def = t ? {
+        id: t.id,
+        code: t.code,
+        name: t.name,
+        short_name: t.short_name,
+        items: t.items,
+        minutes: t.minutes,
+        category: t.category,
+        description: t.description,
+        ...(t.questions_json ? safeJSON(t.questions_json) : {}),
+      } : null;
+      testCache.set(a.test_code, def);
+    }
+    return {
+      ...a,
+      answers_json: a.answers_json ? safeJSON(a.answers_json) : null,
+      alerts_json: a.alerts_json ? safeJSON(a.alerts_json) : null,
+      definition: def,
+    };
+  });
+
+  res.json(result);
+});
+
+/**
+ * POST /api/portal/tests/:id/submit — el paciente envía sus respuestas.
+ * Calcula score, marca completada, genera alerta al psicólogo si aplica.
+ */
+router.post("/portal/tests/:id/submit", requirePatient, (req, res) => {
+  const app = db.prepare("SELECT * FROM test_applications WHERE id = ? AND patient_id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!app) return res.status(404).json({ error: "Test no encontrado" });
+  if (app.status === "completado") return res.status(409).json({ error: "Ya completaste este test" });
+
+  const test = db.prepare("SELECT * FROM psych_tests WHERE code = ?").get(app.test_code);
+  if (!test || !test.questions_json) return res.status(500).json({ error: "Definición del test no disponible" });
+  const def = safeJSON(test.questions_json);
+
+  const { answers } = req.body ?? {};
+  if (!answers || typeof answers !== "object") return res.status(400).json({ error: "Respuestas requeridas" });
+
+  const missing = def.questions.filter((q) => answers[q.id] == null);
+  if (missing.length > 0) {
+    return res.status(400).json({ error: `Faltan ${missing.length} respuestas`, missing: missing.map((q) => q.id) });
+  }
+
+  const calc = calculateScore(def, answers);
+  const completedAt = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE test_applications
+    SET status = 'completado', score = ?, level = ?, interpretation = ?,
+        answers_json = ?, alerts_json = ?,
+        completed_at = ?, date = ?, applied_by = 'paciente'
+    WHERE id = ?
+  `).run(
+    calc.score, calc.level, calc.label,
+    JSON.stringify(answers),
+    Object.keys(calc.alerts).length > 0 ? JSON.stringify(calc.alerts) : null,
+    completedAt, completedAt.slice(0, 10),
+    req.params.id
+  );
+
+  // Si hay alerta crítica → notificar al psicólogo
+  if (calc.alerts.critical_response) {
+    db.prepare(`
+      INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'alerta', ?, ?, ?, 0, 1)
+    `).run(
+      `N-test-${req.params.id}-${Date.now()}`,
+      app.workspace_id,
+      `Respuesta crítica en ${test.code}`,
+      `${app.patient_name} marcó una respuesta clínicamente significativa. Revisar lo antes posible.`,
+      completedAt
+    );
+  }
+
+  // Devolver al paciente solo el resultado básico — sin interpretación detallada
+  // (eso es para discutir con su psicóloga).
+  res.json({
+    ok: true,
+    score: calc.score,
+    level: calc.level,
+    label: calc.label,
+    has_critical_response: !!calc.alerts.critical_response,
+  });
 });
 
 /**

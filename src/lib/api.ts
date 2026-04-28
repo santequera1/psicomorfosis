@@ -281,6 +281,53 @@ export interface TareaFolder {
   created_at: string;
 }
 
+// ─── Tests psicométricos ────────────────────────────────────────────────────
+export interface PsychTestScaleOption { value: number; label: string }
+export interface PsychTestQuestion { id: string; text: string; reverse?: boolean; scale?: PsychTestScaleOption[] }
+export interface PsychTestRange { min: number; max: number; label: string; level: "none" | "low" | "moderate" | "high" | "critical" }
+export interface PsychTestAlerts { critical_question_id?: string; critical_threshold?: number }
+export interface PsychTestDefinition {
+  version?: number;
+  instructions?: string;
+  scale?: PsychTestScaleOption[] | null;
+  questions: PsychTestQuestion[];
+  scoring?: { type: "sum" | "sum_reversed" | "eat26" };
+  ranges: PsychTestRange[];
+  alerts?: PsychTestAlerts | null;
+}
+export interface PsychTest {
+  id: string;
+  code: string;
+  name: string;
+  shortName: string;
+  items: number;
+  minutes: number;
+  category: string;
+  description: string | null;
+  ageRange: string | null;
+  scoring: PsychTestRange[];
+  definition: PsychTestDefinition | null;
+}
+export interface TestApplication {
+  id: string;
+  workspace_id: number;
+  patient_id: string | null;
+  patient_name: string | null;
+  test_code: string;
+  test_name: string;
+  date: string | null;
+  score: number | null;
+  interpretation: string | null;
+  level: string | null;
+  professional: string | null;
+  status: "pendiente" | "en_curso" | "completado" | string;
+  applied_by: "profesional" | "paciente" | null;
+  assigned_at: string | null;
+  completed_at: string | null;
+  answers_json: Record<string, number> | null;
+  alerts_json: { critical_response?: boolean; critical_question_id?: string; critical_value?: number } | null;
+}
+
 // ─── Documentos & Plantillas ───────────────────────────────────────────────
 export type DocumentKind = "editor" | "file";
 export type DocumentStatus = "borrador" | "pendiente_firma" | "firmado";
@@ -504,10 +551,29 @@ export const api = {
   createAppointment: (body: Record<string, unknown>) =>
     request("/api/appointments", { method: "POST", body: JSON.stringify(body) }),
 
-  // Tests
-  listTestCatalog: () => request<Array<Record<string, unknown>>>("/api/tests/catalog"),
-  listTestApplications: (params: Record<string, string> = {}) =>
-    request<Array<Record<string, unknown>>>(`/api/tests/applications${qs(params)}`),
+  // Tests psicométricos — catálogo y aplicaciones
+  listTestCatalog: () => request<Array<PsychTest>>("/api/tests/catalog"),
+  getTestCatalog: (id: string) => request<PsychTest>(`/api/tests/catalog/${id}`),
+  listTestApplications: (params: { patient_id?: string; status?: string; test_code?: string } = {}) =>
+    request<TestApplication[]>(`/api/tests/applications${qs(params)}`),
+  getTestApplication: (id: string) => request<TestApplication>(`/api/tests/applications/${id}`),
+  /** Crear aplicación con respuestas (staff aplicó test en sesión). */
+  createTestApplication: (body: { test_id: string; patient_id?: string; patient_name?: string; answers?: Record<string, number>; applied_by?: "profesional" | "paciente" }) =>
+    request<TestApplication>("/api/tests/applications", { method: "POST", body: JSON.stringify(body) }),
+  /** Asignar test al paciente para autoaplicación (sin respuestas, queda pendiente). */
+  assignTestToPatient: (body: { test_id: string; patient_id: string }) =>
+    request<TestApplication>("/api/tests/applications", { method: "POST", body: JSON.stringify({ ...body, assign_to_patient: true }) }),
+  submitTestApplication: (id: string, answers: Record<string, number>) =>
+    request<TestApplication>(`/api/tests/applications/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) }),
+  deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
+
+  // Portal del paciente — tests
+  portalTests: () => request<Array<TestApplication & { definition: PsychTestDefinition | null }>>("/api/portal/tests"),
+  portalSubmitTest: (id: string, answers: Record<string, number>) =>
+    request<{ ok: true; score: number; level: string; label: string; has_critical_response: boolean }>(
+      `/api/portal/tests/${id}/submit`,
+      { method: "POST", body: JSON.stringify({ answers }) }
+    ),
 
   // Tasks
   listTasks: (params: Record<string, string> = {}) =>

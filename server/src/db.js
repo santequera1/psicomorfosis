@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
+import { seedTestDefinitions } from "./psych_test_definitions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = join(__dirname, "..", "data.db");
@@ -127,7 +128,8 @@ CREATE TABLE IF NOT EXISTS psych_tests (
   category TEXT,
   description TEXT,
   age_range TEXT,
-  scoring TEXT
+  scoring TEXT,
+  questions_json TEXT  -- JSON con definición completa: instructions, scale, questions, scoring ranges, alerts
 );
 
 CREATE TABLE IF NOT EXISTS test_applications (
@@ -137,12 +139,18 @@ CREATE TABLE IF NOT EXISTS test_applications (
   patient_name TEXT,
   test_code TEXT,
   test_name TEXT,
-  date TEXT,
+  date TEXT,                     -- fecha de aplicación (cuando se completa)
   score INTEGER,
   interpretation TEXT,
-  level TEXT,
+  level TEXT,                    -- 'none' | 'low' | 'moderate' | 'high' | 'critical'
   professional TEXT,
-  status TEXT,
+  status TEXT,                   -- 'pendiente' | 'en_curso' | 'completado'
+  -- Nuevos campos para flujo de auto-aplicación y respuestas detalladas
+  applied_by TEXT,               -- 'paciente' | 'profesional'
+  assigned_at TEXT,              -- cuando el psicólogo lo asignó al paciente
+  completed_at TEXT,             -- cuando se enviaron las respuestas
+  answers_json TEXT,             -- { q1: 2, q2: 1, ... }
+  alerts_json TEXT,              -- { critical_response: true, ... }
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
   FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
 );
@@ -471,6 +479,13 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE",
     "ALTER TABLE patients ADD COLUMN photo_url TEXT",
     "ALTER TABLE patients ADD COLUMN address TEXT",
+    // Tests psicométricos (27 abril)
+    "ALTER TABLE psych_tests ADD COLUMN questions_json TEXT",
+    "ALTER TABLE test_applications ADD COLUMN applied_by TEXT",
+    "ALTER TABLE test_applications ADD COLUMN assigned_at TEXT",
+    "ALTER TABLE test_applications ADD COLUMN completed_at TEXT",
+    "ALTER TABLE test_applications ADD COLUMN answers_json TEXT",
+    "ALTER TABLE test_applications ADD COLUMN alerts_json TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -521,6 +536,19 @@ function backfillExisting() {
     }
   } catch (err) {
     console.warn("[db] backfill seed templates falló:", err.message);
+  }
+
+  // 1c. Definiciones JSON completas de los 8 tests psicométricos.
+  // El seed antiguo solo tenía metadata; ahora agregamos questions_json para
+  // que el aplicador interactivo funcione con todos.
+  try {
+    const missing = db.prepare("SELECT COUNT(*) AS n FROM psych_tests WHERE questions_json IS NULL OR questions_json = ''").get().n;
+    if (missing > 0) {
+      seedTestDefinitions(db);
+      console.log(`[db] backfill: cargadas definiciones de ${missing} tests psicométricos`);
+    }
+  } catch (err) {
+    console.warn("[db] backfill test definitions falló:", err.message);
   }
 
   // 2. Vincular users.professional_id si está vacío y hay match exacto por nombre
@@ -609,37 +637,10 @@ function seed() {
 
 // ─── Catálogo de tests (global, compartido entre workspaces) ───────────────
 function seedPsychTestCatalog() {
-  const ins = db.prepare(`
-    INSERT INTO psych_tests (id, code, name, short_name, items, minutes, category, description, age_range, scoring)
-    VALUES (@id, @code, @name, @short_name, @items, @minutes, @category, @description, @age_range, @scoring)
-  `);
-  const rows = [
-    { id: "phq9", code: "PHQ-9", name: "Patient Health Questionnaire", short_name: "PHQ-9", items: 9, minutes: 5, category: "Depresión", age_range: "≥ 12 años",
-      description: "Tamizaje y medición de la severidad de síntomas depresivos en las últimas 2 semanas.",
-      scoring: JSON.stringify([{ range: "0–4", label: "Mínima", level: "none" },{ range: "5–9", label: "Leve", level: "low" },{ range: "10–14", label: "Moderada", level: "moderate" },{ range: "15–19", label: "Moderadamente severa", level: "high" },{ range: "20–27", label: "Severa", level: "critical" }]) },
-    { id: "gad7", code: "GAD-7", name: "Generalized Anxiety Disorder", short_name: "GAD-7", items: 7, minutes: 4, category: "Ansiedad", age_range: "≥ 12 años",
-      description: "Evalúa la severidad de síntomas de ansiedad generalizada en las últimas 2 semanas.",
-      scoring: JSON.stringify([{ range: "0–4", label: "Mínima", level: "none" },{ range: "5–9", label: "Leve", level: "low" },{ range: "10–14", label: "Moderada", level: "moderate" },{ range: "15–21", label: "Severa", level: "high" }]) },
-    { id: "bdi2", code: "BDI-II", name: "Beck Depression Inventory", short_name: "BDI-II", items: 21, minutes: 10, category: "Depresión", age_range: "≥ 13 años",
-      description: "Inventario de 21 ítems para evaluar la presencia y severidad de síntomas depresivos.",
-      scoring: JSON.stringify([{ range: "0–13", label: "Mínima", level: "none" },{ range: "14–19", label: "Leve", level: "low" },{ range: "20–28", label: "Moderada", level: "moderate" },{ range: "29–63", label: "Severa", level: "high" }]) },
-    { id: "bai", code: "BAI", name: "Beck Anxiety Inventory", short_name: "Beck Ansiedad", items: 21, minutes: 8, category: "Ansiedad", age_range: "≥ 17 años",
-      description: "Mide síntomas somáticos y cognitivos de ansiedad en la última semana.",
-      scoring: JSON.stringify([{ range: "0–7", label: "Mínima", level: "none" },{ range: "8–15", label: "Leve", level: "low" },{ range: "16–25", label: "Moderada", level: "moderate" },{ range: "26–63", label: "Severa", level: "high" }]) },
-    { id: "rosenberg", code: "RSES", name: "Rosenberg Self-Esteem Scale", short_name: "Rosenberg", items: 10, minutes: 5, category: "Autoestima", age_range: "≥ 14 años",
-      description: "Escala unidimensional de 10 ítems para evaluar autoestima global.",
-      scoring: JSON.stringify([{ range: "≥ 30", label: "Alta", level: "none" },{ range: "26–29", label: "Media", level: "low" },{ range: "< 26", label: "Baja", level: "moderate" }]) },
-    { id: "pcl5", code: "PCL-5", name: "PTSD Checklist DSM-5", short_name: "PCL-5", items: 20, minutes: 10, category: "TEPT", age_range: "≥ 18 años",
-      description: "Mide presencia y severidad de síntomas de TEPT según DSM-5.",
-      scoring: JSON.stringify([{ range: "0–32", label: "Bajo umbral", level: "low" },{ range: "33–80", label: "Clínicamente significativa", level: "high" }]) },
-    { id: "audit", code: "AUDIT", name: "Alcohol Use Disorders Identification Test", short_name: "AUDIT", items: 10, minutes: 5, category: "Adicciones", age_range: "≥ 15 años",
-      description: "Identifica consumo de riesgo, perjudicial y dependencia de alcohol.",
-      scoring: JSON.stringify([{ range: "0–7", label: "Bajo riesgo", level: "none" },{ range: "8–15", label: "Riesgo", level: "low" },{ range: "16–19", label: "Perjudicial", level: "moderate" },{ range: "≥ 20", label: "Dependencia", level: "high" }]) },
-    { id: "eat26", code: "EAT-26", name: "Eating Attitudes Test", short_name: "EAT-26", items: 26, minutes: 8, category: "Alimentación", age_range: "≥ 13 años",
-      description: "Tamizaje para actitudes relacionadas con trastornos de la conducta alimentaria.",
-      scoring: JSON.stringify([{ range: "< 20", label: "Riesgo bajo", level: "low" },{ range: "≥ 20", label: "Riesgo significativo", level: "high" }]) },
-  ];
-  for (const r of rows) ins.run(r);
+  // Las definiciones completas (preguntas + escalas + scoring) viven en
+  // psych_test_definitions.js. Idempotente: si el test ya existe, actualiza
+  // questions_json. Útil tanto en seed fresco como en backfill.
+  seedTestDefinitions(db);
 }
 
 // ─── Workspace Individual — Nathaly ────────────────────────────────────────

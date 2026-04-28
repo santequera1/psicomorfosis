@@ -22,6 +22,7 @@ import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
+import { Route as PTestsRouteImport } from './routes/p_.tests'
 import { Route as PTareasRouteImport } from './routes/p_.tareas'
 import { Route as PPerfilRouteImport } from './routes/p_.perfil'
 import { Route as PLoginRouteImport } from './routes/p_.login'
@@ -97,6 +98,11 @@ const PacientesIdRoute = PacientesIdRouteImport.update({
   path: '/pacientes/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PTestsRoute = PTestsRouteImport.update({
+  id: '/p_/tests',
+  path: '/p/tests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PTareasRoute = PTareasRouteImport.update({
   id: '/p_/tareas',
   path: '/p/tareas',
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/p/login': typeof PLoginRoute
   '/p/perfil': typeof PPerfilRoute
   '/p/tareas': typeof PTareasRoute
+  '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/p/login': typeof PLoginRoute
   '/p/perfil': typeof PPerfilRoute
   '/p/tareas': typeof PTareasRoute
+  '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/p_/login': typeof PLoginRoute
   '/p_/perfil': typeof PPerfilRoute
   '/p_/tareas': typeof PTareasRoute
+  '/p_/tests': typeof PTestsRoute
   '/pacientes_/$id': typeof PacientesIdRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/p/login'
     | '/p/perfil'
     | '/p/tareas'
+    | '/p/tests'
     | '/pacientes/$id'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/p/login'
     | '/p/perfil'
     | '/p/tareas'
+    | '/p/tests'
     | '/pacientes/$id'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/p_/login'
     | '/p_/perfil'
     | '/p_/tareas'
+    | '/p_/tests'
     | '/pacientes_/$id'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
@@ -311,6 +323,7 @@ export interface RootRouteChildren {
   PLoginRoute: typeof PLoginRoute
   PPerfilRoute: typeof PPerfilRoute
   PTareasRoute: typeof PTareasRoute
+  PTestsRoute: typeof PTestsRoute
   PacientesIdRoute: typeof PacientesIdRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
   PActivarTokenRoute: typeof PActivarTokenRoute
@@ -409,6 +422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PacientesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p_/tests': {
+      id: '/p_/tests'
+      path: '/p/tests'
+      fullPath: '/p/tests'
+      preLoaderRoute: typeof PTestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/p_/tareas': {
       id: '/p_/tareas'
       path: '/p/tareas'
@@ -495,6 +515,7 @@ const rootRouteChildren: RootRouteChildren = {
   PLoginRoute: PLoginRoute,
   PPerfilRoute: PPerfilRoute,
   PTareasRoute: PTareasRoute,
+  PTestsRoute: PTestsRoute,
   PacientesIdRoute: PacientesIdRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
   PActivarTokenRoute: PActivarTokenRoute,

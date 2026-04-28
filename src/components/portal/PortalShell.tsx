@@ -1,6 +1,6 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart } from "lucide-react";
+import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain } from "lucide-react";
 import { Logo } from "@/components/app/Logo";
 import { clearSession, getStoredUser, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ const TABS: { to: string; label: string; icon: React.ComponentType<{ className?:
   { to: "/p/inicio",     label: "Inicio",     icon: Home },
   { to: "/p/citas",      label: "Mis citas",  icon: Calendar },
   { to: "/p/tareas",     label: "Tareas",     icon: ListChecks },
+  { to: "/p/tests",      label: "Tests",      icon: Brain },
   { to: "/p/documentos", label: "Documentos", icon: FileText },
   { to: "/p/perfil",     label: "Perfil",     icon: User },
 ];
