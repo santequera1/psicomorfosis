@@ -668,6 +668,39 @@ export const api = {
 
   // Assets inline del editor (imágenes que se pegan en el cuerpo del doc).
   // Devuelve URL pública sin token (sirve directo via /api/uploads/...).
+  // Firma del paciente — link público con token
+  createSignRequest: (documentId: string) =>
+    request<{ token: string; url: string; expires_at: string; days_valid: number; whatsapp_text: string; patient_phone: string | null }>(
+      `/api/documents/${documentId}/sign-request`, { method: "POST" }
+    ),
+  listSignRequests: (documentId: string) =>
+    request<Array<{ id: number; token: string; expires_at: string; signed_at: string | null; signed_ip: string | null; cert_sha256: string | null; created_at: string }>>(
+      `/api/documents/${documentId}/sign-requests`
+    ),
+  // Endpoints públicos del paciente firmando — sin auth
+  validateSignToken: (token: string) =>
+    fetch(`${API_BASE}/api/documents/sign/${token}`).then(async (r) => {
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new ApiError(r.status, (body as any).error ?? "Error");
+      return body as {
+        valid: boolean;
+        document: { id: string; name: string; type: string; kind: string; body_json: TipTapDoc | null; body_text: string | null; professional: string | null; created_at: string };
+        patient: { name: string; preferred_name: string | null } | null;
+        clinic: { name: string | null; city: string | null; address: string | null };
+        expires_at: string;
+      };
+    }),
+  submitSignature: (token: string, body: { signature_data_url: string; geolocation?: { lat: number; lng: number; accuracy?: number } }) =>
+    fetch(`${API_BASE}/api/documents/sign/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new ApiError(r.status, (data as any).error ?? "Error");
+      return data as { ok: true; signed_at: string; cert_sha256: string; cert_data: any };
+    }),
+
   uploadDocumentAsset: async (file: File, document_id?: string) => {
     const fd = new FormData();
     fd.append("file", file);

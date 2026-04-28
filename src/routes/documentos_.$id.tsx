@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft, FileSignature, Printer, Archive, Trash2, AlertCircle, Loader2,
-  Check, Lock, User, FileText,
+  Check, Lock, User, FileText, Send, MessageCircle, Copy,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { whatsappUrl } from "@/lib/display";
 import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
@@ -29,6 +31,7 @@ function DocumentDetailPage() {
 
   // ─── Local state del editor ─────────────────────────────────────────────
   const [body, setBody] = useState<TipTapDoc | null>(null);
+  const [signRequestOpen, setSignRequestOpen] = useState(false);
   const [text, setText] = useState<string>("");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
@@ -131,6 +134,16 @@ function DocumentDetailPage() {
               >
                 <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Imprimir / PDF</span>
               </button>
+              {!isLocked && doc.patient_id && (
+                <button
+                  type="button"
+                  onClick={() => setSignRequestOpen(true)}
+                  className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700"
+                  title="Generar enlace para que el paciente firme desde su celular"
+                >
+                  <Send className="h-4 w-4" /> <span className="hidden sm:inline">Pedir firma del paciente</span>
+                </button>
+              )}
               {!isLocked && (
                 <button
                   type="button"
@@ -187,7 +200,94 @@ function DocumentDetailPage() {
           }}
         />
       </div>
+      {signRequestOpen && (
+        <SignRequestModal doc={doc} onClose={() => setSignRequestOpen(false)} />
+      )}
     </AppShell>
+  );
+}
+
+// ─── Modal: Solicitar firma del paciente ───────────────────────────────────
+function SignRequestModal({ doc, onClose }: { doc: PsmDocument; onClose: () => void }) {
+  const [data, setData] = useState<{ token: string; url: string; expires_at: string; days_valid: number; whatsapp_text: string; patient_phone: string | null } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.createSignRequest(doc.id)
+      .then((res) => { if (active) setData(res); })
+      .catch((e: any) => { if (active) setError(e?.message ?? "Error"); });
+    return () => { active = false; };
+  }, [doc.id]);
+
+  function copy(text: string, label: string) {
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success(`${label} copiado`),
+      () => toast.error("No se pudo copiar")
+    );
+  }
+
+  const wa = data ? whatsappUrl(data.patient_phone, data.whatsapp_text) : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Firma del paciente</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Pedir firma a {doc.patient_name?.split(" ")[0] ?? "paciente"}</h3>
+            <p className="text-xs text-ink-500 mt-1">Se genera un enlace único. El paciente lo abre, lee el documento y firma desde su celular o computador. La firma queda con sello de tiempo, IP y hash SHA-256.</p>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400">
+            <span className="text-base leading-none">×</span>
+          </button>
+        </header>
+
+        <div className="p-5">
+          {error && <div className="rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-xs text-rose-700">{error}</div>}
+          {!data && !error && <div className="text-center py-8 text-ink-500"><Loader2 className="h-5 w-5 mx-auto mb-2 animate-spin" /> Generando enlace…</div>}
+          {data && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-line-200 bg-bg-100 p-4 flex flex-col items-center gap-2">
+                <QRCodeSVG value={data.url} size={180} marginSize={2} />
+                <p className="text-[11px] text-ink-500">Escanea con la cámara</p>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-ink-500 mb-1">Enlace de firma</label>
+                <div className="flex gap-2">
+                  <input readOnly value={data.url} onClick={(e) => (e.target as HTMLInputElement).select()}
+                    className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-bg text-xs text-ink-900 font-mono" />
+                  <button onClick={() => copy(data.url, "Enlace")} className="h-10 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5">
+                    <Copy className="h-3.5 w-3.5" /> Copiar
+                  </button>
+                </div>
+                <p className="text-[11px] text-ink-500 mt-1">Válido por {data.days_valid} días — expira el {new Date(data.expires_at).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}.</p>
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wider text-ink-500 mb-1">Mensaje sugerido</label>
+                <textarea readOnly value={data.whatsapp_text}
+                  className="w-full h-32 px-3 py-2 rounded-md border border-line-200 bg-bg text-xs text-ink-700 font-mono resize-none" />
+                <div className="mt-2 flex gap-2">
+                  <button onClick={() => copy(data.whatsapp_text, "Mensaje")} className="flex-1 h-10 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400">
+                    Copiar mensaje
+                  </button>
+                  {wa && (
+                    <a href={wa} target="_blank" rel="noopener noreferrer"
+                      className="flex-1 h-10 px-3 rounded-md bg-sage-500 text-white text-xs font-medium hover:bg-sage-700 inline-flex items-center justify-center gap-1.5">
+                      <MessageCircle className="h-3.5 w-3.5" /> Abrir WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <footer className="px-5 py-4 border-t border-line-100 flex justify-end">
+          <button onClick={onClose} className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cerrar</button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

@@ -29,6 +29,7 @@ import { Route as PLoginRouteImport } from './routes/p_.login'
 import { Route as PInicioRouteImport } from './routes/p_.inicio'
 import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
 import { Route as PCitasRouteImport } from './routes/p_.citas'
+import { Route as FirmarTokenRouteImport } from './routes/firmar.$token'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
 import { Route as PActivarTokenRouteImport } from './routes/p_.activar.$token'
 import { Route as DocumentosPlantillaIdRouteImport } from './routes/documentos_.plantilla.$id'
@@ -133,6 +134,11 @@ const PCitasRoute = PCitasRouteImport.update({
   path: '/p/citas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FirmarTokenRoute = FirmarTokenRouteImport.update({
+  id: '/firmar/$token',
+  path: '/firmar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocumentosIdRoute = DocumentosIdRouteImport.update({
   id: '/documentos_/$id',
   path: '/documentos/$id',
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
+  '/firmar/$token': typeof FirmarTokenRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -188,6 +195,7 @@ export interface FileRoutesByTo {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
+  '/firmar/$token': typeof FirmarTokenRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
   '/documentos_/$id': typeof DocumentosIdRoute
+  '/firmar/$token': typeof FirmarTokenRoute
   '/p_/citas': typeof PCitasRoute
   '/p_/documentos': typeof PDocumentosRoute
   '/p_/inicio': typeof PInicioRoute
@@ -241,6 +250,7 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos/$id'
+    | '/firmar/$token'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -266,6 +276,7 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos/$id'
+    | '/firmar/$token'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -291,6 +302,7 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/tests'
     | '/documentos_/$id'
+    | '/firmar/$token'
     | '/p_/citas'
     | '/p_/documentos'
     | '/p_/inicio'
@@ -317,6 +329,7 @@ export interface RootRouteChildren {
   TareasRoute: typeof TareasRoute
   TestsRoute: typeof TestsRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
+  FirmarTokenRoute: typeof FirmarTokenRoute
   PCitasRoute: typeof PCitasRoute
   PDocumentosRoute: typeof PDocumentosRoute
   PInicioRoute: typeof PInicioRoute
@@ -471,6 +484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PCitasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/firmar/$token': {
+      id: '/firmar/$token'
+      path: '/firmar/$token'
+      fullPath: '/firmar/$token'
+      preLoaderRoute: typeof FirmarTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/documentos_/$id': {
       id: '/documentos_/$id'
       path: '/documentos/$id'
@@ -509,6 +529,7 @@ const rootRouteChildren: RootRouteChildren = {
   TareasRoute: TareasRoute,
   TestsRoute: TestsRoute,
   DocumentosIdRoute: DocumentosIdRoute,
+  FirmarTokenRoute: FirmarTokenRoute,
   PCitasRoute: PCitasRoute,
   PDocumentosRoute: PDocumentosRoute,
   PInicioRoute: PInicioRoute,

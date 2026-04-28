@@ -210,6 +210,39 @@ CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents(patient_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 
+-- Solicitudes de firma del paciente. Cada documento puede tener N requests
+-- (psicólogo puede generar más de un link si el primero expira). El paciente
+-- firma con canvas y la firma se guarda con metadata legal: IP, user-agent,
+-- timestamp, geolocalización opcional, SHA-256 del documento al momento de
+-- firmar (para detectar manipulación posterior).
+CREATE TABLE IF NOT EXISTS document_sign_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  document_id TEXT NOT NULL,
+  patient_id TEXT,
+  token TEXT UNIQUE NOT NULL,
+  expires_at TEXT NOT NULL,
+  -- Captura al firmar
+  signed_at TEXT,
+  signature_data_url TEXT,        -- imagen de firma (data:image/png;base64,...)
+  signed_ip TEXT,
+  signed_user_agent TEXT,
+  signed_geolocation TEXT,        -- JSON {lat,lng,accuracy} si autoriza
+  -- Integridad
+  doc_snapshot_sha256 TEXT,       -- hash del body_text del doc al firmar
+  cert_sha256 TEXT,               -- hash de cert_data_json
+  cert_data_json TEXT,            -- JSON con: doc_id, patient_id, name, doc_hash, signed_at, ip, ua, geo
+  -- Auditoría
+  created_by_user_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sign_requests_token ON document_sign_requests(token);
+CREATE INDEX IF NOT EXISTS idx_sign_requests_doc ON document_sign_requests(document_id);
+
 -- Assets inline del editor (imágenes pegadas en docs). NO van en la lista
 -- principal de Documentos para no contaminar; son archivos pequeños referenciados
 -- por URL pública desde el body_json. Se asocian a un documento si fue donde se

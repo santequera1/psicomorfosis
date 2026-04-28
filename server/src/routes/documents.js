@@ -24,9 +24,11 @@ function requireAuthOrToken(req, res, next) {
   next();
 }
 
-// Las rutas /:id/file usan requireAuthOrToken; el resto usa requireAuth normal.
-// Aplicamos por ruta porque la mayoría requiere headers estrictos.
+// Las rutas /:id/file usan requireAuthOrToken. Las rutas /sign/* (firma
+// pública del paciente) son completamente abiertas — la auth viene del token
+// único de la URL. El resto usa requireAuth normal.
 router.use((req, res, next) => {
+  if (req.path.startsWith("/sign/")) return next(); // firma pública
   if (req.path.endsWith("/file") || req.path.match(/^\/[^/]+\/file$/)) {
     return requireAuthOrToken(req, res, next);
   }
@@ -765,6 +767,237 @@ router.delete("/:id", (req, res) => {
   db.prepare("DELETE FROM documents WHERE id = ?").run(req.params.id);
   req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:deleted", { id: req.params.id });
   res.json({ ok: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// FIRMA DEL PACIENTE — link público con token, canvas, audit trail SHA-256
+// ════════════════════════════════════════════════════════════════════════════
+
+const SIGN_REQUEST_DAYS = 7;
+const SIGN_TOKEN_BYTES = 24;
+
+/** Helper: extrae el texto plano del body_json para hashear su contenido. */
+function docTextForHash(doc) {
+  if (doc.kind === "file") return `file:${doc.filename}:${doc.size_bytes}`;
+  return doc.body_text || (doc.body_json ? JSON.stringify(safeJSON(doc.body_json)) : "");
+}
+
+/**
+ * POST /api/documents/:id/sign-request
+ * Genera un link de firma único y devuelve URL + texto WhatsApp pre-armado.
+ * Solo el psicólogo lo crea; el documento se identifica por su id.
+ */
+router.post("/:id/sign-request", (req, res) => {
+  if (req.user.role === "paciente") return res.status(403).json({ error: "Solo staff" });
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, wsId(req));
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!doc.patient_id) return res.status(400).json({ error: "El documento debe estar vinculado a un paciente" });
+
+  // Invalidar requests pendientes previas (no usadas)
+  db.prepare("DELETE FROM document_sign_requests WHERE document_id = ? AND signed_at IS NULL").run(doc.id);
+
+  const token = crypto.randomBytes(SIGN_TOKEN_BYTES).toString("hex");
+  const expiresAt = new Date(Date.now() + SIGN_REQUEST_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  db.prepare(`
+    INSERT INTO document_sign_requests (workspace_id, document_id, patient_id, token, expires_at, created_by_user_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(wsId(req), doc.id, doc.patient_id, token, expiresAt, req.user.id);
+
+  const base = req.headers["x-forwarded-host"]
+    ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`
+    : `${req.protocol}://${req.get("host")}`;
+  const url = `${base}/firmar/${token}`;
+
+  const patient = db.prepare("SELECT name, preferred_name, phone FROM patients WHERE id = ?").get(doc.patient_id);
+  const greeting = patient?.preferred_name || patient?.name?.split(" ")[0] || "";
+  const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(wsId(req));
+  const whatsappText = [
+    `Hola ${greeting}, soy ${req.user.name || "tu psicóloga"}.`,
+    ``,
+    `Te comparto un documento que necesito que firmes:`,
+    `📄 ${doc.name}`,
+    ``,
+    `Puedes leerlo y firmarlo desde tu celular o computador en este enlace seguro (válido por ${SIGN_REQUEST_DAYS} días):`,
+    url,
+    ``,
+    `No requiere descargar nada — funciona directo en el navegador.`,
+    `Cualquier duda, me cuentas.`,
+  ].join("\n");
+
+  res.status(201).json({
+    token,
+    url,
+    expires_at: expiresAt,
+    days_valid: SIGN_REQUEST_DAYS,
+    whatsapp_text: whatsappText,
+    patient_phone: patient?.phone ?? null,
+  });
+});
+
+/**
+ * GET /api/documents/sign/:token (público, sin auth)
+ * Valida el token y devuelve el contenido del doc + metadata mínima.
+ */
+router.get("/sign/:token", (req, res) => {
+  const sr = db.prepare("SELECT * FROM document_sign_requests WHERE token = ?").get(req.params.token);
+  if (!sr) return res.status(404).json({ error: "Solicitud no encontrada" });
+  if (sr.signed_at) return res.status(409).json({ error: "Este documento ya fue firmado", signed: true });
+  if (new Date(sr.expires_at).getTime() < Date.now()) {
+    return res.status(410).json({ error: "Este enlace expiró. Pide a tu psicóloga uno nuevo." });
+  }
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(sr.document_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  const patient = sr.patient_id ? db.prepare("SELECT name, preferred_name FROM patients WHERE id = ?").get(sr.patient_id) : null;
+  const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(sr.workspace_id);
+  const settings = Object.fromEntries(
+    db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(sr.workspace_id)
+      .map((s) => [s.key, s.value])
+  );
+
+  res.json({
+    valid: true,
+    document: {
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      kind: doc.kind,
+      body_json: safeJSON(doc.body_json),
+      body_text: doc.body_text,
+      professional: doc.professional,
+      created_at: doc.created_at,
+    },
+    patient: patient,
+    clinic: { name: ws?.name, city: settings.city, address: settings.address },
+    expires_at: sr.expires_at,
+  });
+});
+
+/**
+ * POST /api/documents/sign/:token (público)
+ * Recibe la firma del paciente y la metadata. Calcula SHA-256, marca firmado,
+ * actualiza el documento agregando un bloque de firma del paciente.
+ */
+router.post("/sign/:token", (req, res) => {
+  const { signature_data_url, geolocation } = req.body ?? {};
+  if (!signature_data_url || typeof signature_data_url !== "string" || !signature_data_url.startsWith("data:image/")) {
+    return res.status(400).json({ error: "Firma inválida" });
+  }
+  const sr = db.prepare("SELECT * FROM document_sign_requests WHERE token = ?").get(req.params.token);
+  if (!sr) return res.status(404).json({ error: "Solicitud no encontrada" });
+  if (sr.signed_at) return res.status(409).json({ error: "Este documento ya fue firmado" });
+  if (new Date(sr.expires_at).getTime() < Date.now()) {
+    return res.status(410).json({ error: "Este enlace expiró" });
+  }
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(sr.document_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  const patient = sr.patient_id ? db.prepare("SELECT * FROM patients WHERE id = ?").get(sr.patient_id) : null;
+
+  // Capturar metadata del request
+  const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim()
+    || req.headers["x-real-ip"]?.toString()
+    || req.socket.remoteAddress
+    || "";
+  const userAgent = req.headers["user-agent"] || "";
+  const signedAt = new Date().toISOString();
+  const docText = docTextForHash(doc);
+  const docHash = crypto.createHash("sha256").update(docText).digest("hex");
+
+  // Construir certificado (los datos que dan validez legal)
+  const certData = {
+    version: 1,
+    document: { id: doc.id, name: doc.name, type: doc.type },
+    patient: patient ? { id: patient.id, name: patient.name, doc: patient.doc } : null,
+    workspace_id: sr.workspace_id,
+    signed_at: signedAt,
+    signed_ip: ip,
+    signed_user_agent: userAgent,
+    signed_geolocation: geolocation ?? null,
+    document_sha256: docHash,
+    signature_data_url_sha256: crypto.createHash("sha256").update(signature_data_url).digest("hex"),
+  };
+  const certJson = JSON.stringify(certData);
+  const certHash = crypto.createHash("sha256").update(certJson).digest("hex");
+
+  // Insertar bloque de firma del paciente al final del body del documento
+  // (solo si es kind=editor con body_json válido)
+  if (doc.kind === "editor") {
+    const body = safeJSON(doc.body_json) || { type: "doc", content: [] };
+    body.content = body.content || [];
+    body.content.push(
+      { type: "horizontalRule" },
+      {
+        type: "signature",
+        attrs: {
+          url: signature_data_url,
+          name: patient?.name ?? "Paciente",
+          tarjetaProfesional: patient?.doc ? `Doc: ${patient.doc}` : "",
+          signedAt,
+        },
+      },
+      {
+        type: "paragraph",
+        content: [{
+          type: "text",
+          text: `Firmado electrónicamente por ${patient?.name ?? "el paciente"} · IP ${ip} · ${new Date(signedAt).toLocaleString("es-CO")} · Cert SHA-256: ${certHash.slice(0, 16)}…`,
+          marks: [{ type: "italic" }],
+        }],
+      }
+    );
+    db.prepare("UPDATE documents SET body_json = ?, updated_at = ? WHERE id = ?")
+      .run(JSON.stringify(body), signedAt, doc.id);
+  }
+
+  db.prepare(`
+    UPDATE document_sign_requests
+    SET signed_at = ?, signature_data_url = ?, signed_ip = ?, signed_user_agent = ?,
+        signed_geolocation = ?, doc_snapshot_sha256 = ?, cert_sha256 = ?, cert_data_json = ?
+    WHERE token = ?
+  `).run(
+    signedAt, signature_data_url, ip, userAgent,
+    geolocation ? JSON.stringify(geolocation) : null,
+    docHash, certHash, certJson,
+    req.params.token
+  );
+
+  // Si el psicólogo no había firmado, dejamos el documento en estado pendiente_firma
+  // (paciente firmó pero falta el profesional). Si ya estaba firmado, marcamos completo.
+  // Aquí simple: solo cambiamos a 'firmado' completo.
+  db.prepare("UPDATE documents SET status = 'firmado', updated_at = ? WHERE id = ?")
+    .run(signedAt, doc.id);
+
+  // Notificación al psicólogo
+  if (doc.workspace_id) {
+    db.prepare(`INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+                VALUES (?, ?, 'firma', ?, ?, ?, 0, 0)`)
+      .run(`N-sign-${sr.id}-${Date.now()}`, doc.workspace_id,
+           "Documento firmado por paciente",
+           `${patient?.name ?? "El paciente"} firmó "${doc.name}".`,
+           signedAt);
+  }
+
+  res.json({
+    ok: true,
+    signed_at: signedAt,
+    cert_sha256: certHash,
+    cert_data: certData,
+  });
+});
+
+/**
+ * GET /api/documents/:id/sign-requests (staff)
+ * Histórico de solicitudes de firma de un documento.
+ */
+router.get("/:id/sign-requests", (req, res) => {
+  if (req.user.role === "paciente") return res.status(403).json({ error: "Solo staff" });
+  const rows = db.prepare(`
+    SELECT id, token, expires_at, signed_at, signed_ip, signed_user_agent, cert_sha256, created_at
+    FROM document_sign_requests
+    WHERE document_id = ? AND workspace_id = ?
+    ORDER BY created_at DESC
+  `).all(req.params.id, wsId(req));
+  res.json(rows);
 });
 
 export default router;

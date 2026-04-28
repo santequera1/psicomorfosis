@@ -71,6 +71,11 @@ function PatientDetailPage() {
     queryFn: () => api.listDocuments({ patient_id: id }),
     enabled: !!id,
   });
+  const { data: patientTests = [] } = useQuery({
+    queryKey: ["test-applications", { patient_id: id }],
+    queryFn: () => api.listTestApplications({ patient_id: id }),
+    enabled: !!id,
+  });
 
   const tests = (allTests as any[]).filter((t) => t.patient_id === id);
   const tasks = (allTasks as any[]).filter((t) => t.patient_id === id);
@@ -218,7 +223,7 @@ function PatientDetailPage() {
 
         {tab === "datos" && <TabDatos patient={patient} />}
         {tab === "historia" && <TabHistoria patient={patient} />}
-        {tab === "tests" && <TabTests rows={tests} />}
+        {tab === "tests" && <TabTests rows={patientTests as any[]} />}
         {tab === "prescripcion" && <TabPrescripcion rows={tasks} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
         {tab === "facturacion" && <TabFacturacion />}
@@ -482,17 +487,77 @@ function TabTests({ rows }: { rows: any[] }) {
     critical: "bg-error-soft text-risk-critical",
   };
 
+  // Agrupar aplicaciones COMPLETADAS por test_code para gráficas evolutivas.
+  // Solo mostramos gráfica si hay 2 o más aplicaciones del mismo test.
+  const completed = rows.filter((r) => r.status === "completado" && r.score != null);
+  const groupedByTest: Record<string, any[]> = {};
+  for (const r of completed) {
+    if (!groupedByTest[r.test_code]) groupedByTest[r.test_code] = [];
+    groupedByTest[r.test_code].push(r);
+  }
+  const evolutionGroups = Object.entries(groupedByTest)
+    .filter(([, apps]) => apps.length >= 2)
+    .map(([code, apps]) => {
+      const sorted = [...apps].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      const data = sorted.map((a) => ({
+        date: new Date(a.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" }),
+        score: a.score,
+        level: a.level,
+      }));
+      const first = sorted[0]?.score ?? 0;
+      const last = sorted[sorted.length - 1]?.score ?? 0;
+      const delta = last - first;
+      return { code, data, first, last, delta, n: sorted.length };
+    });
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-      <div className="xl:col-span-2 rounded-xl border border-line-200 bg-surface">
-        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+    <div className="space-y-5">
+      {/* Gráficas evolutivas (cuando hay 2+ aplicaciones del mismo test) */}
+      {evolutionGroups.length > 0 && (
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {evolutionGroups.map((g) => (
+            <div key={g.code} className="rounded-xl border border-line-200 bg-surface p-5">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div>
+                  <h3 className="font-serif text-base text-ink-900">Evolución · {g.code}</h3>
+                  <p className="text-xs text-ink-500 mt-0.5">{g.n} aplicaciones</p>
+                </div>
+                <span className={
+                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium " +
+                  (g.delta < 0 ? "bg-success-soft text-success" : g.delta > 0 ? "bg-error-soft text-risk-high" : "bg-bg-100 text-ink-500")
+                }>
+                  {g.delta < 0 && <TrendingDown className="h-3 w-3" />}
+                  {g.delta > 0 ? "+" : ""}{g.delta} pts
+                </span>
+              </div>
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={g.data} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="var(--line-100)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="var(--ink-400)" tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 10 }} stroke="var(--ink-400)" tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ border: "1px solid var(--line-200)", borderRadius: 8, fontSize: 12 }} />
+                    <Line type="monotone" dataKey="score" stroke="var(--brand-700)" strokeWidth={2.5} dot={{ r: 4, fill: "var(--brand-700)" }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* Lista de aplicaciones */}
+      <div className="rounded-xl border border-line-200 bg-surface">
+        <div className="px-5 py-4 border-b border-line-100">
           <h3 className="font-serif text-base text-ink-900">Aplicaciones del paciente</h3>
-          <button className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Aplicar test
-          </button>
+          <p className="text-xs text-ink-500 mt-0.5">
+            {rows.length === 0 ? "Sin aplicaciones aún." : `${rows.length} ${rows.length === 1 ? "aplicación" : "aplicaciones"} en total`}
+          </p>
         </div>
         {rows.length === 0 ? (
-          <div className="p-10 text-center text-sm text-ink-500">Este paciente aún no tiene aplicaciones.</div>
+          <div className="p-10 text-center text-sm text-ink-500">
+            Asigna un test desde la vista de Tests psicométricos.
+          </div>
         ) : (
           <ul className="divide-y divide-line-100">
             {rows.map((r) => (
@@ -501,38 +566,41 @@ function TabTests({ rows }: { rows: any[] }) {
                   <Brain className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-ink-900">{r.test_code} · {r.test_name}</div>
-                  <div className="text-xs text-ink-500 mt-0.5 tabular">{r.date} · {r.professional}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-ink-900">{r.test_code}</span>
+                    <span className="text-xs text-ink-500">{r.test_name}</span>
+                    {r.applied_by === "paciente" && r.status === "completado" && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">Auto-aplicado</span>
+                    )}
+                    {r.alerts_json?.critical_response && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error-soft text-risk-critical">⚠ Respuesta crítica</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-ink-500 mt-0.5 tabular">
+                    {r.completed_at
+                      ? new Date(r.completed_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })
+                      : r.assigned_at
+                        ? `Asignado ${new Date(r.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
+                        : r.date}
+                    {" · "}{r.professional}
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="font-serif text-2xl text-ink-900 tabular">{r.status === "completado" ? r.score : "—"}</div>
-                  <span className={"inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium " + LEVEL_STYLE[r.level]}>{r.interpretation}</span>
+                  {r.status === "completado" && r.score != null ? (
+                    <>
+                      <div className="font-serif text-2xl text-ink-900 tabular">{r.score}</div>
+                      <span className={"inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium " + (LEVEL_STYLE[r.level ?? "none"] ?? LEVEL_STYLE.none)}>{r.interpretation}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-ink-500 inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {r.status === "pendiente" ? "Pendiente" : "Sin completar"}
+                    </span>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </div>
-
-      <div className="rounded-xl border border-line-200 bg-surface p-5">
-        <h3 className="font-serif text-base text-ink-900">Evolución · GAD-7</h3>
-        <div className="flex items-center gap-2 my-3">
-          <span className="font-serif text-3xl text-ink-900 tabular">8</span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-success-soft text-success">
-            <TrendingDown className="h-3 w-3" /> −7 pts
-          </span>
-        </div>
-        <div className="h-40">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={TEST_EVOLUTION}>
-              <CartesianGrid stroke="oklch(0.92 0.01 240)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="oklch(0.55 0.02 240)" tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10 }} stroke="oklch(0.55 0.02 240)" tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ border: "1px solid oklch(0.92 0.01 240)", borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="score" stroke="oklch(0.53 0.045 200)" strokeWidth={2.5} dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
       </div>
     </div>
   );

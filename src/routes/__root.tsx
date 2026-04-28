@@ -83,7 +83,8 @@ const BOOTSTRAP_SCRIPT = `
     var isPatientPortal = path === '/p' || path.indexOf('/p/') === 0;
     var publicPaths = ['/login', '/p/login'];
     var isPublic = publicPaths.indexOf(path) !== -1
-      || path.indexOf('/p/activar/') === 0;
+      || path.indexOf('/p/activar/') === 0
+      || path.indexOf('/firmar/') === 0;
     if (isPatientPortal) {
       // Portal del paciente: si requiere auth y no hay token o el token no es de paciente → /p/login
       var needsAuth = !isPublic;
