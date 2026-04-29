@@ -665,14 +665,43 @@ function backfillExisting() {
     console.warn("[db] backfill info Nathaly falló:", err.message);
   }
 
-  // 6. Promover a nathaly como platform admin (dueña de la plataforma para
-  // la fase beta). Idempotente: solo levanta el flag, no toca otros campos.
+  // 6. Configuración de platform admin dedicado.
+  // Antes nathaly era platform_admin como atajo; ahora la dueña de la
+  // plataforma es una cuenta separada (Stiven Antequera) en su propio
+  // workspace, y nathaly vuelve a ser una psicóloga normal de su consulta.
+  // Idempotente: si ya está bien, no hace nada.
   try {
-    const r = db.prepare(`
-      UPDATE users SET is_platform_admin = 1
-      WHERE username = 'nathaly' AND (is_platform_admin IS NULL OR is_platform_admin = 0)
+    const demote = db.prepare(`
+      UPDATE users SET is_platform_admin = 0
+      WHERE username = 'nathaly' AND is_platform_admin = 1
     `).run();
-    if (r.changes > 0) console.log(`[db] backfill: promovida nathaly a platform_admin`);
+    if (demote.changes > 0) console.log(`[db] backfill: nathaly de-promovida (vuelve a psicóloga regular)`);
+
+    let platformWsId = db.prepare(`SELECT id FROM workspaces WHERE name = ?`)
+      .get("Plataforma Psicomorfosis")?.id;
+    if (!platformWsId) {
+      platformWsId = db.prepare(`INSERT INTO workspaces (name, mode) VALUES (?, ?)`)
+        .run("Plataforma Psicomorfosis", "individual").lastInsertRowid;
+      console.log(`[db] backfill: creado workspace "Plataforma Psicomorfosis" id=${platformWsId}`);
+    }
+
+    const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get("stiven");
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_platform_admin)
+        VALUES (?, ?, ?, ?, ?, 'super_admin', 1)
+      `).run(
+        platformWsId,
+        "stiven",
+        bcrypt.hashSync("1007418662", 10),
+        "Stiven Antequera",
+        "stivenatequera@gmail.com",
+      );
+      console.log(`[db] backfill: creada cuenta stiven (platform admin)`);
+    } else {
+      // Asegurar el flag (idempotente)
+      db.prepare(`UPDATE users SET is_platform_admin = 1 WHERE id = ?`).run(existing.id);
+    }
   } catch (err) {
     console.warn("[db] backfill platform_admin falló:", err.message);
   }
@@ -684,7 +713,23 @@ function seed() {
   seedSystemDocumentTemplates();
   const wsIndividual = seedIndividualWorkspace();
   const wsOrg = seedOrganizationWorkspace();
+  seedPlatformAdmin();
   console.log(`[db] seed done — WS individual=${wsIndividual}, WS organización=${wsOrg}`);
+}
+
+/** Crea el workspace + cuenta del dueño de la plataforma (Stiven). */
+function seedPlatformAdmin() {
+  const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)")
+    .run("Plataforma Psicomorfosis", "individual").lastInsertRowid;
+  db.prepare(`
+    INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_platform_admin)
+    VALUES (?, ?, ?, ?, ?, 'super_admin', 1)
+  `).run(
+    wsId, "stiven",
+    bcrypt.hashSync("1007418662", 10),
+    "Stiven Antequera",
+    "stivenatequera@gmail.com",
+  );
 }
 
 // ─── Catálogo de tests (global, compartido entre workspaces) ───────────────
@@ -700,8 +745,8 @@ function seedIndividualWorkspace() {
   const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)").run("Consulta Psic. Nathaly Ferrer", "individual").lastInsertRowid;
 
   // Usuario
-  db.prepare("INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_platform_admin) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(wsId, "nathaly", bcrypt.hashSync("nathaly123", 10), "Nathaly Ferrer Pacheco", "nathaly@psicomorfosis.co", "super_admin", 1);
+  db.prepare("INSERT INTO users (workspace_id, username, password_hash, name, email, role) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(wsId, "nathaly", bcrypt.hashSync("nathaly123", 10), "Nathaly Ferrer Pacheco", "nathaly@psicomorfosis.co", "super_admin");
 
   // Profesional único
   const profId = db.prepare("INSERT INTO professionals (workspace_id, name, title, email, phone, approach, active) VALUES (?, ?, ?, ?, ?, ?, 1)")
