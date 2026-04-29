@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft, FileSignature, Printer, Archive, Trash2, AlertCircle, Loader2,
+  ChevronLeft, FileSignature, Archive, Trash2, AlertCircle, Loader2,
   Check, Lock, User, FileText, Send, MessageCircle, Copy, Download,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -12,7 +12,6 @@ import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
-import { downloadDocPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/documentos_/$id")({
   head: ({ params }) => ({ meta: [{ title: `Documento ${params.id} — Psicomorfosis` }] }),
@@ -112,28 +111,24 @@ function DocumentDetailPage() {
     },
   });
 
-  // Genera y descarga el PDF del cuerpo del editor con membrete clínico.
+  // Descarga el PDF generado server-side (pdfmake). Texto seleccionable,
+  // mismo render en cualquier dispositivo, no congela el navegador.
   async function downloadPdf() {
     if (!doc) return;
-    const editorEl = editorContainerRef.current?.querySelector<HTMLElement>(".psm-editor-content");
-    if (!editorEl) {
-      toast.error("Editor no disponible");
-      return;
-    }
     setDownloadingPdf(true);
     try {
-      await downloadDocPdf(
-        editorEl,
-        {
-          clinicName: workspace?.name ?? "Psicomorfosis",
-          professional: doc.professional,
-          dateLabel: formatDateTime(doc.updated_at),
-          documentName: doc.name,
-          patientName: doc.patient_name ?? null,
-          patientId: doc.patient_id ?? null,
-        },
-        sanitizeFilename(doc.name) + ".pdf",
-      );
+      // Si hay autosave pendiente, esperarlo antes de pedir el PDF — para que
+      // el server lea el body actualizado, no la versión vieja.
+      if (saving) await new Promise((r) => setTimeout(r, 1800));
+      const blob = await api.downloadDocumentPdf(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = sanitizeFilename(doc.name) + ".pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success("PDF descargado");
     } catch (e: any) {
       toast.error("No se pudo generar el PDF: " + (e?.message ?? e));
@@ -177,14 +172,6 @@ function DocumentDetailPage() {
               >
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 <span className="hidden sm:inline">{downloadingPdf ? "Generando…" : "Descargar PDF"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700"
-                title="Imprimir desde el navegador"
-              >
-                <Printer className="h-4 w-4" /> <span className="hidden lg:inline">Imprimir</span>
               </button>
               {!isLocked && doc.patient_id && (
                 <button

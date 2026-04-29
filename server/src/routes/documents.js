@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import mammoth from "mammoth";
 import { db } from "../db.js";
 import { requireAuth, verifyToken } from "../auth.js";
+import { buildPdfStream } from "../lib/pdfRenderer.js";
 
 const router = Router();
 
@@ -999,6 +1000,49 @@ router.get("/:id/sign-requests", (req, res) => {
     ORDER BY created_at DESC
   `).all(req.params.id, wsId(req));
   res.json(rows);
+});
+
+/**
+ * GET /api/documents/:id/pdf
+ * Genera y devuelve el PDF del documento, server-side, sin dependencias
+ * de Chromium. Tipografía Roboto, texto seleccionable, membrete clínico,
+ * variables ya resueltas con el patient_id actual.
+ */
+router.get("/:id/pdf", (req, res) => {
+  try {
+    const docRow = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?")
+      .get(req.params.id, wsId(req));
+    if (!docRow) return res.status(404).json({ error: "Documento no encontrado" });
+    if (docRow.kind !== "editor") return res.status(400).json({ error: "Solo documentos editables soportan exportar a PDF" });
+
+    const body_json = docRow.body_json ? safeJSON(docRow.body_json) : { type: "doc", content: [] };
+    const ctx = buildInterpolationContext(wsId(req), docRow.patient_id, docRow.professional);
+    const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(wsId(req));
+    const today = new Date().toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
+    const stream = buildPdfStream(
+      { ...docRow, body_json },
+      ctx,
+      {
+        clinicName: ws?.name ?? "Psicomorfosis",
+        professional: docRow.professional,
+        dateLabel: today,
+        documentName: docRow.name,
+        patientName: docRow.patient_name,
+        patientId: docRow.patient_id,
+      },
+      wsId(req),
+    );
+
+    const safeName = docRow.name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 80) || "documento";
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.pdf"`);
+    stream.pipe(res);
+    stream.end();
+  } catch (e) {
+    console.error("[pdf]", e);
+    res.status(500).json({ error: "No se pudo generar el PDF: " + (e?.message ?? e) });
+  }
 });
 
 /**

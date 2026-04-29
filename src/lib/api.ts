@@ -686,6 +686,18 @@ export const api = {
       fecha: Record<string, string>;
       sesion: Record<string, string>;
     }>(`/api/documents/${documentId}/variables`),
+  /** Descarga el PDF del documento. Devuelve el Blob — el caller arma el download anchor. */
+  downloadDocumentPdf: async (documentId: string): Promise<Blob> => {
+    const token = localStorage.getItem("psm.token");
+    const r = await fetch(`${API_BASE}/api/documents/${documentId}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo generar el PDF");
+    }
+    return r.blob();
+  },
   // Endpoints públicos del paciente firmando — sin auth
   validateSignToken: (token: string) =>
     fetch(`${API_BASE}/api/documents/sign/${token}`).then(async (r) => {
