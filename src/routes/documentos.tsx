@@ -11,9 +11,12 @@ import {
   FileText, FileSignature, FilePlus, Upload, Download, Search,
   FileCheck2, FileClock, FileWarning, FileArchive, ArrowRight, ShieldCheck,
   MoreHorizontal, X, Eye, Loader2, Trash2, Archive, FilePen, Sparkles,
-  ScrollText, ClipboardList, ChevronRight, Pencil,
+  ScrollText, ClipboardList, ChevronRight, Pencil, Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
+import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
+import { useWorkspace } from "@/lib/workspace";
 
 export const Route = createFileRoute("/documentos")({
   head: () => ({ meta: [{ title: "Documentos · Psicomorfosis" }] }),
@@ -62,6 +65,10 @@ function DocumentosPage() {
   const [status, setStatus] = useState<string>("todos");
   const [newOpen, setNewOpen] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [duplicating, setDuplicating] = useState<PsmDocument | null>(null);
+  const [viewMode, setViewMode] = usePersistedViewMode("psm.docs.view", "list");
+  // Carpeta abierta (en modo carpetas): patient_id o "_general" para sin paciente
+  const [openFolder, setOpenFolder] = useState<string | null>(null);
 
   const filterPatient = search.paciente ?? null;
 
@@ -106,6 +113,42 @@ function DocumentosPage() {
     mutationFn: (id: string) => api.deleteDocument(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["documents"] }); toast.success("Eliminado"); },
   });
+
+  // Patients para los selectores (modal de duplicar + folders)
+  const { data: patientsAll = [] } = useQuery({
+    queryKey: ["patients"],
+    queryFn: () => api.listPatients(),
+  });
+  const { data: workspaceData } = useWorkspace();
+  const professionalsList = workspaceData?.professionals ?? [];
+
+  // Agrupado por paciente para vista carpetas. Documentos sin patient_id caen
+  // en la carpeta especial "_general".
+  const folders = useMemo(() => {
+    const groups = new Map<string, { id: string; name: string; preferredName?: string; photoUrl?: string | null; docs: PsmDocument[] }>();
+    for (const d of filtered) {
+      const key = d.patient_id ?? "_general";
+      if (!groups.has(key)) {
+        const p = key === "_general" ? null : patientsAll.find((x) => x.id === key);
+        groups.set(key, {
+          id: key,
+          name: p?.name ?? d.patient_name ?? "Sin paciente vinculado",
+          preferredName: p?.preferredName,
+          photoUrl: (p as any)?.photo_url ?? null,
+          docs: [],
+        });
+      }
+      groups.get(key)!.docs.push(d);
+    }
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.id === "_general") return 1;
+      if (b.id === "_general") return -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered, patientsAll]);
+
+  const openFolderData = openFolder ? folders.find((f) => f.id === openFolder) : null;
+  const docsToShow = viewMode === "folders" && openFolderData ? openFolderData.docs : filtered;
 
   return (
     <AppShell>
@@ -157,18 +200,28 @@ function DocumentosPage() {
                   className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <select value={type} onChange={(e) => setType(e.target.value)}
-                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0">
+                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0 flex-1">
                   <option value="todos">Todos los tipos</option>
                   {Object.keys(TYPE_LABEL).map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
                 </select>
                 <select value={status} onChange={(e) => setStatus(e.target.value)}
-                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0">
+                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0 flex-1">
                   <option value="todos">Todos los estados</option>
                   {Object.keys(STATUS_STYLE).map((k) => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
                 </select>
+                <ViewToggle value={viewMode} onChange={(v) => { setViewMode(v); setOpenFolder(null); }} />
               </div>
+              {viewMode === "folders" && openFolderData && (
+                <div className="flex items-center gap-2 text-xs text-ink-500 pt-1">
+                  <button onClick={() => setOpenFolder(null)} className="text-brand-700 hover:underline inline-flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3 rotate-180" /> Carpetas
+                  </button>
+                  <span className="text-ink-300">/</span>
+                  <span className="text-ink-900 font-medium truncate">{openFolderData.name}</span>
+                </div>
+              )}
             </div>
 
             {isLoading ? (
@@ -177,9 +230,36 @@ function DocumentosPage() {
               <div className="p-10 text-center text-sm text-ink-500">
                 {docs.length === 0 ? "Aún no hay documentos. Click en \"Nuevo documento\" para crear el primero." : "Sin documentos que coincidan con los filtros."}
               </div>
+            ) : viewMode === "folders" && !openFolderData ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4">
+                {folders.map((f) => f.id === "_general" ? (
+                  <GenericFolder key={f.id} name={f.name} count={f.docs.length} onClick={() => setOpenFolder(f.id)} toneIdx={5} />
+                ) : (
+                  <PatientFolder
+                    key={f.id}
+                    name={f.name}
+                    preferredName={f.preferredName}
+                    photoUrl={f.photoUrl}
+                    count={f.docs.length}
+                    onClick={() => setOpenFolder(f.id)}
+                  />
+                ))}
+              </div>
+            ) : viewMode === "cards" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 sm:p-4">
+                {docsToShow.map((d) => (
+                  <DocCard
+                    key={d.id}
+                    doc={d}
+                    onArchive={() => archiveMu.mutate(d.id)}
+                    onDelete={() => { if (confirm(`¿Eliminar "${d.name}" definitivamente?`)) deleteMu.mutate(d.id); }}
+                    onDuplicate={() => setDuplicating(d)}
+                  />
+                ))}
+              </div>
             ) : (
               <ul className="divide-y divide-line-100">
-                {filtered.map((d) => (
+                {docsToShow.map((d) => (
                   <DocRow
                     key={d.id}
                     doc={d}
@@ -188,6 +268,7 @@ function DocumentosPage() {
                     onCloseMenu={() => setMenuId(null)}
                     onArchive={() => archiveMu.mutate(d.id)}
                     onDelete={() => { if (confirm(`¿Eliminar "${d.name}" definitivamente?`)) deleteMu.mutate(d.id); }}
+                    onDuplicate={() => setDuplicating(d)}
                   />
                 ))}
               </ul>
@@ -253,22 +334,62 @@ function DocumentosPage() {
           presetPatient={patient ?? null}
         />
       )}
+      {duplicating && (
+        <DuplicateDocumentModal
+          doc={duplicating}
+          patients={patientsAll}
+          professionals={professionalsList.map((p) => ({ id: p.id, name: p.name }))}
+          onClose={() => setDuplicating(null)}
+        />
+      )}
     </AppShell>
   );
 }
 
 // ─── Fila de documento con menú "···" ──────────────────────────────────────
-function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete }: {
+/** Descarga el PDF generado server-side (kind=editor) o el archivo subido (kind=file). */
+async function downloadDocument(doc: PsmDocument) {
+  try {
+    if (doc.kind === "file") {
+      // Para archivos subidos hay un endpoint propio que ya forza download.
+      window.location.href = api.documentFileUrl(doc.id, { download: true });
+      return;
+    }
+    const blob = await api.downloadDocumentPdf(doc.id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = (doc.name || "documento").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_") + ".pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("PDF descargado");
+  } catch (e: any) {
+    toast.error("No se pudo descargar: " + (e?.message ?? e));
+  }
+}
+
+function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate }: {
   doc: PsmDocument;
   menuOpen: boolean;
   onMenuToggle: () => void;
   onCloseMenu: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    setDownloading(true);
+    try { await downloadDocument(doc); } finally { setDownloading(false); }
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -310,13 +431,14 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete 
             className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Ver">
             <Eye className="h-3.5 w-3.5" />
           </Link>
-          {isFile && (
-            <a href={api.documentFileUrl(doc.id, { download: true })}
-              download
-              className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Descargar">
-              <Download className="h-3.5 w-3.5" />
-            </a>
-          )}
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50"
+            title={isFile ? "Descargar archivo" : "Descargar como PDF"}
+          >
+            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </button>
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMenuToggle(); }}
@@ -324,12 +446,18 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete 
               <MoreHorizontal className="h-4 w-4" />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
+              <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
                 onClick={(e) => e.stopPropagation()}>
                 <Link to="/documentos/$id" params={{ id: doc.id }}
                   className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
                   <Pencil className="h-4 w-4" /> Abrir
                 </Link>
+                {!isFile && (
+                  <button onClick={(e) => { e.stopPropagation(); onCloseMenu(); onDuplicate(); }}
+                    className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+                    <Copy className="h-4 w-4" /> Duplicar y reasignar
+                  </button>
+                )}
                 <button onClick={onArchive}
                   className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
                   <Archive className="h-4 w-4" /> Archivar
@@ -344,6 +472,183 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete 
         </div>
       </div>
     </li>
+  );
+}
+
+// ─── Tarjeta de documento (vista cards) ────────────────────────────────────
+function DocCard({ doc, onArchive, onDelete, onDuplicate }: {
+  doc: PsmDocument;
+  onArchive: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
+  const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
+  const TIcon = TYPE_ICON[doc.type] ?? FileText;
+  const isFile = doc.kind === "file";
+  const [downloading, setDownloading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    setTimeout(() => document.addEventListener("click", close, { once: true }), 0);
+    return () => document.removeEventListener("click", close);
+  }, [menuOpen]);
+
+  async function handleDownload(e: React.MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    setDownloading(true);
+    try { await downloadDocument(doc); } finally { setDownloading(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
+      <Link to="/documentos/$id" params={{ id: doc.id }} className="block">
+        <div className="flex items-start gap-3">
+          <div className="h-11 w-11 rounded-xl bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+            <TIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-ink-900 line-clamp-2">{doc.name}</div>
+            <div className="text-[11px] text-ink-500 mt-0.5">{TYPE_LABEL[doc.type] ?? doc.type}</div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+          <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
+            <s.Icon className="h-3 w-3" /> {s.label}
+          </span>
+          <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+            {isFile ? "📎 Archivo" : "✍ Editor"}
+          </span>
+        </div>
+        <div className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500 flex items-center justify-between gap-2">
+          <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
+          <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
+        </div>
+      </Link>
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={handleDownload}
+          disabled={downloading}
+          className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50"
+          title={isFile ? "Descargar archivo" : "Descargar PDF"}
+        >
+          {downloading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+        </button>
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMenuOpen((o) => !o); }}
+            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+            title="Más"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
+              onClick={(e) => e.stopPropagation()}>
+              {!isFile && (
+                <button onClick={() => { setMenuOpen(false); onDuplicate(); }}
+                  className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+                  <Copy className="h-4 w-4" /> Duplicar y reasignar
+                </button>
+              )}
+              <button onClick={() => { setMenuOpen(false); onArchive(); }}
+                className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+                <Archive className="h-4 w-4" /> Archivar
+              </button>
+              <button onClick={() => { setMenuOpen(false); onDelete(); }}
+                className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-500/10 inline-flex items-center gap-2">
+                <Trash2 className="h-4 w-4" /> Eliminar
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal "Duplicar y reasignar" ──────────────────────────────────────────
+function DuplicateDocumentModal({ doc, patients, professionals, onClose }: {
+  doc: PsmDocument;
+  patients: ApiPatient[];
+  professionals: { id: number; name: string }[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [name, setName] = useState(`${doc.name} (copia)`);
+  const [patientId, setPatientId] = useState(doc.patient_id ?? "");
+  const [professional, setProfessional] = useState(doc.professional ?? "");
+
+  const dupMu = useMutation({
+    mutationFn: () => api.duplicateDocument(doc.id, {
+      name,
+      patient_id: patientId || null,
+      professional: professional || null,
+    }),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Documento duplicado");
+      onClose();
+      navigate({ to: "/documentos/$id", params: { id: created.id } });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); dupMu.mutate(); }}
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Documentos</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Duplicar y reasignar</h3>
+            <p className="text-xs text-ink-500 mt-1">Crea una copia del cuerpo. El nuevo doc empieza como borrador, sin firma.</p>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="p-5 space-y-3">
+          <Field label="Nombre del nuevo documento" required>
+            <input value={name} onChange={(e) => setName(e.target.value)} required
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          </Field>
+          <Field label="Paciente">
+            <select value={patientId} onChange={(e) => setPatientId(e.target.value)}
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
+              <option value="">— Sin paciente —</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.preferredName ?? p.name} ({p.id})</option>
+              ))}
+            </select>
+          </Field>
+          {professionals.length > 1 && (
+            <Field label="Profesional">
+              <select value={professional} onChange={(e) => setProfessional(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
+                {professionals.map((p) => (
+                  <option key={p.id} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+        </div>
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+          <button type="submit" disabled={dupMu.isPending || !name.trim()}
+            className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
+            {dupMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Duplicar
+          </button>
+        </footer>
+      </form>
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { RiskPicker } from "@/components/app/RiskPicker";
+import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, MessageCircle } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 
@@ -57,6 +58,7 @@ function PatientsPage() {
   const [editing, setEditing] = useState<Patient | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Patient | null>(null);
+  const [viewMode, setViewMode] = usePersistedViewMode("psm.patients.view", "list");
 
   const { data: patients = [], isLoading, error } = useQuery({
     queryKey: ["patients"],
@@ -152,8 +154,14 @@ function PatientsPage() {
                 </select>
               </div>
             </div>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-[11px] text-ink-500 tabular">{filtered.length} paciente{filtered.length === 1 ? "" : "s"}</span>
+              <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
+            </div>
           </div>
 
+          {viewMode === "list" ? (
+            <>
           {/* Vista de cards en mobile */}
           <ul className="md:hidden divide-y divide-line-100">
             {filtered.map((p) => (
@@ -321,6 +329,24 @@ function PatientsPage() {
               </tbody>
             </table>
           </div>
+            </>
+          ) : (
+            /* viewMode === "cards": grid de tarjetas grandes en cualquier viewport */
+            <div className="p-3 sm:p-4">
+              {filtered.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {filtered.map((p) => (
+                    <PatientCard
+                      key={p.id}
+                      patient={p}
+                      onEdit={() => setEditing(p)}
+                      onRemove={() => setRemoving(p)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="p-10 text-center">
@@ -351,6 +377,84 @@ function PatientsPage() {
       {editing && <EditPatientModal patient={editing} onClose={() => setEditing(null)} />}
       {removing && <ArchiveOrDeleteModal patient={removing} onClose={() => setRemoving(null)} />}
     </AppShell>
+  );
+}
+
+// ─── Vista de tarjetas: PatientCard ─────────────────────────────────────────
+function PatientCard({ patient: p, onEdit, onRemove }: {
+  patient: Patient;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const wa = whatsappUrl(p.phone);
+  return (
+    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
+      <Link to="/pacientes/$id" params={{ id: p.id }} className="block">
+        <div className="flex items-start gap-3">
+          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarTone(p.name)}`}>
+            {initials(p.preferredName ?? p.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-ink-900 truncate">
+              {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+            </div>
+            <div className="text-[11px] text-ink-500 tabular truncate">{p.doc} · {p.id}</div>
+          </div>
+        </div>
+        <div className="mt-3 text-xs text-ink-700 line-clamp-2">{p.reason || <span className="text-ink-400">Sin motivo registrado</span>}</div>
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${STATUS_STYLE[p.status]}`}>
+            {p.status}
+          </span>
+          <RiskBadge risk={p.risk} types={p.riskTypes} compact />
+          <span className="text-[10px] text-ink-500">· {MODALITY_LABEL[p.modality]}</span>
+        </div>
+        <div className="mt-3 pt-3 border-t border-line-100 text-[11px] flex items-center justify-between gap-2">
+          <span className="text-ink-500 truncate">{p.professional}</span>
+          <span className="tabular shrink-0 text-brand-700">{p.nextSession ?? <span className="text-ink-400">—</span>}</span>
+        </div>
+      </Link>
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {wa && (
+          <a href={wa} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+            title="WhatsApp"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+          </a>
+        )}
+        <div className="relative">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenu((v) => !v); }}
+            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+            title="Más"
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </button>
+          {menu && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenu(false); }} />
+              <div className="absolute right-0 top-full mt-1 z-40 w-44 rounded-lg border border-line-200 bg-surface shadow-modal py-1"
+                onClick={(e) => e.stopPropagation()}>
+                <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenu(false)}>
+                  <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha
+                </Link>
+                <button onClick={() => { setMenu(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
+                  <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar
+                </button>
+                <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenu(false)}>
+                  <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
+                </Link>
+                <div className="my-1 h-px bg-line-100" />
+                <button onClick={() => { setMenu(false); onRemove(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
+                  <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

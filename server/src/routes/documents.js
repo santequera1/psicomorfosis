@@ -698,6 +698,55 @@ router.post("/", (req, res) => {
 });
 
 /**
+ * POST /api/documents/:id/duplicate
+ * Crea una copia del documento con el mismo body_json. Permite reasignar
+ * paciente y profesional. Útil cuando un mismo informe/consentimiento se
+ * usa con varios pacientes o un terapeuta toma el caso de otro.
+ *
+ * Body opcional: { name?, patient_id?, patient_name?, professional?, professional_id? }
+ * Si no se envía algún campo, se hereda del documento original (excepto el
+ * estado, que siempre vuelve a 'borrador' y la firma se borra).
+ */
+router.post("/:id/duplicate", (req, res) => {
+  if (req.user.role === "paciente") return res.status(403).json({ error: "Solo staff" });
+  const src = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, ws(req));
+  if (!src) return res.status(404).json({ error: "Documento original no encontrado" });
+  if (src.kind === "file") return res.status(400).json({ error: "No se puede duplicar un archivo subido. Súbelo de nuevo si necesitas otra copia." });
+
+  const { name, patient_id, patient_name, professional } = req.body ?? {};
+  const newId = newDocId(ws(req));
+  const newName = (name || `${src.name} (copia)`).slice(0, 200);
+  const newPatientId = patient_id !== undefined ? (patient_id || null) : src.patient_id;
+  let newPatientName = patient_name !== undefined ? (patient_name || null) : src.patient_name;
+  // Si se cambia el paciente y no se mandó patient_name, lo resolvemos
+  if (newPatientId && newPatientId !== src.patient_id && !patient_name) {
+    const p = db.prepare("SELECT name FROM patients WHERE id = ? AND workspace_id = ?").get(newPatientId, ws(req));
+    newPatientName = p?.name ?? null;
+  }
+  if (!newPatientId) newPatientName = null;
+  const newProfessional = professional !== undefined ? (professional || src.professional) : src.professional;
+
+  db.prepare(`
+    INSERT INTO documents (
+      id, workspace_id, name, type, kind,
+      patient_id, patient_name,
+      body_json, body_text, template_id,
+      status, professional, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'borrador', ?, ?, ?)
+  `).run(
+    newId, ws(req), newName, src.type, src.kind,
+    newPatientId, newPatientName,
+    src.body_json, src.body_text, src.template_id,
+    newProfessional ?? "",
+    now(), now()
+  );
+  const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(newId);
+  req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:created", rowToDoc(row));
+  res.status(201).json(rowToDoc(row));
+});
+
+/**
  * Editar metadata del documento o body. Si está firmado, solo se permite cambiar
  * status='archivado' para sacarlo de la vista activa.
  */

@@ -686,6 +686,15 @@ export const api = {
       fecha: Record<string, string>;
       sesion: Record<string, string>;
     }>(`/api/documents/${documentId}/variables`),
+  /** Duplica un documento. Permite reasignar paciente y profesional. */
+  duplicateDocument: (
+    id: string,
+    body?: { name?: string; patient_id?: string | null; patient_name?: string | null; professional?: string | null },
+  ) =>
+    request<PsmDocument>(`/api/documents/${id}/duplicate`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   /** Descarga el PDF del documento. Devuelve el Blob — el caller arma el download anchor. */
   downloadDocumentPdf: async (documentId: string): Promise<Blob> => {
     const token = localStorage.getItem("psm.token");

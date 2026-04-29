@@ -1,0 +1,168 @@
+import { cn } from "@/lib/utils";
+
+/**
+ * Carpeta estilo Apple Files / Photos: SVG de folder con tab y una "polaroid"
+ * con la foto del paciente (o sus iniciales coloreadas) sobre la solapa.
+ *
+ * Se usa en la vista Carpetas de Documentos y donde queramos representar a
+ * un paciente como contenedor agregador. El color del folder se deriva del
+ * nombre para variedad visual sin tener que persistirlo.
+ */
+
+const FOLDER_TONES = [
+  { body: "#F4D78A", tab: "#E9C875", border: "#C8A553" }, // amarillo
+  { body: "#C8E6B7", tab: "#B8D9A6", border: "#8FB37C" }, // verde
+  { body: "#F4C7E0", tab: "#E5B5D2", border: "#C18BAA" }, // rosa
+  { body: "#C5D8F4", tab: "#B5C9E6", border: "#8AA5C8" }, // azul
+  { body: "#E5D2F4", tab: "#D6C2E6", border: "#A89BC8" }, // lavanda
+  { body: "#F4D5B7", tab: "#E5C6A8", border: "#C8A07A" }, // durazno
+];
+
+const AVATAR_TONES = [
+  "bg-brand-100 text-brand-800",
+  "bg-sage-200 text-sage-700",
+  "bg-lavender-100 text-lavender-500",
+  "bg-warning-soft text-risk-moderate",
+];
+
+function hashName(name: string): number {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+}
+
+export interface PatientFolderProps {
+  name: string;
+  preferredName?: string;
+  photoUrl?: string | null;
+  count?: number;
+  onClick?: () => void;
+  className?: string;
+}
+
+export function PatientFolder({ name, preferredName, photoUrl, count, onClick, className }: PatientFolderProps) {
+  const h = hashName(name);
+  const tone = FOLDER_TONES[h % FOLDER_TONES.length];
+  const avatarTone = AVATAR_TONES[h % AVATAR_TONES.length];
+  const displayName = preferredName ?? name;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-bg-100/60 transition-colors text-left",
+        className,
+      )}
+      title={name}
+    >
+      <div className="relative w-32 h-28">
+        {/* SVG de la carpeta */}
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm">
+          {/* Tab posterior (fondo) */}
+          <path
+            d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
+            fill={tone.tab}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+          {/* Cuerpo de la carpeta (más al frente) */}
+          <path
+            d="M4 36 Q4 28 12 28 L116 28 Q124 28 124 36 L124 96 Q124 104 116 104 L12 104 Q4 104 4 96 Z"
+            fill={tone.body}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+        </svg>
+
+        {/* Polaroid con foto/iniciales */}
+        <div
+          className="absolute left-1/2 top-3 -translate-x-1/2 rotate-[-3deg] bg-white p-1 pb-3 rounded-sm shadow-md"
+          style={{ width: 50, height: 56 }}
+        >
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={displayName}
+              className="w-full h-10 object-cover rounded-sm"
+              draggable={false}
+            />
+          ) : (
+            <div className={cn("w-full h-10 rounded-sm flex items-center justify-center text-xs font-semibold", avatarTone)}>
+              {initials(displayName)}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="text-center w-full px-1">
+        <div className="text-sm text-ink-900 font-medium truncate">{displayName}</div>
+        {typeof count === "number" && (
+          <div className="text-[11px] text-ink-500 tabular">{count} {count === 1 ? "documento" : "documentos"}</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * Carpeta genérica (sin foto) — para "Sin paciente vinculado", "Plantillas", etc.
+ */
+export function GenericFolder({
+  name,
+  count,
+  onClick,
+  className,
+  toneIdx = 0,
+}: {
+  name: string;
+  count?: number;
+  onClick?: () => void;
+  className?: string;
+  toneIdx?: number;
+}) {
+  const tone = FOLDER_TONES[toneIdx % FOLDER_TONES.length];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-bg-100/60 transition-colors text-left",
+        className,
+      )}
+      title={name}
+    >
+      <div className="relative w-32 h-28">
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm">
+          <path
+            d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
+            fill={tone.tab}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+          <path
+            d="M4 36 Q4 28 12 28 L116 28 Q124 28 124 36 L124 96 Q124 104 116 104 L12 104 Q4 104 4 96 Z"
+            fill={tone.body}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+        </svg>
+      </div>
+      <div className="text-center w-full px-1">
+        <div className="text-sm text-ink-900 font-medium truncate">{name}</div>
+        {typeof count === "number" && (
+          <div className="text-[11px] text-ink-500 tabular">{count} {count === 1 ? "documento" : "documentos"}</div>
+        )}
+      </div>
+    </button>
+  );
+}

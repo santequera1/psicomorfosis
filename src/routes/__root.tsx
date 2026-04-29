@@ -1,6 +1,8 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast, Toaster } from "sonner";
+import { toggleTheme } from "@/lib/theme";
 
 import appCss from "../styles.css?url";
 
@@ -132,9 +134,29 @@ function RootComponent() {
       },
     },
   }));
+
+  // Atajo global: Ctrl/Cmd + Shift + L alterna entre claro y oscuro.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const isToggle = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "L" || e.key === "l");
+      if (!isToggle) return;
+      // No interferir si el foco está en input/textarea editable (evita pisar
+      // selección de texto u otros shortcuts del navegador).
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || el?.isContentEditable) return;
+      e.preventDefault();
+      const next = toggleTheme();
+      toast.success(`Tema ${next === "oscuro" ? "oscuro" : "claro"}`);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <QueryClientProvider client={client}>
       <Outlet />
+      <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
 }
