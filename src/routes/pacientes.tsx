@@ -8,7 +8,8 @@ import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { RiskPicker } from "@/components/app/RiskPicker";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
-import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, MessageCircle } from "lucide-react";
+import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 
 export const Route = createFileRoute("/pacientes")({
@@ -275,7 +276,7 @@ function PatientsPage() {
                               title={`WhatsApp ${p.phone}`}
                               className="h-7 w-7 rounded-md hover:bg-sage-200/30 text-sage-500 hover:text-sage-700 inline-flex items-center justify-center"
                             >
-                              <MessageCircle className="h-3.5 w-3.5" />
+                              <FaWhatsapp className="h-3.5 w-3.5" />
                             </a>
                           ) : null;
                         })()}
@@ -421,7 +422,7 @@ function PatientCard({ patient: p, onEdit, onRemove }: {
             className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
             title="WhatsApp"
           >
-            <MessageCircle className="h-3.5 w-3.5" />
+            <FaWhatsapp className="h-3.5 w-3.5" />
           </a>
         )}
         <div className="relative">

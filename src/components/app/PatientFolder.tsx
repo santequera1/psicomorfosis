@@ -66,9 +66,18 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
       )}
       title={name}
     >
-      <div className="relative w-32 h-28">
+      {/* Wrapper que aplica el lift + tilt al hover. transform-gpu para que la
+          animación corra suave en compositor sin repintar capas. */}
+      <div
+        className={cn(
+          "relative w-32 h-28 transform-gpu transition-transform duration-300 ease-out",
+          "origin-[50%_85%]",
+          "group-hover:-translate-y-1.5 group-hover:-rotate-3",
+          "group-active:-translate-y-0.5 group-active:rotate-[-1.5deg] group-active:duration-100",
+        )}
+      >
         {/* SVG de la carpeta */}
-        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm">
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm group-hover:drop-shadow-md transition-all duration-300">
           {/* Tab posterior (fondo) */}
           <path
             d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
@@ -85,9 +94,14 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
           />
         </svg>
 
-        {/* Polaroid con foto/iniciales */}
+        {/* Polaroid con foto/iniciales — se asoma un poco más al hover. */}
         <div
-          className="absolute left-1/2 top-3 -translate-x-1/2 rotate-[-3deg] bg-white p-1 pb-3 rounded-sm shadow-md"
+          className={cn(
+            "absolute left-1/2 top-3 bg-white p-1 pb-3 rounded-sm shadow-md",
+            "transform-gpu transition-transform duration-300 ease-out",
+            "-translate-x-1/2 -rotate-3",
+            "group-hover:-translate-y-1 group-hover:rotate-[-5deg]",
+          )}
           style={{ width: 50, height: 56 }}
         >
           {photoUrl ? (
