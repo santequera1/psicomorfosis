@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   ChevronLeft, FileSignature, Archive, Trash2, AlertCircle, Loader2,
@@ -12,6 +13,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { PatientPicker } from "@/components/app/PatientPicker";
 
 export const Route = createFileRoute("/documentos_/$id")({
   head: ({ params }) => ({ meta: [{ title: `Documento ${params.id} — Psicomorfosis` }] }),
@@ -110,6 +112,15 @@ function DocumentDetailPage() {
       navigate({ to: "/documentos" });
     },
   });
+  const duplicateMu = useMutation({
+    mutationFn: () => api.duplicateDocument(id, {}),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast.success("Duplicado");
+      navigate({ to: "/documentos/$id", params: { id: created.id } });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   // Descarga el PDF generado server-side (pdfmake). Texto seleccionable,
   // mismo render en cualquier dispositivo, no congela el navegador.
@@ -197,7 +208,12 @@ function DocumentDetailPage() {
                   <FileSignature className="h-4 w-4" /> <span className="hidden sm:inline">Firmar</span>
                 </button>
               )}
-              <ActionsMenu onArchive={() => archiveMu.mutate()} onDelete={() => { if (confirm("¿Eliminar definitivamente?")) deleteMu.mutate(); }} />
+              <ActionsMenu
+                locked={isLocked}
+                onDuplicate={() => duplicateMu.mutate()}
+                onArchive={() => archiveMu.mutate()}
+                onDelete={() => { if (confirm("¿Eliminar definitivamente?")) deleteMu.mutate(); }}
+              />
             </div>
           </div>
           {isLocked && (
@@ -449,7 +465,12 @@ function SaveStatus({ saving, savedAt, locked }: { saving: boolean; savedAt: Dat
   );
 }
 
-function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: () => void }) {
+function ActionsMenu({ onDuplicate, onArchive, onDelete, locked }: {
+  onDuplicate?: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  locked?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -461,14 +482,38 @@ function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete:
     return () => document.removeEventListener("click", close);
   }, [open]);
 
-  // Posicionar el menú con coordenadas absolutas viewport (fixed) para que
-  // nunca se tape por el header sticky o el overflow del contenedor padre.
+  // Posicionar contra el viewport. El menú se renderiza en document.body via
+  // portal para escapar de cualquier ancestor con `transform` (TipTap aplica
+  // transform al editor, lo cual rompe los `position: fixed` descendientes
+  // y hacía que en mobile el menú apareciera "flotando" en medio de la hoja).
   useEffect(() => {
     if (open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+      const top = r.bottom + 6;
+      const right = window.innerWidth - r.right;
+      setPos({ top, right: Math.max(8, right) });
     }
   }, [open]);
+
+  const menu = open && pos ? (
+    <div
+      className="fixed w-52 rounded-lg border border-line-200 bg-surface shadow-modal py-1 z-1000"
+      style={{ top: pos.top, right: pos.right }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {onDuplicate && !locked && (
+        <button onClick={onDuplicate} className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+          <Copy className="h-4 w-4" /> Duplicar y reasignar
+        </button>
+      )}
+      <button onClick={onArchive} className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+        <Archive className="h-4 w-4" /> Archivar
+      </button>
+      <button onClick={onDelete} className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-500/10 inline-flex items-center gap-2">
+        <Trash2 className="h-4 w-4" /> Eliminar
+      </button>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -481,20 +526,8 @@ function ActionsMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete:
       >
         <span className="font-bold text-base leading-none">···</span>
       </button>
-      {open && pos && (
-        <div
-          className="fixed w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1 z-50"
-          style={{ top: pos.top, right: pos.right }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button onClick={onArchive} className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
-            <Archive className="h-4 w-4" /> Archivar
-          </button>
-          <button onClick={onDelete} className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-500/10 inline-flex items-center gap-2">
-            <Trash2 className="h-4 w-4" /> Eliminar
-          </button>
-        </div>
-      )}
+      {/* Portal a body para escapar el contexto transform de TipTap. */}
+      {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : null}
     </>
   );
 }
@@ -507,7 +540,6 @@ function PatientLinkRow({ doc, disabled }: { doc: PsmDocument; disabled?: boolea
   const { data: patients = [] } = useQuery({
     queryKey: ["patients"],
     queryFn: () => api.listPatients(),
-    enabled: picking,
   });
 
   const setPatientMu = useMutation({
@@ -545,25 +577,20 @@ function PatientLinkRow({ doc, disabled }: { doc: PsmDocument; disabled?: boolea
 
   if (picking) {
     return (
-      <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
-        <User className="h-3.5 w-3.5 text-ink-500" />
-        <select
-          autoFocus
-          defaultValue={doc.patient_id ?? ""}
-          onChange={(e) => {
-            const p = patients.find((x) => x.id === e.target.value);
-            setPatientMu.mutate(p ?? null);
-          }}
-          className="h-7 px-2 rounded border border-line-200 bg-bg text-xs text-ink-900 focus:outline-none focus:border-brand-400"
-        >
-          <option value="">— Sin paciente —</option>
-          {patients.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.preferredName ?? p.name} ({p.id})
-            </option>
-          ))}
-        </select>
-        <button onClick={() => setPicking(false)} className="text-ink-500 hover:text-ink-700">
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-60 max-w-md">
+          <PatientPicker
+            value={doc.patient_id ?? null}
+            patients={patients}
+            autoFocus
+            compact
+            onChange={(id) => {
+              const p = id ? patients.find((x) => x.id === id) ?? null : null;
+              setPatientMu.mutate(p);
+            }}
+          />
+        </div>
+        <button onClick={() => setPicking(false)} className="text-xs text-ink-500 hover:text-ink-700">
           Cancelar
         </button>
       </div>

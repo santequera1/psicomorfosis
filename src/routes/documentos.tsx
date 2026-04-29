@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
 import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
+import { PatientPicker } from "@/components/app/PatientPicker";
 import { useWorkspace } from "@/lib/workspace";
 
 export const Route = createFileRoute("/documentos")({
@@ -66,7 +67,7 @@ function DocumentosPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<PsmDocument | null>(null);
-  const [viewMode, setViewMode] = usePersistedViewMode("psm.docs.view", "list");
+  const [viewMode, setViewMode] = usePersistedViewMode("psm.docs.view", "folders");
   // Carpeta abierta (en modo carpetas): patient_id o "_general" para sin paciente
   const [openFolder, setOpenFolder] = useState<string | null>(null);
 
@@ -620,13 +621,12 @@ function DuplicateDocumentModal({ doc, patients, professionals, onClose }: {
               className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </Field>
           <Field label="Paciente">
-            <select value={patientId} onChange={(e) => setPatientId(e.target.value)}
-              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-              <option value="">— Sin paciente —</option>
-              {patients.map((p) => (
-                <option key={p.id} value={p.id}>{p.preferredName ?? p.name} ({p.id})</option>
-              ))}
-            </select>
+            <PatientPicker
+              value={patientId || null}
+              onChange={(id) => setPatientId(id ?? "")}
+              patients={patients}
+              allowEmpty
+            />
           </Field>
           {professionals.length > 1 && (
             <Field label="Profesional">
@@ -1040,11 +1040,12 @@ function PatientSelect({
           <span className="text-xs text-ink-500">· {preset.id}</span>
         </div>
       ) : (
-        <select value={value} onChange={(e) => onChange(e.target.value)}
-          className="w-full h-10 px-3 rounded-md border border-line-200 bg-bg text-sm">
-          <option value="">— Sin paciente —</option>
-          {patients.map((p) => <option key={p.id} value={p.id}>{p.preferredName ?? p.name} ({p.id})</option>)}
-        </select>
+        <PatientPicker
+          value={value || null}
+          onChange={(id) => onChange(id ?? "")}
+          patients={patients}
+          allowEmpty
+        />
       )}
     </Field>
   );

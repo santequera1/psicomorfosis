@@ -119,9 +119,9 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
         </div>
       </div>
       <div className="text-center w-full px-1">
-        <div className="text-sm text-ink-900 font-medium truncate">{displayName}</div>
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word">{displayName}</div>
         {typeof count === "number" && (
-          <div className="text-[11px] text-ink-500 tabular">{count} {count === 1 ? "documento" : "documentos"}</div>
+          <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
       </div>
     </button>
@@ -155,8 +155,15 @@ export function GenericFolder({
       )}
       title={name}
     >
-      <div className="relative w-32 h-28">
-        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm">
+      <div
+        className={cn(
+          "relative w-32 h-28 transform-gpu transition-transform duration-300 ease-out",
+          "origin-[50%_85%]",
+          "group-hover:-translate-y-1.5 group-hover:-rotate-3",
+          "group-active:-translate-y-0.5 group-active:rotate-[-1.5deg] group-active:duration-100",
+        )}
+      >
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm group-hover:drop-shadow-md transition-all duration-300">
           <path
             d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
             fill={tone.tab}
@@ -172,9 +179,9 @@ export function GenericFolder({
         </svg>
       </div>
       <div className="text-center w-full px-1">
-        <div className="text-sm text-ink-900 font-medium truncate">{name}</div>
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word">{name}</div>
         {typeof count === "number" && (
-          <div className="text-[11px] text-ink-500 tabular">{count} {count === 1 ? "documento" : "documentos"}</div>
+          <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
       </div>
     </button>
