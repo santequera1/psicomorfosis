@@ -5,6 +5,23 @@ import { requireAuth } from "../auth.js";
 const router = Router();
 router.use(requireAuth);
 
+const VALID_RISK_TYPES = new Set([
+  "suicida", "autolesion", "heteroagresion", "abandono_tto", "reagudizacion", "descompensacion",
+]);
+
+function safeParseArray(s) {
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v.filter((x) => VALID_RISK_TYPES.has(x)) : [];
+  } catch { return []; }
+}
+
+function serializeRiskTypes(arr) {
+  if (!Array.isArray(arr)) return null;
+  const cleaned = arr.filter((x) => VALID_RISK_TYPES.has(x));
+  return cleaned.length ? JSON.stringify(cleaned) : null;
+}
+
 function rowToPatient(r) {
   if (!r) return null;
   return {
@@ -28,6 +45,7 @@ function rowToPatient(r) {
     lastContact: r.derived_last_contact ?? r.last_contact,
     nextSession: r.derived_next_session ?? r.next_session ?? undefined,
     risk: r.risk,
+    riskTypes: r.risk_type ? safeParseArray(r.risk_type) : [],
     tags: r.tags ? r.tags.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     archivedAt: r.archived_at ?? undefined,
   };
@@ -157,8 +175,8 @@ router.post("/", (req, res) => {
   const p = req.body ?? {};
   const id = p.id ?? nextPatientId(req.user.workspace_id);
   db.prepare(`
-    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, tags)
-    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @tags)
+    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags)
+    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags)
   `).run({
     id,
     workspace_id: req.user.workspace_id,
@@ -178,6 +196,7 @@ router.post("/", (req, res) => {
     last_contact: p.lastContact ?? "Hoy",
     next_session: p.nextSession ?? null,
     risk: p.risk ?? "none",
+    risk_type: serializeRiskTypes(p.riskTypes),
     tags: Array.isArray(p.tags) ? p.tags.join(",") : null,
   });
   const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(id);
@@ -206,6 +225,7 @@ router.patch("/:id", (req, res) => {
     last_contact: p.lastContact ?? existing.last_contact,
     next_session: p.nextSession ?? existing.next_session,
     risk: p.risk ?? existing.risk,
+    risk_type: p.riskTypes !== undefined ? serializeRiskTypes(p.riskTypes) : existing.risk_type,
     tags: Array.isArray(p.tags) ? p.tags.join(",") : existing.tags,
   };
   db.prepare(`
@@ -213,7 +233,7 @@ router.patch("/:id", (req, res) => {
       name=@name, preferred_name=@preferred_name, pronouns=@pronouns, doc=@doc, age=@age,
       phone=@phone, email=@email, professional=@professional, professional_id=@professional_id,
       sede_id=@sede_id, modality=@modality, status=@status, reason=@reason,
-      last_contact=@last_contact, next_session=@next_session, risk=@risk, tags=@tags,
+      last_contact=@last_contact, next_session=@next_session, risk=@risk, risk_type=@risk_type, tags=@tags,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=@id
   `).run({ ...mapped, id: req.params.id });

@@ -183,7 +183,7 @@ function AgendaPage() {
                       <span className="text-ink-500">Motivo:</span> {nextPatient.reason}
                     </div>
                     <div className="mt-3 flex items-center gap-2">
-                      <RiskBadge risk={nextPatient.risk} compact />
+                      <RiskBadge risk={nextPatient.risk} types={nextPatient.riskTypes} compact />
                       <span className="text-[11px] text-ink-500">Último contacto: {nextPatient.lastContact}</span>
                     </div>
                     <div className="mt-4 flex gap-2">
@@ -217,7 +217,7 @@ function AgendaPage() {
                     >
                       {p.preferredName ?? p.name}
                     </button>
-                    <RiskBadge risk={p.risk} compact />
+                    <RiskBadge risk={p.risk} types={p.riskTypes} compact />
                   </li>
                 ))}
                 {myPatientsRisk.length === 0 && <li className="text-xs text-ink-500">Sin pacientes en riesgo activo.</li>}
@@ -595,7 +595,7 @@ function NewAppointmentModal({ patients, onClose }: { patients: ApiPatient[]; on
                         <div className="text-sm text-ink-900 truncate">{p.preferredName ? `${p.preferredName} · ` : ""}{p.name}</div>
                         <div className="text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</div>
                       </div>
-                      <RiskBadge risk={p.risk} compact />
+                      <RiskBadge risk={p.risk} types={p.riskTypes} compact />
                     </button>
                   </li>
                 ))}

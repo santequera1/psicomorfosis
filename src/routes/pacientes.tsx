@@ -2,10 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
-import { type Patient, type PatientStatus, type Modality, type Risk } from "@/lib/mock-data";
+import { type Patient, type PatientStatus, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
+import { RiskPicker } from "@/components/app/RiskPicker";
 import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, MessageCircle } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 
@@ -173,7 +174,7 @@ function PatientsPage() {
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${STATUS_STYLE[p.status]}`}>
                         {p.status}
                       </span>
-                      <RiskBadge risk={p.risk} compact />
+                      <RiskBadge risk={p.risk} types={p.riskTypes} compact />
                       <span className="text-[10px] text-ink-400">· {MODALITY_LABEL[p.modality]}</span>
                     </div>
                     {p.nextSession && (
@@ -253,7 +254,7 @@ function PatientsPage() {
                         {p.status}
                       </span>
                     </td>
-                    <td className="px-3 py-3.5"><RiskBadge risk={p.risk} compact /></td>
+                    <td className="px-3 py-3.5"><RiskBadge risk={p.risk} types={p.riskTypes} compact /></td>
                     <td className="px-3 py-3.5 text-ink-700 tabular">{p.nextSession ?? <span className="text-ink-400">—</span>}</td>
                     <td className="px-3 py-3.5 relative">
                       <div className="flex items-center justify-end gap-0.5">
@@ -493,6 +494,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
     status: patient.status,
     reason: patient.reason,
     risk: patient.risk,
+    riskTypes: patient.riskTypes ?? [],
   });
   const [err, setErr] = useState<string | null>(null);
 
@@ -560,7 +562,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
           <Labeled label="Motivo de consulta">
             <textarea rows={2} value={form.reason ?? ""} onChange={(e) => update("reason", e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </Labeled>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Labeled label="Modalidad">
               <select value={form.modality ?? "individual"} onChange={(e) => update("modality", e.target.value as Modality)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
                 <option value="individual">Individual</option><option value="pareja">Pareja</option><option value="familiar">Familiar</option><option value="grupal">Grupal</option><option value="tele">Telepsicología</option>
@@ -571,11 +573,15 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
                 <option value="activo">Activo</option><option value="pausa">Pausa</option><option value="alta">Alta</option><option value="derivado">Derivado</option>
               </select>
             </Labeled>
-            <Labeled label="Riesgo">
-              <select value={form.risk ?? "none"} onChange={(e) => update("risk", e.target.value as Risk)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="none">Sin bandera</option><option value="low">Bajo</option><option value="moderate">Moderado</option><option value="high">Alto</option><option value="critical">Crítico</option>
-              </select>
-            </Labeled>
+          </div>
+
+          <div className="rounded-lg border border-line-200 bg-bg-100/30 p-3.5">
+            <RiskPicker
+              level={(form.risk ?? "none") as Risk}
+              types={(form.riskTypes ?? []) as RiskType[]}
+              onLevelChange={(r) => update("risk", r)}
+              onTypesChange={(t) => update("riskTypes", t as Patient["riskTypes"])}
+            />
           </div>
         </div>
 
@@ -605,7 +611,7 @@ function NewPatientModal({ onClose }: { onClose: () => void }) {
   const mainProfessional = professionals[0];
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({ pronouns: "ella", modality: "individual", status: "activo", risk: "none" });
+  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({ pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [] });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -655,6 +661,7 @@ function NewPatientModal({ onClose }: { onClose: () => void }) {
       reason: form.reason ?? "",
       lastContact: "Hoy",
       risk: form.risk,
+    riskTypes: form.riskTypes,
     });
   }
   return (
@@ -730,11 +737,15 @@ function NewPatientModal({ onClose }: { onClose: () => void }) {
                   Profesional asignada: <span className="text-ink-900 font-medium">{mainProfessional.name}</span>
                 </div>
               )}
-              <Labeled label="Bandera de riesgo inicial">
-                <select value={form.risk ?? "none"} onChange={(e) => updateField("risk", e.target.value as Risk)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                  <option value="none">Sin bandera</option><option value="low">Bajo</option><option value="moderate">Moderado</option><option value="high">Alto</option><option value="critical">Crítico</option>
-                </select>
-              </Labeled>
+              <div className="rounded-lg border border-line-200 bg-bg-100/30 p-3.5">
+                <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium mb-2">Bandera de riesgo inicial</p>
+                <RiskPicker
+                  level={(form.risk ?? "none") as Risk}
+                  types={(form.riskTypes ?? []) as RiskType[]}
+                  onLevelChange={(r) => updateField("risk", r)}
+                  onTypesChange={(t) => updateField("riskTypes", t as Patient["riskTypes"])}
+                />
+              </div>
             </>
           )}
           {step === 3 && (

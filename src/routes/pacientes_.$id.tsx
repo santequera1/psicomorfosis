@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
 import { RiskBadge } from "@/components/app/RiskBadge";
+import { RiskPicker } from "@/components/app/RiskPicker";
+import type { Risk, RiskType } from "@/lib/mock-data";
 import { TEST_EVOLUTION } from "@/lib/mock-data";
 import { api } from "@/lib/api";
 import { Trash2 } from "lucide-react";
@@ -119,7 +121,7 @@ function PatientDetailPage() {
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-serif text-lg sm:text-[28px] leading-tight text-ink-900">{patient.name}</h1>
-                <RiskBadge risk={patient.risk} compact />
+                <RiskBadge risk={patient.risk} types={patient.riskTypes} compact />
               </div>
               {patient.preferredName && <p className="text-xs sm:text-sm text-ink-500 mt-0.5">({patient.preferredName} · {patient.pronouns})</p>}
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-ink-700">
@@ -247,6 +249,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
     modality: patient.modality,
     status: patient.status,
     risk: patient.risk,
+    riskTypes: (patient.riskTypes ?? []) as RiskType[],
   });
   const mu = useMutation({
     mutationFn: () => api.updatePatient(patient.id, form),
@@ -286,7 +289,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Motivo de consulta</span>
             <textarea rows={2} value={form.reason} onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))} className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Modalidad</span>
               <select value={form.modality} onChange={(e) => setForm((p) => ({ ...p, modality: e.target.value as any }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
@@ -299,12 +302,14 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
                 <option value="activo">Activo</option><option value="pausa">Pausa</option><option value="alta">Alta</option><option value="derivado">Derivado</option>
               </select>
             </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Riesgo</span>
-              <select value={form.risk} onChange={(e) => setForm((p) => ({ ...p, risk: e.target.value as any }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="none">Sin bandera</option><option value="low">Bajo</option><option value="moderate">Moderado</option><option value="high">Alto</option><option value="critical">Crítico</option>
-              </select>
-            </label>
+          </div>
+          <div className="rounded-lg border border-line-200 bg-bg-100/30 p-3.5">
+            <RiskPicker
+              level={form.risk as Risk}
+              types={form.riskTypes}
+              onLevelChange={(r) => setForm((p) => ({ ...p, risk: r }))}
+              onTypesChange={(t) => setForm((p) => ({ ...p, riskTypes: t }))}
+            />
           </div>
         </div>
         <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">

@@ -519,6 +519,8 @@ function runMigrations() {
     "ALTER TABLE test_applications ADD COLUMN completed_at TEXT",
     "ALTER TABLE test_applications ADD COLUMN answers_json TEXT",
     "ALTER TABLE test_applications ADD COLUMN alerts_json TEXT",
+    // Tipos de riesgo (28 abril) — JSON array: ["suicida", "autolesion", ...]
+    "ALTER TABLE patients ADD COLUMN risk_type TEXT",
   ];
   for (const sql of migrations) {
     try {

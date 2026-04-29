@@ -77,6 +77,7 @@ export interface ApiPatient {
   lastContact: string;
   nextSession?: string;
   risk: "none" | "low" | "moderate" | "high" | "critical";
+  riskTypes?: ("suicida" | "autolesion" | "heteroagresion" | "abandono_tto" | "reagudizacion" | "descompensacion")[];
   tags?: string[];
 }
 

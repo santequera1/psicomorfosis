@@ -260,7 +260,7 @@ export function AdminDashboard() {
                       <div className="text-sm font-medium text-ink-900 truncate">{p.preferredName ?? p.name}</div>
                       <div className="text-xs text-ink-500 truncate">{p.reason}</div>
                     </div>
-                    <RiskBadge risk={p.risk} compact />
+                    <RiskBadge risk={p.risk} types={p.riskTypes} compact />
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
                     <span>{p.professional}</span>

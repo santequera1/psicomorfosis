@@ -129,7 +129,7 @@ function PatientHeader({ patient, isOrg, onOpenNote }: { patient: Patient; isOrg
               <h1 className="text-lg sm:text-xl font-serif text-ink-900 leading-tight">
                 {patient.name}
               </h1>
-              <RiskBadge risk={patient.risk} compact />
+              <RiskBadge risk={patient.risk} types={patient.riskTypes} compact />
             </div>
             <p className="mt-0.5 text-xs sm:text-sm text-ink-500">
               {patient.preferredName ? <>"{patient.preferredName}" · </> : null}
@@ -665,7 +665,7 @@ function PatientPickerModal({ patients, currentId, onPick, onClose }: { patients
                   <div className="text-sm text-ink-900 truncate">{p.name}</div>
                   <div className="text-[11px] text-ink-500 truncate tabular">{p.id} · {p.doc}</div>
                 </div>
-                <RiskBadge risk={p.risk} compact />
+                <RiskBadge risk={p.risk} types={p.riskTypes} compact />
               </button>
             </li>
           ))}

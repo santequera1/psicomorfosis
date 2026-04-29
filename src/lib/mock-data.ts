@@ -2,6 +2,13 @@
 // Todos ficticios — no representan personas reales.
 
 export type Risk = "none" | "low" | "moderate" | "high" | "critical";
+export type RiskType =
+  | "suicida"
+  | "autolesion"
+  | "heteroagresion"
+  | "abandono_tto"
+  | "reagudizacion"
+  | "descompensacion";
 export type Modality = "individual" | "pareja" | "familiar" | "grupal" | "tele";
 export type PatientStatus = "activo" | "pausa" | "alta" | "derivado";
 
@@ -23,6 +30,7 @@ export interface Patient {
   lastContact: string;
   nextSession?: string;
   risk: Risk;
+  riskTypes?: RiskType[];
   tags?: string[];
 }
 
@@ -85,6 +93,49 @@ export const RISK_LABEL: Record<Risk, string> = {
   high: "Riesgo alto",
   critical: "Riesgo crítico",
 };
+
+export const RISK_LABEL_SHORT: Record<Risk, string> = {
+  none: "Sin riesgo",
+  low: "Bajo",
+  moderate: "Moderado",
+  high: "Alto",
+  critical: "Crítico",
+};
+
+export const RISK_TYPE_LABEL: Record<RiskType, string> = {
+  suicida: "Suicida",
+  autolesion: "Autolesión",
+  heteroagresion: "Heteroagresión",
+  abandono_tto: "Abandono de tratamiento",
+  reagudizacion: "Reagudización",
+  descompensacion: "Descompensación",
+};
+
+export const RISK_TYPE_DESCRIPTION: Record<RiskType, string> = {
+  suicida: "Ideación, planeación o intento suicida",
+  autolesion: "Conducta autolesiva no suicida",
+  heteroagresion: "Riesgo de daño a terceros",
+  abandono_tto: "Riesgo de abandonar el proceso terapéutico",
+  reagudizacion: "Posible reaparición de síntomas",
+  descompensacion: "Riesgo de descompensación clínica/psiquiátrica",
+};
+
+/** Hint contextual al seleccionar nivel de riesgo. */
+export function riskHint(risk: Risk, types: RiskType[] = []): string | null {
+  if (risk === "critical") {
+    return "Requiere atención inmediata. Activa protocolo de crisis y documenta plan de seguridad.";
+  }
+  if (risk === "high") {
+    return "Considera contacto frecuente, plan de contingencia y red de apoyo identificada.";
+  }
+  if (types.includes("suicida") && risk === "moderate") {
+    return "Riesgo suicida detectado. Aplica PHQ-9 (item 9) o C-SSRS y documenta plan de seguridad.";
+  }
+  if (types.includes("autolesion") && risk === "moderate") {
+    return "Considera seguimiento DBT y técnicas de regulación emocional.";
+  }
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Tests psicométricos
