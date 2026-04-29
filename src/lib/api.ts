@@ -678,6 +678,14 @@ export const api = {
     request<Array<{ id: number; token: string; expires_at: string; signed_at: string | null; signed_ip: string | null; cert_sha256: string | null; created_at: string }>>(
       `/api/documents/${documentId}/sign-requests`
     ),
+  getDocumentVariables: (documentId: string) =>
+    request<{
+      paciente: Record<string, string>;
+      profesional: Record<string, string>;
+      clinica: Record<string, string>;
+      fecha: Record<string, string>;
+      sesion: Record<string, string>;
+    }>(`/api/documents/${documentId}/variables`),
   // Endpoints públicos del paciente firmando — sin auth
   validateSignToken: (token: string) =>
     fetch(`${API_BASE}/api/documents/sign/${token}`).then(async (r) => {

@@ -45,6 +45,7 @@ import {
   Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Link2,
   Image as ImageIcon, Undo, Redo, Type, Paperclip, FileSignature,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SlashCommand } from "./SlashCommand";
@@ -52,6 +53,8 @@ import { VariableSuggest } from "./VariableSuggest";
 import { Callout } from "./CalloutExtension";
 import { Attachment } from "./AttachmentExtension";
 import { Signature } from "./SignatureExtension";
+import { VariableNode, VariableContextProvider, migrateVariablesInDoc, type VariableContextValue } from "./VariableNode";
+import { TextAlign } from "@tiptap/extension-text-align";
 import type { TipTapDoc } from "@/lib/api";
 
 interface Props {
@@ -63,11 +66,13 @@ interface Props {
   onUploadImage?: (file: File) => Promise<string>;
   /** Callback al adjuntar archivo (PDF/Word/etc). Devuelve datos para insertar como bloque. */
   onUploadAttachment?: (file: File) => Promise<{ url: string; name: string; mime: string; sizeBytes: number }>;
+  /** Contexto resuelto para renderizar variables {{paciente.nombre}} con valor real. */
+  variableContext?: VariableContextValue | null;
 }
 
 const EMPTY_DOC: TipTapDoc = { type: "doc", content: [{ type: "paragraph" }] };
 
-export function DocumentEditor({ initialDoc, onChange, editable = true, placeholder, onUploadImage, onUploadAttachment }: Props) {
+export function DocumentEditor({ initialDoc, onChange, editable = true, placeholder, onUploadImage, onUploadAttachment, variableContext }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [signatureOpen, setSignatureOpen] = useState(false);
@@ -101,14 +106,64 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
       Callout,
       Attachment,
       Signature,
+      VariableNode,
+      TextAlign.configure({
+        types: ["paragraph", "heading"],
+        alignments: ["left", "center", "right", "justify"],
+        defaultAlignment: "left",
+      }),
       SlashCommand,
       VariableSuggest,
     ],
-    content: initialDoc ?? EMPTY_DOC,
+    content: migrateVariablesInDoc(initialDoc ?? EMPTY_DOC) as TipTapDoc,
     editable,
     editorProps: {
       attributes: {
         class: "psm-editor-content focus:outline-none min-h-100 py-6",
+      },
+      // Pegar imágenes desde el portapapeles (Ctrl+V tras copiar/recortar imagen)
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items || !onUploadImage) return false;
+        for (const item of Array.from(items)) {
+          if (item.kind === "file" && item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            event.preventDefault();
+            onUploadImage(file)
+              .then((url) => {
+                const { tr } = view.state;
+                const node = view.state.schema.nodes.image.create({ src: url });
+                view.dispatch(tr.replaceSelectionWith(node));
+              })
+              .catch((err) => {
+                toast.error("No se pudo subir la imagen pegada: " + (err?.message ?? err));
+              });
+            return true;
+          }
+        }
+        return false;
+      },
+      // Soltar imágenes desde el explorador de archivos
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved) return false;
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0 || !onUploadImage) return false;
+        const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+        if (imageFiles.length === 0) return false;
+        event.preventDefault();
+        const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        const insertAt = coords?.pos ?? view.state.selection.from;
+        Promise.all(imageFiles.map((f) => onUploadImage(f)))
+          .then((urls) => {
+            urls.forEach((url, i) => {
+              const node = view.state.schema.nodes.image.create({ src: url });
+              const tr = view.state.tr.insert(insertAt + i, node);
+              view.dispatch(tr);
+            });
+          })
+          .catch((err) => toast.error("No se pudo soltar la imagen: " + (err?.message ?? err)));
+        return true;
       },
     },
     onUpdate: ({ editor }) => {
@@ -125,9 +180,10 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   // Cuando initialDoc cambia (cambio de documento en la misma instancia), recargar
   useEffect(() => {
     if (editor && initialDoc) {
+      const migrated = migrateVariablesInDoc(initialDoc) as TipTapDoc;
       const current = editor.getJSON();
-      if (JSON.stringify(current) !== JSON.stringify(initialDoc)) {
-        editor.commands.setContent(initialDoc, { emitUpdate: false });
+      if (JSON.stringify(current) !== JSON.stringify(migrated)) {
+        editor.commands.setContent(migrated, { emitUpdate: false });
       }
     }
   }, [initialDoc, editor]);
@@ -231,6 +287,7 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
   }
 
   return (
+    <VariableContextProvider value={variableContext ?? null}>
     <div className="bg-surface rounded-xl border border-line-200 relative">
       {editable && (
         <Toolbar
@@ -266,6 +323,7 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
         />
       )}
     </div>
+    </VariableContextProvider>
   );
 }
 
@@ -468,6 +526,21 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
         </Btn>
         <Btn active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()} title="Tachado">
           <Strikethrough className="h-4 w-4" />
+        </Btn>
+      </BtnGroup>
+      <Sep />
+      <BtnGroup>
+        <Btn active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()} title="Alinear a la izquierda">
+          <AlignLeft className="h-4 w-4" />
+        </Btn>
+        <Btn active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()} title="Centrar">
+          <AlignCenter className="h-4 w-4" />
+        </Btn>
+        <Btn active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()} title="Alinear a la derecha">
+          <AlignRight className="h-4 w-4" />
+        </Btn>
+        <Btn active={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()} title="Justificar">
+          <AlignJustify className="h-4 w-4" />
         </Btn>
       </BtnGroup>
       <Sep />

@@ -17,10 +17,11 @@ import { getToken } from "@/lib/api";
  *    (el usuario no puede "back" y caer otra vez en el estado sin sesión).
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [checked, setChecked] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false; // SSR
-    return getToken() !== null;
-  });
+  // El estado inicial DEBE ser el mismo en SSR y en el primer render del cliente
+  // para evitar React #418 (hydration mismatch). El bootstrap script de __root.tsx
+  // ya redirigió a /login si no había token, así que aquí solo necesitamos el
+  // useEffect post-hidratación que confirma el token.
+  const [checked, setChecked] = useState<boolean>(false);
 
   useEffect(() => {
     if (!getToken()) {

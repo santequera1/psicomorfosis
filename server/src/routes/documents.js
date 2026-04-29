@@ -1000,4 +1000,18 @@ router.get("/:id/sign-requests", (req, res) => {
   res.json(rows);
 });
 
+/**
+ * GET /api/documents/:id/variables
+ * Devuelve el contexto resuelto de variables del documento (paciente actual,
+ * profesional actual, clínica, fechas) para que el editor renderice los
+ * placeholders {{paciente.nombre}} con su valor real en vivo.
+ */
+router.get("/:id/variables", (req, res) => {
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, wsId(req));
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  const ctx = buildInterpolationContext(wsId(req), doc.patient_id, doc.professional);
+  res.json(ctx);
+});
+
 export default router;

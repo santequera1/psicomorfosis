@@ -57,3 +57,4 @@ vista-tareas.md
 *.doc
 *.test.pdf
 valoracion_inicial_psicologica.pdf
+deploy.py

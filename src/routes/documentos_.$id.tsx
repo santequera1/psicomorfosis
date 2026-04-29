@@ -29,6 +29,14 @@ function DocumentDetailPage() {
   });
   const { data: workspace } = useWorkspace();
 
+  // Contexto de variables: paciente vinculado al doc + profesional + clínica + fecha.
+  // Se refetchea cuando cambia el patient_id (vincular/desvincular paciente).
+  const { data: variableContext } = useQuery({
+    queryKey: ["document-variables", id, doc?.patient_id ?? null],
+    queryFn: () => api.getDocumentVariables(id),
+    enabled: !!doc,
+  });
+
   // ─── Local state del editor ─────────────────────────────────────────────
   const [body, setBody] = useState<TipTapDoc | null>(null);
   const [signRequestOpen, setSignRequestOpen] = useState(false);
@@ -180,6 +188,7 @@ function DocumentDetailPage() {
         <DocumentEditor
           initialDoc={doc.body_json ?? null}
           editable={!isLocked}
+          variableContext={variableContext ?? null}
           onChange={(d, t) => { setBody(d); setText(t); }}
           onUploadImage={async (file) => {
             // Las imágenes inline van a una tabla aparte (document_assets) — NO

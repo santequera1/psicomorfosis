@@ -154,9 +154,17 @@ export const VariableSuggest = Extension.create({
         allowedPrefixes: null,
         command: ({ editor, range, props }) => {
           const v = props as Variable;
-          // Reemplazar el rango (incluyendo el `{{` y la query parcial) por
-          // `{{key}}` literal — el texto a insertar incluye su propio cierre.
-          editor.chain().focus().deleteRange(range).insertContent(`{{${v.key}}}`).run();
+          // Insertar como node `variable` (inline atom) — renderiza el valor
+          // resuelto en vivo y no se queda como texto literal.
+          editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent([
+              { type: "variable", attrs: { key: v.key } },
+              { type: "text", text: " " },
+            ])
+            .run();
         },
       },
     };
