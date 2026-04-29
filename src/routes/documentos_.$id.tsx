@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft, FileSignature, Printer, Archive, Trash2, AlertCircle, Loader2,
-  Check, Lock, User, FileText, Send, MessageCircle, Copy,
+  Check, Lock, User, FileText, Send, MessageCircle, Copy, Download,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { whatsappUrl } from "@/lib/display";
@@ -12,6 +12,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { downloadDocPdf } from "@/lib/pdf";
 
 export const Route = createFileRoute("/documentos_/$id")({
   head: ({ params }) => ({ meta: [{ title: `Documento ${params.id} — Psicomorfosis` }] }),
@@ -43,6 +44,8 @@ function DocumentDetailPage() {
   const [text, setText] = useState<string>("");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Cargar body cuando llega la data
   useEffect(() => {
@@ -109,6 +112,36 @@ function DocumentDetailPage() {
     },
   });
 
+  // Genera y descarga el PDF del cuerpo del editor con membrete clínico.
+  async function downloadPdf() {
+    if (!doc) return;
+    const editorEl = editorContainerRef.current?.querySelector<HTMLElement>(".psm-editor-content");
+    if (!editorEl) {
+      toast.error("Editor no disponible");
+      return;
+    }
+    setDownloadingPdf(true);
+    try {
+      await downloadDocPdf(
+        editorEl,
+        {
+          clinicName: workspace?.name ?? "Psicomorfosis",
+          professional: doc.professional,
+          dateLabel: formatDateTime(doc.updated_at),
+          documentName: doc.name,
+          patientName: doc.patient_name ?? null,
+          patientId: doc.patient_id ?? null,
+        },
+        sanitizeFilename(doc.name) + ".pdf",
+      );
+      toast.success("PDF descargado");
+    } catch (e: any) {
+      toast.error("No se pudo generar el PDF: " + (e?.message ?? e));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   // ─── Estados de carga / error ────────────────────────────────────────────
   if (isLoading) {
     return <AppShell><div className="flex items-center justify-center min-h-[60vh] text-ink-500"><Loader2 className="h-5 w-5 animate-spin" /></div></AppShell>;
@@ -137,10 +170,21 @@ function DocumentDetailPage() {
               <SaveStatus saving={saving} savedAt={savedAt} locked={isLocked} />
               <button
                 type="button"
+                onClick={downloadPdf}
+                disabled={downloadingPdf}
+                className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
+                title="Descargar el documento como PDF"
+              >
+                {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                <span className="hidden sm:inline">{downloadingPdf ? "Generando…" : "Descargar PDF"}</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => window.print()}
                 className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700"
+                title="Imprimir desde el navegador"
               >
-                <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Imprimir / PDF</span>
+                <Printer className="h-4 w-4" /> <span className="hidden lg:inline">Imprimir</span>
               </button>
               {!isLocked && doc.patient_id && (
                 <button
@@ -185,6 +229,7 @@ function DocumentDetailPage() {
           <p className="text-xs text-ink-500 m-0 mt-1"><strong>{doc.name}</strong>{doc.patient_name ? ` · Paciente: ${doc.patient_name} (${doc.patient_id})` : ""}</p>
         </div>
 
+        <div ref={editorContainerRef}>
         <DocumentEditor
           initialDoc={doc.body_json ?? null}
           editable={!isLocked}
@@ -208,6 +253,7 @@ function DocumentDetailPage() {
             };
           }}
         />
+        </div>
       </div>
       {signRequestOpen && (
         <SignRequestModal doc={doc} onClose={() => setSignRequestOpen(false)} />
@@ -559,4 +605,13 @@ function PatientLinkRow({ doc, disabled }: { doc: PsmDocument; disabled?: boolea
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function sanitizeFilename(name: string): string {
+  return name
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // sin acentos
+    .replace(/[^a-zA-Z0-9-_ ]/g, "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "documento";
 }

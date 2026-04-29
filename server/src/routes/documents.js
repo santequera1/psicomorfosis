@@ -272,6 +272,7 @@ function parseInline(html, decode) {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
 const ws = (req) => req.user.workspace_id;
+const wsId = ws;
 const newDocId = (wsId) => `D-${wsId}-${Date.now().toString(36)}-${crypto.randomBytes(2).toString("hex")}`;
 
 function safeJSON(s) {
