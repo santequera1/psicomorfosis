@@ -24,6 +24,7 @@ import notificationsRoutes from "./routes/notifications.js";
 import settingsRoutes from "./routes/settings.js";
 import notesRoutes from "./routes/notes.js";
 import portalRoutes from "./routes/portal.js";
+import platformRoutes from "./routes/platform.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -52,6 +53,7 @@ app.use("/api/uploads", express.static(UPLOADS_DIR, {
 }));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/platform", platformRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/patients", patientsRoutes);
 app.use("/api/appointments", appointmentsRoutes);

@@ -13,6 +13,7 @@ import { Route as TestsRouteImport } from './routes/tests'
 import { Route as TareasRouteImport } from './routes/tareas'
 import { Route as ReportesRouteImport } from './routes/reportes'
 import { Route as PrescripcionRouteImport } from './routes/prescripcion'
+import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoriaRouteImport } from './routes/historia'
@@ -52,6 +53,11 @@ const ReportesRoute = ReportesRouteImport.update({
 const PrescripcionRoute = PrescripcionRouteImport.update({
   id: '/prescripcion',
   path: '/prescripcion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PacientesRoute = PacientesRouteImport.update({
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/historia': typeof HistoriaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
+  '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/historia': typeof HistoriaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
+  '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/historia': typeof HistoriaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
+  '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/login'
     | '/pacientes'
+    | '/platform'
     | '/prescripcion'
     | '/reportes'
     | '/tareas'
@@ -271,6 +281,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/login'
     | '/pacientes'
+    | '/platform'
     | '/prescripcion'
     | '/reportes'
     | '/tareas'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/login'
     | '/pacientes'
+    | '/platform'
     | '/prescripcion'
     | '/reportes'
     | '/tareas'
@@ -324,6 +336,7 @@ export interface RootRouteChildren {
   HistoriaRoute: typeof HistoriaRoute
   LoginRoute: typeof LoginRoute
   PacientesRoute: typeof PacientesRoute
+  PlatformRoute: typeof PlatformRoute
   PrescripcionRoute: typeof PrescripcionRoute
   ReportesRoute: typeof ReportesRoute
   TareasRoute: typeof TareasRoute
@@ -370,6 +383,13 @@ declare module '@tanstack/react-router' {
       path: '/prescripcion'
       fullPath: '/prescripcion'
       preLoaderRoute: typeof PrescripcionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pacientes': {
@@ -524,6 +544,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoriaRoute: HistoriaRoute,
   LoginRoute: LoginRoute,
   PacientesRoute: PacientesRoute,
+  PlatformRoute: PlatformRoute,
   PrescripcionRoute: PrescripcionRoute,
   ReportesRoute: ReportesRoute,
   TareasRoute: TareasRoute,

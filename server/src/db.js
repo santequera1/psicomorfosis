@@ -521,6 +521,11 @@ function runMigrations() {
     "ALTER TABLE test_applications ADD COLUMN alerts_json TEXT",
     // Tipos de riesgo (28 abril) — JSON array: ["suicida", "autolesion", ...]
     "ALTER TABLE patients ADD COLUMN risk_type TEXT",
+    // Plataforma (29 abril) — admin global cross-workspace + cuentas deshabilitables
+    "ALTER TABLE users ADD COLUMN is_platform_admin INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN last_login_at TEXT",
+    "ALTER TABLE workspaces ADD COLUMN disabled_at TEXT",
+    "ALTER TABLE workspaces ADD COLUMN disabled_reason TEXT",
   ];
   for (const sql of migrations) {
     try {
@@ -659,6 +664,18 @@ function backfillExisting() {
   } catch (err) {
     console.warn("[db] backfill info Nathaly falló:", err.message);
   }
+
+  // 6. Promover a nathaly como platform admin (dueña de la plataforma para
+  // la fase beta). Idempotente: solo levanta el flag, no toca otros campos.
+  try {
+    const r = db.prepare(`
+      UPDATE users SET is_platform_admin = 1
+      WHERE username = 'nathaly' AND (is_platform_admin IS NULL OR is_platform_admin = 0)
+    `).run();
+    if (r.changes > 0) console.log(`[db] backfill: promovida nathaly a platform_admin`);
+  } catch (err) {
+    console.warn("[db] backfill platform_admin falló:", err.message);
+  }
 }
 
 function seed() {
@@ -683,8 +700,8 @@ function seedIndividualWorkspace() {
   const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)").run("Consulta Psic. Nathaly Ferrer", "individual").lastInsertRowid;
 
   // Usuario
-  db.prepare("INSERT INTO users (workspace_id, username, password_hash, name, email, role) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(wsId, "nathaly", bcrypt.hashSync("nathaly123", 10), "Nathaly Ferrer Pacheco", "nathaly@psicomorfosis.co", "super_admin");
+  db.prepare("INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_platform_admin) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(wsId, "nathaly", bcrypt.hashSync("nathaly123", 10), "Nathaly Ferrer Pacheco", "nathaly@psicomorfosis.co", "super_admin", 1);
 
   // Profesional único
   const profId = db.prepare("INSERT INTO professionals (workspace_id, name, title, email, phone, approach, active) VALUES (?, ?, ?, ?, ?, ?, 1)")

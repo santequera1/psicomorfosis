@@ -2,12 +2,12 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Pill, FileText, Receipt, BarChart3, Settings, ListTodo,
-  ChevronsLeft, ChevronsRight, X,
+  ChevronsLeft, ChevronsRight, X, Shield,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
-import { getStoredUser, type ApiUser } from "@/lib/api";
+import { api, getStoredUser, setSession, type ApiUser, getToken } from "@/lib/api";
 import { useSidebar } from "./SidebarContext";
 
 const groups: Array<{
@@ -47,9 +47,36 @@ export function AppSidebar() {
   const { location } = useRouterState();
   const path = location.pathname;
   const [user, setUser] = useState<ApiUser | null>(null);
-  useEffect(() => { setUser(getStoredUser()); }, []);
+  useEffect(() => {
+    const stored = getStoredUser();
+    setUser(stored);
+    // Refrescamos contra /me al cargar para captar flags nuevos (ej:
+    // isPlatformAdmin que se otorgó después del último login). Si /me
+    // devuelve algo distinto, actualizamos localStorage. No mostramos
+    // errores: si falla, seguimos con lo que hay en cache.
+    const token = getToken();
+    if (!token) return;
+    api.me()
+      .then((resp) => {
+        const fresh = resp.user;
+        if (JSON.stringify(fresh) !== JSON.stringify(stored)) {
+          setSession(token, fresh);
+          setUser(fresh);
+        }
+      })
+      .catch(() => { /* silent */ });
+  }, []);
 
   const initials = (user?.name ?? "?").split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+
+  // El grupo "Plataforma" solo se inserta si el user es admin de plataforma.
+  // No tocar el array `groups` global para no afectar otros renders.
+  const visibleGroups = user?.isPlatformAdmin
+    ? [...groups, {
+        label: "Plataforma",
+        items: [{ to: "/platform", label: "Cuentas y uso", icon: Shield }],
+      }]
+    : groups;
 
   return (
     <>
@@ -96,7 +123,7 @@ export function AppSidebar() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4">
-          {groups.map((g) => (
+          {visibleGroups.map((g) => (
             <div key={g.label} className="mb-5">
               <div className={cn(
                 "px-5 mb-2 text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/55 font-medium",

@@ -27,9 +27,70 @@ export interface ApiUser {
   name: string;
   email: string;
   role: string;
+  /** Cross-workspace platform admin (dueño de la plataforma). */
+  isPlatformAdmin?: boolean;
   workspaceId: number;
   workspaceName: string;
   workspaceMode: WorkspaceMode;
+}
+
+export interface PlatformWorkspace {
+  id: number;
+  name: string;
+  mode: WorkspaceMode;
+  disabledAt: string | null;
+  disabledReason: string | null;
+  createdAt: string;
+  usersCount: number;
+  patientsCount: number;
+  documentsCount: number;
+  documents7d: number;
+  appointments30d: number;
+  lastLoginAt: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerUsername: string | null;
+}
+
+export interface PlatformWorkspaceDetail {
+  workspace: {
+    id: number;
+    name: string;
+    mode: WorkspaceMode;
+    disabledAt: string | null;
+    disabledReason: string | null;
+    createdAt: string;
+  };
+  users: Array<{
+    id: number;
+    username: string;
+    name: string;
+    email: string | null;
+    role: string;
+    isPlatformAdmin: boolean;
+    lastLoginAt: string | null;
+    createdAt: string;
+  }>;
+  stats: {
+    patients_count: number;
+    patients_archived: number;
+    documents_count: number;
+    documents_signed: number;
+    appointments_total: number;
+    tests_count: number;
+    notes_count: number;
+  };
+}
+
+export interface PlatformUsage {
+  workspaces_total: number;
+  workspaces_active: number;
+  staff_users: number;
+  patient_users: number;
+  active_staff_7d: number;
+  patients_total: number;
+  docs_30d: number;
+  appts_30d: number;
 }
 
 export interface Sede {
@@ -824,4 +885,33 @@ export const api = {
   supersedeNote: (id: number, body: { content: string; sign?: boolean }) =>
     request<ClinicalNote>(`/api/notes/${id}/supersede`, { method: "POST", body: JSON.stringify(body) }),
   deleteNote: (id: number) => request<{ ok: true }>(`/api/notes/${id}`, { method: "DELETE" }),
+
+  // ─── Plataforma (solo platform admins) ────────────────────────────────
+  platformListWorkspaces: () =>
+    request<PlatformWorkspace[]>(`/api/platform/workspaces`),
+  platformGetWorkspace: (id: number) =>
+    request<PlatformWorkspaceDetail>(`/api/platform/workspaces/${id}`),
+  platformDisableWorkspace: (id: number, reason?: string) =>
+    request<{ ok: boolean }>(`/api/platform/workspaces/${id}/disable`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  platformEnableWorkspace: (id: number) =>
+    request<{ ok: boolean }>(`/api/platform/workspaces/${id}/enable`, { method: "POST" }),
+  platformCreateWorkspace: (body: {
+    workspaceName: string;
+    mode?: "individual" | "organization";
+    ownerName: string;
+    ownerEmail: string;
+    username?: string;
+    password: string;
+    professionalTitle?: string;
+    professionalPhone?: string;
+    professionalApproach?: string;
+  }) =>
+    request<{ workspaceId: number; userId: number; professionalId: number; username: string }>(
+      `/api/platform/workspaces`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  platformGetUsage: () => request<PlatformUsage>(`/api/platform/usage`),
 };

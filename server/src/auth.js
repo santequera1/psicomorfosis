@@ -50,6 +50,24 @@ export function requirePatient(req, res, next) {
   next();
 }
 
+/**
+ * Requiere que el JWT pertenezca a un platform admin (dueño de la plataforma,
+ * cross-workspace). Diferente de "super_admin" del workspace, que solo es
+ * dueño de su propia clínica. Solo platform_admin ve /api/platform/*.
+ */
+export function requirePlatformAdmin(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Missing token" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload.is_platform_admin) {
+    return res.status(403).json({ error: "Acceso solo para administradores de plataforma" });
+  }
+  req.user = payload;
+  next();
+}
+
 /** Lo opuesto a requirePatient: bloquea pacientes en rutas de staff. */
 export function requireStaff(req, res, next) {
   const header = req.headers.authorization ?? "";
