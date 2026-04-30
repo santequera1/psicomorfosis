@@ -16,18 +16,25 @@ import { getToken } from "@/lib/api";
  *    causados por la hidratación de SSR, y no deja entrada en el history
  *    (el usuario no puede "back" y caer otra vez en el estado sin sesión).
  */
+// Cache a nivel de módulo: una vez que un AppShell ha confirmado la sesión en
+// el primer render del cliente, los siguientes remounts (cambio de ruta —
+// cada page envuelve su propio AppShell) parten ya en `true` y evitan el
+// flash de pantalla en blanco entre navegaciones.
+let SESSION_CONFIRMED = false;
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   // El estado inicial DEBE ser el mismo en SSR y en el primer render del cliente
-  // para evitar React #418 (hydration mismatch). El bootstrap script de __root.tsx
-  // ya redirigió a /login si no había token, así que aquí solo necesitamos el
-  // useEffect post-hidratación que confirma el token.
-  const [checked, setChecked] = useState<boolean>(false);
+  // para evitar React #418 (hydration mismatch). En SSR `SESSION_CONFIRMED`
+  // siempre es false (módulo recién cargado), igual que en el cliente la
+  // primera vez. A partir de ahí queda en true y los remounts no pestañean.
+  const [checked, setChecked] = useState<boolean>(SESSION_CONFIRMED);
 
   useEffect(() => {
     if (!getToken()) {
       window.location.replace("/login");
       return;
     }
+    SESSION_CONFIRMED = true;
     setChecked(true);
   }, []);
 

@@ -149,6 +149,60 @@ router.post("/workspaces/:id/enable", (req, res) => {
 });
 
 /**
+ * DELETE /api/platform/workspaces/:id
+ * Body: { confirm_name: string }  // debe coincidir con el nombre exacto del workspace
+ *
+ * Elimina permanentemente un workspace y todos sus datos (cascade en FKs).
+ * Para evitar borrados accidentales, exige tipear el nombre exacto.
+ * No se permite borrar el workspace propio (donde está el platform admin).
+ */
+router.delete("/workspaces/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const ws = db.prepare("SELECT id, name FROM workspaces WHERE id = ?").get(id);
+  if (!ws) return res.status(404).json({ error: "Workspace no encontrado" });
+  if (id === req.user.workspace_id) {
+    return res.status(400).json({ error: "No puedes eliminar tu propio workspace de plataforma" });
+  }
+  const { confirm_name } = req.body ?? {};
+  if (confirm_name !== ws.name) {
+    return res.status(400).json({
+      error: `Para confirmar, el campo "confirm_name" debe coincidir exactamente con "${ws.name}"`,
+    });
+  }
+  // ON DELETE CASCADE en las FKs limpia patients, documents, appointments,
+  // notes, etc. Los archivos en disk (uploads/) quedan huérfanos — limpieza
+  // futura via cron si hace falta.
+  db.prepare("DELETE FROM workspaces WHERE id = ?").run(id);
+  res.json({ ok: true });
+});
+
+/**
+ * POST /api/platform/users/:id/reset-password
+ * Body: { new_password: string }  // mínimo 6 caracteres
+ *
+ * El platform admin define una contraseña nueva para un usuario y se la
+ * comparte por fuera (WhatsApp/email). El user debería cambiarla al
+ * próximo login (UI le sugiere hacerlo, pero no es obligatorio aún).
+ */
+router.post("/users/:id/reset-password", (req, res) => {
+  const userId = Number(req.params.id);
+  const u = db.prepare("SELECT id, username, name, workspace_id, is_platform_admin FROM users WHERE id = ?").get(userId);
+  if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+  // No permitir resetear el password del propio platform admin desde acá
+  // (debería usar Configuración > Cambiar contraseña con su password actual)
+  if (u.id === req.user.id) {
+    return res.status(400).json({ error: "Para tu propia contraseña, usa Configuración" });
+  }
+  const { new_password } = req.body ?? {};
+  if (!new_password || typeof new_password !== "string" || new_password.length < 6) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+  }
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+    .run(bcrypt.hashSync(new_password, 10), userId);
+  res.json({ ok: true, username: u.username, name: u.name });
+});
+
+/**
  * POST /api/platform/workspaces
  * Body: { workspaceName, mode, ownerName, ownerEmail, username?, password, professionalTitle?, professionalPhone? }
  *

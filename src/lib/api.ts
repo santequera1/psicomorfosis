@@ -578,6 +578,11 @@ export const api = {
 
   // Workspace
   getWorkspace: () => request<Workspace>("/api/workspace"),
+  getDashboardStats: () => request<{
+    sessionsByModality: Array<{ modality: string; value: number }>;
+    reasons: Array<{ reason: string; value: number }>;
+    revenue7d: Array<{ day: string; value: number }>;
+  }>("/api/workspace/dashboard-stats"),
   /** Firma del profesional vinculado al usuario actual. */
   getMySignature: () => request<{ professional_id: number; name: string; tarjeta_profesional: string | null; signature_url: string | null }>("/api/workspace/me/signature"),
   setMySignature: (dataUrl: string) =>
@@ -919,6 +924,16 @@ export const api = {
     }),
   platformEnableWorkspace: (id: number) =>
     request<{ ok: boolean }>(`/api/platform/workspaces/${id}/enable`, { method: "POST" }),
+  platformDeleteWorkspace: (id: number, confirmName: string) =>
+    request<{ ok: boolean }>(`/api/platform/workspaces/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_name: confirmName }),
+    }),
+  platformResetUserPassword: (userId: number, newPassword: string) =>
+    request<{ ok: boolean; username: string; name: string }>(
+      `/api/platform/users/${userId}/reset-password`,
+      { method: "POST", body: JSON.stringify({ new_password: newPassword }) },
+    ),
   platformCreateWorkspace: (body: {
     workspaceName: string;
     mode?: "individual" | "organization";

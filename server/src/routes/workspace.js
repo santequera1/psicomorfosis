@@ -188,4 +188,77 @@ router.put("/me/signature", express.json({ limit: "2mb" }), async (req, res) => 
   res.json({ ok: true, signature_url: url });
 });
 
+/**
+ * GET /api/workspace/dashboard-stats
+ * Datos reales del workspace para los charts del Inicio (sesiones por
+ * modalidad últimos 30d, motivos de consulta de pacientes activos,
+ * ingresos diarios últimos 7d). Reemplaza la mock data hardcoded.
+ */
+router.get("/dashboard-stats", (req, res) => {
+  const ws = req.user.workspace_id;
+
+  // Sesiones por modalidad — appointments dentro de los últimos 30 días.
+  const modalityRows = db.prepare(`
+    SELECT modality, COUNT(*) AS value
+    FROM appointments
+    WHERE workspace_id = ?
+      AND date >= date('now', '-30 days')
+    GROUP BY modality
+  `).all(ws);
+  const MODALITY_ORDER = ["individual", "pareja", "familiar", "grupal", "tele"];
+  const MODALITY_LABEL = {
+    individual: "Individual", pareja: "Pareja", familiar: "Familiar",
+    grupal: "Grupal", tele: "Tele",
+  };
+  const modalityMap = Object.fromEntries(modalityRows.map((r) => [r.modality, r.value]));
+  const sessionsByModality = MODALITY_ORDER
+    .map((m) => ({ modality: MODALITY_LABEL[m], value: modalityMap[m] ?? 0 }))
+    .filter((m) => m.value > 0);
+
+  // Motivos de consulta — heurística por primeras palabras del campo reason.
+  const patientsRows = db.prepare(`
+    SELECT reason FROM patients
+    WHERE workspace_id = ? AND archived_at IS NULL AND reason IS NOT NULL AND reason != ''
+  `).all(ws);
+  const reasonCounts = new Map();
+  for (const r of patientsRows) {
+    const key = r.reason.split(/[·,.\-]/)[0].trim().split(/\s+/).slice(0, 2).join(" ");
+    if (!key) continue;
+    reasonCounts.set(key, (reasonCounts.get(key) ?? 0) + 1);
+  }
+  const reasons = Array.from(reasonCounts.entries())
+    .map(([reason, value]) => ({ reason, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 7);
+
+  // Ingresos por día (lunes a domingo de la semana actual) — recibos pagados.
+  const DAYS_LABEL = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  const dow = today.getDay(); // 0=dom .. 6=sáb
+  startOfWeek.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  startOfWeek.setHours(0, 0, 0, 0);
+  const buckets = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    buckets.push({
+      day: DAYS_LABEL[d.getDay()],
+      iso: d.toISOString().slice(0, 10),
+      value: 0,
+    });
+  }
+  const paidRows = db.prepare(`
+    SELECT date, amount FROM invoices
+    WHERE workspace_id = ? AND status = 'pagada' AND date >= ? AND date <= ?
+  `).all(ws, buckets[0].iso, buckets[6].iso);
+  for (const r of paidRows) {
+    const b = buckets.find((x) => x.iso === r.date);
+    if (b) b.value += r.amount;
+  }
+  const revenue7d = buckets.map(({ day, value }) => ({ day, value }));
+
+  res.json({ sessionsByModality, reasons, revenue7d });
+});
+
 export default router;

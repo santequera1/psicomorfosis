@@ -2,12 +2,12 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Pill, FileText, Receipt, BarChart3, Settings, ListTodo,
-  ChevronsLeft, ChevronsRight, X, Shield,
+  ChevronsLeft, ChevronsRight, X, Shield, LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
-import { api, getStoredUser, setSession, type ApiUser, getToken } from "@/lib/api";
+import { api, getStoredUser, setSession, clearSession, type ApiUser, getToken } from "@/lib/api";
 import { useSidebar } from "./SidebarContext";
 
 const groups: Array<{
@@ -107,10 +107,14 @@ export function AppSidebar() {
       >
         <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed && "md:justify-center md:px-0")}>
           <Logo className="h-7 w-7 shrink-0 text-brand-400" />
-          {/* Texto del brand: visible siempre en mobile, depende de collapsed en desktop */}
-          <div className={cn("flex flex-col leading-tight", collapsed && "md:hidden")}>
+          {/* Texto del brand: visible siempre en mobile, depende de collapsed en desktop.
+              Subtítulo viene del workspace activo del user (fallback al nombre del user
+              o al texto de marca si aún no cargó). */}
+          <div className={cn("flex flex-col leading-tight min-w-0", collapsed && "md:hidden")}>
             <span className="font-serif text-[17px] font-medium text-sidebar-accent-foreground">Psicomorfosis</span>
-            <span className="text-[11px] text-sidebar-foreground/70 tracking-wide">Psic. Nathaly Ferrer</span>
+            <span className="text-[11px] text-sidebar-foreground/70 tracking-wide truncate">
+              {user?.workspaceName ?? "Cargando…"}
+            </span>
           </div>
           {/* Cerrar drawer en mobile */}
           <button
@@ -169,7 +173,7 @@ export function AppSidebar() {
               "flex items-center gap-3 rounded-md px-2 py-2",
               collapsed && "md:hidden"
             )}>
-              <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold">
+              <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold shrink-0">
                 {initials}
               </div>
               <div className="flex-1 min-w-0">
@@ -178,6 +182,21 @@ export function AppSidebar() {
               </div>
             </div>
           )}
+          {/* Cerrar sesión */}
+          <button
+            onClick={() => {
+              clearSession();
+              window.location.replace("/login");
+            }}
+            className={cn(
+              "w-full flex items-center gap-2 text-sidebar-foreground/85 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
+              collapsed && "md:justify-center md:px-0",
+            )}
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span className={cn(collapsed && "md:hidden")}>Cerrar sesión</span>
+          </button>
           {/* Botón colapsar solo en desktop */}
           <button
             onClick={() => setCollapsed(!collapsed)}

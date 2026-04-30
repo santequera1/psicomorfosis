@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar,
 } from "recharts";
-import { REVENUE_7D, SESSIONS_BY_MODALITY, REASONS, TODAY_AGENDA } from "@/lib/mock-data";
+import { TODAY_AGENDA } from "@/lib/mock-data";
 import { api, getStoredUser } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 
@@ -42,6 +42,13 @@ export function AdminDashboard() {
     queryKey: ["appointments", today],
     queryFn: () => api.listAppointments({ date: today }),
   });
+  const { data: dashStats } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: () => api.getDashboardStats(),
+  });
+  const sessionsByModality = dashStats?.sessionsByModality ?? [];
+  const reasons = dashStats?.reasons ?? [];
+  const revenue7d = dashStats?.revenue7d ?? [];
 
   const activePatients = patients.filter((p) => p.status === "activo");
   const riskActive = patients.filter((p) => p.risk === "high" || p.risk === "critical");
@@ -59,13 +66,8 @@ export function AdminDashboard() {
     risk: riskActive.length,
   }), [todayAppointments, patients, activePatients.length, invoicesSummary, riskActive.length]);
 
-  // Escala los datos del chart al total real de facturación (evita mostrar valores inflados del mock)
-  const revenueData = useMemo(() => {
-    const realTotal = invoicesSummary?.paid ?? 0;
-    const mockTotal = REVENUE_7D.reduce((a, b) => a + b.value, 0) || 1;
-    const ratio = realTotal / mockTotal;
-    return REVENUE_7D.map((r) => ({ ...r, value: Math.round(r.value * ratio) }));
-  }, [invoicesSummary?.paid]);
+  const revenueData = revenue7d;
+  const revenueHasData = revenueData.some((r) => r.value > 0);
 
   function openCrisis() {
     window.dispatchEvent(new Event("psm:open-crisis"));
@@ -123,7 +125,7 @@ export function AdminDashboard() {
             </div>
             <span className="text-xs text-ink-500">COP</span>
           </div>
-          <div className="h-[260px]">
+          <div className="h-65 relative">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueData} margin={{ top: 10, right: 8, left: -8, bottom: 0 }}>
                 <defs>
@@ -143,15 +145,23 @@ export function AdminDashboard() {
                 <Area type="monotone" dataKey="value" stroke="oklch(0.53 0.045 200)" strokeWidth={2} fill="url(#g1)" />
               </AreaChart>
             </ResponsiveContainer>
+            {!revenueHasData && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <p className="text-xs text-ink-400 italic bg-surface/80 px-3 py-1 rounded">Sin recibos pagados esta semana</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="rounded-xl border border-line-200 bg-surface p-5">
           <h3 className="font-serif text-lg text-ink-900 mb-1">Sesiones por modalidad</h3>
-          <p className="text-xs text-ink-500 mb-4">{period}</p>
+          <p className="text-xs text-ink-500 mb-4">Últimos 30 días</p>
+          {sessionsByModality.length === 0 ? (
+            <p className="text-xs text-ink-400 italic py-8 text-center">Aún no hay citas en los últimos 30 días.</p>
+          ) : (
           <div className="space-y-3">
-            {SESSIONS_BY_MODALITY.map((m, i) => {
-              const max = Math.max(...SESSIONS_BY_MODALITY.map((x) => x.value));
+            {sessionsByModality.map((m, i) => {
+              const max = Math.max(...sessionsByModality.map((x) => x.value));
               const pct = (m.value / max) * 100;
               // Colores como los del PieChart de Reportes (mismas tokens CSS)
               const dotColors = [
@@ -179,16 +189,20 @@ export function AdminDashboard() {
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="rounded-xl border border-line-200 bg-surface p-5">
           <h3 className="font-serif text-lg text-ink-900 mb-1">Motivos de consulta</h3>
-          <p className="text-xs text-ink-500 mb-4">Distribución del trimestre</p>
+          <p className="text-xs text-ink-500 mb-4">Pacientes activos</p>
+          {reasons.length === 0 ? (
+            <p className="text-xs text-ink-400 italic py-8 text-center">Aún no hay pacientes con motivo registrado.</p>
+          ) : (
           <div className="h-70">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={REASONS} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+              <BarChart data={reasons} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.94 0.004 130)" horizontal={false} />
                 <XAxis type="number" stroke="oklch(0.62 0.015 250)" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis dataKey="reason" type="category" stroke="oklch(0.4 0.018 250)" fontSize={12} tickLine={false} axisLine={false} width={92} />
@@ -197,6 +211,7 @@ export function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-line-200 bg-surface p-5 xl:col-span-1">

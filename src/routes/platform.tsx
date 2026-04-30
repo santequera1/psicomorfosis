@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
-  CheckCircle2, Building2, User as UserIcon,
+  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
-import { api, getStoredUser, type PlatformWorkspace } from "@/lib/api";
+import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/platform")({
@@ -60,6 +60,7 @@ function PlatformDashboard() {
   const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "deshabilitado">("todos");
   const [createOpen, setCreateOpen] = useState(false);
   const [disabling, setDisabling] = useState<PlatformWorkspace | null>(null);
+  const [deleting, setDeleting] = useState<PlatformWorkspace | null>(null);
 
   const { data: usage } = useQuery({
     queryKey: ["platform-usage"],
@@ -80,6 +81,12 @@ function PlatformDashboard() {
     }
     return true;
   }), [workspaces, query, statusFilter]);
+
+  const counts = useMemo(() => ({
+    todos: workspaces.length,
+    activo: workspaces.filter((w) => !w.disabledAt).length,
+    deshabilitado: workspaces.filter((w) => !!w.disabledAt).length,
+  }), [workspaces]);
 
   return (
     <AppShell>
@@ -146,15 +153,28 @@ function PlatformDashboard() {
                 className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400"
-            >
-              <option value="todos">Todas</option>
-              <option value="activo">Activas</option>
-              <option value="deshabilitado">Deshabilitadas</option>
-            </select>
+            <div className="flex gap-1 p-1 rounded-md bg-bg-100 text-xs">
+              {([
+                { v: "todos", label: "Todas", count: counts.todos },
+                { v: "activo", label: "Activas", count: counts.activo },
+                { v: "deshabilitado", label: "Deshabilitadas", count: counts.deshabilitado },
+              ] as const).map((it) => (
+                <button
+                  key={it.v}
+                  onClick={() => setStatusFilter(it.v)}
+                  className={cn(
+                    "px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1.5",
+                    statusFilter === it.v ? "bg-surface text-ink-900 font-medium shadow-xs" : "text-ink-500 hover:text-ink-900",
+                  )}
+                >
+                  {it.label}
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular",
+                    statusFilter === it.v ? "bg-brand-50 text-brand-800" : "bg-bg-100 text-ink-500",
+                  )}>{it.count}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {isLoading ? (
@@ -172,6 +192,7 @@ function PlatformDashboard() {
                   key={w.id}
                   ws={w}
                   onDisable={() => setDisabling(w)}
+                  onDelete={() => setDeleting(w)}
                 />
               ))}
             </ul>
@@ -181,12 +202,13 @@ function PlatformDashboard() {
 
       {createOpen && <CreateWorkspaceModal onClose={() => setCreateOpen(false)} />}
       {disabling && <DisableWorkspaceModal ws={disabling} onClose={() => setDisabling(null)} />}
+      {deleting && <DeleteWorkspaceModal ws={deleting} onClose={() => setDeleting(null)} />}
     </AppShell>
   );
 }
 
 // ─── Fila por workspace ─────────────────────────────────────────────────────
-function WorkspaceRow({ ws, onDisable }: { ws: PlatformWorkspace; onDisable: () => void }) {
+function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDisable: () => void; onDelete: () => void }) {
   const qc = useQueryClient();
   const enableMu = useMutation({
     mutationFn: () => api.platformEnableWorkspace(ws.id),
@@ -264,6 +286,13 @@ function WorkspaceRow({ ws, onDisable }: { ws: PlatformWorkspace; onDisable: () 
               Deshabilitar
             </button>
           )}
+          <button
+            onClick={onDelete}
+            className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
+            title="Eliminar cuenta permanentemente"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
           <Link
             to="/platform"
             search={{ ws: ws.id }}
@@ -517,12 +546,85 @@ function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose
   );
 }
 
+// ─── Modal: eliminar workspace permanentemente ─────────────────────────────
+function DeleteWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [confirm, setConfirm] = useState("");
+  const matches = confirm === ws.name;
+  const mu = useMutation({
+    mutationFn: () => api.platformDeleteWorkspace(ws.id, confirm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      qc.invalidateQueries({ queryKey: ["platform-usage"] });
+      toast.success(`Cuenta "${ws.name}" eliminada`);
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/50 backdrop-blur-sm pt-16 p-4" onClick={onClose}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (matches) mu.mutate(); }}
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal border border-rose-300/40"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start gap-3">
+          <div className="h-10 w-10 rounded-full bg-rose-500/10 text-rose-700 flex items-center justify-center shrink-0">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-widest text-rose-700 font-medium">Acción destructiva</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Eliminar "{ws.name}"</h3>
+          </div>
+        </header>
+        <div className="p-5 space-y-3">
+          <div className="rounded-lg bg-rose-500/5 border border-rose-300/40 p-3 text-xs text-ink-700 space-y-1.5">
+            <p className="font-medium text-rose-700">Esto eliminará permanentemente:</p>
+            <ul className="list-disc list-inside space-y-0.5 ml-1 text-ink-700">
+              <li>{ws.patientsCount} paciente(s)</li>
+              <li>{ws.documentsCount} documento(s)</li>
+              <li>Citas, notas, tests, recibos asociados</li>
+              <li>Los usuarios del workspace y su acceso</li>
+            </ul>
+            <p className="text-ink-500 italic mt-2">No se puede deshacer.</p>
+          </div>
+          <div>
+            <label className="block text-xs text-ink-700 mb-1.5">
+              Para confirmar, escribe <strong className="text-rose-700">{ws.name}</strong> abajo:
+            </label>
+            <input
+              autoFocus
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="w-full h-10 px-3 rounded-md border border-rose-300/40 bg-surface text-sm outline-none focus:border-rose-700"
+            />
+          </div>
+        </div>
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={!matches || mu.isPending}
+            className="h-9 px-4 rounded-md bg-rose-700 text-white text-sm font-medium hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+          >
+            {mu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Trash2 className="h-3.5 w-3.5" /> Eliminar permanentemente
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 // ─── Detalle de un workspace ────────────────────────────────────────────────
 function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => void }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["platform-workspace", wsId],
     queryFn: () => api.platformGetWorkspace(wsId),
   });
+  const [resetting, setResetting] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
 
   return (
     <AppShell>
@@ -583,11 +685,21 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
                         @{u.username} · {u.role} {u.email && `· ${u.email}`}
                       </div>
                     </div>
-                    <div className="text-right text-[11px] text-ink-500 tabular shrink-0">
+                    <div className="text-right text-[11px] text-ink-500 tabular shrink-0 hidden sm:block">
                       {u.lastLoginAt
                         ? <>Último login<br />{formatRelative(u.lastLoginAt)}</>
-                        : <span className="text-ink-400">Nunca entró</span>}
+                        : <span className="text-ink-400">Sin registro reciente</span>}
                     </div>
+                    {!u.isPlatformAdmin && u.role !== "paciente" && (
+                      <button
+                        onClick={() => setResetting(u)}
+                        className="h-8 px-2.5 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 shrink-0"
+                        title="Restablecer contraseña"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Reset</span>
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -595,7 +707,134 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
           </>
         )}
       </div>
+      {resetting && (
+        <ResetPasswordModal
+          user={resetting}
+          workspaceName={data?.workspace.name ?? ""}
+          onClose={() => setResetting(null)}
+        />
+      )}
     </AppShell>
+  );
+}
+
+// ─── Modal: resetear contraseña de un user ─────────────────────────────────
+function ResetPasswordModal({
+  user, workspaceName, onClose,
+}: {
+  user: PlatformWorkspaceDetail["users"][number];
+  workspaceName: string;
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState(() => {
+    // Sugerimos password aleatoria de 10 chars: letras + dígitos
+    const a = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let s = "";
+    for (let i = 0; i < 10; i++) s += a[Math.floor(Math.random() * a.length)];
+    return s;
+  });
+  const [done, setDone] = useState(false);
+
+  const mu = useMutation({
+    mutationFn: () => api.platformResetUserPassword(user.id, password),
+    onSuccess: () => {
+      setDone(true);
+      toast.success("Contraseña restablecida");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function copy(text: string, label: string) {
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success(`${label} copiado`),
+      () => toast.error("No se pudo copiar"),
+    );
+  }
+
+  const waMessage = `Hola ${user.name.split(" ")[0]}, te restablecí tu contraseña en Psicomorfosis 🔑\n\nUsuario: ${user.username}\nNueva contraseña: ${password}\n\nIngresa en https://psico.wailus.co/login y luego cámbiala desde Configuración.`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4" onClick={onClose}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (!done) mu.mutate(); }}
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Plataforma</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Restablecer contraseña</h3>
+            <p className="text-xs text-ink-500 mt-1">{user.name} · @{user.username}{workspaceName && ` · ${workspaceName}`}</p>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        {done ? (
+          <div className="p-5 space-y-4">
+            <div className="rounded-lg border border-success/30 bg-success-soft p-4 flex items-start gap-2">
+              <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-success">Contraseña actualizada</p>
+                <p className="text-xs text-ink-700 mt-1">Comparte la nueva contraseña con {user.name.split(" ")[0]} y pídele que la cambie al entrar.</p>
+              </div>
+            </div>
+            <Field label="Nueva contraseña">
+              <div className="flex gap-2">
+                <input readOnly value={password} className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-bg text-sm font-mono text-ink-900" />
+                <button type="button" onClick={() => copy(password, "Contraseña")} className="h-10 px-3 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 inline-flex items-center gap-1.5 text-xs">
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </button>
+              </div>
+            </Field>
+            <Field label="Mensaje sugerido para WhatsApp">
+              <textarea
+                readOnly
+                rows={5}
+                value={waMessage}
+                className="w-full px-3 py-2 rounded-md border border-line-200 bg-bg text-xs text-ink-700 font-mono resize-none"
+              />
+              <button type="button" onClick={() => copy(waMessage, "Mensaje")} className="mt-2 h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5">
+                <Copy className="h-3.5 w-3.5" /> Copiar mensaje
+              </button>
+            </Field>
+          </div>
+        ) : (
+          <div className="p-5 space-y-3">
+            <p className="text-xs text-ink-700">
+              La nueva contraseña reemplaza la actual del usuario. La generamos aleatoria por defecto, pero puedes editarla.
+            </p>
+            <Field label="Nueva contraseña" required>
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+                required
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 font-mono"
+              />
+              <p className="text-[11px] text-ink-500 mt-1">Mínimo 6 caracteres.</p>
+            </Field>
+          </div>
+        )}
+
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
+          {done ? (
+            <button type="button" onClick={onClose} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800">
+              Listo
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+              <button type="submit" disabled={mu.isPending || password.length < 6} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
+                {mu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                <KeyRound className="h-3.5 w-3.5" /> Restablecer
+              </button>
+            </>
+          )}
+        </footer>
+      </form>
+    </div>
   );
 }
 
