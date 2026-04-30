@@ -85,6 +85,11 @@ function HistoriaPage() {
     );
   }
 
+  // Si el paciente fue auto-seleccionado (no vino en la URL), mostrar
+  // un banner suave para que el psicólogo no se confunda — antes la app
+  // abría el primer paciente sin avisar.
+  const autoSelected = !search.id && patientId === patients[0]?.id;
+
   return (
     <AppShell>
       <div className="px-2 lg:px-0 max-w-7xl mx-auto">
@@ -101,6 +106,21 @@ function HistoriaPage() {
             {patient.preferredName ?? patient.name.split(" ")[0]} <ChevronDown className="h-3 w-3" />
           </button>
         </div>
+
+        {autoSelected && (
+          <div className="mb-4 rounded-lg border border-brand-100 bg-brand-50/50 px-4 py-3 flex items-center gap-3 text-xs text-ink-700">
+            <span className="text-brand-700">ⓘ</span>
+            <span className="flex-1">
+              Mostrando la historia de <strong>{patient.preferredName ?? patient.name}</strong> (seleccionado por defecto al ser tu primer paciente).
+            </span>
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="text-brand-700 font-medium hover:underline shrink-0"
+            >
+              Cambiar paciente →
+            </button>
+          </div>
+        )}
 
         <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteOpen(true)} />
         <ClinicalBlocks patientId={patient.id} />

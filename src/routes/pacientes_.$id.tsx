@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -191,7 +191,7 @@ function PatientDetailPage() {
           </div>
         </header>
 
-        <div className="border-b border-line-200 overflow-x-auto">
+        <div className="border-b border-line-200 overflow-x-auto no-scrollbar">
           <nav className="flex items-center gap-1 min-w-max">
             {TABS.map((t) => {
               const Icon = t.icon;
@@ -228,7 +228,7 @@ function PatientDetailPage() {
         {tab === "tests" && <TabTests rows={patientTests as any[]} />}
         {tab === "prescripcion" && <TabPrescripcion rows={tasks} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
-        {tab === "facturacion" && <TabFacturacion />}
+        {tab === "facturacion" && <TabFacturacion patientId={id} />}
       </div>
 
       {editing && patient && <EditPatientInlineModal patient={patient} onClose={() => setEditing(false)} />}
@@ -725,39 +725,82 @@ function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) 
   );
 }
 
-function TabFacturacion() {
+function TabFacturacion({ patientId }: { patientId: string }) {
+  const { data: invoices = [], isLoading } = useQuery({
+    queryKey: ["invoices", { patient_id: patientId }],
+    queryFn: () => api.listInvoices({ patient_id: patientId }),
+  });
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+
+  const summary = useMemo(() => {
+    const totalBilled = invoices.reduce((s, i) => s + i.amount, 0);
+    const paid = invoices.filter((i) => i.status === "pagada").reduce((s, i) => s + i.amount, 0);
+    const pending = invoices.filter((i) => i.status === "pendiente").reduce((s, i) => s + i.amount, 0);
+    const overdue = invoices.filter((i) => i.status === "vencida").reduce((s, i) => s + i.amount, 0);
+    // Método preferido: el más usado entre pagados (si hay)
+    const methodCounts = new Map<string, number>();
+    for (const i of invoices) if (i.method) methodCounts.set(i.method, (methodCounts.get(i.method) ?? 0) + 1);
+    const preferred = [...methodCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+    return { totalBilled, paid, pending, overdue, preferred };
+  }, [invoices]);
+
+  const statusLabel: Record<string, string> = { pagada: "Pagado", pendiente: "Pendiente", vencida: "Vencido", borrador: "Borrador" };
+  const statusStyle: Record<string, string> = {
+    pagada: "bg-success-soft text-success",
+    pendiente: "bg-warning-soft text-risk-moderate",
+    vencida: "bg-error-soft text-risk-high",
+    borrador: "bg-bg-100 text-ink-500",
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       <div className="md:col-span-2 rounded-xl border border-line-200 bg-surface">
-        <div className="px-5 py-4 border-b border-line-100">
-          <h3 className="font-serif text-base text-ink-900">Facturas del paciente</h3>
+        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+          <h3 className="font-serif text-base text-ink-900">Recibos del paciente</h3>
+          <Link
+            to="/facturacion"
+            className="text-xs text-brand-700 hover:underline"
+          >
+            Ver todos →
+          </Link>
         </div>
-        <ul className="divide-y divide-line-100">
-          {[
-            { id: "F-2025-0184", concept: "Sesión · individual", date: "2026-04-09", amount: 180000, status: "pagada" },
-            { id: "F-2025-0172", concept: "Sesión · individual", date: "2026-04-02", amount: 180000, status: "pagada" },
-            { id: "F-2025-0165", concept: "Sesión · individual", date: "2026-03-26", amount: 180000, status: "pendiente" },
-          ].map((f) => (
-            <li key={f.id} className="px-5 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-ink-900">{f.id}</div>
-                <div className="text-xs text-ink-500">{f.concept} · {f.date}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="tabular text-sm text-ink-900">${f.amount.toLocaleString("es-CO")}</span>
-                <span className={"text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium " + (f.status === "pagada" ? "bg-success-soft text-success" : "bg-warning-soft text-risk-moderate")}>{f.status}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {isLoading ? (
+          <div className="px-5 py-10 text-center text-sm text-ink-500">Cargando…</div>
+        ) : invoices.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-ink-500">
+            Aún no hay recibos para este paciente.
+          </div>
+        ) : (
+          <ul className="divide-y divide-line-100">
+            {invoices.map((f) => (
+              <li key={f.id} className="px-5 py-3 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-ink-900 font-mono">{f.id}</div>
+                  <div className="text-xs text-ink-500">{f.concept} · {f.date}</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="tabular text-sm text-ink-900 font-medium">{fmt(f.amount)}</span>
+                  <span className={"text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium " + (statusStyle[f.status] ?? "bg-bg-100 text-ink-500")}>
+                    {statusLabel[f.status] ?? f.status}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div className="rounded-xl border border-line-200 bg-surface p-5">
         <h3 className="font-serif text-base text-ink-900">Resumen</h3>
         <ul className="mt-3 space-y-2 text-sm">
-          <li className="flex items-center justify-between text-ink-700"><span>Total facturado</span><span className="tabular">$2.160.000</span></li>
-          <li className="flex items-center justify-between text-ink-700"><span>Pagado</span><span className="tabular text-success">$1.980.000</span></li>
-          <li className="flex items-center justify-between text-ink-700"><span>Pendiente</span><span className="tabular text-risk-moderate">$180.000</span></li>
-          <li className="flex items-center justify-between text-ink-700"><span>Método preferido</span><span>PSE</span></li>
+          <li className="flex items-center justify-between text-ink-700"><span>Total facturado</span><span className="tabular">{fmt(summary.totalBilled)}</span></li>
+          <li className="flex items-center justify-between text-ink-700"><span>Pagado</span><span className="tabular text-success">{fmt(summary.paid)}</span></li>
+          <li className="flex items-center justify-between text-ink-700"><span>Pendiente</span><span className="tabular text-risk-moderate">{fmt(summary.pending)}</span></li>
+          {summary.overdue > 0 && (
+            <li className="flex items-center justify-between text-ink-700"><span>Vencido</span><span className="tabular text-risk-high">{fmt(summary.overdue)}</span></li>
+          )}
+          <li className="flex items-center justify-between text-ink-700"><span>Método más usado</span><span>{summary.preferred}</span></li>
         </ul>
       </div>
     </div>

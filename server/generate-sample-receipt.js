@@ -27,7 +27,7 @@ const inv = {
   id: "F-2026-0108",
   patient_id: "PAC-00312",
   patient_name: "Laura Molina",
-  professional: "Dra. Renata Ospina",
+  professional: "Nathaly Ferrer Pacheco",
   concept: "Sesión de Psicoterapia Individual",
   amount: 180000,
   method: "Tarjeta",
@@ -49,9 +49,9 @@ const ws = {
 };
 
 const prof = {
-  name: "Dra. Renata Ospina",
-  title: "Psicología Clínica · Lic. 34-7801",
-  email: "renata@psicomorfosis.co",
+  name: "Nathaly Ferrer Pacheco",
+  title: "Psicóloga clínica · TP 34-7801",
+  email: "nathaly@psicomorfosis.co",
   phone: "+57 304 219 0650",
 };
 
