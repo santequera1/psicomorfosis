@@ -849,6 +849,12 @@ export const api = {
   // Settings
   getSettings: () => request<Record<string, string>>("/api/settings"),
   updateSettings: (body: Record<string, string>) => request("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+  /** Sube el logo de recibos como data URL (PNG/JPG/WebP/SVG ≤ 1MB). */
+  uploadReceiptLogo: (dataUrl: string | null) =>
+    request<{ ok: boolean; receipt_logo_url: string | null }>(
+      "/api/workspace/receipt-logo",
+      { method: "PUT", body: JSON.stringify(dataUrl ? { dataUrl } : { clear: true }) },
+    ),
 
   // Tareas (organización interna del equipo) — distinto de tasks (terapéuticas)
   listTareas: (params: { include?: ("archived" | "deleted")[] } = {}) => {

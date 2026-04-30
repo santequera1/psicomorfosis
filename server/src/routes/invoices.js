@@ -9,16 +9,19 @@
  */
 import { Router } from "express";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import PdfPrinter from "pdfmake";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
+import { buildReceiptDoc } from "../lib/receiptTemplates.js";
 
 const router = Router();
 router.use(requireAuth);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = path.join(__dirname, "..", "..", "fonts");
+const LOGOS_DIR = path.join(__dirname, "..", "..", "uploads", "logos");
 const printer = new PdfPrinter({
   Roboto: {
     normal:      path.join(FONTS_DIR, "Roboto-Regular.ttf"),
@@ -27,6 +30,16 @@ const printer = new PdfPrinter({
     bolditalics: path.join(FONTS_DIR, "Roboto-MediumItalic.ttf"),
   },
 });
+
+/** Si hay logo subido, devuelve el path en disk; si no, null. */
+function findLogoPath(workspaceId) {
+  for (const ext of ["png", "jpg", "webp"]) {
+    const p = path.join(LOGOS_DIR, `${workspaceId}.${ext}`);
+    if (fs.existsSync(p)) return p;
+  }
+  // SVG no es soportado por pdfmake nativo, lo ignoramos
+  return null;
+}
 
 function rowToInvoice(r) {
   if (!r) return null;
@@ -182,108 +195,32 @@ router.get("/:id/pdf", (req, res) => {
       .get(req.params.id, req.user.workspace_id);
     if (!inv) return res.status(404).json({ error: "Recibo no encontrado" });
 
-    const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+    const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(req.user.workspace_id);
     const settings = Object.fromEntries(
       db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(req.user.workspace_id)
         .map((s) => [s.key, s.value])
     );
-    const fmtCop = (n) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
-    const fmtDate = (iso) => {
-      if (!iso) return "—";
-      const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
-      return d.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+    // Profesional vinculado al recibo (match por nombre dentro del workspace)
+    const prof = inv.professional
+      ? db.prepare("SELECT name, title, email, phone FROM professionals WHERE workspace_id = ? AND name = ?")
+          .get(req.user.workspace_id, inv.professional)
+      : null;
+
+    // Personalización del recibo (si no hay setting, defaults razonables)
+    const showLogo = settings.receipt_show_logo !== "0"; // default: mostrar
+    const showName = settings.receipt_show_name !== "0"; // default: mostrar
+    const orientation = settings.receipt_logo_orientation ?? "horizontal";
+    const logoPath = showLogo ? findLogoPath(req.user.workspace_id) : null;
+    // Tamaño del logo según orientación (en pt PDF; A4 width ~595pt)
+    const LOGO_SIZES = {
+      horizontal: { width: 90, height: 28 },
+      vertical:   { width: 38, height: 56 },
+      square:     { width: 44, height: 44 },
     };
+    const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
 
-    const methodLine = (() => {
-      const parts = [inv.method];
-      if (inv.method === "Transferencia" && inv.bank) parts.push(`· ${inv.bank}`);
-      if (inv.method === "Convenio EPS" && inv.eps) parts.push(`· ${inv.eps}`);
-      if (inv.payment_reference) parts.push(`· Ref: ${inv.payment_reference}`);
-      return parts.join(" ");
-    })();
-
-    const docDef = {
-      pageSize: "A4",
-      pageMargins: [42, 50, 42, 50],
-      info: { title: `Recibo ${inv.id}`, author: ws?.name ?? "Psicomorfosis", creator: "Psicomorfosis" },
-      defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.4, color: "#1f1f1f" },
-      content: [
-        // Cabecera con membrete
-        {
-          columns: [
-            [
-              { text: ws?.name ?? "Psicomorfosis", fontSize: 16, bold: true, color: "#4a3a8c" },
-              settings.address ? { text: settings.address, fontSize: 9, color: "#666" } : null,
-              settings.phone ? { text: `Tel: ${settings.phone}`, fontSize: 9, color: "#666" } : null,
-              settings.city ? { text: settings.city, fontSize: 9, color: "#666" } : null,
-            ].filter(Boolean),
-            [
-              { text: "RECIBO", fontSize: 11, bold: true, color: "#4a3a8c", alignment: "right", margin: [0, 4, 0, 2] },
-              { text: inv.id, fontSize: 10, alignment: "right", color: "#1f1f1f", font: "Roboto", bold: true },
-              { text: fmtDate(inv.date), fontSize: 9, alignment: "right", color: "#666" },
-            ],
-          ],
-          margin: [0, 0, 0, 20],
-        },
-        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#d4d4d4" }] },
-
-        // Datos del paciente
-        { text: "Recibí de", fontSize: 9, color: "#888", margin: [0, 18, 0, 4] },
-        { text: inv.patient_name || "—", fontSize: 14, bold: true },
-        { text: "por concepto de", fontSize: 9, color: "#888", margin: [0, 14, 0, 4] },
-        { text: inv.concept, fontSize: 11 },
-
-        // Total destacado
-        {
-          margin: [0, 22, 0, 0],
-          table: {
-            widths: ["*"],
-            body: [[
-              {
-                text: [
-                  { text: "Valor: ", fontSize: 11, color: "#666" },
-                  { text: fmtCop(inv.amount), fontSize: 22, bold: true, color: "#4a3a8c" },
-                ],
-                fillColor: "#f5f3ff",
-                margin: [16, 14, 16, 14],
-              },
-            ]],
-          },
-          layout: "noBorders",
-        },
-
-        // Detalle de pago
-        { text: "Detalle de pago", fontSize: 9, color: "#888", margin: [0, 22, 0, 6] },
-        {
-          table: {
-            widths: ["35%", "*"],
-            body: [
-              [{ text: "Método", color: "#888", fontSize: 9 }, { text: methodLine, fontSize: 10 }],
-              [{ text: "Estado", color: "#888", fontSize: 9 }, { text: inv.status === "pagada" ? "PAGADO" : inv.status.toUpperCase(), fontSize: 10, bold: true, color: inv.status === "pagada" ? "#1f6b46" : "#7a5b00" }],
-              ...(inv.paid_at ? [[{ text: "Fecha de pago", color: "#888", fontSize: 9 }, { text: fmtDate(inv.paid_at), fontSize: 10 }]] : []),
-              ...(inv.payment_notes ? [[{ text: "Notas", color: "#888", fontSize: 9 }, { text: inv.payment_notes, fontSize: 10, italics: true }]] : []),
-            ],
-          },
-          layout: { hLineColor: "#eee", vLineWidth: () => 0, hLineWidth: () => 0.5 },
-        },
-
-        // Pie de firma
-        { text: "", margin: [0, 40, 0, 0] },
-        {
-          columns: [
-            { text: "" },
-            [
-              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: "#aaa" }] },
-              { text: inv.professional ?? "", fontSize: 10, alignment: "left", margin: [0, 6, 0, 0] },
-              { text: ws?.name ?? "", fontSize: 9, alignment: "left", color: "#666" },
-            ],
-          ],
-        },
-
-        { text: "Este documento es un recibo de pago, no constituye factura electrónica DIAN.", fontSize: 8, italics: true, color: "#aaa", margin: [0, 28, 0, 0] },
-      ],
-    };
-
+    const ctx = { inv, ws, prof, settings, showLogo, showName, logoPath, logoSize };
+    const docDef = buildReceiptDoc(ctx);
     const stream = printer.createPdfKitDocument(docDef);
     const safe = (inv.patient_name || "recibo").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
     res.setHeader("Content-Type", "application/pdf");

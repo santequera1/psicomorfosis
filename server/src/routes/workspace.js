@@ -189,6 +189,64 @@ router.put("/me/signature", express.json({ limit: "2mb" }), async (req, res) => 
 });
 
 /**
+ * PUT /api/workspace/receipt-logo
+ * Body: { dataUrl: "data:image/png;base64,..." } | { clear: true }
+ *
+ * Guarda el logo de recibos en uploads/logos/<workspaceId>.<ext> y registra
+ * la URL pública en settings('receipt_logo_url'). Aceptamos data URL para
+ * tener un único endpoint con auth (sin multipart) y mantener el patrón
+ * que ya usamos para firmas.
+ */
+router.put("/receipt-logo", express.json({ limit: "2mb" }), async (req, res) => {
+  const { dataUrl, clear } = req.body ?? {};
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const logosDir = path.join(process.cwd(), "uploads", "logos");
+  fs.mkdirSync(logosDir, { recursive: true });
+  const wsId = req.user.workspace_id;
+
+  // Helper upsert para settings
+  const upsertSetting = (key, value) => {
+    db.prepare(`
+      INSERT INTO settings (workspace_id, key, value) VALUES (?, ?, ?)
+      ON CONFLICT(workspace_id, key) DO UPDATE SET value = excluded.value
+    `).run(wsId, key, value == null ? "" : String(value));
+  };
+
+  if (clear) {
+    for (const e of ["png", "jpg", "webp", "svg"]) {
+      const old = path.join(logosDir, `${wsId}.${e}`);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+    upsertSetting("receipt_logo_url", "");
+    return res.json({ ok: true, receipt_logo_url: null });
+  }
+
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    return res.status(400).json({ error: "Esperaba data URL de imagen" });
+  }
+  const m = dataUrl.match(/^data:image\/(png|jpe?g|webp|svg\+xml);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: "Formato de imagen no soportado" });
+  const ext = m[1] === "jpeg" ? "jpg" : m[1] === "svg+xml" ? "svg" : m[1];
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 1024 * 1024) {
+    return res.status(413).json({ error: "Logo demasiado grande (>1MB)" });
+  }
+  const filename = `${wsId}.${ext}`;
+  fs.writeFileSync(path.join(logosDir, filename), buf);
+  // Borrar otras extensiones del mismo workspace por si cambió formato
+  for (const e of ["png", "jpg", "webp", "svg"]) {
+    if (e !== ext) {
+      const old = path.join(logosDir, `${wsId}.${e}`);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+  }
+  const url = `/api/uploads/logos/${filename}?v=${Date.now()}`;
+  upsertSetting("receipt_logo_url", url);
+  res.json({ ok: true, receipt_logo_url: url });
+});
+
+/**
  * GET /api/workspace/dashboard-stats
  * Datos reales del workspace para los charts del Inicio (sesiones por
  * modalidad últimos 30d, motivos de consulta de pacientes activos,
