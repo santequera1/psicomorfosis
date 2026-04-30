@@ -39,11 +39,14 @@ function toNote(row) {
 // Lista notas de un paciente — excluye superseded por defecto.
 // GET /api/patients/:patientId/notes?kind=motivo&include_superseded=true
 router.get("/patients/:patientId/notes", (req, res) => {
-  const { kind, include_superseded } = req.query;
+  const { kind, include_superseded, include_archived } = req.query;
   let sql = "SELECT * FROM clinical_notes WHERE workspace_id = ? AND patient_id = ?";
   const args = [req.user.workspace_id, req.params.patientId];
   if (!include_superseded || include_superseded === "false") {
     sql += " AND superseded_by_id IS NULL";
+  }
+  if (!include_archived || include_archived === "false") {
+    sql += " AND archived_at IS NULL";
   }
   if (kind) {
     if (!VALID_KINDS.has(kind)) return res.status(400).json({ error: "kind inválido" });
@@ -152,25 +155,30 @@ router.post("/notes/:id/supersede", (req, res) => {
 });
 
 /**
- * Eliminar una nota — SOLO permitido si es borrador (signed_at IS NULL).
- * Las notas firmadas no se pueden borrar por la Resolución 1995/1999;
- * para corregirlas, usar /supersede.
+ * Eliminar una nota.
+ * - Borradores (signed_at IS NULL): DELETE físico.
+ * - Firmadas: archivado lógico (archived_at) — la nota desaparece de la UI
+ *   pero el row se conserva en DB. Esto cumple Res. 1995/1999 que prohíbe
+ *   alterar la historia clínica firmada pero permite excluirla de la vista
+ *   activa, manteniendo trazabilidad para auditoría regulatoria.
  */
 router.delete("/notes/:id", (req, res) => {
   const existing = db.prepare("SELECT * FROM clinical_notes WHERE id = ? AND workspace_id = ?")
     .get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Nota no encontrada" });
-  if (existing.signed_at) {
-    return res.status(409).json({
-      error: "Las notas firmadas no se pueden eliminar por Resolución 1995/1999. Usa 'Crear nueva versión' para corregirla.",
-    });
-  }
   if (existing.superseded_by_id) {
     return res.status(409).json({ error: "Esta nota ya fue reemplazada por otra versión." });
   }
+  if (existing.signed_at) {
+    // Soft delete para notas firmadas — preserva audit trail.
+    db.prepare("UPDATE clinical_notes SET archived_at = ? WHERE id = ?")
+      .run(new Date().toISOString(), req.params.id);
+    req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("note:archived", { id: Number(req.params.id) });
+    return res.json({ ok: true, archived: true });
+  }
   db.prepare("DELETE FROM clinical_notes WHERE id = ?").run(req.params.id);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("note:deleted", { id: Number(req.params.id) });
-  res.json({ ok: true });
+  res.json({ ok: true, archived: false });
 });
 
 export default router;

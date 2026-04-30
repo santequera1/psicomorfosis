@@ -232,7 +232,10 @@ function DocumentosPage() {
                 {docs.length === 0 ? "Aún no hay documentos. Click en \"Nuevo documento\" para crear el primero." : "Sin documentos que coincidan con los filtros."}
               </div>
             ) : viewMode === "folders" && !openFolderData ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4">
+              <div
+                key="folders-grid"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4 animate-in fade-in slide-in-from-left-2 duration-200"
+              >
                 {folders.map((f) => f.id === "_general" ? (
                   <GenericFolder key={f.id} name={f.name} count={f.docs.length} onClick={() => setOpenFolder(f.id)} toneIdx={5} />
                 ) : (
@@ -259,7 +262,15 @@ function DocumentosPage() {
                 ))}
               </div>
             ) : (
-              <ul className="divide-y divide-line-100">
+              <ul
+                key={openFolderData ? `folder-${openFolderData.id}` : "all-list"}
+                className={cn(
+                  "divide-y divide-line-100",
+                  openFolderData
+                    ? "animate-in fade-in slide-in-from-right-3 duration-250"
+                    : "animate-in fade-in duration-150",
+                )}
+              >
                 {docsToShow.map((d) => (
                   <DocRow
                     key={d.id}

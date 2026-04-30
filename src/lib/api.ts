@@ -152,6 +152,12 @@ export interface Invoice {
   method: string;
   status: "pagada" | "pendiente" | "vencida" | "borrador";
   date: string;
+  bank: string | null;
+  eps: string | null;
+  payment_reference: string | null;
+  payment_notes: string | null;
+  paid_at: string | null;
+  created_at: string | null;
 }
 
 export type NoteKind =
@@ -809,13 +815,28 @@ export const api = {
     return res.json() as Promise<{ id: number; public_url: string; mime: string; size_bytes: number }>;
   },
 
-  // Invoices
+  // Recibos (internamente "invoices" por compat de schema)
   listInvoices: (params: Record<string, string> = {}) => request<Invoice[]>(`/api/invoices${qs(params)}`),
+  getInvoice: (id: string) => request<Invoice>(`/api/invoices/${id}`),
   createInvoice: (body: Partial<Invoice>) =>
     request<Invoice>("/api/invoices", { method: "POST", body: JSON.stringify(body) }),
   updateInvoice: (id: string, body: Partial<Invoice>) =>
     request<Invoice>(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteInvoice: (id: string) =>
+    request<void>(`/api/invoices/${id}`, { method: "DELETE" }),
   invoicesSummary: () => request<{ paid: number; pending: number; overdue: number; total: number }>("/api/invoices/summary"),
+  /** Descarga el PDF del recibo. */
+  downloadInvoicePdf: async (id: string): Promise<Blob> => {
+    const token = localStorage.getItem("psm.token");
+    const r = await fetch(`${API_BASE}/api/invoices/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo generar el PDF");
+    }
+    return r.blob();
+  },
 
   // Notifications
   listNotifications: () => request<Array<Record<string, unknown>>>("/api/notifications"),

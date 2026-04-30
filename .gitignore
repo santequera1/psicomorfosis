@@ -61,3 +61,4 @@ deploy.py
 check_logs.py
 smoke_variables.py
 smoke_pdf.py
+verify_admin.py

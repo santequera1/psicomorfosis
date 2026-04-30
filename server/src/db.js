@@ -526,6 +526,16 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN last_login_at TEXT",
     "ALTER TABLE workspaces ADD COLUMN disabled_at TEXT",
     "ALTER TABLE workspaces ADD COLUMN disabled_reason TEXT",
+    // Recibos (29 abril) — campos para método de pago detallado y trazabilidad
+    "ALTER TABLE invoices ADD COLUMN bank TEXT",
+    "ALTER TABLE invoices ADD COLUMN eps TEXT",
+    "ALTER TABLE invoices ADD COLUMN payment_reference TEXT",
+    "ALTER TABLE invoices ADD COLUMN payment_notes TEXT",
+    "ALTER TABLE invoices ADD COLUMN paid_at TEXT",
+    "ALTER TABLE invoices ADD COLUMN created_at TEXT",
+    // Notas clínicas firmadas: borrado lógico (Res. 1995/1999 prohíbe DELETE
+    // físico, pero permite archivo si los datos siguen disponibles para audit)
+    "ALTER TABLE clinical_notes ADD COLUMN archived_at TEXT",
   ];
   for (const sql of migrations) {
     try {

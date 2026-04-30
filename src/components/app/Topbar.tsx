@@ -23,7 +23,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/tests": "Tests psicométricos",
   "/prescripcion": "Prescripción",
   "/documentos": "Documentos",
-  "/facturacion": "Facturación",
+  "/facturacion": "Recibos",
   "/reportes": "Reportes",
   "/configuracion": "Configuración",
 };

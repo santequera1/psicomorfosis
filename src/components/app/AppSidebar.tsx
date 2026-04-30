@@ -35,7 +35,7 @@ const groups: Array<{
   {
     label: "Gestión",
     items: [
-      { to: "/facturacion", label: "Facturación", icon: Receipt },
+      { to: "/facturacion", label: "Recibos", icon: Receipt },
       { to: "/reportes", label: "Reportes", icon: BarChart3 },
       { to: "/configuracion", label: "Configuración", icon: Settings },
     ],

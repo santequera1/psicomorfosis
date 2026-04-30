@@ -1,19 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
-import { Receipt, TrendingUp, Wallet, AlertCircle, Download, Plus, X, Search, FileText, CheckCircle2, Send, Loader2 } from "lucide-react";
+import { PatientPicker } from "@/components/app/PatientPicker";
+import {
+  Receipt, TrendingUp, Wallet, AlertCircle, Plus, X, Search,
+  Download, CheckCircle2, Loader2, Pencil, Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Invoice } from "@/lib/api";
 
 export const Route = createFileRoute("/facturacion")({
-  head: () => ({ meta: [{ title: "Facturación — Psicomorfosis" }] }),
+  head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
   component: FacturacionPage,
 });
 
 type Estado = "pagada" | "pendiente" | "vencida" | "borrador";
-type Filter = "Todas" | "Pagadas" | "Pendientes" | "Vencidas";
+type Filter = "Todos" | "Pagados" | "Pendientes" | "Vencidos";
 
 const ESTADO_STYLE: Record<Estado, string> = {
   pagada:    "bg-success-soft text-success border border-success/20",
@@ -22,27 +27,52 @@ const ESTADO_STYLE: Record<Estado, string> = {
   borrador:  "bg-bg-100 text-ink-500 border border-line-200",
 };
 
-const fmt = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+const ESTADO_LABEL: Record<Estado, string> = {
+  pagada: "Pagado",
+  pendiente: "Pendiente",
+  vencida: "Vencido",
+  borrador: "Borrador",
+};
+
+const PAYMENT_METHODS = ["Efectivo", "Tarjeta", "PSE", "Transferencia", "Convenio"] as const;
+const COMMON_BANKS = [
+  "Bancolombia", "Davivienda", "BBVA", "Banco de Bogotá", "Banco Popular",
+  "Banco Caja Social", "AV Villas", "Nequi", "Daviplata", "Banco Falabella",
+  "Banco GNB Sudameris", "Itaú", "Scotiabank Colpatria", "Otro",
+];
+const COMMON_EPS = [
+  "Sura EPS", "Sanitas EPS", "Compensar", "Famisanar", "Salud Total",
+  "Coomeva", "Nueva EPS", "Mutual Ser", "Aliansalud", "SOS", "Otro",
+];
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 
 function FacturacionPage() {
-  const [filter, setFilter] = useState<Filter>("Todas");
+  const [filter, setFilter] = useState<Filter>("Todos");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Invoice | null>(null);
+  const [editing, setEditing] = useState<Invoice | null>(null);
 
   const { data: invoices = [], isLoading, error } = useQuery({
     queryKey: ["invoices"],
     queryFn: () => api.listInvoices(),
   });
-  const { data: summary } = useQuery({ queryKey: ["invoices-summary"], queryFn: () => api.invoicesSummary() });
+  const { data: summary } = useQuery({
+    queryKey: ["invoices-summary"],
+    queryFn: () => api.invoicesSummary(),
+  });
 
   const filtered = useMemo(() => invoices.filter((f) => {
-    if (filter === "Pagadas" && f.status !== "pagada") return false;
+    if (filter === "Pagados" && f.status !== "pagada") return false;
     if (filter === "Pendientes" && f.status !== "pendiente") return false;
-    if (filter === "Vencidas" && f.status !== "vencida") return false;
+    if (filter === "Vencidos" && f.status !== "vencida") return false;
     if (query.trim()) {
       const q = query.toLowerCase();
-      if (!f.patient_name.toLowerCase().includes(q) && !f.id.toLowerCase().includes(q) && !f.concept.toLowerCase().includes(q)) return false;
+      if (!f.patient_name.toLowerCase().includes(q) &&
+          !f.id.toLowerCase().includes(q) &&
+          !f.concept.toLowerCase().includes(q)) return false;
     }
     return true;
   }), [invoices, filter, query]);
@@ -51,41 +81,30 @@ function FacturacionPage() {
   const porCobrar = summary?.pending ?? 0;
   const vencidas = summary?.overdue ?? 0;
 
-  function exportCSV() {
-    const rows: string[][] = [["ID", "Paciente", "Concepto", "Fecha", "Método", "Valor", "Estado"], ...filtered.map((f) => [f.id, f.patient_name, f.concept, f.date, f.method, String(f.amount), f.status])];
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `facturacion-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <AppShell>
       <div className="max-w-7xl mx-auto">
         <header className="flex items-end justify-between mb-5 sm:mb-6 flex-wrap gap-3">
           <div>
             <div className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Gestión financiera</div>
-            <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Facturación</h1>
-            <p className="text-sm text-ink-500 mt-1">Movimientos del mes en curso</p>
+            <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Recibos</h1>
+            <p className="text-sm text-ink-500 mt-1">Comprobantes de pago de las sesiones</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={exportCSV} className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 flex items-center justify-center gap-2">
-              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">CSV</span>
-            </button>
-            <button onClick={() => setCreateOpen(true)} className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 flex items-center justify-center gap-2">
-              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nueva factura</span><span className="sm:hidden">Nueva</span>
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nuevo recibo</span><span className="sm:hidden">Nuevo</span>
             </button>
           </div>
         </header>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado" value={fmt(recaudado)} delta={{ value: "+12.4%", positive: true }} />
-          <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} facturas`} />
-          <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidas" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} factura(s)`} emphasis={vencidas > 0 ? "risk" : "default"} />
-          <KpiCard icon={<Receipt className="h-4 w-4" />} label="Emitidas" value={String(summary?.total ?? invoices.length)} hint="en total" />
+          <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado" value={fmt(recaudado)} hint="pagados" delta={{ neutral: true, value: "" }} />
+          <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} recibos`} delta={{ neutral: true, value: "" }} />
+          <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidos" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} recibo(s)`} emphasis={vencidas > 0 ? "risk" : "default"} delta={{ neutral: true, value: "" }} />
+          <KpiCard icon={<Receipt className="h-4 w-4" />} label="Total" value={String(summary?.total ?? invoices.length)} hint="emitidos" delta={{ neutral: true, value: "" }} />
         </div>
 
         <section className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
@@ -96,12 +115,12 @@ function FacturacionPage() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar factura o paciente…"
+                placeholder="Buscar paciente, ID o concepto…"
                 className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
             <div className="flex gap-1 p-1 rounded-md bg-bg-100 text-xs overflow-x-auto no-scrollbar">
-              {(["Todas", "Pagadas", "Pendientes", "Vencidas"] as Filter[]).map((t) => (
+              {(["Todos", "Pagados", "Pendientes", "Vencidos"] as Filter[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setFilter(t)}
@@ -116,7 +135,7 @@ function FacturacionPage() {
             <table className="w-full text-sm">
               <thead className="bg-bg-100 text-ink-500 text-xs uppercase tracking-wide">
                 <tr>
-                  <th className="text-left font-medium px-5 py-3">Factura</th>
+                  <th className="text-left font-medium px-5 py-3">Recibo</th>
                   <th className="text-left font-medium px-5 py-3">Paciente</th>
                   <th className="text-left font-medium px-5 py-3">Concepto</th>
                   <th className="text-left font-medium px-5 py-3">Fecha</th>
@@ -129,13 +148,21 @@ function FacturacionPage() {
                 {filtered.map((f) => (
                   <tr key={f.id} onClick={() => setDetail(f)} className="border-t border-line-100 hover:bg-brand-50/40 cursor-pointer transition-colors">
                     <td className="px-5 py-3.5 font-mono text-xs text-ink-700">{f.id}</td>
-                    <td className="px-5 py-3.5 text-ink-900">{f.patient_name}</td>
+                    <td className="px-5 py-3.5 text-ink-900">
+                      {f.patient_name || <span className="text-ink-400 italic">Sin paciente</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-ink-500">{f.concept}</td>
                     <td className="px-5 py-3.5 text-ink-500 tabular">{f.date}</td>
-                    <td className="px-5 py-3.5 text-ink-500">{f.method}</td>
+                    <td className="px-5 py-3.5 text-ink-500">
+                      {f.method}
+                      {f.bank && <span className="text-ink-400"> · {f.bank}</span>}
+                      {f.eps && <span className="text-ink-400"> · {f.eps}</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-right tabular text-ink-900 font-medium">{fmt(f.amount)}</td>
                     <td className="px-5 py-3.5">
-                      <span className={cn("text-[11px] px-2.5 py-1 rounded-full capitalize", ESTADO_STYLE[f.status])}>{f.status}</span>
+                      <span className={cn("text-[11px] px-2.5 py-1 rounded-full", ESTADO_STYLE[f.status])}>
+                        {ESTADO_LABEL[f.status]}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -143,7 +170,7 @@ function FacturacionPage() {
                   <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-500"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando…</td></tr>
                 )}
                 {!isLoading && !error && filtered.length === 0 && (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-500">Sin facturas en este filtro.</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-500">Sin recibos en este filtro.</td></tr>
                 )}
                 {error && (
                   <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-risk-high">No se pudo cargar desde el backend.</td></tr>
@@ -158,90 +185,224 @@ function FacturacionPage() {
         </section>
       </div>
 
-      {createOpen && <NewFacturaModal onClose={() => setCreateOpen(false)} />}
-      {detail && <FacturaDetailModal factura={detail} onClose={() => setDetail(null)} />}
+      {createOpen && <ReceiptFormModal mode="create" onClose={() => setCreateOpen(false)} />}
+      {editing && <ReceiptFormModal mode="edit" invoice={editing} onClose={() => setEditing(null)} />}
+      {detail && (
+        <ReceiptDetailModal
+          factura={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => { setEditing(detail); setDetail(null); }}
+        />
+      )}
     </AppShell>
   );
 }
 
-function NewFacturaModal({ onClose }: { onClose: () => void }) {
+// ─── Modal form (crear / editar) ──────────────────────────────────────────
+function ReceiptFormModal({
+  mode, invoice, onClose,
+}: {
+  mode: "create" | "edit";
+  invoice?: Invoice;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
-  const [patientId, setPatientId] = useState("");
-  const [concept, setConcept] = useState("Sesión individual TCC");
-  const [amount, setAmount] = useState(180000);
-  const [method, setMethod] = useState("Tarjeta");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [patientId, setPatientId] = useState<string | null>(invoice?.patient_id ?? null);
+  const [patientName, setPatientName] = useState<string>(invoice?.patient_name ?? "");
+  const [concept, setConcept] = useState(invoice?.concept ?? "Sesión individual");
+  const [amount, setAmount] = useState(invoice?.amount ?? 80000);
+  const [method, setMethod] = useState<typeof PAYMENT_METHODS[number]>(
+    (PAYMENT_METHODS as readonly string[]).includes(invoice?.method ?? "")
+      ? (invoice!.method as typeof PAYMENT_METHODS[number])
+      : "Efectivo"
+  );
+  const [bank, setBank] = useState(invoice?.bank ?? "");
+  const [eps, setEps] = useState(invoice?.eps ?? "");
+  const [reference, setReference] = useState(invoice?.payment_reference ?? "");
+  const [notes, setNotes] = useState(invoice?.payment_notes ?? "");
+  const [status, setStatus] = useState<Estado>(invoice?.status ?? "pagada");
+  const [date, setDate] = useState(invoice?.date ?? new Date().toISOString().slice(0, 10));
 
   const mu = useMutation({
     mutationFn: () => {
-      const p = patients.find((x) => x.id === patientId);
-      return api.createInvoice({
+      const body: Partial<Invoice> = {
         patient_id: patientId || null,
-        patient_name: p?.name ?? "",
-        professional: p?.professional ?? "",
+        patient_name: patientName,
         concept,
-        amount,
+        amount: Math.max(0, Math.round(amount)),
         method,
+        bank: method === "Transferencia" ? (bank || null) : null,
+        eps: method === "Convenio" ? (eps || null) : null,
+        payment_reference: reference || null,
+        payment_notes: notes || null,
+        status,
         date,
-        status: "pendiente",
-      } as any);
+      };
+      return mode === "create"
+        ? api.createInvoice(body)
+        : api.updateInvoice(invoice!.id, body);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["invoices-summary"] });
+      toast.success(mode === "create" ? "Recibo creado" : "Recibo actualizado");
       onClose();
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
+  const isMethodTransfer = method === "Transferencia";
+  const isMethodConvenio = method === "Convenio";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); mu.mutate(); }} className="w-full max-w-lg rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm p-4 pt-16 overflow-y-auto" onClick={onClose}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
+        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Facturación</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Nueva factura electrónica</h3>
-            <p className="text-xs text-ink-500 mt-1">Se emitirá con formato DIAN compatible.</p>
+            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Recibos</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">
+              {mode === "create" ? "Nuevo recibo" : `Editar recibo ${invoice?.id}`}
+            </h3>
+            <p className="text-xs text-ink-500 mt-1">Comprobante de pago — no es factura electrónica DIAN.</p>
           </div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
             <X className="h-4 w-4" />
           </button>
         </header>
+
         <div className="p-5 space-y-3">
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Paciente</span>
-            <select required value={patientId} onChange={(e) => setPatientId(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-              <option value="">Selecciona un paciente…</option>
-              {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </label>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-1.5">Paciente</label>
+            <PatientPicker
+              value={patientId}
+              onChange={(id, name) => { setPatientId(id); setPatientName(name ?? ""); }}
+              allowEmpty
+            />
+          </div>
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Concepto</span>
-            <input value={concept} onChange={(e) => setConcept(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700" />
+            <input
+              required
+              value={concept}
+              onChange={(e) => setConcept(e.target.value)}
+              placeholder="Sesión individual · Pareja · Familiar…"
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+            />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Valor (COP)</span>
-              <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700 tabular" />
-              <p className="text-[11px] text-ink-500 mt-1">Total: {fmt(amount)}</p>
+              <input
+                type="number"
+                min={0}
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular"
+              />
+              <p className="text-[11px] text-ink-500 mt-1">{fmt(amount)}</p>
             </label>
             <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Método</span>
-              <select value={method} onChange={(e) => setMethod(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option>Tarjeta</option><option>PSE</option><option>Transferencia</option><option>Efectivo</option><option>Convenio EPS</option>
-              </select>
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+              />
             </label>
           </div>
           <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Método de pago</span>
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as typeof PAYMENT_METHODS[number])}
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+            >
+              {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </label>
+
+          {/* Campos condicionales */}
+          {isMethodTransfer && (
+            <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Banco</span>
+              <input
+                list="psm-banks"
+                value={bank}
+                onChange={(e) => setBank(e.target.value)}
+                placeholder="Bancolombia, Davivienda, Nequi…"
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+              />
+              <datalist id="psm-banks">
+                {COMMON_BANKS.map((b) => <option key={b} value={b} />)}
+              </datalist>
+            </label>
+          )}
+          {isMethodConvenio && (
+            <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">EPS / Convenio</span>
+              <input
+                list="psm-eps"
+                value={eps}
+                onChange={(e) => setEps(e.target.value)}
+                placeholder="Sura EPS, Sanitas, Compensar…"
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+              />
+              <datalist id="psm-eps">
+                {COMMON_EPS.map((e) => <option key={e} value={e} />)}
+              </datalist>
+            </label>
+          )}
+
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+              Referencia / Comprobante <span className="text-ink-400 normal-case tracking-normal">(opcional)</span>
+            </span>
+            <input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Nº de aprobación, últimos 4 de tarjeta, etc."
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+              Notas <span className="text-ink-400 normal-case tracking-normal">(opcional)</span>
+            </span>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Estado</span>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Estado)}
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+            >
+              <option value="pagada">Pagado</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="vencida">Vencido</option>
+              <option value="borrador">Borrador</option>
+            </select>
           </label>
         </div>
+
         <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
-          <button type="submit" disabled={mu.isPending || !patientId} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
+          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">
+            Cancelar
+          </button>
+          <button type="submit" disabled={mu.isPending} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
             {mu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Emitir factura
+            {mode === "create" ? "Generar recibo" : "Guardar cambios"}
           </button>
         </footer>
       </form>
@@ -249,16 +410,67 @@ function NewFacturaModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function FacturaDetailModal({ factura, onClose }: { factura: Invoice; onClose: () => void }) {
-  const [payOpen, setPayOpen] = useState(false);
+// ─── Modal detalle (PDF + marcar pagada + editar + eliminar) ──────────────
+function ReceiptDetailModal({
+  factura, onClose, onEdit,
+}: {
+  factura: Invoice;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const qc = useQueryClient();
+  const [downloading, setDownloading] = useState(false);
+  const isPaid = factura.status === "pagada";
+
+  const markPaidMu = useMutation({
+    mutationFn: () => api.updateInvoice(factura.id, { status: "pagada" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoices-summary"] });
+      toast.success("Marcado como pagado");
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const deleteMu = useMutation({
+    mutationFn: () => api.deleteInvoice(factura.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["invoices-summary"] });
+      toast.success("Recibo eliminado");
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  async function downloadPdf() {
+    setDownloading(true);
+    try {
+      const blob = await api.downloadInvoicePdf(factura.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${factura.id}_${(factura.patient_name || "recibo").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 50)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success("PDF descargado");
+    } catch (e: any) {
+      toast.error("No se pudo generar el PDF: " + (e?.message ?? e));
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl bg-surface shadow-modal max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium font-mono">{factura.id}</p>
             <h3 className="font-serif text-xl text-ink-900 mt-0.5">{factura.concept}</h3>
-            <p className="text-xs text-ink-500 mt-1">{factura.patient_name} · {factura.date}</p>
+            <p className="text-xs text-ink-500 mt-1">{factura.patient_name || "Sin paciente"} · {factura.date}</p>
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
             <X className="h-4 w-4" />
@@ -268,114 +480,69 @@ function FacturaDetailModal({ factura, onClose }: { factura: Invoice; onClose: (
           <div className="rounded-lg border border-line-200 p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs text-ink-500 uppercase tracking-wider">Total</span>
-              <span className={cn("text-[11px] px-2.5 py-1 rounded-full capitalize", ESTADO_STYLE[factura.status])}>{factura.status}</span>
+              <span className={cn("text-[11px] px-2.5 py-1 rounded-full", ESTADO_STYLE[factura.status])}>
+                {ESTADO_LABEL[factura.status]}
+              </span>
             </div>
             <div className="font-serif text-3xl text-ink-900 tabular mt-2">{fmt(factura.amount)}</div>
-            <div className="text-xs text-ink-500 mt-1">Método: {factura.method}</div>
-          </div>
-          <div className="rounded-lg border border-line-200 p-3 text-xs space-y-1.5">
-            <div className="flex justify-between"><span className="text-ink-500">Subtotal</span><span className="tabular text-ink-900">{fmt(Math.round(factura.amount / 1.19))}</span></div>
-            <div className="flex justify-between"><span className="text-ink-500">IVA 19%</span><span className="tabular text-ink-900">{fmt(factura.amount - Math.round(factura.amount / 1.19))}</span></div>
-            <div className="flex justify-between pt-1.5 border-t border-line-100"><span className="text-ink-700 font-medium">Total</span><span className="tabular text-ink-900 font-medium">{fmt(factura.amount)}</span></div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <button className="h-10 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5">
-              <FileText className="h-3.5 w-3.5" /> PDF
-            </button>
-            <button className="h-10 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5">
-              <Send className="h-3.5 w-3.5" /> Reenviar
-            </button>
-            {factura.status !== "pagada" && (
-              <button
-                onClick={() => setPayOpen(true)}
-                className="h-10 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Marcar pagada
-              </button>
+            <div className="text-xs text-ink-500 mt-1">
+              Método: {factura.method}
+              {factura.bank && ` · ${factura.bank}`}
+              {factura.eps && ` · ${factura.eps}`}
+            </div>
+            {factura.payment_reference && (
+              <div className="text-xs text-ink-500 mt-1 tabular">Ref: {factura.payment_reference}</div>
+            )}
+            {factura.paid_at && (
+              <div className="text-xs text-ink-500 mt-1">Pagado el {new Date(factura.paid_at).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}</div>
+            )}
+            {factura.payment_notes && (
+              <div className="text-xs text-ink-700 mt-2 italic">"{factura.payment_notes}"</div>
             )}
           </div>
-        </div>
 
-        {payOpen && <MarkPaidModal factura={factura} onClose={() => setPayOpen(false)} onSaved={() => { setPayOpen(false); onClose(); }} />}
-      </div>
-    </div>
-  );
-}
-
-function MarkPaidModal({ factura, onClose, onSaved }: { factura: Invoice; onClose: () => void; onSaved: () => void }) {
-  const qc = useQueryClient();
-  const [method, setMethod] = useState(factura.method || "Tarjeta");
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10));
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
-
-  const mu = useMutation({
-    mutationFn: () => api.updateInvoice(factura.id, {
-      status: "pagada",
-      method,
-      // La referencia/fecha de pago/notas las agrupamos en el campo method por ahora (schema no expone campos dedicados)
-      concept: reference ? `${factura.concept} · Ref: ${reference}${notes ? ` · ${notes}` : ""} · Pagada ${paidDate}` : factura.concept,
-    } as any),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      qc.invalidateQueries({ queryKey: ["invoices-summary"] });
-      onSaved();
-    },
-  });
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink-900/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <form
-        onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="p-5 border-b border-line-100 flex items-start justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Registrar pago</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Marcar factura {factura.id} como pagada</h3>
-            <p className="text-xs text-ink-500 mt-1">{factura.patient_name} · {fmt(factura.amount)}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={downloadPdf}
+              disabled={downloading}
+              className="h-10 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            >
+              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {downloading ? "Generando…" : "Descargar PDF"}
+            </button>
+            <button
+              onClick={onEdit}
+              className="h-10 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
-            <X className="h-4 w-4" />
+
+          {!isPaid && (
+            <button
+              onClick={() => markPaidMu.mutate()}
+              disabled={markPaidMu.isPending}
+              className="w-full h-10 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+            >
+              {markPaidMu.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              Marcar como pagado
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              if (confirm(`¿Eliminar el recibo ${factura.id} definitivamente?`)) {
+                deleteMu.mutate();
+              }
+            }}
+            disabled={deleteMu.isPending}
+            className="w-full h-9 rounded-md border border-rose-300/50 text-xs text-rose-700 hover:bg-rose-500/5 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+          >
+            {deleteMu.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Eliminar recibo
           </button>
-        </header>
-        <div className="p-5 space-y-3">
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Método de pago real</span>
-            <select required value={method} onChange={(e) => setMethod(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-              <option>Tarjeta</option>
-              <option>PSE</option>
-              <option>Transferencia</option>
-              <option>Efectivo</option>
-              <option>Nequi</option>
-              <option>Daviplata</option>
-              <option>Bancolombia</option>
-              <option>Convenio EPS</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha de pago</span>
-            <input type="date" required value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
-          </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Referencia / Número de aprobación</span>
-            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ej. ABC12345 o últimos 4 de tarjeta" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
-          </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Notas internas</span>
-            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional: comentarios del cobro…" className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
-          </label>
         </div>
-        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
-          <button type="submit" disabled={mu.isPending} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
-            {mu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Confirmar pago
-          </button>
-        </footer>
-      </form>
+      </div>
     </div>
   );
 }
