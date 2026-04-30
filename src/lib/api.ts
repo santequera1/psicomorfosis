@@ -152,6 +152,8 @@ export interface Invoice {
   method: string;
   status: "pagada" | "pendiente" | "vencida" | "borrador";
   date: string;
+  /** Modalidad del servicio: "Presencial" | "Virtual" | "Tele" — independiente del método de pago. */
+  modality: string | null;
   bank: string | null;
   eps: string | null;
   payment_reference: string | null;

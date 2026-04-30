@@ -35,6 +35,7 @@ const ESTADO_LABEL: Record<Estado, string> = {
 };
 
 const PAYMENT_METHODS = ["Efectivo", "Tarjeta", "PSE", "Transferencia", "Convenio"] as const;
+const MODALITIES = ["Presencial", "Virtual", "Tele"] as const;
 const COMMON_BANKS = [
   "Bancolombia", "Davivienda", "BBVA", "Banco de Bogotá", "Banco Popular",
   "Banco Caja Social", "AV Villas", "Nequi", "Daviplata", "Banco Falabella",
@@ -215,6 +216,7 @@ function FacturacionPage() {
 function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => void }) {
   const qc = useQueryClient();
   const [downloading, setDownloading] = useState(false);
+  const [viewing, setViewing] = useState(false);
 
   const markPaidMu = useMutation({
     mutationFn: () => api.updateInvoice(invoice.id, { status: "pagada" }),
@@ -255,11 +257,35 @@ function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => vo
     }
   }
 
+  async function viewPdf(e: React.MouseEvent) {
+    e.stopPropagation();
+    setViewing(true);
+    try {
+      const blob = await api.downloadInvoicePdf(invoice.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      // El blob lo necesita la pestaña nueva mientras carga el viewer; 60s sobra.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      toast.error("No se pudo abrir el PDF: " + (err?.message ?? err));
+    } finally {
+      setViewing(false);
+    }
+  }
+
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const isPaid = invoice.status === "pagada";
 
   return (
     <div className="inline-flex items-center gap-0.5" onClick={stop}>
+      <button
+        onClick={viewPdf}
+        disabled={viewing}
+        title="Ver PDF"
+        className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 hover:text-ink-700 inline-flex items-center justify-center disabled:opacity-50"
+      >
+        {viewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
       <button
         onClick={downloadPdf}
         disabled={downloading}
@@ -324,6 +350,11 @@ function ReceiptFormModal({
   const [notes, setNotes] = useState(invoice?.payment_notes ?? "");
   const [status, setStatus] = useState<Estado>(invoice?.status ?? "pagada");
   const [date, setDate] = useState(invoice?.date ?? new Date().toISOString().slice(0, 10));
+  const [modality, setModality] = useState<typeof MODALITIES[number]>(
+    (MODALITIES as readonly string[]).includes(invoice?.modality ?? "")
+      ? (invoice!.modality as typeof MODALITIES[number])
+      : "Presencial"
+  );
 
   const mu = useMutation({
     mutationFn: () => {
@@ -333,6 +364,7 @@ function ReceiptFormModal({
         concept,
         amount: Math.max(0, Math.round(amount)),
         method,
+        modality,
         bank: method === "Transferencia" ? (bank || null) : null,
         eps: method === "Convenio" ? (eps || null) : null,
         payment_reference: reference || null,
@@ -418,16 +450,28 @@ function ReceiptFormModal({
               />
             </label>
           </div>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Método de pago</span>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as typeof PAYMENT_METHODS[number])}
-              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
-            >
-              {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Modalidad</span>
+              <select
+                value={modality}
+                onChange={(e) => setModality(e.target.value as typeof MODALITIES[number])}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+              >
+                {MODALITIES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Método de pago</span>
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as typeof PAYMENT_METHODS[number])}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+              >
+                {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+          </div>
 
           {/* Campos condicionales */}
           {isMethodTransfer && (

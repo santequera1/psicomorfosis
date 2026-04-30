@@ -533,6 +533,9 @@ function runMigrations() {
     "ALTER TABLE invoices ADD COLUMN payment_notes TEXT",
     "ALTER TABLE invoices ADD COLUMN paid_at TEXT",
     "ALTER TABLE invoices ADD COLUMN created_at TEXT",
+    // Modalidad del servicio (Presencial / Virtual / Tele) — independiente
+    // del método de pago. Se renderiza en el chip de la tabla del PDF.
+    "ALTER TABLE invoices ADD COLUMN modality TEXT",
     // Notas clínicas firmadas: borrado lógico (Res. 1995/1999 prohíbe DELETE
     // físico, pero permite archivo si los datos siguen disponibles para audit)
     "ALTER TABLE clinical_notes ADD COLUMN archived_at TEXT",

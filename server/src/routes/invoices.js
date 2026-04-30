@@ -53,6 +53,7 @@ function rowToInvoice(r) {
     method: r.method,
     status: r.status,
     date: r.date,
+    modality: r.modality ?? null,
     bank: r.bank ?? null,
     eps: r.eps ?? null,
     payment_reference: r.payment_reference ?? null,
@@ -117,8 +118,8 @@ router.post("/", (req, res) => {
   db.prepare(`
     INSERT INTO invoices (
       id, workspace_id, patient_id, patient_name, professional, concept, amount,
-      method, status, date, bank, eps, payment_reference, payment_notes, paid_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      method, status, date, modality, bank, eps, payment_reference, payment_notes, paid_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.workspace_id,
     i.patient_id ?? i.patientId ?? null,
@@ -129,6 +130,7 @@ router.post("/", (req, res) => {
     i.method ?? "Efectivo",
     i.status ?? "pendiente",
     i.date ?? new Date().toISOString().slice(0, 10),
+    i.modality ?? null,
     i.bank ?? null,
     i.eps ?? null,
     i.payment_reference ?? null,
@@ -153,6 +155,7 @@ router.patch("/:id", (req, res) => {
     method: b.method ?? existing.method,
     status: b.status ?? existing.status,
     date: b.date ?? existing.date,
+    modality: b.modality !== undefined ? (b.modality || null) : existing.modality,
     bank: b.bank !== undefined ? (b.bank || null) : existing.bank,
     eps: b.eps !== undefined ? (b.eps || null) : existing.eps,
     payment_reference: b.payment_reference !== undefined ? (b.payment_reference || null) : existing.payment_reference,
@@ -166,11 +169,11 @@ router.patch("/:id", (req, res) => {
   db.prepare(`
     UPDATE invoices SET
       patient_id=?, patient_name=?, concept=?, amount=?, method=?, status=?, date=?,
-      bank=?, eps=?, payment_reference=?, payment_notes=?, paid_at=?
+      modality=?, bank=?, eps=?, payment_reference=?, payment_notes=?, paid_at=?
     WHERE id=? AND workspace_id=?
   `).run(
     m.patient_id, m.patient_name, m.concept, m.amount, m.method, m.status, m.date,
-    m.bank, m.eps, m.payment_reference, m.payment_notes, paidAt,
+    m.modality, m.bank, m.eps, m.payment_reference, m.payment_notes, paidAt,
     req.params.id, req.user.workspace_id,
   );
   const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);

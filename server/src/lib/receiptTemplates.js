@@ -29,7 +29,10 @@ function fmtDate(iso) {
 function fmtDateShort(iso) {
   if (!iso) return "—";
   const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
-  return d.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+  // "16 abr 2026" — 1 línea, sin "de" para no truncarse en columnas estrechas.
+  const day = d.getDate();
+  const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  return `${day} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function methodSummary(inv) {
@@ -223,10 +226,29 @@ export function templateEsquinaVerde(ctx) {
   };
 
   // Tabla de servicios — por ahora un solo concepto (futuro: array)
+  // Modalidad del servicio (Presencial/Virtual/Tele) — distinta del método
+  // de pago. Si no está definida, omitimos el chip.
+  const modality = inv.modality ?? "";
+  const modalityCell = modality
+    ? {
+        stack: [{
+          text: modality,
+          fontSize: 10,
+          color: COLORS.avPaciFg,
+          fillColor: COLORS.avPaciBg,
+          alignment: "center",
+          margin: [4, 4, 4, 4],
+        }],
+        alignment: "left",
+        border: [false, false, false, false],
+        margin: [0, 4, 0, 0],
+      }
+    : { text: "—", fontSize: 10, color: COLORS.placeholder, border: [false, false, false, false], margin: [0, 6, 0, 0] };
+
   const servicesTable = {
     margin: [32, 0, 32, 0],
     table: {
-      widths: ["*", 80, 80, 70],
+      widths: ["*", 78, 75, 75],
       headerRows: 1,
       body: [
         [
@@ -243,16 +265,8 @@ export function templateEsquinaVerde(ctx) {
             ],
             border: [false, false, false, false],
           },
-          {
-            text: methodTagText(inv.method),
-            fontSize: 10,
-            color: COLORS.avPaciFg,
-            fillColor: COLORS.avPaciBg,
-            alignment: "left",
-            margin: [4, 4, 4, 4],
-            border: [false, false, false, false],
-          },
-          { text: fmtDateShort(inv.date), fontSize: 11, color: COLORS.tInk, border: [false, false, false, false], margin: [0, 6, 0, 0] },
+          modalityCell,
+          { text: fmtDateShort(inv.date), fontSize: 10, color: COLORS.tInk, border: [false, false, false, false], margin: [0, 6, 0, 0] },
           { text: fmtCop(inv.amount), fontSize: 12, bold: true, color: COLORS.pInk, alignment: "right", border: [false, false, false, false], margin: [0, 6, 0, 0] },
         ],
       ],
