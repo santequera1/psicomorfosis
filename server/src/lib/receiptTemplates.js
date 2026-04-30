@@ -176,12 +176,15 @@ export function templateEsquinaVerde(ctx) {
     avTeraFg: "#9fd4b8",
   };
 
+  // Roboto no tiene el glifo ✓ (U+2713) ni los emoji ⏳/⚠ — salían como
+  // cuadritos vacíos. Construimos el check con un canvas pequeño, y los
+  // demás estados quedan solo con texto (el color ya transmite el estado).
   const statusBadge = (() => {
     const map = {
-      pagada:    { bg: COLORS.accent, fg: COLORS.soft, label: "✓ PAGADO" },
-      pendiente: { bg: "#fef3c7",     fg: "#92400e",   label: "⏳ PENDIENTE" },
-      vencida:   { bg: "#fee2e2",     fg: "#991b1b",   label: "⚠ VENCIDO" },
-      borrador:  { bg: "#e5e7eb",     fg: "#374151",   label: "BORRADOR" },
+      pagada:    { bg: COLORS.accent, fg: COLORS.soft, label: "PAGADO",    check: true  },
+      pendiente: { bg: "#fef3c7",     fg: "#92400e",   label: "PENDIENTE", check: false },
+      vencida:   { bg: "#fee2e2",     fg: "#991b1b",   label: "VENCIDO",   check: false },
+      borrador:  { bg: "#e5e7eb",     fg: "#374151",   label: "BORRADOR",  check: false },
     };
     return map[inv.status] ?? map.borrador;
   })();
@@ -234,14 +237,15 @@ export function templateEsquinaVerde(ctx) {
   }
 
   // Icono de tarjeta de crédito (canvas vector) — solo si method=Tarjeta.
+  // Tamaño y proporciones similares a una tarjeta real.
   function paymentMethodIcon() {
     if ((inv.method ?? "").toLowerCase() !== "tarjeta") return null;
     return {
-      width: 38,
+      width: 50,
       canvas: [
-        { type: "rect", x: 0, y: 0, w: 36, h: 24, r: 3, color: COLORS.headerBg },
-        { type: "rect", x: 0, y: 7, w: 36, h: 6, color: COLORS.accent },
-        { type: "rect", x: 4, y: 16, w: 12, h: 4, r: 1, color: COLORS.soft },
+        { type: "rect", x: 0, y: 0, w: 46, h: 30, r: 4, color: COLORS.headerBg },
+        { type: "rect", x: 0, y: 9, w: 46, h: 7, color: COLORS.accent },
+        { type: "rect", x: 5, y: 21, w: 16, h: 5, r: 1.5, color: COLORS.soft },
       ],
     };
   }
@@ -493,25 +497,42 @@ export function templateEsquinaVerde(ctx) {
                 {
                   width: "auto",
                   stack: [
+                    // Badge de estado — el check va como canvas (no unicode)
+                    // dentro de una tabla de 1 fila para mantener fillColor.
                     {
                       table: {
                         widths: ["auto"],
                         body: [[{
-                          text: statusBadge.label,
-                          color: statusBadge.fg,
+                          columns: [
+                            ...(statusBadge.check
+                              ? [{
+                                  width: 12,
+                                  canvas: [
+                                    // Check (✓) dibujado a mano: dos líneas
+                                    { type: "polyline", lineWidth: 1.6, lineColor: statusBadge.fg, points: [{ x: 0, y: 5 }, { x: 4, y: 9 }, { x: 11, y: 1 }] },
+                                  ],
+                                  margin: [0, 3, 0, 0],
+                                }]
+                              : []),
+                            {
+                              width: "auto",
+                              text: statusBadge.label,
+                              color: statusBadge.fg,
+                              fontSize: 9,
+                              bold: true,
+                              characterSpacing: 0.6,
+                              margin: [statusBadge.check ? 4 : 0, 0, 0, 0],
+                            },
+                          ],
                           fillColor: statusBadge.bg,
-                          fontSize: 9,
-                          bold: true,
-                          alignment: "center",
-                          margin: [10, 4, 10, 4],
-                          characterSpacing: 0.5,
+                          margin: [12, 5, 12, 5],
                           border: [false, false, false, false],
                         }]],
                       },
                       layout: "noBorders",
                       alignment: "right",
                     },
-                    { text: inv.id, color: COLORS.soft, fontSize: 12, bold: true, alignment: "right", margin: [0, 8, 0, 0] },
+                    { text: inv.id, color: COLORS.soft, fontSize: 13, bold: true, alignment: "right", margin: [0, 10, 0, 0], characterSpacing: 0.4 },
                     { text: `Emitido: ${fmtDateShort(inv.created_at ?? inv.date)}`, color: "#4e7a63", fontSize: 9, alignment: "right", margin: [0, 2, 0, 0] },
                   ],
                 },
