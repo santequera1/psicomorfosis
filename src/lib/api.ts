@@ -830,6 +830,29 @@ export const api = {
   deleteInvoice: (id: string) =>
     request<void>(`/api/invoices/${id}`, { method: "DELETE" }),
   invoicesSummary: () => request<{ paid: number; pending: number; overdue: number; total: number }>("/api/invoices/summary"),
+  /** Genera un PDF de muestra con los settings dados (sin persistir). Devuelve Blob. */
+  previewReceiptPdf: async (params: {
+    template: string;
+    showLogo: boolean;
+    showName: boolean;
+    orientation: string;
+  }): Promise<Blob> => {
+    const token = localStorage.getItem("psm.token");
+    const qs = new URLSearchParams({
+      template: params.template,
+      show_logo: params.showLogo ? "1" : "0",
+      show_name: params.showName ? "1" : "0",
+      orientation: params.orientation,
+    });
+    const r = await fetch(`${API_BASE}/api/invoices/preview-pdf?${qs}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo generar el preview");
+    }
+    return r.blob();
+  },
   /** Descarga el PDF del recibo. */
   downloadInvoicePdf: async (id: string): Promise<Blob> => {
     const token = localStorage.getItem("psm.token");

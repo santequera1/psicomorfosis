@@ -185,6 +185,76 @@ router.delete("/:id", (req, res) => {
 });
 
 /**
+ * GET /api/invoices/preview-pdf
+ * Query: template, show_logo, show_name, orientation
+ * Genera un PDF de muestra con datos placeholder usando los settings
+ * pasados por query (sin persistir nada). Sirve para que el psicólogo vea
+ * cómo quedará un recibo con la configuración nueva ANTES de guardarla.
+ * El logo y el nombre vienen del workspace real, así que el preview se
+ * siente personal.
+ */
+router.get("/preview-pdf", (req, res) => {
+  try {
+    const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+    const settings = Object.fromEntries(
+      db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(req.user.workspace_id)
+        .map((s) => [s.key, s.value])
+    );
+
+    // Settings desde query (preview en vivo) sobreescriben los persistidos
+    const previewSettings = {
+      ...settings,
+      receipt_template: req.query.template || settings.receipt_template || "minimal",
+    };
+    const showLogo = req.query.show_logo !== undefined ? req.query.show_logo === "1" : settings.receipt_show_logo !== "0";
+    const showName = req.query.show_name !== undefined ? req.query.show_name === "1" : settings.receipt_show_name !== "0";
+    const orientation = req.query.orientation || settings.receipt_logo_orientation || "horizontal";
+    const logoPath = showLogo ? findLogoPath(req.user.workspace_id) : null;
+    const LOGO_SIZES = {
+      horizontal: { width: 90, height: 28 },
+      vertical:   { width: 38, height: 56 },
+      square:     { width: 44, height: 44 },
+    };
+    const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
+
+    // Profesional: el primero del workspace si existe, si no datos genéricos
+    const prof = db.prepare("SELECT name, title, email, phone FROM professionals WHERE workspace_id = ? LIMIT 1")
+      .get(req.user.workspace_id) ?? { name: "Profesional", title: "Psicología clínica" };
+
+    // Datos de muestra del recibo
+    const today = new Date().toISOString().slice(0, 10);
+    const inv = {
+      id: "R-2026-0001",
+      patient_id: "PAC-MUESTRA",
+      patient_name: "Paciente de Ejemplo",
+      professional: prof.name,
+      concept: "Sesión individual TCC · 50 min",
+      amount: 180000,
+      method: "Tarjeta",
+      bank: null,
+      eps: null,
+      payment_reference: "TXN-MUESTRA-12345",
+      payment_notes: null,
+      status: "pagada",
+      date: today,
+      paid_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
+    const ctx = { inv, ws, prof, settings: previewSettings, showLogo, showName, logoPath, logoSize };
+    const docDef = buildReceiptDoc(ctx);
+    const stream = printer.createPdfKitDocument(docDef);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="recibo-muestra.pdf"`);
+    stream.pipe(res);
+    stream.end();
+  } catch (e) {
+    console.error("[invoices/preview-pdf]", e);
+    res.status(500).json({ error: "No se pudo generar el preview: " + (e?.message ?? e) });
+  }
+});
+
+/**
  * GET /api/invoices/:id/pdf
  * Genera el PDF del recibo (no es factura electrónica DIAN — solo
  * comprobante de pago profesional). Texto seleccionable, A4.

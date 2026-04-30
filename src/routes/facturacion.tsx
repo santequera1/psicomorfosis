@@ -7,7 +7,7 @@ import { KpiCard } from "@/components/app/KpiCard";
 import { PatientPicker } from "@/components/app/PatientPicker";
 import {
   Receipt, TrendingUp, Wallet, AlertCircle, Plus, X, Search,
-  Download, CheckCircle2, Loader2, Pencil, Trash2, Settings,
+  Download, CheckCircle2, Loader2, Pencil, Trash2, Settings, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Invoice } from "@/lib/api";
@@ -675,7 +675,28 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
   );
   const [logoUrl, setLogoUrl] = useState<string>(settings.receipt_logo_url ?? "");
   const [logoPending, setLogoPending] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function openPreview() {
+    setPreviewing(true);
+    try {
+      const blob = await api.previewReceiptPdf({
+        template, showLogo, showName, orientation,
+      });
+      const url = URL.createObjectURL(blob);
+      // Abrir en nueva pestaña — el navegador renderiza el PDF inline.
+      window.open(url, "_blank", "noopener,noreferrer");
+      // No revocamos el URL inmediatamente: la pestaña nueva lo necesita
+      // mientras el viewer cargue. Lo dejamos colgado (el GC del browser
+      // lo recoge al cerrar la pestaña). Como mucho, es un blob de ~30KB.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      toast.error("No se pudo generar el preview: " + (e?.message ?? e));
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   // Sincronizar form con datos al cargar
   useEffect(() => {
@@ -884,12 +905,24 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
           </section>
         </div>
 
-        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
-          <button type="submit" disabled={saveMu.isPending} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
-            {saveMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Guardar cambios
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-between gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={openPreview}
+            disabled={previewing}
+            className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 disabled:opacity-60"
+            title="Abrir un PDF de muestra con la configuración actual en una nueva pestaña"
+          >
+            {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+            Vista previa
           </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+            <button type="submit" disabled={saveMu.isPending} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
+              {saveMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Guardar cambios
+            </button>
+          </div>
         </footer>
       </form>
     </div>
