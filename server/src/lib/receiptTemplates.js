@@ -60,92 +60,177 @@ function brandHeader(ctx, theme) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TEMPLATE 1: minimal — limpio, profesional, igual al que ya teníamos.
+// TEMPLATE 1: minimal — estilo "letterhead clínico" sobrio.
+// Marca presente solo como acento (banda superior fina + título y total en
+// teal). Sin header pesado, dos columnas para Recibí de / Atendido por,
+// total grande solo tipográfico, tabla de pago como grid sin bordes, firma
+// centrada al pie con línea fina.
 // ════════════════════════════════════════════════════════════════════════════
 export function templateMinimal(ctx) {
-  const { inv, ws, settings } = ctx;
-  const brandColor = "#4a3a8c";
+  const { inv, ws, prof, settings } = ctx;
+
+  const COLORS = {
+    primary:   "#4c7476", // brand-700 — accent
+    primaryDk: "#3e5b5d", // brand-800
+    soft:      "#dbecec", // brand-100
+    softer:    "#ecf6f6", // brand-50
+    ink:       "#20272f", // ink-900
+    inkSoft:   "#414951", // ink-700
+    midText:   "#636a71", // ink-500
+    mute:      "#80878f", // ink-400
+    border:    "#dbecec",
+  };
+
+  // Bloque de marca arriba a la izquierda (con logo opcional + nombre).
+  // Si el usuario apagó "mostrar nombre", solo va el logo. Si apagó ambos,
+  // queda un espacio vacío arriba (raro pero respeta la preferencia).
+  const brandStack = (() => {
+    const items = [];
+    if (ctx.showLogo && ctx.logoPath) {
+      items.push({
+        columns: [
+          { width: ctx.logoSize.width, image: ctx.logoPath, height: ctx.logoSize.height },
+          ctx.showName
+            ? {
+                width: "*",
+                stack: [
+                  { text: ws?.name ?? "Psicomorfosis", fontSize: 18, bold: true, color: COLORS.ink, characterSpacing: -0.2 },
+                  { text: ws?.mode === "organization" ? "Centro de psicología clínica" : "Consultorio de psicología clínica", fontSize: 10, color: COLORS.midText, margin: [0, 2, 0, 0] },
+                ],
+                margin: [12, 0, 0, 0],
+              }
+            : { width: "*", text: "" },
+        ],
+        columnGap: 0,
+      });
+    } else if (ctx.showName) {
+      items.push({ text: ws?.name ?? "Psicomorfosis", fontSize: 18, bold: true, color: COLORS.ink, characterSpacing: -0.2 });
+      items.push({ text: ws?.mode === "organization" ? "Centro de psicología clínica" : "Consultorio de psicología clínica", fontSize: 10, color: COLORS.midText, margin: [0, 2, 0, 0] });
+    }
+    return items;
+  })();
 
   return {
     pageSize: "A4",
-    pageMargins: [42, 50, 42, 50],
+    pageMargins: [56, 50, 56, 40],
     info: { title: `Recibo ${inv.id}`, author: ws?.name ?? "Psicomorfosis", creator: "Psicomorfosis" },
-    defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.4, color: "#1f1f1f" },
+    defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.4, color: COLORS.inkSoft },
+    styles: {
+      label:        { fontSize: 9, color: COLORS.midText, characterSpacing: 1.2, bold: true },
+      sectionTitle: { fontSize: 10, color: COLORS.primary, bold: true, characterSpacing: 1.0 },
+    },
+
+    // Banda fina teal en el borde superior — acento de marca discreto.
+    background: function (currentPage, pageSize) {
+      return [
+        { canvas: [{ type: "rect", x: 0, y: 0, w: pageSize.width, h: 3, color: COLORS.primary }] },
+      ];
+    },
+
     content: [
-      // Header
+      // Cabecera: marca a la izq, recibo + ID + fecha a la der
       {
         columns: [
-          [
-            ...brandHeader(ctx, {
-              brandText: { fontSize: 16, bold: true, color: brandColor },
-            }),
-            settings.address ? { text: settings.address, fontSize: 9, color: "#666", margin: [0, 4, 0, 0] } : null,
-            settings.phone ? { text: `Tel: ${settings.phone}`, fontSize: 9, color: "#666" } : null,
-            settings.city ? { text: settings.city, fontSize: 9, color: "#666" } : null,
-          ].filter(Boolean),
-          [
-            { text: "RECIBO", fontSize: 11, bold: true, color: brandColor, alignment: "right", margin: [0, 4, 0, 2] },
-            { text: inv.id, fontSize: 10, alignment: "right", color: "#1f1f1f", bold: true },
-            { text: fmtDate(inv.date), fontSize: 9, alignment: "right", color: "#666" },
-          ],
+          { width: "*", stack: brandStack },
+          {
+            width: "auto",
+            stack: [
+              { text: "RECIBO DE PAGO", style: "label", alignment: "right" },
+              { text: inv.id, fontSize: 14, bold: true, color: COLORS.primary, alignment: "right", margin: [0, 4, 0, 0], characterSpacing: 0.4 },
+              { text: fmtDate(inv.date), fontSize: 10, color: COLORS.midText, alignment: "right", margin: [0, 2, 0, 0] },
+            ],
+          },
         ],
-        margin: [0, 0, 0, 20],
-      },
-      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#d4d4d4" }] },
-
-      { text: "Recibí de", fontSize: 9, color: "#888", margin: [0, 18, 0, 4] },
-      { text: inv.patient_name || "—", fontSize: 14, bold: true },
-      { text: "por concepto de", fontSize: 9, color: "#888", margin: [0, 14, 0, 4] },
-      { text: inv.concept, fontSize: 11 },
-
-      // Total destacado
-      {
-        margin: [0, 22, 0, 0],
-        table: {
-          widths: ["*"],
-          body: [[
-            {
-              text: [
-                { text: "Valor: ", fontSize: 11, color: "#666" },
-                { text: fmtCop(inv.amount), fontSize: 22, bold: true, color: brandColor },
-              ],
-              fillColor: "#f5f3ff",
-              margin: [16, 14, 16, 14],
-            },
-          ]],
-        },
-        layout: "noBorders",
       },
 
-      { text: "Detalle de pago", fontSize: 9, color: "#888", margin: [0, 22, 0, 6] },
+      // Línea separadora fina bajo la cabecera
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 483, y2: 0, lineWidth: 0.5, lineColor: COLORS.border }], margin: [0, 16, 0, 0] },
+
+      // Bloque Paciente / Profesional en 2 columnas (estilo carta formal)
+      {
+        margin: [0, 20, 0, 0],
+        columns: [
+          {
+            width: "*",
+            stack: [
+              { text: "RECIBÍ DE", style: "label" },
+              { text: inv.patient_name || "—", fontSize: 16, bold: true, color: COLORS.ink, margin: [0, 6, 0, 0] },
+              ...(inv.patient_id ? [{ text: `ID: ${inv.patient_id}`, fontSize: 9, color: COLORS.mute, margin: [0, 3, 0, 0] }] : []),
+            ],
+          },
+          {
+            width: "*",
+            stack: [
+              { text: "ATENDIDO POR", style: "label" },
+              { text: prof?.name ?? inv.professional ?? "—", fontSize: 13, bold: true, color: COLORS.ink, margin: [0, 6, 0, 0] },
+              ...(prof?.title ? [{ text: prof.title, fontSize: 9, color: COLORS.mute, margin: [0, 3, 0, 0] }] : []),
+            ],
+          },
+        ],
+        columnGap: 30,
+      },
+
+      // POR CONCEPTO DE
+      { text: "POR CONCEPTO DE", style: "label", margin: [0, 22, 0, 0] },
+      { text: inv.concept, fontSize: 13, color: COLORS.ink, margin: [0, 6, 0, 0] },
+      ...(inv.modality ? [{ text: `Modalidad: ${inv.modality}`, fontSize: 10, color: COLORS.midText, margin: [0, 3, 0, 0] }] : []),
+
+      // VALOR — solo tipografía, sin caja de fondo
+      {
+        margin: [0, 24, 0, 0],
+        stack: [
+          { text: "VALOR TOTAL", style: "label" },
+          { text: fmtCop(inv.amount), fontSize: 30, bold: true, color: COLORS.primary, margin: [0, 4, 0, 0], characterSpacing: -0.3 },
+        ],
+      },
+
+      // Línea fina antes del detalle de pago
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 483, y2: 0, lineWidth: 0.5, lineColor: COLORS.border }], margin: [0, 22, 0, 0] },
+
+      // DETALLE DE PAGO — grid limpio sin bordes
+      { text: "DETALLE DE PAGO", style: "sectionTitle", margin: [0, 18, 0, 10] },
       {
         table: {
-          widths: ["35%", "*"],
+          widths: ["32%", "*"],
           body: [
-            [{ text: "Método", color: "#888", fontSize: 9 }, { text: methodSummary(inv), fontSize: 10 }],
-            [{ text: "Estado", color: "#888", fontSize: 9 }, { text: inv.status === "pagada" ? "PAGADO" : inv.status.toUpperCase(), fontSize: 10, bold: true, color: inv.status === "pagada" ? "#1f6b46" : "#7a5b00" }],
-            ...(inv.paid_at ? [[{ text: "Fecha de pago", color: "#888", fontSize: 9 }, { text: fmtDate(inv.paid_at), fontSize: 10 }]] : []),
-            ...(inv.payment_reference ? [[{ text: "Referencia", color: "#888", fontSize: 9 }, { text: inv.payment_reference, fontSize: 10, font: "Roboto" }]] : []),
-            ...(inv.payment_notes ? [[{ text: "Notas", color: "#888", fontSize: 9 }, { text: inv.payment_notes, fontSize: 10, italics: true }]] : []),
+            [{ text: "Método de pago", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: methodSummary(inv), fontSize: 11, color: COLORS.ink, border: [false, false, false, false] }],
+            ...(inv.bank ? [[{ text: "Banco", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: inv.bank, fontSize: 11, color: COLORS.ink, border: [false, false, false, false] }]] : []),
+            ...(inv.eps ? [[{ text: "EPS / Convenio", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: inv.eps, fontSize: 11, color: COLORS.ink, border: [false, false, false, false] }]] : []),
+            [{ text: "Estado", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, {
+              text: inv.status === "pagada" ? "Pagado" : inv.status.charAt(0).toUpperCase() + inv.status.slice(1),
+              fontSize: 11,
+              bold: true,
+              color: inv.status === "pagada" ? COLORS.primary : "#7a5b00",
+              border: [false, false, false, false],
+            }],
+            ...(inv.paid_at ? [[{ text: "Fecha de pago", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: fmtDate(inv.paid_at), fontSize: 11, color: COLORS.ink, border: [false, false, false, false] }]] : []),
+            ...(inv.payment_reference ? [[{ text: "Referencia", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: inv.payment_reference, fontSize: 11, color: COLORS.inkSoft, border: [false, false, false, false] }]] : []),
+            ...(inv.payment_notes ? [[{ text: "Notas", color: COLORS.mute, fontSize: 9, border: [false, false, false, false] }, { text: inv.payment_notes, fontSize: 10, italics: true, color: COLORS.midText, border: [false, false, false, false] }]] : []),
           ],
         },
-        layout: { hLineColor: "#eee", vLineWidth: () => 0, hLineWidth: () => 0.5 },
+        layout: { paddingTop: () => 5, paddingBottom: () => 5, paddingLeft: () => 0, paddingRight: () => 0 },
       },
 
-      // Pie de firma
-      { text: "", margin: [0, 40, 0, 0] },
+      // Firma centrada al pie
       {
+        margin: [0, 36, 0, 0],
         columns: [
-          { text: "" },
-          [
-            { canvas: [{ type: "line", x1: 0, y1: 0, x2: 200, y2: 0, lineWidth: 0.5, lineColor: "#aaa" }] },
-            { text: inv.professional ?? "", fontSize: 10, alignment: "left", margin: [0, 6, 0, 0] },
-            { text: ws?.name ?? "", fontSize: 9, alignment: "left", color: "#666" },
-          ],
+          { width: "*", text: "" },
+          {
+            width: 220,
+            stack: [
+              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5, lineColor: COLORS.midText }] },
+              { text: prof?.name ?? inv.professional ?? "", fontSize: 10, alignment: "center", color: COLORS.ink, bold: true, margin: [0, 6, 0, 0] },
+              { text: ws?.name ?? "", fontSize: 9, alignment: "center", color: COLORS.midText },
+              ...(settings.phone ? [{ text: settings.phone, fontSize: 9, alignment: "center", color: COLORS.mute, margin: [0, 2, 0, 0] }] : []),
+            ],
+          },
+          { width: "*", text: "" },
         ],
       },
 
-      { text: "Este documento es un recibo de pago, no constituye factura electrónica DIAN.", fontSize: 8, italics: true, color: "#aaa", margin: [0, 28, 0, 0] },
+      // Disclaimer al pie
+      { text: "Este documento es un comprobante de pago, no constituye factura electrónica DIAN.", fontSize: 8, italics: true, color: COLORS.mute, alignment: "center", margin: [0, 22, 0, 0] },
     ],
   };
 }
@@ -158,22 +243,24 @@ export function templateMinimal(ctx) {
 export function templateEsquinaVerde(ctx) {
   const { inv, ws, prof, settings } = ctx;
 
-  // Paleta del HTML de referencia
+  // Paleta de marca Psicomorfosis: teal apagado (brand 200°), sage (155°),
+  // ink neutro. Convertida desde los tokens oklch de src/styles.css a hex
+  // aproximado (pdfmake no acepta oklch). Tonos clínicos y pulidos.
   const COLORS = {
-    headerBg: "#1a2e25",      // dark teal
-    accent:   "#2a5c42",      // green
-    soft:     "#9fd4b8",      // light green (texto sobre dark)
-    midText:  "#6b9980",      // mid gray-green
-    softBg:   "#f5f9f7",      // soft bg
-    border:   "#dde8e3",
-    rowDiv:   "#edf3f0",
-    pInk:     "#1a2e25",
-    tInk:     "#3d5e50",
-    placeholder: "#9fb8ad",
-    avPaciBg: "#e1f5ee",
-    avPaciFg: "#0f6e56",
-    avTeraBg: "#1a2e25",
-    avTeraFg: "#9fd4b8",
+    headerBg: "#2c4243",      // brand-900 (teal muy oscuro)
+    accent:   "#4c7476",      // brand-700 — PRIMARY
+    soft:     "#98b8ba",      // brand-400 (texto soft sobre dark)
+    midText:  "#636a71",      // ink-500 (etiquetas y micro-info)
+    softBg:   "#ecf6f6",      // brand-50 (filas/total)
+    border:   "#dbecec",      // brand-100
+    rowDiv:   "#dbecec",      // brand-100
+    pInk:     "#20272f",      // ink-900 (textos primarios)
+    tInk:     "#414951",      // ink-700 (texto secundario en tabla)
+    placeholder: "#80878f",   // ink-400
+    avPaciBg: "#dbecec",      // brand-100
+    avPaciFg: "#3e5b5d",      // brand-800
+    avTeraBg: "#2c4243",      // brand-900
+    avTeraFg: "#98b8ba",      // brand-400
   };
 
   // Roboto no tiene el glifo ✓ (U+2713) ni los emoji ⏳/⚠ — salían como
@@ -181,10 +268,10 @@ export function templateEsquinaVerde(ctx) {
   // demás estados quedan solo con texto (el color ya transmite el estado).
   const statusBadge = (() => {
     const map = {
-      pagada:    { bg: COLORS.accent, fg: COLORS.soft, label: "PAGADO",    check: true  },
-      pendiente: { bg: "#fef3c7",     fg: "#92400e",   label: "PENDIENTE", check: false },
-      vencida:   { bg: "#fee2e2",     fg: "#991b1b",   label: "VENCIDO",   check: false },
-      borrador:  { bg: "#e5e7eb",     fg: "#374151",   label: "BORRADOR",  check: false },
+      pagada:    { bg: COLORS.accent, fg: "#ffffff", label: "PAGADO",    check: true  },
+      pendiente: { bg: "#fef3c7",     fg: "#92400e", label: "PENDIENTE", check: false },
+      vencida:   { bg: "#fee2e2",     fg: "#991b1b", label: "VENCIDO",   check: false },
+      borrador:  { bg: "#e5e7eb",     fg: "#374151", label: "BORRADOR",  check: false },
     };
     return map[inv.status] ?? map.borrador;
   })();
@@ -194,8 +281,9 @@ export function templateEsquinaVerde(ctx) {
   function modalityChip(modality) {
     if (!modality) return null;
     const m = modality.toLowerCase();
-    let bg = COLORS.avPaciBg, fg = COLORS.avPaciFg;
-    if (m.includes("virtual")) { bg = "#e8f4fd"; fg = "#1a5276"; }
+    // Presencial (sage) por default, Virtual (lavender), Tele (ámbar suave)
+    let bg = "#cad9ce", fg = "#3e5b5d";          // sage-200 / brand-800
+    if (m.includes("virtual")) { bg = "#eee8f6"; fg = "#5e4d7a"; }   // lavender-100 / lavender-700
     else if (m.includes("tele")) { bg = "#fef3c7"; fg = "#92400e"; }
     return { label: modality, bg, fg };
   }
@@ -291,7 +379,7 @@ export function templateEsquinaVerde(ctx) {
       ],
     ],
     columnGap: 20,
-    margin: [32, 24, 32, 24],
+    margin: [36, 28, 36, 28],
   };
 
   // Modalidad como chip coloreado por tipo
@@ -312,7 +400,7 @@ export function templateEsquinaVerde(ctx) {
     : { text: "—", fontSize: 10, color: COLORS.placeholder, border: [false, false, false, false], margin: [0, 6, 0, 0], alignment: "center" };
 
   const servicesTable = {
-    margin: [32, 0, 32, 0],
+    margin: [36, 0, 36, 0],
     table: {
       widths: ["*", 78, 75, 75],
       headerRows: 1,
@@ -341,8 +429,8 @@ export function templateEsquinaVerde(ctx) {
       hLineColor: COLORS.rowDiv,
       hLineWidth: () => 0.5,
       vLineWidth: () => 0,
-      paddingTop: () => 10,
-      paddingBottom: () => 10,
+      paddingTop: () => 12,
+      paddingBottom: () => 12,
       paddingLeft: () => 12,
       paddingRight: () => 12,
     },
@@ -351,7 +439,7 @@ export function templateEsquinaVerde(ctx) {
   // MÉTODO DE PAGO con icono opcional
   const cardIcon = paymentMethodIcon();
   const paymentBlock = {
-    margin: [32, 22, 32, 0],
+    margin: [36, 24, 36, 0],
     columns: [
       {
         width: "*",
@@ -410,19 +498,19 @@ export function templateEsquinaVerde(ctx) {
   };
 
   const totalBlock = {
-    margin: [0, 24, 0, 0],
+    margin: [0, 28, 0, 0],
     table: {
       widths: ["*"],
       body: [[
         {
           fillColor: COLORS.softBg,
-          margin: [32, 18, 32, 18],
+          margin: [36, 20, 36, 20],
           columns: [
             [
               { text: "TOTAL PAGADO", style: "tinyHead" },
               { text: "1 servicio", fontSize: 10, color: COLORS.placeholder, margin: [0, 2, 0, 0] },
             ],
-            { text: fmtCop(inv.amount), fontSize: 24, bold: true, color: COLORS.pInk, alignment: "right" },
+            { text: fmtCop(inv.amount), fontSize: 28, bold: true, color: COLORS.pInk, alignment: "right" },
           ],
         },
       ]],
@@ -434,7 +522,7 @@ export function templateEsquinaVerde(ctx) {
   // separados por un margen suave. Igual a la referencia.
   const generatedOn = fmtDateShort(new Date().toISOString());
   const footer = {
-    margin: [32, 18, 32, 0],
+    margin: [36, 20, 36, 0],
     columns: [
       {
         width: "*",
@@ -459,12 +547,12 @@ export function templateEsquinaVerde(ctx) {
 
   return {
     pageSize: "A4",
-    pageMargins: [0, 0, 0, 32],
+    pageMargins: [0, 0, 0, 40],
     info: { title: `Recibo ${inv.id}`, author: ws?.name ?? "Psicomorfosis", creator: "Psicomorfosis" },
     defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.4, color: COLORS.pInk },
     styles: {
-      tinyHead: { fontSize: 9, bold: true, color: COLORS.midText, characterSpacing: 0.5 },
-      thHead:   { fontSize: 9, bold: true, color: COLORS.midText, characterSpacing: 0.5 },
+      tinyHead: { fontSize: 9, bold: true, color: COLORS.midText, characterSpacing: 1.2 },
+      thHead:   { fontSize: 9, bold: true, color: COLORS.midText, characterSpacing: 1.2 },
     },
     content: [
       // Header dark teal (banda de borde a borde)
@@ -475,7 +563,7 @@ export function templateEsquinaVerde(ctx) {
           body: [[
             {
               fillColor: COLORS.headerBg,
-              margin: [32, 28, 32, 28],
+              margin: [36, 32, 36, 32],
               columns: [
                 {
                   width: "*",
@@ -485,8 +573,8 @@ export function templateEsquinaVerde(ctx) {
                       width: "*",
                       stack: ctx.showName
                         ? [
-                            { text: ws?.name ?? "Psicomorfosis", color: "#ffffff", fontSize: 18, bold: true, margin: [0, 0, 0, 0] },
-                            { text: ws?.mode === "organization" ? "Centro de psicología clínica" : "Consultorio de psicología clínica", fontSize: 11, color: COLORS.soft, margin: [0, 4, 0, 0] },
+                            { text: ws?.name ?? "Psicomorfosis", color: "#ffffff", fontSize: 20, bold: true, characterSpacing: 0, margin: [0, 0, 0, 0] },
+                            { text: ws?.mode === "organization" ? "Centro de psicología clínica" : "Consultorio de psicología clínica", fontSize: 10, color: COLORS.soft, margin: [0, 4, 0, 0] },
                           ]
                         : [],
                       margin: [ctx.showLogo ? 12 : 0, 0, 0, 0],
@@ -532,8 +620,8 @@ export function templateEsquinaVerde(ctx) {
                       layout: "noBorders",
                       alignment: "right",
                     },
-                    { text: inv.id, color: COLORS.soft, fontSize: 13, bold: true, alignment: "right", margin: [0, 10, 0, 0], characterSpacing: 0.4 },
-                    { text: `Emitido: ${fmtDateShort(inv.created_at ?? inv.date)}`, color: "#4e7a63", fontSize: 9, alignment: "right", margin: [0, 2, 0, 0] },
+                    { text: inv.id, color: COLORS.soft, fontSize: 12, bold: true, alignment: "right", margin: [0, 10, 0, 0], characterSpacing: 0.4 },
+                    { text: `Emitido: ${fmtDateShort(inv.created_at ?? inv.date)}`, color: COLORS.soft, fontSize: 9, alignment: "right", margin: [0, 2, 0, 0] },
                   ],
                 },
               ],
@@ -543,8 +631,8 @@ export function templateEsquinaVerde(ctx) {
         layout: "noBorders",
       },
       personasBlock,
-      { canvas: [{ type: "line", x1: 32, y1: 0, x2: 563, y2: 0, lineWidth: 0.5, lineColor: COLORS.border }] },
-      { text: "DETALLE DE SERVICIOS", style: "tinyHead", margin: [32, 22, 32, 12] },
+      { canvas: [{ type: "line", x1: 36, y1: 0, x2: 559, y2: 0, lineWidth: 0.75, lineColor: COLORS.border }] },
+      { text: "DETALLE DE SERVICIOS", style: "tinyHead", margin: [36, 22, 36, 12] },
       servicesTable,
       paymentBlock,
       totalBlock,
