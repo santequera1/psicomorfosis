@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
-import { Users, CalendarCheck, TrendingUp, HeartHandshake, Download, Info } from "lucide-react";
+import { Users, CalendarCheck, TrendingUp, HeartHandshake, Download } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { REVENUE_7D, REASONS, SESSIONS_BY_MODALITY } from "@/lib/mock-data";
 import { api } from "@/lib/api";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -17,18 +16,18 @@ export const Route = createFileRoute("/reportes")({
 
 const PIE_COLORS = ["var(--brand-700)", "var(--sage-500)", "var(--lavender-400)", "var(--brand-400)", "var(--warning)"];
 
-const RETENCION = [
-  { mes: "Ene", nuevos: 12, retenidos: 38, alta: 4 },
-  { mes: "Feb", nuevos: 15, retenidos: 42, alta: 3 },
-  { mes: "Mar", nuevos: 18, retenidos: 49, alta: 5 },
-  { mes: "Abr", nuevos: 14, retenidos: 56, alta: 6 },
-];
-
 function ReportesPage() {
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() as Promise<any> });
   const { data: appointments = [] } = useQuery({ queryKey: ["all-appointments"], queryFn: () => api.listAppointments() });
   const { data: summary } = useQuery({ queryKey: ["invoices-summary"], queryFn: () => api.invoicesSummary() });
+  const { data: reportsStats } = useQuery({ queryKey: ["reports-stats"], queryFn: () => api.getReportsStats() });
+
+  const revenue7d = reportsStats?.revenue7d ?? [];
+  const sessionsByModality = reportsStats?.sessionsByModality ?? [];
+  const reasons = reportsStats?.reasons ?? [];
+  const retention = reportsStats?.retention ?? [];
+  const revenueHasData = revenue7d.some((r) => r.value > 0);
 
   const activePatients = patients.filter((p) => p.status === "activo").length;
   const sessionsRealized = (appointments as any[]).filter((a) => a.status === "atendida").length;
@@ -53,13 +52,6 @@ function ReportesPage() {
           </button>
         </header>
 
-        <div className="rounded-lg border border-brand-700/20 bg-brand-50/40 p-3 mb-5 flex items-start gap-2">
-          <Info className="h-4 w-4 text-brand-700 shrink-0 mt-0.5" />
-          <p className="text-xs text-ink-700">
-            KPIs calculados desde la base de datos real. Las gráficas siguen mostrando datos de ejemplo mientras se conecta el endpoint histórico.
-          </p>
-        </div>
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <KpiCard icon={<Users className="h-4 w-4" />} label="Pacientes activos" value={String(activePatients)} delta={{ neutral: true, value: "" }} hint={`${patients.length} en total`} />
           <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones realizadas" value={String(sessionsRealized)} delta={{ neutral: true, value: "" }} hint={`${attendanceRate}% asistencia`} />
@@ -69,51 +61,70 @@ function ReportesPage() {
 
         <div className="grid lg:grid-cols-3 gap-5 mb-6">
           <Card title="Ingresos · semana" subtitle="Tendencia diaria" className="lg:col-span-2">
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={REVENUE_7D} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--brand-700)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="var(--brand-700)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="var(--line-100)" vertical={false} />
-                <XAxis dataKey="day" stroke="var(--ink-400)" fontSize={11} />
-                <YAxis stroke="var(--ink-400)" fontSize={11} tickFormatter={(v) => `${v / 1000000}M`} />
-                <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--line-200)", borderRadius: 10, fontSize: 12 }} />
-                <Area type="monotone" dataKey="value" stroke="var(--brand-700)" strokeWidth={2} fill="url(#rev)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="relative">
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={revenue7d} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--brand-700)" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="var(--brand-700)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--line-100)" vertical={false} />
+                  <XAxis dataKey="day" stroke="var(--ink-400)" fontSize={11} />
+                  <YAxis stroke="var(--ink-400)" fontSize={11} tickFormatter={(v) => `${v / 1000000}M`} />
+                  <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--line-200)", borderRadius: 10, fontSize: 12 }} />
+                  <Area type="monotone" dataKey="value" stroke="var(--brand-700)" strokeWidth={2} fill="url(#rev)" />
+                </AreaChart>
+              </ResponsiveContainer>
+              {!revenueHasData && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <p className="text-xs text-ink-400 italic bg-surface/80 px-3 py-1 rounded">Sin recibos pagados esta semana</p>
+                </div>
+              )}
+            </div>
           </Card>
 
-          <Card title="Modalidades" subtitle="Distribución del mes">
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={SESSIONS_BY_MODALITY} dataKey="value" nameKey="modality" innerRadius={50} outerRadius={85} paddingAngle={2}>
-                  {SESSIONS_BY_MODALITY.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Legend wrapperStyle={{ fontSize: 11 }} iconSize={8} />
-              </PieChart>
-            </ResponsiveContainer>
+          <Card title="Modalidades" subtitle="Últimos 30 días">
+            {sessionsByModality.length === 0 ? (
+              <div className="h-65 flex items-center justify-center">
+                <p className="text-xs text-ink-400 italic">Aún no hay citas en los últimos 30 días.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={sessionsByModality} dataKey="value" nameKey="modality" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                    {sessionsByModality.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Legend wrapperStyle={{ fontSize: 11 }} iconSize={8} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </Card>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-5">
           <Card title="Motivos de consulta" subtitle="Top 7 categorías">
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={REASONS} layout="vertical" margin={{ top: 5, right: 15, left: 50, bottom: 5 }}>
-                <CartesianGrid stroke="var(--line-100)" horizontal={false} />
-                <XAxis type="number" stroke="var(--ink-400)" fontSize={11} />
-                <YAxis dataKey="reason" type="category" stroke="var(--ink-400)" fontSize={11} width={80} />
-                <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--line-200)", borderRadius: 10, fontSize: 12 }} />
-                <Bar dataKey="value" fill="var(--brand-700)" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {reasons.length === 0 ? (
+              <div className="h-65 flex items-center justify-center">
+                <p className="text-xs text-ink-400 italic">Aún no hay pacientes con motivo registrado.</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={reasons} layout="vertical" margin={{ top: 5, right: 15, left: 50, bottom: 5 }}>
+                  <CartesianGrid stroke="var(--line-100)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--ink-400)" fontSize={11} />
+                  <YAxis dataKey="reason" type="category" stroke="var(--ink-400)" fontSize={11} width={80} />
+                  <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--line-200)", borderRadius: 10, fontSize: 12 }} />
+                  <Bar dataKey="value" fill="var(--brand-700)" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Card>
 
-          <Card title="Retención de pacientes" subtitle="Nuevos vs retenidos vs alta">
+          <Card title="Retención de pacientes" subtitle="Últimos 6 meses · nuevos / retenidos / alta">
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={RETENCION} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <BarChart data={retention} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid stroke="var(--line-100)" vertical={false} />
                 <XAxis dataKey="mes" stroke="var(--ink-400)" fontSize={11} />
                 <YAxis stroke="var(--ink-400)" fontSize={11} />

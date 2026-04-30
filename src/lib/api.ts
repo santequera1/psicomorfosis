@@ -585,6 +585,12 @@ export const api = {
     reasons: Array<{ reason: string; value: number }>;
     revenue7d: Array<{ day: string; value: number }>;
   }>("/api/workspace/dashboard-stats"),
+  getReportsStats: () => request<{
+    sessionsByModality: Array<{ modality: string; value: number }>;
+    reasons: Array<{ reason: string; value: number }>;
+    revenue7d: Array<{ day: string; value: number }>;
+    retention: Array<{ mes: string; nuevos: number; retenidos: number; alta: number }>;
+  }>("/api/workspace/reports-stats"),
   /** Firma del profesional vinculado al usuario actual. */
   getMySignature: () => request<{ professional_id: number; name: string; tarjeta_profesional: string | null; signature_url: string | null }>("/api/workspace/me/signature"),
   setMySignature: (dataUrl: string) =>
