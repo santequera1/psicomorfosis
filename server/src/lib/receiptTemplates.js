@@ -178,46 +178,111 @@ export function templateEsquinaVerde(ctx) {
 
   const statusBadge = (() => {
     const map = {
-      pagada:    { bg: COLORS.accent, fg: COLORS.soft, label: "PAGADO" },
-      pendiente: { bg: "#fef3c7",     fg: "#92400e",   label: "PENDIENTE" },
-      vencida:   { bg: "#fee2e2",     fg: "#991b1b",   label: "VENCIDO" },
+      pagada:    { bg: COLORS.accent, fg: COLORS.soft, label: "✓ PAGADO" },
+      pendiente: { bg: "#fef3c7",     fg: "#92400e",   label: "⏳ PENDIENTE" },
+      vencida:   { bg: "#fee2e2",     fg: "#991b1b",   label: "⚠ VENCIDO" },
       borrador:  { bg: "#e5e7eb",     fg: "#374151",   label: "BORRADOR" },
     };
     return map[inv.status] ?? map.borrador;
   })();
 
-  // Personas: bloques en columnas
+  // Color del chip de modalidad — distinto por tipo (presencial verde,
+  // virtual azul, tele ámbar). Si no hay valor, devuelve null y se omite.
+  function modalityChip(modality) {
+    if (!modality) return null;
+    const m = modality.toLowerCase();
+    let bg = COLORS.avPaciBg, fg = COLORS.avPaciFg;
+    if (m.includes("virtual")) { bg = "#e8f4fd"; fg = "#1a5276"; }
+    else if (m.includes("tele")) { bg = "#fef3c7"; fg = "#92400e"; }
+    return { label: modality, bg, fg };
+  }
+
+  // Avatar como bloque alineado: canvas + texto centrado vía margin negativo.
+  // Esta técnica funciona en pdfmake sin sacar el bloque del flow del PDF
+  // (a diferencia de absolutePosition, que rompe la paginación).
+  function avatarBlock(initials, bg, fg) {
+    return {
+      width: 44,
+      stack: [
+        { canvas: [{ type: "ellipse", x: 22, y: 22, color: bg, r1: 22, r2: 22 }] },
+        { text: initials, color: fg, fontSize: 14, bold: true, alignment: "center", margin: [0, -30, 0, 0] },
+      ],
+    };
+  }
+
+  // Logo del header: si hay imagen subida la usamos. Si no, dibujamos un
+  // círculo con borde light + iniciales (placeholder elegante que se ve
+  // similar a una marca real).
+  function headerLogoBlock() {
+    if (ctx.showLogo && ctx.logoPath) {
+      return { width: ctx.logoSize.width, image: ctx.logoPath, height: ctx.logoSize.height };
+    }
+    if (!ctx.showLogo) return { width: 0, text: "" };
+    // Placeholder: círculo con iniciales del workspace
+    const initials = initialsOf(ws?.name);
+    return {
+      width: 36,
+      stack: [
+        {
+          canvas: [
+            { type: "ellipse", x: 18, y: 18, color: COLORS.headerBg, r1: 18, r2: 18, lineWidth: 1.2, lineColor: COLORS.soft },
+          ],
+        },
+        { text: initials, color: COLORS.soft, fontSize: 13, bold: true, alignment: "center", margin: [0, -25, 0, 0] },
+      ],
+    };
+  }
+
+  // Icono de tarjeta de crédito (canvas vector) — solo si method=Tarjeta.
+  function paymentMethodIcon() {
+    if ((inv.method ?? "").toLowerCase() !== "tarjeta") return null;
+    return {
+      width: 38,
+      canvas: [
+        { type: "rect", x: 0, y: 0, w: 36, h: 24, r: 3, color: COLORS.headerBg },
+        { type: "rect", x: 0, y: 7, w: 36, h: 6, color: COLORS.accent },
+        { type: "rect", x: 4, y: 16, w: 12, h: 4, r: 1, color: COLORS.soft },
+      ],
+    };
+  }
+
   const personasBlock = {
     columns: [
-      // Paciente (izq)
       [
         { text: "PACIENTE", style: "tinyHead" },
         {
-          margin: [0, 8, 0, 0],
+          margin: [0, 10, 0, 0],
           columns: [
-            { width: 36, ...avatarCircle(initialsOf(inv.patient_name), COLORS.avPaciBg, COLORS.avPaciFg) },
-            { width: "*", text: [
-              { text: (inv.patient_name || "—") + "\n", fontSize: 12, bold: true, color: COLORS.pInk },
-              { text: (inv.patient_id ? `ID: ${inv.patient_id}` : "Sin ID"), fontSize: 9, color: COLORS.midText },
-            ], margin: [10, 4, 0, 0] },
+            avatarBlock(initialsOf(inv.patient_name), COLORS.avPaciBg, COLORS.avPaciFg),
+            {
+              width: "*",
+              text: [
+                { text: (inv.patient_name || "—") + "\n", fontSize: 13, bold: true, color: COLORS.pInk },
+                { text: (inv.patient_id ? `ID: ${inv.patient_id}` : "Sin ID"), fontSize: 9, color: COLORS.midText },
+              ],
+              margin: [12, 4, 0, 0],
+            },
           ],
+          columnGap: 0,
         },
       ],
-      // Separator
       { width: 1, canvas: [{ type: "line", x1: 0, y1: 0, x2: 0, y2: 70, lineWidth: 0.5, lineColor: COLORS.border }] },
-      // Terapeuta (der)
       [
         { text: "TERAPEUTA", style: "tinyHead" },
         {
-          margin: [0, 8, 0, 0],
+          margin: [0, 10, 0, 0],
           columns: [
-            { width: 36, ...avatarCircle(initialsOf(prof?.name ?? inv.professional), COLORS.avTeraBg, COLORS.avTeraFg) },
-            { width: "*", text: [
-              { text: (prof?.name ?? inv.professional ?? "—") + "\n", fontSize: 12, bold: true, color: COLORS.pInk },
-              ...(prof?.title ? [{ text: prof.title + "\n", fontSize: 9, color: COLORS.midText }] : []),
-              ...(prof?.title && prof.title.match(/Lic|TP|tarjeta/i) ? [] : (prof?.title ? [] : [])),
-            ], margin: [10, 4, 0, 0] },
+            avatarBlock(initialsOf(prof?.name ?? inv.professional), COLORS.avTeraBg, COLORS.avTeraFg),
+            {
+              width: "*",
+              text: [
+                { text: (prof?.name ?? inv.professional ?? "—") + "\n", fontSize: 13, bold: true, color: COLORS.pInk },
+                ...(prof?.title ? [{ text: prof.title + "\n", fontSize: 9, color: COLORS.midText }] : []),
+              ],
+              margin: [12, 4, 0, 0],
+            },
           ],
+          columnGap: 0,
         },
       ],
     ],
@@ -225,25 +290,22 @@ export function templateEsquinaVerde(ctx) {
     margin: [32, 24, 32, 24],
   };
 
-  // Tabla de servicios — por ahora un solo concepto (futuro: array)
-  // Modalidad del servicio (Presencial/Virtual/Tele) — distinta del método
-  // de pago. Si no está definida, omitimos el chip.
-  const modality = inv.modality ?? "";
-  const modalityCell = modality
+  // Modalidad como chip coloreado por tipo
+  const chip = modalityChip(inv.modality);
+  const modalityCell = chip
     ? {
         stack: [{
-          text: modality,
-          fontSize: 10,
-          color: COLORS.avPaciFg,
-          fillColor: COLORS.avPaciBg,
+          text: chip.label,
+          fontSize: 9,
+          color: chip.fg,
+          fillColor: chip.bg,
           alignment: "center",
-          margin: [4, 4, 4, 4],
+          margin: [6, 4, 6, 4],
         }],
-        alignment: "left",
         border: [false, false, false, false],
         margin: [0, 4, 0, 0],
       }
-    : { text: "—", fontSize: 10, color: COLORS.placeholder, border: [false, false, false, false], margin: [0, 6, 0, 0] };
+    : { text: "—", fontSize: 10, color: COLORS.placeholder, border: [false, false, false, false], margin: [0, 6, 0, 0], alignment: "center" };
 
   const servicesTable = {
     margin: [32, 0, 32, 0],
@@ -253,7 +315,7 @@ export function templateEsquinaVerde(ctx) {
       body: [
         [
           { text: "CONCEPTO", style: "thHead", fillColor: COLORS.softBg },
-          { text: "MODALIDAD", style: "thHead", fillColor: COLORS.softBg },
+          { text: "MODALIDAD", style: "thHead", fillColor: COLORS.softBg, alignment: "center" },
           { text: "FECHA", style: "thHead", fillColor: COLORS.softBg },
           { text: "VALOR", style: "thHead", fillColor: COLORS.softBg, alignment: "right" },
         ],
@@ -282,20 +344,64 @@ export function templateEsquinaVerde(ctx) {
     },
   };
 
+  // MÉTODO DE PAGO con icono opcional
+  const cardIcon = paymentMethodIcon();
   const paymentBlock = {
     margin: [32, 22, 32, 0],
     columns: [
-      [
-        { text: "MÉTODO DE PAGO", style: "tinyHead" },
-        { text: methodSummary(inv), fontSize: 11, color: COLORS.pInk, bold: true, margin: [0, 6, 0, 0] },
-        ...(inv.paid_at ? [{ text: `Pagado el ${fmtDate(inv.paid_at)}`, fontSize: 10, color: COLORS.midText, margin: [0, 2, 0, 0] }] : []),
-      ],
-      ...(inv.payment_reference ? [
-        [
-          { text: "REFERENCIA", style: "tinyHead", alignment: "right" },
-          { text: inv.payment_reference, fontSize: 11, color: COLORS.tInk, alignment: "right", margin: [0, 6, 0, 0] },
+      {
+        width: "*",
+        stack: [
+          { text: "MÉTODO DE PAGO", style: "tinyHead" },
+          {
+            margin: [0, 8, 0, 0],
+            columns: cardIcon
+              ? [
+                  cardIcon,
+                  {
+                    width: "*",
+                    text: [
+                      { text: methodSummary(inv), fontSize: 11, color: COLORS.pInk, bold: true },
+                      ...(inv.paid_at ? [{ text: `\n${(inv.method ?? "").toLowerCase() === "tarjeta" ? "Pagado" : "Recibido"} el ${fmtDate(inv.paid_at)}`, fontSize: 9, color: COLORS.midText }] : []),
+                    ],
+                    margin: [10, 0, 0, 0],
+                  },
+                ]
+              : [
+                  {
+                    width: "*",
+                    text: [
+                      { text: methodSummary(inv), fontSize: 11, color: COLORS.pInk, bold: true },
+                      ...(inv.paid_at ? [{ text: `\nPagado el ${fmtDate(inv.paid_at)}`, fontSize: 9, color: COLORS.midText }] : []),
+                    ],
+                  },
+                ],
+          },
         ],
-      ] : []),
+      },
+      ...(inv.payment_reference
+        ? [{
+            width: "auto",
+            stack: [
+              { text: "REFERENCIA", style: "tinyHead", alignment: "right" },
+              {
+                margin: [0, 8, 0, 0],
+                table: {
+                  widths: ["auto"],
+                  body: [[{
+                    text: inv.payment_reference,
+                    fontSize: 10,
+                    color: COLORS.tInk,
+                    fillColor: COLORS.softBg,
+                    margin: [10, 5, 10, 5],
+                    border: [false, false, false, false],
+                  }]],
+                },
+                layout: "noBorders",
+              },
+            ],
+          }]
+        : []),
     ],
   };
 
@@ -320,14 +426,30 @@ export function templateEsquinaVerde(ctx) {
     layout: "noBorders",
   };
 
+  // Footer: contacto a la izquierda + fecha de generación a la derecha,
+  // separados por un margen suave. Igual a la referencia.
+  const generatedOn = fmtDateShort(new Date().toISOString());
   const footer = {
-    margin: [32, 16, 32, 0],
+    margin: [32, 18, 32, 0],
     columns: [
-      [
-        ...(settings.email ? [{ text: settings.email, fontSize: 10, color: COLORS.midText }] : []),
-        ...(settings.address ? [{ text: settings.address, fontSize: 10, color: COLORS.placeholder, margin: [0, 2, 0, 0] }] : []),
-        { text: "Comprobante de pago — no constituye factura electrónica DIAN", fontSize: 8, italics: true, color: COLORS.placeholder, margin: [0, 12, 0, 0] },
-      ],
+      {
+        width: "*",
+        stack: [
+          ...(settings.email ? [{ text: settings.email, fontSize: 10, color: COLORS.midText }] : []),
+          ...(settings.address || settings.city ? [{
+            text: [settings.address, settings.city].filter(Boolean).join(" · "),
+            fontSize: 10, color: COLORS.placeholder, margin: [0, 2, 0, 0],
+          }] : []),
+        ],
+      },
+      {
+        width: "auto",
+        text: `Documento generado el ${generatedOn}`,
+        fontSize: 9,
+        color: COLORS.placeholder,
+        alignment: "right",
+        margin: [0, 4, 0, 0],
+      },
     ],
   };
 
@@ -341,7 +463,7 @@ export function templateEsquinaVerde(ctx) {
       thHead:   { fontSize: 9, bold: true, color: COLORS.midText, characterSpacing: 0.5 },
     },
     content: [
-      // Header dark teal completo de borde a borde
+      // Header dark teal (banda de borde a borde)
       {
         margin: [0, 0, 0, 0],
         table: {
@@ -353,26 +475,42 @@ export function templateEsquinaVerde(ctx) {
               columns: [
                 {
                   width: "*",
-                  stack: [
+                  columns: [
+                    headerLogoBlock(),
                     {
-                      columns: [
-                        ctx.showLogo && ctx.logoPath
-                          ? { width: ctx.logoSize.width, image: ctx.logoPath, height: ctx.logoSize.height }
-                          : { width: 0, text: "" },
-                        ctx.showName
-                          ? { width: "*", text: ws?.name ?? "Psicomorfosis", color: "#ffffff", fontSize: 18, bold: true, margin: [ctx.showLogo && ctx.logoPath ? 12 : 0, 4, 0, 0] }
-                          : { width: 0, text: "" },
-                      ],
+                      width: "*",
+                      stack: ctx.showName
+                        ? [
+                            { text: ws?.name ?? "Psicomorfosis", color: "#ffffff", fontSize: 18, bold: true, margin: [0, 0, 0, 0] },
+                            { text: ws?.mode === "organization" ? "Centro de psicología clínica" : "Consultorio de psicología clínica", fontSize: 11, color: COLORS.soft, margin: [0, 4, 0, 0] },
+                          ]
+                        : [],
+                      margin: [ctx.showLogo ? 12 : 0, 0, 0, 0],
                     },
-                    ...(ws?.mode === "organization"
-                      ? [{ text: "Centro de psicología clínica", fontSize: 11, color: COLORS.soft, margin: [ctx.showLogo && ctx.logoPath ? ctx.logoSize.width + 12 : 0, 4, 0, 0] }]
-                      : [{ text: "Consultorio de psicología clínica", fontSize: 11, color: COLORS.soft, margin: [ctx.showLogo && ctx.logoPath ? ctx.logoSize.width + 12 : 0, 4, 0, 0] }]),
                   ],
+                  columnGap: 0,
                 },
                 {
                   width: "auto",
                   stack: [
-                    { text: statusBadge.label, color: statusBadge.fg, fillColor: statusBadge.bg, fontSize: 9, bold: true, alignment: "center", margin: [10, 4, 10, 4], characterSpacing: 0.5 },
+                    {
+                      table: {
+                        widths: ["auto"],
+                        body: [[{
+                          text: statusBadge.label,
+                          color: statusBadge.fg,
+                          fillColor: statusBadge.bg,
+                          fontSize: 9,
+                          bold: true,
+                          alignment: "center",
+                          margin: [10, 4, 10, 4],
+                          characterSpacing: 0.5,
+                          border: [false, false, false, false],
+                        }]],
+                      },
+                      layout: "noBorders",
+                      alignment: "right",
+                    },
                     { text: inv.id, color: COLORS.soft, fontSize: 12, bold: true, alignment: "right", margin: [0, 8, 0, 0] },
                     { text: `Emitido: ${fmtDateShort(inv.created_at ?? inv.date)}`, color: "#4e7a63", fontSize: 9, alignment: "right", margin: [0, 2, 0, 0] },
                   ],
@@ -392,35 +530,6 @@ export function templateEsquinaVerde(ctx) {
       footer,
     ],
   };
-}
-
-/** Helper para dibujar un avatar circular con iniciales (canvas + texto). */
-function avatarCircle(initials, bg, fg) {
-  return {
-    stack: [
-      {
-        canvas: [
-          { type: "ellipse", x: 18, y: 18, color: bg, r1: 18, r2: 18 },
-        ],
-        absolutePosition: { x: 0, y: 0 },
-      },
-      {
-        text: initials,
-        color: fg,
-        fontSize: 12,
-        bold: true,
-        alignment: "center",
-        margin: [0, 11, 0, 0],
-      },
-    ],
-    width: 36,
-    height: 36,
-  };
-}
-
-function methodTagText(method) {
-  // Normalizar para mostrar (mantener legible)
-  return method || "—";
 }
 
 /**
