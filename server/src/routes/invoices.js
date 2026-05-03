@@ -263,10 +263,15 @@ router.get("/preview-pdf", (req, res) => {
  * comprobante de pago profesional). Texto seleccionable, A4.
  */
 router.get("/:id/pdf", (req, res) => {
+  console.log(`[invoices/pdf] HIT id=${req.params.id} ws=${req.user.workspace_id}`);
   try {
     const inv = db.prepare("SELECT * FROM invoices WHERE id = ? AND workspace_id = ?")
       .get(req.params.id, req.user.workspace_id);
-    if (!inv) return res.status(404).json({ error: "Recibo no encontrado" });
+    if (!inv) {
+      console.log(`[invoices/pdf] not found id=${req.params.id}`);
+      return res.status(404).json({ error: "Recibo no encontrado" });
+    }
+    console.log(`[invoices/pdf] inv loaded, building doc...`);
 
     const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(req.user.workspace_id);
     const settings = Object.fromEntries(
@@ -293,11 +298,25 @@ router.get("/:id/pdf", (req, res) => {
     const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
 
     const ctx = { inv, ws, prof, settings, showLogo, showName, logoPath, logoSize };
+    console.log(`[invoices/pdf] ctx ready, template=${settings.receipt_template ?? "minimal"} logoPath=${logoPath}`);
     const docDef = buildReceiptDoc(ctx);
+    console.log(`[invoices/pdf] docDef built, creating stream...`);
     const stream = printer.createPdfKitDocument(docDef);
+    console.log(`[invoices/pdf] stream created, piping...`);
     const safe = (inv.patient_name || "recibo").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${inv.id}_${safe}.pdf"`);
+    // Log explícito de errores del stream — si pdfmake/pdfkit emite error
+    // async durante el streaming (logo corrupto, fuente faltante, etc.)
+    // sin esto el proceso muere callado y el cliente ve ERR_CONNECTION_RESET.
+    stream.on("error", (err) => {
+      console.error("[invoices/pdf stream error]", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error generando PDF: " + (err?.message ?? err) });
+      } else {
+        res.destroy(err);
+      }
+    });
     stream.pipe(res);
     stream.end();
   } catch (e) {

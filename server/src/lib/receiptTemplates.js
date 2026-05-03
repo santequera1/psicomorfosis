@@ -70,15 +70,16 @@ export function templateMinimal(ctx) {
   const { inv, ws, prof, settings } = ctx;
 
   const COLORS = {
-    primary:   "#4c7476", // brand-700 — accent
-    primaryDk: "#3e5b5d", // brand-800
-    soft:      "#dbecec", // brand-100
-    softer:    "#ecf6f6", // brand-50
-    ink:       "#20272f", // ink-900
-    inkSoft:   "#414951", // ink-700
-    midText:   "#636a71", // ink-500
-    mute:      "#80878f", // ink-400
-    border:    "#dbecec",
+    primary:   "#2e4142", // brand-900 — color predominante profundo
+    primaryDk: "#243536", // brand-950 — variant más oscura
+    accent:    "#3d5a5b", // brand-800 — acento intermedio
+    soft:      "#d1e8e8", // brand-100 — tonos menta suaves
+    softer:    "#e8f4f4", // brand-50 — fondo muy claro
+    ink:       "#1a2425", // ink-950 — texto principal casi negro
+    inkSoft:   "#374647", // ink-800 — texto secundario
+    midText:   "#5a6b6c", // ink-600 — microtexto
+    mute:      "#8a9a9a", // ink-400 — texto deshabilitado
+    border:    "#c4dcdc", // brand-200 — bordes sutiles
   };
 
   // Bloque de marca arriba a la izquierda (con logo opcional + nombre).
@@ -247,20 +248,20 @@ export function templateEsquinaVerde(ctx) {
   // ink neutro. Convertida desde los tokens oklch de src/styles.css a hex
   // aproximado (pdfmake no acepta oklch). Tonos clínicos y pulidos.
   const COLORS = {
-    headerBg: "#2c4243",      // brand-900 (teal muy oscuro)
-    accent:   "#4c7476",      // brand-700 — PRIMARY
-    soft:     "#98b8ba",      // brand-400 (texto soft sobre dark)
-    midText:  "#636a71",      // ink-500 (etiquetas y micro-info)
-    softBg:   "#ecf6f6",      // brand-50 (filas/total)
-    border:   "#dbecec",      // brand-100
-    rowDiv:   "#dbecec",      // brand-100
-    pInk:     "#20272f",      // ink-900 (textos primarios)
-    tInk:     "#414951",      // ink-700 (texto secundario en tabla)
-    placeholder: "#80878f",   // ink-400
-    avPaciBg: "#dbecec",      // brand-100
-    avPaciFg: "#3e5b5d",      // brand-800
-    avTeraBg: "#2c4243",      // brand-900
-    avTeraFg: "#98b8ba",      // brand-400
+    headerBg: "#2e4142",      // brand-900 (teal muy oscuro)
+    accent:   "#3d5a5b",      // brand-700 — PRIMARY
+    soft:     "#c8dad8",      // brand-400 (texto soft sobre dark)
+    midText:  "#698889",      // ink-500 (etiquetas y micro-info)
+    softBg:   "#e8f4f4",      // brand-50 (filas/total)
+    border:   "#c8dad8",      // brand-100
+    rowDiv:   "#c8dad8",      // brand-100
+    pInk:     "#1a2425",      // ink-900 (textos primarios)
+    tInk:     "#435556",      // ink-700 (texto secundario en tabla)
+    placeholder: "#9aa8a8",   // ink-400
+    avPaciBg: "#c8dad8",      // brand-100
+    avPaciFg: "#3d5a5b",      // brand-800
+    avTeraBg: "#2e4142",      // brand-900
+    avTeraFg: "#c8dad8",      // brand-400
   };
 
   // Roboto no tiene el glifo ✓ (U+2713) ni los emoji ⏳/⚠ — salían como
@@ -269,9 +270,9 @@ export function templateEsquinaVerde(ctx) {
   const statusBadge = (() => {
     const map = {
       pagada:    { bg: COLORS.accent, fg: "#ffffff", label: "PAGADO",    check: true  },
-      pendiente: { bg: "#fef3c7",     fg: "#92400e", label: "PENDIENTE", check: false },
-      vencida:   { bg: "#fee2e2",     fg: "#991b1b", label: "VENCIDO",   check: false },
-      borrador:  { bg: "#e5e7eb",     fg: "#374151", label: "BORRADOR",  check: false },
+      pendiente: { bg: "COLORS.warnBg",     fg: "COLORS.warnFg", label: "PENDIENTE", check: false },
+      vencida:   { bg: "COLORS.dangerBg",     fg: "COLORS.dangerFg", label: "VENCIDO",   check: false },
+      borrador:  { bg: "COLORS.draftBg",     fg: "COLORS.draftFg", label: "BORRADOR",  check: false },
     };
     return map[inv.status] ?? map.borrador;
   })();
@@ -282,9 +283,9 @@ export function templateEsquinaVerde(ctx) {
     if (!modality) return null;
     const m = modality.toLowerCase();
     // Presencial (sage) por default, Virtual (lavender), Tele (ámbar suave)
-    let bg = "#cad9ce", fg = "#3e5b5d";          // sage-200 / brand-800
+    let bg = "#cad9ce", fg = "#3d5a5b";          // sage-200 / brand-800
     if (m.includes("virtual")) { bg = "#eee8f6"; fg = "#5e4d7a"; }   // lavender-100 / lavender-700
-    else if (m.includes("tele")) { bg = "#fef3c7"; fg = "#92400e"; }
+    else if (m.includes("tele")) { bg = "COLORS.warnBg"; fg = "COLORS.warnFg"; }
     return { label: modality, bg, fg };
   }
 
@@ -650,3 +651,4 @@ export function buildReceiptDoc(ctx) {
   if (t === "esquina_verde") return templateEsquinaVerde(ctx);
   return templateMinimal(ctx);
 }
+
