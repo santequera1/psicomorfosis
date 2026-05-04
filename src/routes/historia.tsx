@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, BLOCK_LABELS, type SoapContent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
+import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 
 type Patient = ApiPatient;
 
@@ -62,6 +63,7 @@ function HistoriaPage() {
   const [patientId, setPatientId] = useState<string | null>(search.id ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [apptOpen, setApptOpen] = useState(false);
 
   // Cuando carguen los pacientes, si no hay id seleccionado, usar el primero
   useEffect(() => {
@@ -122,18 +124,19 @@ function HistoriaPage() {
           </div>
         )}
 
-        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteOpen(true)} />
+        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteOpen(true)} onOpenAppt={() => setApptOpen(true)} />
         <ClinicalBlocks patientId={patient.id} />
         <SessionNotes patientId={patient.id} onOpenNew={() => setNoteOpen(true)} />
       </div>
 
       {pickerOpen && <PatientPickerModal patients={patients} currentId={patient.id} onPick={(id) => { setPatientId(id); setPickerOpen(false); }} onClose={() => setPickerOpen(false)} />}
       {noteOpen && <NewSoapNoteModal patient={patient} onClose={() => setNoteOpen(false)} />}
+      {apptOpen && <NewAppointmentModal patients={patients} prefilledPatient={patient} onClose={() => setApptOpen(false)} />}
     </AppShell>
   );
 }
 
-function PatientHeader({ patient, isOrg, onOpenNote }: { patient: Patient; isOrg: boolean; patients: Patient[]; onOpenNote: () => void }) {
+function PatientHeader({ patient, isOrg, onOpenNote, onOpenAppt }: { patient: Patient; isOrg: boolean; patients: Patient[]; onOpenNote: () => void; onOpenAppt: () => void }) {
   const initialsLetters = (patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
   const wa = whatsappUrl(patient.phone);
   return (
@@ -177,12 +180,12 @@ function PatientHeader({ patient, isOrg, onOpenNote }: { patient: Patient; isOrg
             >
               <Edit3 className="h-3.5 w-3.5" /> Nota
             </button>
-            <Link
-              to="/agenda"
+            <button
+              onClick={onOpenAppt}
               className="h-9 px-3 rounded-md bg-brand-700 text-white text-xs sm:text-sm hover:bg-brand-800 inline-flex items-center justify-center gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" /> Agendar
-            </Link>
+            </button>
           </div>
         </div>
 

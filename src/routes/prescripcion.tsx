@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
@@ -25,12 +25,18 @@ interface TaskRow {
   sessions_remaining: number;
 }
 
+type PrescripcionSearch = { patientId?: string; openAssign?: boolean };
+
 export const Route = createFileRoute("/prescripcion")({
   head: () => ({
     meta: [
       { title: "Prescripción · Psicomorfosis" },
       { name: "description", content: "Planes terapéuticos, tareas TCC y seguimiento de adherencia." },
     ],
+  }),
+  validateSearch: (search: Record<string, unknown>): PrescripcionSearch => ({
+    patientId: typeof search.patientId === "string" ? search.patientId : undefined,
+    openAssign: search.openAssign === true || search.openAssign === "1" || search.openAssign === "true" || undefined,
   }),
   component: PrescripcionPage,
 });
@@ -57,10 +63,11 @@ const TYPE_LABEL: Record<TaskType, string> = {
 };
 
 function PrescripcionPage() {
+  const search = useSearch({ from: "/prescripcion" });
   const [filter, setFilter] = useState<"todas" | "activas" | "vencidas">("activas");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<TaskRow | null>(null);
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(!!search.openAssign || !!search.patientId);
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks"],
@@ -295,21 +302,18 @@ function PrescripcionPage() {
         </section>
       </div>
 
-      {assignOpen && <AssignTaskModal onClose={() => setAssignOpen(false)} />}
+      {assignOpen && <AssignTaskModal initialPatientId={search.patientId ?? null} onClose={() => setAssignOpen(false)} />}
     </AppShell>
   );
 }
 
-function AssignTaskModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+function AssignTaskModal({ onClose, initialPatientId }: { onClose: () => void; initialPatientId?: string | null }) {
+  // Si viene patientId por search (ej. desde el perfil del paciente),
+  // arrancamos en el paso 2 con el paciente preseleccionado.
+  const [step, setStep] = useState<1 | 2 | 3>(initialPatientId ? 2 : 1);
   const [template, setTemplate] = useState<TaskType>("registro_pensamientos");
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
-  const [patient, setPatient] = useState<string>("");
-
-  // Auto-seleccionar el primer paciente cuando cargan
-  if (!patient && patients.length > 0) {
-    // OK — el useState inicial queda vacío; actualizamos al seleccionar.
-  }
+  const [patient, setPatient] = useState<string>(initialPatientId ?? "");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4">

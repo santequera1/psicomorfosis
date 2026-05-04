@@ -47,7 +47,11 @@ function ReportesPage() {
             <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Reportes</h1>
             <p className="text-sm text-ink-500 mt-1">Indicadores operativos del workspace</p>
           </div>
-          <button className="h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 flex items-center gap-2">
+          <button
+            onClick={() => window.print()}
+            title="Imprimir o guardar como PDF desde el diálogo del navegador"
+            className="h-10 px-3 sm:px-4 rounded-lg border border-line-200 bg-surface text-xs sm:text-sm text-ink-700 hover:border-brand-400 flex items-center gap-2"
+          >
             <Download className="h-4 w-4" /> <span>Exportar PDF</span>
           </button>
         </header>

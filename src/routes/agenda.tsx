@@ -7,9 +7,11 @@ import { RiskBadge } from "@/components/app/RiskBadge";
 import { KpiCard } from "@/components/app/KpiCard";
 import { api, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { toast } from "sonner";
+import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import {
   Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X,
-  ChevronLeft, MapPin, Users, Video, CalendarDays, Search, Loader2,
+  ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/agenda")({
@@ -493,188 +495,59 @@ function ListView({ appointments, onPick }: { appointments: any[]; onPick: (s: a
   );
 }
 
-function NewAppointmentModal({ patients, onClose }: { patients: ApiPatient[]; onClose: () => void }) {
-  const qc = useQueryClient();
-  const { data: workspace } = useWorkspace();
-  const isOrg = workspace?.mode === "organization";
-
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<ApiPatient | null>(null);
-  const [showResults, setShowResults] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [time, setTime] = useState("10:30");
-  const [modality, setModality] = useState<Modality>("individual");
-  const [duration, setDuration] = useState(50);
-  const [notes, setNotes] = useState("");
-  const [sedeId, setSedeId] = useState<number | "">(isOrg && workspace?.sedes[0] ? workspace.sedes[0].id : "");
-
-  const filtered = query.trim()
-    ? patients.filter((p) => {
-        const q = query.toLowerCase();
-        return p.name.toLowerCase().includes(q) || (p.preferredName ?? "").toLowerCase().includes(q) || p.doc.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
-      }).slice(0, 6)
-    : [];
-
-  const mu = useMutation({
-    mutationFn: () => api.createAppointment({
-      patient_id: selected?.id ?? null,
-      patient_name: selected?.name ?? "",
-      professional: selected?.professional ?? "",
-      professional_id: selected?.professionalId ?? null,
-      sede_id: sedeId === "" ? null : sedeId,
-      date,
-      time,
-      duration_min: duration,
-      modality: modality,
-      room: modality === "tele" ? "Telepsicología" : "",
-      status: "confirmada",
-      notes,
-    } as any),
-    onSuccess: () => {
-      // Invalidar TODAS las queries de citas (incluyendo las que llevan fecha en el key)
-      // y los pacientes (porque derivamos next_session/last_contact de appointments).
-      qc.invalidateQueries({ queryKey: ["appointments"] });
-      qc.invalidateQueries({ queryKey: ["all-appointments"] });
-      qc.invalidateQueries({ queryKey: ["patients"] });
-      onClose();
-    },
-  });
-
-  function pick(p: ApiPatient) {
-    setSelected(p);
-    setQuery(p.preferredName ?? p.name);
-    setShowResults(false);
-    if (p.modality) setModality(p.modality);
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (selected) mu.mutate(); }}
-        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="p-5 border-b border-line-100 flex items-start justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Nueva cita</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Crear cita</h3>
-          </div>
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
-            <X className="h-4 w-4" />
-          </button>
-        </header>
-        <div className="p-5 space-y-3">
-          <label className="block relative">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Paciente</span>
-            <div className="mt-1 flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-surface focus-within:border-brand-700">
-              <Search className="h-4 w-4 text-ink-400" />
-              <input
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setSelected(null); setShowResults(true); }}
-                onFocus={() => setShowResults(true)}
-                placeholder="Escribe el nombre, documento o ID…"
-                className="flex-1 bg-transparent text-sm outline-none text-ink-900"
-                required
-              />
-              {selected && (
-                <button type="button" onClick={() => { setSelected(null); setQuery(""); }} className="text-ink-400 hover:text-ink-700">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            {showResults && filtered.length > 0 && !selected && (
-              <ul className="absolute z-20 mt-1 left-0 right-0 rounded-md border border-line-200 bg-surface shadow-modal max-h-64 overflow-y-auto">
-                {filtered.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => pick(p)}
-                      className="w-full flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-brand-50/70 text-left"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm text-ink-900 truncate">{p.preferredName ? `${p.preferredName} · ` : ""}{p.name}</div>
-                        <div className="text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</div>
-                      </div>
-                      <RiskBadge risk={p.risk} types={p.riskTypes} compact />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {showResults && query.trim() && filtered.length === 0 && !selected && (
-              <div className="absolute z-20 mt-1 left-0 right-0 rounded-md border border-line-200 bg-surface shadow-modal p-3 text-xs text-ink-500">
-                Sin coincidencias. Revisa el nombre o crea el paciente primero.
-              </div>
-            )}
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
-            </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Modalidad</span>
-              <select value={modality} onChange={(e) => setModality(e.target.value as Modality)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="individual">Individual</option>
-                <option value="pareja">Pareja</option>
-                <option value="familiar">Familiar</option>
-                <option value="grupal">Grupal</option>
-                <option value="tele">Telepsicología</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Duración</span>
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value={50}>50 min</option>
-                <option value={30}>30 min</option>
-                <option value={60}>60 min</option>
-                <option value={90}>90 min</option>
-              </select>
-            </label>
-          </div>
-
-          {isOrg && workspace && workspace.sedes.length > 0 && (
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Sede</span>
-              <select value={sedeId} onChange={(e) => setSedeId(e.target.value === "" ? "" : Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="">Sin sede asignada</option>
-                {workspace.sedes.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Notas</span>
-            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observaciones internas…" className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
-          </label>
-        </div>
-        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
-          <button type="submit" disabled={!selected || mu.isPending} className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
-            {mu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Crear cita
-          </button>
-        </footer>
-      </form>
-    </div>
-  );
-}
-
 function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => void }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const patientName = slot.patient_name ?? slot.patient ?? "Paciente";
   const patientId = slot.patient_id ?? null;
+
+  const [reschedOpen, setReschedOpen] = useState(false);
+  const [newDate, setNewDate] = useState<string>(slot.date ?? new Date().toISOString().slice(0, 10));
+  const [newTime, setNewTime] = useState<string>(slot.time ?? "09:00");
+  const [busy, setBusy] = useState(false);
+
+  async function startSession() {
+    setBusy(true);
+    try {
+      await api.updateAppointment(slot.id, { status: "atendida" });
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      onClose();
+      if (patientId) navigate({ to: "/historia", search: { id: patientId } });
+    } catch (e: any) {
+      toast.error("No se pudo marcar como atendida: " + (e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reschedule() {
+    if (!newDate || !newTime) return;
+    setBusy(true);
+    try {
+      await api.updateAppointment(slot.id, { date: newDate, time: newTime });
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      toast.success("Cita reagendada");
+      onClose();
+    } catch (e: any) {
+      toast.error("No se pudo reagendar: " + (e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelAppointment() {
+    if (!confirm("¿Cancelar esta cita?")) return;
+    setBusy(true);
+    try {
+      await api.deleteAppointment(slot.id);
+      qc.invalidateQueries({ queryKey: ["appointments"] });
+      onClose();
+    } catch (e: any) {
+      toast.error("No se pudo cancelar: " + (e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
@@ -696,26 +569,55 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
           </div>
         </header>
         <div className="p-5 space-y-2">
-          <button className="w-full h-10 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2">
-            <CalendarDays className="h-4 w-4" /> Iniciar sesión
+          <button
+            onClick={startSession}
+            disabled={busy}
+            title="Marca la cita como atendida y abre la historia clínica del paciente"
+            className="w-full h-10 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <CalendarDays className="h-4 w-4" /> Atender ahora
           </button>
           <div className="grid grid-cols-2 gap-2">
-            <button className="h-10 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Reagendar</button>
             <button
-              onClick={async () => {
-                if (!confirm("¿Cancelar esta cita?")) return;
-                await api.listAppointments; // noop to silence lint
-                try {
-                  await fetch(`${api.base}/api/appointments/${slot.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("psm.token")}` } });
-                  qc.invalidateQueries({ queryKey: ["appointments"] });
-                  onClose();
-                } catch (e) { console.error(e); }
-              }}
-              className="h-10 rounded-md border border-line-200 text-sm text-ink-700 hover:border-risk-high hover:text-risk-high"
+              onClick={() => setReschedOpen((v) => !v)}
+              className="h-10 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+            >
+              Reagendar
+            </button>
+            <button
+              onClick={cancelAppointment}
+              disabled={busy}
+              className="h-10 rounded-md border border-line-200 text-sm text-ink-700 hover:border-risk-high hover:text-risk-high disabled:opacity-60"
             >
               Cancelar cita
             </button>
           </div>
+
+          {reschedOpen && (
+            <div className="rounded-lg border border-line-200 bg-bg-100/30 p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
+                  <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
+                  <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+                </label>
+              </div>
+              <button
+                onClick={reschedule}
+                disabled={busy || !newDate || !newTime}
+                className="w-full h-9 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+              >
+                {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Confirmar nueva fecha
+              </button>
+            </div>
+          )}
+
           {patientId && (
             <>
               <button

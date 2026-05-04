@@ -157,8 +157,8 @@ function PerfilPanel() {
       <div className="flex items-center gap-5 mb-7 pb-7 border-b border-line-100">
         <div className="h-20 w-20 rounded-2xl bg-brand-100 text-brand-800 flex items-center justify-center text-2xl font-serif">{initials}</div>
         <div>
-          <button disabled className="h-9 px-4 rounded-lg border border-line-200 bg-bg-100 text-ink-500 text-sm cursor-not-allowed" title="Disponible próximamente">Cambiar foto</button>
-          <p className="text-xs text-ink-500 mt-2">JPG o PNG · máx. 2MB · disponible próximamente</p>
+          <p className="text-sm text-ink-700 font-medium">{initials !== "—" ? "Tus iniciales" : "Sin foto de perfil"}</p>
+          <p className="text-xs text-ink-500 mt-1">Por ahora se muestran tus iniciales en lugar de una foto.</p>
         </div>
       </div>
 

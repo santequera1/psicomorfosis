@@ -8,9 +8,11 @@ import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { RiskPicker } from "@/components/app/RiskPicker";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
-import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye } from "lucide-react";
+import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, Calendar } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
+import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/pacientes")({
   head: () => ({
@@ -59,6 +61,7 @@ function PatientsPage() {
   const [editing, setEditing] = useState<Patient | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Patient | null>(null);
+  const [apptFor, setApptFor] = useState<Patient | null>(null);
   const [viewMode, setViewMode] = usePersistedViewMode("psm.patients.view", "list");
 
   const { data: patients = [], isLoading, error } = useQuery({
@@ -78,6 +81,10 @@ function PatientsPage() {
   }), [patients, query, status, modality, riskFilter]);
 
   function exportCSV() {
+    if (filtered.length === 0) {
+      toast.error("No hay pacientes para exportar con los filtros actuales");
+      return;
+    }
     const rows: string[][] = [["ID", "Nombre", "Edad", "Motivo", "Profesional", "Modalidad", "Estado", "Riesgo", "Próxima sesión"], ...filtered.map((p) => [p.id, p.name, String(p.age || ""), p.reason, p.professional, p.modality, p.status, p.risk, p.nextSession ?? ""])];
     const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
@@ -86,6 +93,7 @@ function PatientsPage() {
     a.href = url; a.download = `pacientes-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success(`Exportados ${filtered.length} paciente${filtered.length === 1 ? "" : "s"} a CSV`);
   }
 
   return (
@@ -210,6 +218,9 @@ function PatientsPage() {
                       <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenuOpen(null)}>
                         <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
                       </Link>
+                      <button onClick={(e) => { e.stopPropagation(); setApptFor(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
+                        <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
+                      </button>
                       <div className="my-1 h-px bg-line-100" />
                       <button onClick={(e) => { e.stopPropagation(); setRemoving(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
                         <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
@@ -314,6 +325,12 @@ function PatientsPage() {
                             >
                               <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia clínica
                             </Link>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setApptFor(p); setMenuOpen(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left"
+                            >
+                              <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
+                            </button>
                             <div className="my-1 h-px bg-line-100" />
                             <button
                               onClick={(e) => { e.stopPropagation(); setRemoving(p); setMenuOpen(null); }}
@@ -342,6 +359,7 @@ function PatientsPage() {
                       patient={p}
                       onEdit={() => setEditing(p)}
                       onRemove={() => setRemoving(p)}
+                      onSchedule={() => setApptFor(p)}
                     />
                   ))}
                 </div>
@@ -377,15 +395,17 @@ function PatientsPage() {
       {createOpen && <NewPatientModal onClose={() => setCreateOpen(false)} />}
       {editing && <EditPatientModal patient={editing} onClose={() => setEditing(null)} />}
       {removing && <ArchiveOrDeleteModal patient={removing} onClose={() => setRemoving(null)} />}
+      {apptFor && <NewAppointmentModal patients={patients as any} prefilledPatient={apptFor as any} onClose={() => setApptFor(null)} />}
     </AppShell>
   );
 }
 
 // ─── Vista de tarjetas: PatientCard ─────────────────────────────────────────
-function PatientCard({ patient: p, onEdit, onRemove }: {
+function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
   patient: Patient;
   onEdit: () => void;
   onRemove: () => void;
+  onSchedule: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   const wa = whatsappUrl(p.phone);
@@ -446,6 +466,9 @@ function PatientCard({ patient: p, onEdit, onRemove }: {
                 <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenu(false)}>
                   <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
                 </Link>
+                <button onClick={() => { setMenu(false); onSchedule(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
+                  <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
+                </button>
                 <div className="my-1 h-px bg-line-100" />
                 <button onClick={() => { setMenu(false); onRemove(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
                   <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
+import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 
 export const Route = createFileRoute("/pacientes_/$id")({
   head: ({ params }: { params: { id: string } }) => ({
@@ -45,6 +46,7 @@ function PatientDetailPage() {
   const [tab, setTab] = useState<Tab>("datos");
   const [editing, setEditing] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [apptOpen, setApptOpen] = useState(false);
 
   const { data: patient, isLoading, error } = useQuery({
     queryKey: ["patient", id],
@@ -158,6 +160,13 @@ function PatientDetailPage() {
               <span className="sm:hidden">Nota</span>
             </Link>
             <button
+              onClick={() => setApptOpen(true)}
+              className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              title="Agendar nueva cita con este paciente"
+            >
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Agendar</span><span className="sm:hidden">Agendar</span>
+            </button>
+            <button
               onClick={() => setInviteOpen(true)}
               className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
               title="Invitar al portal del paciente"
@@ -226,13 +235,14 @@ function PatientDetailPage() {
         {tab === "datos" && <TabDatos patient={patient} />}
         {tab === "historia" && <TabHistoria patient={patient} />}
         {tab === "tests" && <TabTests rows={patientTests as any[]} />}
-        {tab === "prescripcion" && <TabPrescripcion rows={tasks} />}
+        {tab === "prescripcion" && <TabPrescripcion rows={tasks} patientId={id} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
         {tab === "facturacion" && <TabFacturacion patientId={id} />}
       </div>
 
       {editing && patient && <EditPatientInlineModal patient={patient} onClose={() => setEditing(false)} />}
       {inviteOpen && patient && <InvitePortalModal patient={patient} onClose={() => setInviteOpen(false)} />}
+      {apptOpen && patient && <NewAppointmentModal patients={[patient]} prefilledPatient={patient} onClose={() => setApptOpen(false)} />}
     </AppShell>
   );
 }
@@ -611,7 +621,7 @@ function TabTests({ rows }: { rows: any[] }) {
   );
 }
 
-function TabPrescripcion({ rows }: { rows: any[] }) {
+function TabPrescripcion({ rows, patientId }: { rows: any[]; patientId: string }) {
   const STATUS: Record<string, { bg: string; text: string; label: string; Icon: React.ComponentType<{ className?: string }> }> = {
     asignada: { bg: "bg-brand-50", text: "text-brand-800", label: "Asignada", Icon: Clock },
     en_progreso: { bg: "bg-warning-soft", text: "text-risk-moderate", label: "En progreso", Icon: Clock },
@@ -623,7 +633,11 @@ function TabPrescripcion({ rows }: { rows: any[] }) {
     <div className="rounded-xl border border-line-200 bg-surface">
       <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
         <h3 className="font-serif text-base text-ink-900">Plan terapéutico · tareas</h3>
-        <Link to="/prescripcion" className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5">
+        <Link
+          to="/prescripcion"
+          search={{ patientId, openAssign: true } as any}
+          className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+        >
           <Plus className="h-3.5 w-3.5" /> Asignar tarea
         </Link>
       </div>

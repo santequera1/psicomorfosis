@@ -219,7 +219,7 @@ export function Topbar() {
                   <nav className="p-1">
                     <UserMenuItem to="/configuracion" icon={UserIcon} label="Mi perfil" onClose={() => setUserOpen(false)} />
                     <UserMenuItem to="/configuracion" icon={Settings} label="Configuración" onClose={() => setUserOpen(false)} />
-                    <UserMenuItem icon={HelpCircle} label="Centro de ayuda" onClose={() => setUserOpen(false)} />
+                    <UserMenuItem href="mailto:soporte@psicomorfosis.co?subject=Soporte%20Psicomorfosis" icon={HelpCircle} label="Centro de ayuda" onClose={() => setUserOpen(false)} />
                   </nav>
                   <div className="p-1 border-t border-line-100">
                     <button
@@ -243,7 +243,7 @@ export function Topbar() {
   );
 }
 
-function UserMenuItem({ to, icon: Icon, label, onClose }: { to?: string; icon: React.ComponentType<{ className?: string }>; label: string; onClose: () => void }) {
+function UserMenuItem({ to, href, icon: Icon, label, onClose }: { to?: string; href?: string; icon: React.ComponentType<{ className?: string }>; label: string; onClose: () => void }) {
   const inner = (
     <>
       <Icon className="h-4 w-4 text-ink-500" />
@@ -253,6 +253,9 @@ function UserMenuItem({ to, icon: Icon, label, onClose }: { to?: string; icon: R
   const cls = "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-ink-700 hover:bg-bg-100 transition-colors";
   if (to) {
     return <Link to={to} onClick={onClose} className={cls}>{inner}</Link>;
+  }
+  if (href) {
+    return <a href={href} onClick={onClose} className={cls}>{inner}</a>;
   }
   return <button onClick={onClose} className={cls}>{inner}</button>;
 }
@@ -309,9 +312,6 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
-        <footer className="px-4 py-2.5 border-t border-line-100 bg-bg-100/30">
-          <button className="w-full text-xs text-center text-brand-700 hover:underline">Ver todas las notificaciones</button>
-        </footer>
       </div>
     </>
   );

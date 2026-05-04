@@ -388,12 +388,19 @@ function ReceiptFormModal({
   const isMethodTransfer = method === "Transferencia";
   const isMethodConvenio = method === "Convenio";
 
+  // Cerrar solo con Esc o el botón X — clic afuera NO cierra para evitar que
+  // el usuario pierda los datos del formulario por accidente.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm p-4 pt-16 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm p-4 pt-16 overflow-y-auto">
       <form
         onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
         className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -693,14 +700,20 @@ function ReceiptDetailModal({
   );
 }
 
-// ─── Modal: personalizar recibos (logo, nombre, plantilla, orientación) ───
-type ReceiptTemplate = "minimal" | "esquina_verde";
+// ─── Modal: personalizar recibos (logo, nombre, color, orientación) ───
 type LogoOrientation = "horizontal" | "vertical" | "square";
 
-const TEMPLATE_OPTIONS: { value: ReceiptTemplate; label: string; desc: string }[] = [
-  { value: "minimal", label: "Minimal", desc: "Limpio y profesional, fondo blanco con acento violeta." },
-  { value: "esquina_verde", label: "Esquina verde", desc: "Header verde-teal oscuro, paciente y terapeuta con avatares." },
+const DEFAULT_BRAND_COLOR = "#2e4142";
+const COLOR_PRESETS: { value: string; label: string }[] = [
+  { value: "#2e4142", label: "Teal" },
+  { value: "#1e3a5f", label: "Marino" },
+  { value: "#1f3a2f", label: "Bosque" },
+  { value: "#5a2a2e", label: "Borgoña" },
+  { value: "#3a3458", label: "Índigo" },
+  { value: "#262626", label: "Grafito" },
 ];
+
+const isValidHex = (s: string) => /^#[0-9a-f]{6}$/i.test(s);
 
 function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -709,15 +722,15 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
     queryFn: () => api.getSettings(),
   });
 
-  const [template, setTemplate] = useState<ReceiptTemplate>(
-    (settings.receipt_template as ReceiptTemplate) ?? "minimal",
-  );
   const [showLogo, setShowLogo] = useState<boolean>(settings.receipt_show_logo !== "0");
   const [showName, setShowName] = useState<boolean>(settings.receipt_show_name !== "0");
   const [orientation, setOrientation] = useState<LogoOrientation>(
     (settings.receipt_logo_orientation as LogoOrientation) ?? "horizontal",
   );
   const [logoUrl, setLogoUrl] = useState<string>(settings.receipt_logo_url ?? "");
+  const [brandColor, setBrandColor] = useState<string>(
+    isValidHex(settings.receipt_brand_color ?? "") ? settings.receipt_brand_color! : DEFAULT_BRAND_COLOR,
+  );
   const [logoPending, setLogoPending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -726,7 +739,7 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
     setPreviewing(true);
     try {
       const blob = await api.previewReceiptPdf({
-        template, showLogo, showName, orientation,
+        showLogo, showName, orientation, brandColor,
       });
       const url = URL.createObjectURL(blob);
       // Abrir en nueva pestaña — el navegador renderiza el PDF inline.
@@ -745,20 +758,20 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
   // Sincronizar form con datos al cargar
   useEffect(() => {
     if (isLoading) return;
-    setTemplate((settings.receipt_template as ReceiptTemplate) ?? "minimal");
     setShowLogo(settings.receipt_show_logo !== "0");
     setShowName(settings.receipt_show_name !== "0");
     setOrientation((settings.receipt_logo_orientation as LogoOrientation) ?? "horizontal");
     setLogoUrl(settings.receipt_logo_url ?? "");
+    setBrandColor(isValidHex(settings.receipt_brand_color ?? "") ? settings.receipt_brand_color! : DEFAULT_BRAND_COLOR);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
   const saveMu = useMutation({
     mutationFn: () => api.updateSettings({
-      receipt_template: template,
       receipt_show_logo: showLogo ? "1" : "0",
       receipt_show_name: showName ? "1" : "0",
       receipt_logo_orientation: orientation,
+      receipt_brand_color: brandColor,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
@@ -829,26 +842,49 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="p-5 space-y-5">
-          {/* Plantilla */}
+          {/* Color base — define header, banda del total y acentos del PDF */}
           <section>
-            <label className="block text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-2">Plantilla</label>
-            <div className="grid grid-cols-2 gap-2">
-              {TEMPLATE_OPTIONS.map((t) => (
+            <label className="block text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-2">Color base</label>
+            <div className="grid grid-cols-6 gap-2">
+              {COLOR_PRESETS.map((c) => (
                 <button
-                  key={t.value}
+                  key={c.value}
                   type="button"
-                  onClick={() => setTemplate(t.value)}
+                  onClick={() => setBrandColor(c.value)}
+                  title={c.label}
                   className={cn(
-                    "rounded-lg border p-3 text-left transition-all",
-                    template === t.value
-                      ? "border-brand-700 bg-brand-50/50 ring-1 ring-brand-700"
+                    "rounded-lg border p-1.5 transition-all flex flex-col items-center gap-1.5",
+                    brandColor.toLowerCase() === c.value.toLowerCase()
+                      ? "border-brand-700 ring-1 ring-brand-700"
                       : "border-line-200 hover:border-brand-400",
                   )}
                 >
-                  <div className="text-sm font-medium text-ink-900">{t.label}</div>
-                  <div className="text-[11px] text-ink-500 mt-0.5 leading-snug">{t.desc}</div>
+                  <div className="w-full h-7 rounded" style={{ backgroundColor: c.value }} />
+                  <span className="text-[10px] text-ink-700">{c.label}</span>
                 </button>
               ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <label className="text-[11px] text-ink-500 inline-flex items-center gap-2">
+                <span>Personalizado</span>
+                <input
+                  type="color"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="h-7 w-9 rounded border border-line-200 bg-transparent cursor-pointer"
+                />
+              </label>
+              <input
+                type="text"
+                value={brandColor}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith("#") && v.length <= 7) setBrandColor(v);
+                }}
+                onBlur={() => { if (!isValidHex(brandColor)) setBrandColor(DEFAULT_BRAND_COLOR); }}
+                placeholder="#2e4142"
+                className="h-7 w-24 px-2 rounded border border-line-200 text-xs font-mono text-ink-700 focus:border-brand-400 focus:outline-none"
+              />
             </div>
           </section>
 

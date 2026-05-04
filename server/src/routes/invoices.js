@@ -204,19 +204,21 @@ router.get("/preview-pdf", (req, res) => {
         .map((s) => [s.key, s.value])
     );
 
-    // Settings desde query (preview en vivo) sobreescriben los persistidos
+    // Settings desde query (preview en vivo) sobreescriben los persistidos.
+    // brand_color es opcional — el template lo deriva en paleta completa.
     const previewSettings = {
       ...settings,
       receipt_template: req.query.template || settings.receipt_template || "minimal",
+      ...(req.query.brand_color ? { receipt_brand_color: req.query.brand_color } : {}),
     };
     const showLogo = req.query.show_logo !== undefined ? req.query.show_logo === "1" : settings.receipt_show_logo !== "0";
     const showName = req.query.show_name !== undefined ? req.query.show_name === "1" : settings.receipt_show_name !== "0";
     const orientation = req.query.orientation || settings.receipt_logo_orientation || "horizontal";
     const logoPath = showLogo ? findLogoPath(req.user.workspace_id) : null;
     const LOGO_SIZES = {
-      horizontal: { width: 90, height: 28 },
-      vertical:   { width: 38, height: 56 },
-      square:     { width: 44, height: 44 },
+      horizontal: { width: 117, height: 36 },
+      vertical:   { width: 49,  height: 73 },
+      square:     { width: 57,  height: 57 },
     };
     const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
 
@@ -291,9 +293,9 @@ router.get("/:id/pdf", (req, res) => {
     const logoPath = showLogo ? findLogoPath(req.user.workspace_id) : null;
     // Tamaño del logo según orientación (en pt PDF; A4 width ~595pt)
     const LOGO_SIZES = {
-      horizontal: { width: 90, height: 28 },
-      vertical:   { width: 38, height: 56 },
-      square:     { width: 44, height: 44 },
+      horizontal: { width: 117, height: 36 },
+      vertical:   { width: 49,  height: 73 },
+      square:     { width: 57,  height: 57 },
     };
     const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
 

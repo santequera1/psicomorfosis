@@ -631,6 +631,10 @@ export const api = {
     request<Array<Record<string, any>>>(`/api/appointments${qs(params)}`),
   createAppointment: (body: Record<string, unknown>) =>
     request("/api/appointments", { method: "POST", body: JSON.stringify(body) }),
+  updateAppointment: (id: number | string, body: Record<string, unknown>) =>
+    request<Record<string, any>>(`/api/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAppointment: (id: number | string) =>
+    request<void>(`/api/appointments/${id}`, { method: "DELETE" }),
 
   // Tests psicométricos — catálogo y aplicaciones
   listTestCatalog: () => request<Array<PsychTest>>("/api/tests/catalog"),
@@ -840,17 +844,17 @@ export const api = {
   invoicesSummary: () => request<{ paid: number; pending: number; overdue: number; total: number }>("/api/invoices/summary"),
   /** Genera un PDF de muestra con los settings dados (sin persistir). Devuelve Blob. */
   previewReceiptPdf: async (params: {
-    template: string;
     showLogo: boolean;
     showName: boolean;
     orientation: string;
+    brandColor: string;
   }): Promise<Blob> => {
     const token = localStorage.getItem("psm.token");
     const qs = new URLSearchParams({
-      template: params.template,
       show_logo: params.showLogo ? "1" : "0",
       show_name: params.showName ? "1" : "0",
       orientation: params.orientation,
+      brand_color: params.brandColor,
     });
     const r = await fetch(`${API_BASE}/api/invoices/preview-pdf?${qs}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
