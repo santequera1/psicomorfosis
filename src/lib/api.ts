@@ -416,7 +416,19 @@ export interface TestApplication {
   assigned_at: string | null;
   completed_at: string | null;
   answers_json: Record<string, number> | null;
-  alerts_json: { critical_response?: boolean; critical_question_id?: string; critical_value?: number } | null;
+  alerts_json: {
+    critical_response?: boolean;
+    critical_question_id?: string;
+    critical_value?: number;
+    /** Para tests con scoring por escalas múltiples (MCMI-II): raw scores por escala. */
+    scales_raw?: Record<string, number | null>;
+    /** Metadata adicional del scoring: tipo de test, advertencias de validez, etc. */
+    meta?: {
+      type?: string;
+      validity_warning?: string | null;
+      requires_clinical_interpretation?: boolean;
+    };
+  } | null;
   total_items?: number | null;
   answered_items?: number | null;
   started_at?: string | null;

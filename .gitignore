@@ -62,3 +62,8 @@ check_logs.py
 smoke_variables.py
 smoke_pdf.py
 verify_admin.py
+
+# Notas internas y materiales fuente de tests (Excel, Word, scripts one-shot).
+# Los datos extraídos consumibles por la app viven en server/src/data/ y SÍ se commitean.
+notas_claude/
+test-millon/

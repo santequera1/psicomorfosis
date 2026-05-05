@@ -1,5 +1,5 @@
 /**
- * Definiciones completas de los 8 tests psicométricos del catálogo.
+ * Definiciones completas de los tests psicométricos del catálogo.
  *
  * Cada test tiene:
  *  - id, code, name, short_name, items, minutes, category, description, age_range
@@ -11,13 +11,28 @@
  *  - instructions: texto motivacional/instructivo antes del test
  *
  * scoring.type:
- *  - 'sum'        → suma directa de los valores marcados
+ *  - 'sum'         → suma directa de los valores marcados
  *  - 'sum_reversed' → respeta atributo reverse en cada question
- *  - 'eat26'      → solo cuentan respuestas en los extremos (especial)
+ *  - 'eat26'       → solo cuentan respuestas en los extremos (especial)
+ *  - 'millon'      → suma por escala usando matriz V/F → escala+peso
+ *                    (MCMI-II). Devuelve raw scores por escala, no BR.
  *
  * IMPORTANTE: las preguntas se guardan en 1ra persona singular cuando el
  * paciente contesta solo. Cuando el psicólogo aplica, igual se entiende bien.
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname_psy = dirname(fileURLToPath(import.meta.url));
+const MCMI2_QUESTIONS = JSON.parse(readFileSync(join(__dirname_psy, "data", "mcmi2-questions.json"), "utf8"));
+const MCMI2_MATRIX = JSON.parse(readFileSync(join(__dirname_psy, "data", "mcmi2-scoring-matrix.json"), "utf8"));
+
+// Escala V/F común para tests dicotómicos (MCMI-II).
+const SCALE_VF = [
+  { value: 1, label: "Verdadero" },
+  { value: 2, label: "Falso" },
+];
 
 // Escalas comunes reusables
 const LIKERT_PHQ = [
@@ -448,7 +463,63 @@ export const PSYCH_TEST_DEFINITIONS = [
       { id: "q26", text: "Tengo el impulso de vomitar después de las comidas." },
     ],
   },
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: "mcmi2",
+    code: "MCMI-II",
+    name: "Inventario Multiaxial Clínico de Millon",
+    short_name: "MCMI-II",
+    items: 175,
+    minutes: 30,
+    category: "personalidad",
+    description: "Cuestionario de 175 ítems (Verdadero/Falso) para evaluación de patrones de personalidad y síndromes clínicos. Devuelve puntuaciones brutas (PD) por escala — la conversión a Tasa Base (BR) e interpretación clínica las realiza el profesional con su Excel oficial.",
+    age_range: "≥ 18",
+    instructions: "Lee cada afirmación y marca Verdadero si la describe tu forma habitual de ser, sentir o actuar; Falso si no lo hace. No hay respuestas correctas o incorrectas. Si tenés dudas, marca lo que mejor te describe la mayoría del tiempo. Podés pausar y retomar en otro momento — el progreso se guarda automáticamente.",
+    scale: SCALE_VF,
+    questions: MCMI2_QUESTIONS,
+    scoring: {
+      type: "millon",
+      // La matriz no se serializa al questions_json del paciente (~50KB)
+      // — vive en `scoring.matrix_ref` y el backend la carga de MCMI2_MATRIX
+      // al calcular. Esto mantiene la respuesta del catálogo liviana.
+      matrix_ref: "mcmi2",
+    },
+    // No hay rangos de interpretación — el profesional usa el Excel oficial.
+    // Mantenemos un único rango "no interpretado" para que el motor de scoring
+    // no falle al buscar un nivel.
+    ranges: [{ min: -1, max: 999999, label: "Ver detalle por escala", level: "none" }],
+    alerts: null,
+  },
 ];
+
+/**
+ * Catálogo de escalas del MCMI-II con nombres completos.
+ * Se usa para renderizar la tabla de raw scores en el resultado.
+ */
+export const MCMI2_SCALES = MCMI2_MATRIX.scales;
+
+/**
+ * Calcula los raw scores por escala del MCMI-II usando la matriz.
+ * answers: { "1": 1|2, "2": 1|2, ... }  (1=V, 2=F)
+ */
+function calculateMillonScores(answers) {
+  const raw = {};
+  for (const sc of MCMI2_MATRIX.scales) raw[sc.code] = 0;
+
+  for (const itemId of Object.keys(MCMI2_MATRIX.matrix)) {
+    const a = answers[itemId];
+    if (a !== 1 && a !== 2) continue;
+    const respKey = a === 1 ? "V" : "F";
+    const entries = MCMI2_MATRIX.matrix[itemId][respKey] ?? [];
+    for (const e of entries) {
+      raw[e.scale] = (raw[e.scale] ?? 0) + e.weight;
+    }
+  }
+  // Marcar X como no calculable linealmente (la fórmula real requiere
+  // ajustes adicionales que dependen del Excel oficial).
+  raw["X"] = null;
+  return raw;
+}
 
 /**
  * Inserta o actualiza las definiciones en la tabla psych_tests.
@@ -494,10 +565,39 @@ export function seedTestDefinitions(db) {
 /**
  * Calcula el score de una aplicación dada las respuestas.
  * Devuelve { score, level, label, alerts }.
+ *
+ * Para tests con scoring.type === "millon" (MCMI-II), `score` es la suma
+ * total de raw scores y `alerts.scales_raw` contiene el detalle por escala.
  */
 export function calculateScore(testDef, answers) {
   let score = 0;
   const alerts = {};
+
+  // Caso especial: MCMI-II — usa matriz V/F → escala+peso.
+  if (testDef.scoring?.type === "millon") {
+    const raw = calculateMillonScores(answers);
+    // Score "agregado" = suma de las escalas calculables. Sirve para
+    // ordenar listados y dar una métrica única, pero la interpretación
+    // real es por escala individual.
+    for (const k of Object.keys(raw)) if (raw[k] != null) score += raw[k];
+    // Validez mínima: si V > 1, marcamos warning (test posiblemente inválido).
+    const v = raw["V"] ?? 0;
+    alerts.scales_raw = raw;
+    alerts.meta = {
+      type: "millon",
+      requires_clinical_interpretation: true,
+      validity_warning: v > 1
+        ? "El índice de Validez (V) es ≥ 2. El test podría ser inválido. Revisar con criterio clínico antes de interpretar."
+        : null,
+    };
+    return {
+      score,
+      level: "none",
+      label: "Ver detalle por escala",
+      alerts,
+    };
+  }
+
   const scaleMaxValue = (sc) => sc ? Math.max(...sc.map((o) => o.value)) : 3;
 
   for (const q of testDef.questions) {

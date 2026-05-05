@@ -385,29 +385,34 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
 
   if (step === "result" && result) {
     const lvl = result.level && LEVEL_STYLE[result.level];
+    const isMillon = result.alerts_json?.meta?.type === "millon";
     return (
-      <Modal onClose={onClose} title="Resultado">
-        <div className="p-6 text-center">
-          <div className="h-16 w-16 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-4">
-            <CheckCircle2 className="h-7 w-7 text-sage-700" />
-          </div>
-          <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code}</p>
-          <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {result.score}</h3>
-          {lvl && (
-            <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
-              {result.interpretation}
-            </span>
-          )}
-          {result.alerts_json?.critical_response && (
-            <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
-              <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+      <Modal onClose={onClose} title="Resultado" wide={isMillon}>
+        {isMillon ? (
+          <MillonResultView result={result} onClose={onClose} />
+        ) : (
+          <div className="p-6 text-center">
+            <div className="h-16 w-16 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-4">
+              <CheckCircle2 className="h-7 w-7 text-sage-700" />
             </div>
-          )}
-          <button onClick={onClose} className="mt-6 h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
-            Cerrar
-          </button>
-        </div>
+            <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code}</p>
+            <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {result.score}</h3>
+            {lvl && (
+              <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
+                {result.interpretation}
+              </span>
+            )}
+            {result.alerts_json?.critical_response && (
+              <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
+                <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+              </div>
+            )}
+            <button onClick={onClose} className="mt-6 h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+              Cerrar
+            </button>
+          </div>
+        )}
       </Modal>
     );
   }
@@ -471,6 +476,113 @@ function Modal({ children, title, onClose, wide }: { children: React.ReactNode; 
           </button>
         </header>
         {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── MCMI-II: catálogo de escalas con nombres y agrupación ───────────────
+type MillonScaleGroup = "validity" | "personality" | "severe_personality" | "clinical" | "severe_clinical";
+const MILLON_SCALES: Array<{ code: string; name: string; group: MillonScaleGroup }> = [
+  { code: "V",  name: "Validez",                            group: "validity" },
+  { code: "X",  name: "Sinceridad",                         group: "validity" },
+  { code: "Y",  name: "Deseabilidad social",                group: "validity" },
+  { code: "Z",  name: "Devaluación / Alteración",           group: "validity" },
+  { code: "1",  name: "Esquizoide",                         group: "personality" },
+  { code: "2",  name: "Fóbica (Evitativa)",                 group: "personality" },
+  { code: "3",  name: "Dependiente",                        group: "personality" },
+  { code: "4",  name: "Histriónica",                        group: "personality" },
+  { code: "5",  name: "Narcisista",                         group: "personality" },
+  { code: "6A", name: "Antisocial",                         group: "personality" },
+  { code: "6B", name: "Agresivo / Sádica",                  group: "personality" },
+  { code: "7",  name: "Compulsiva (Rígida)",                group: "personality" },
+  { code: "8A", name: "Pasivo-Agresiva (Negativista)",      group: "personality" },
+  { code: "8B", name: "Autodestructiva (Masoquista)",       group: "personality" },
+  { code: "S",  name: "Esquizotípica",                      group: "severe_personality" },
+  { code: "C",  name: "Límite (Borderline)",                group: "severe_personality" },
+  { code: "P",  name: "Paranoide",                          group: "severe_personality" },
+  { code: "A",  name: "Ansiedad",                           group: "clinical" },
+  { code: "H",  name: "Histeriforme / Somatoforme",         group: "clinical" },
+  { code: "N",  name: "Hipomanía",                          group: "clinical" },
+  { code: "D",  name: "Distimia",                           group: "clinical" },
+  { code: "B",  name: "Dependencia de alcohol",             group: "clinical" },
+  { code: "T",  name: "Dependencia de drogas",              group: "clinical" },
+  { code: "SS", name: "Pensamiento psicótico",              group: "severe_clinical" },
+  { code: "CC", name: "Depresión mayor",                    group: "severe_clinical" },
+  { code: "PP", name: "Trastorno delirante",                group: "severe_clinical" },
+];
+const MILLON_GROUP_LABELS: Record<MillonScaleGroup, string> = {
+  validity: "Escalas de validez",
+  personality: "Patrones de personalidad",
+  severe_personality: "Patología severa de personalidad",
+  clinical: "Síndromes clínicos",
+  severe_clinical: "Síndromes severos",
+};
+
+/** Vista de resultado para MCMI-II — tabla de raw scores por escala. */
+function MillonResultView({ result, onClose }: { result: TestApplication; onClose: () => void }) {
+  const raw = result.alerts_json?.scales_raw ?? {};
+  const validityWarning = result.alerts_json?.meta?.validity_warning;
+
+  const groups: Record<MillonScaleGroup, typeof MILLON_SCALES> = {
+    validity: [], personality: [], severe_personality: [], clinical: [], severe_clinical: [],
+  };
+  for (const sc of MILLON_SCALES) groups[sc.group].push(sc);
+
+  return (
+    <div className="p-6">
+      <div className="text-center mb-5">
+        <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code} · {result.patient_name}</p>
+        <h3 className="font-serif text-2xl text-ink-900 mt-1">Puntuaciones brutas por escala</h3>
+        <p className="text-xs text-ink-500 mt-1.5 max-w-lg mx-auto">
+          Estos son los <strong>raw scores (PD)</strong>. La conversión a Tasa Base (BR) y la interpretación clínica las haces con el Excel oficial del MCMI-II ajustado por sexo del paciente.
+        </p>
+      </div>
+
+      {validityWarning && (
+        <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 inline-flex items-start gap-2">
+          <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{validityWarning}</span>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {(Object.keys(groups) as MillonScaleGroup[]).map((g) => (
+          <div key={g}>
+            <div className="text-[10px] uppercase tracking-[0.08em] text-brand-700 font-semibold mb-1.5">
+              {MILLON_GROUP_LABELS[g]}
+            </div>
+            <ul className="rounded-lg border border-line-200 divide-y divide-line-100 bg-surface">
+              {groups[g].map((sc) => {
+                const v = raw[sc.code];
+                return (
+                  <li key={sc.code} className="px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-ink-500 w-8 shrink-0">{sc.code}</span>
+                      <span className="text-sm text-ink-900 truncate">{sc.name}</span>
+                    </div>
+                    <span className={cn(
+                      "tabular text-sm font-medium shrink-0",
+                      v == null ? "text-ink-400 italic font-normal" : "text-ink-900"
+                    )}>
+                      {v == null ? "no calc." : v}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-lg bg-bg-100/50 border border-line-100 p-3 text-xs text-ink-500">
+        <strong className="text-ink-700">Nota clínica:</strong> el MCMI-II requiere conversión a tasa base (BR), corrección por escala X y otros ajustes para una interpretación válida. La escala X (Sinceridad) no se calcula automáticamente — su fórmula vive en el Excel oficial. Aplica criterio clínico antes de comunicar resultados al paciente.
+      </div>
+
+      <div className="mt-5 flex justify-end">
+        <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+          Cerrar
+        </button>
       </div>
     </div>
   );
