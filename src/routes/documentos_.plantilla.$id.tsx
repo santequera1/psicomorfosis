@@ -172,7 +172,7 @@ function TemplateEditPage() {
               <Info className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
               <span>
                 Esta plantilla es del sistema y no se puede modificar directamente.
-                Volvé al listado y usa el ícono de lápiz para crear una <strong>copia editable</strong> en tu workspace.
+                Vuelve al listado y usa el ícono de lápiz para crear una <strong>copia editable</strong> en tu workspace.
               </span>
             </div>
           )}
@@ -285,7 +285,7 @@ function VariablesPanel({ previewMode, onTogglePreview, disabled }: { previewMod
           {previewMode ? (
             <span>Vista previa <strong className="text-brand-700">activa</strong>: las variables muestran datos de ejemplo. Lo guardado es la plantilla original.</span>
           ) : (
-            <span>También podés escribir <code className="text-brand-700">{"{{"}</code> dentro del editor para abrir el autocompletado.</span>
+            <span>También puedes escribir <code className="text-brand-700">{"{{"}</code> dentro del editor para abrir el autocompletado.</span>
           )}
         </div>
       </div>

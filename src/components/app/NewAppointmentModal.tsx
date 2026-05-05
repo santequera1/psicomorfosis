@@ -119,7 +119,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
                         className="w-full flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-brand-50/70 text-left"
                       >
                         <div className="min-w-0">
-                          <div className="text-sm text-ink-900 truncate">{p.preferredName ? `${p.preferredName} · ` : ""}{p.name}</div>
+                          <div className="text-sm text-ink-900 truncate">{p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}</div>
                           <div className="text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</div>
                         </div>
                         <RiskBadge risk={p.risk} types={p.riskTypes} compact />

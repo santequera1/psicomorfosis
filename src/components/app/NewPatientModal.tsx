@@ -170,7 +170,7 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
               </div>
               <Labeled label="Etiquetas (opcional)">
                 <p className="text-[11px] text-ink-500 mt-1 mb-2 leading-snug">
-                  Sirven para agrupar pacientes y filtrar la lista (ej. <em>Ansiedad</em>, <em>Adolescente</em>, <em>Alto riesgo</em>). Hacé click en una sugerida o escribí la tuya y presioná <kbd className="px-1 rounded bg-bg-100 text-ink-700 text-[10px] font-mono">Enter</kbd>.
+                  Sirven para agrupar pacientes y filtrar la lista (ej. <em>Ansiedad</em>, <em>Adolescente</em>, <em>Alto riesgo</em>). Haz clic en una sugerida o escribe la tuya y presiona <kbd className="px-1 rounded bg-bg-100 text-ink-700 text-[10px] font-mono">Enter</kbd>.
                 </p>
                 <TagEditor
                   value={form.tags ?? []}

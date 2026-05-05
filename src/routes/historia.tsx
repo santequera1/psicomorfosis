@@ -57,6 +57,7 @@ export const Route = createFileRoute("/historia")({
 
 function HistoriaPage() {
   const search = useSearch({ from: "/historia" });
+  const navigate = useNavigate();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
@@ -73,6 +74,16 @@ function HistoriaPage() {
   useEffect(() => {
     if (search.id && search.id !== patientId) setPatientId(search.id);
   }, [search.id, patientId]);
+
+  // Cuando el state cambia (ej. seleccionado desde empty state o picker) y la
+  // URL no lo refleja, sincronizamos. Así el link queda compartible y el
+  // botón Atrás del navegador funciona correctamente.
+  function selectPatient(id: string) {
+    setPatientId(id);
+    if (search.id !== id) {
+      navigate({ to: "/historia", search: { id }, replace: true });
+    }
+  }
 
   const { data: patient, isLoading } = useQuery({
     queryKey: ["patient", patientId],
@@ -100,7 +111,7 @@ function HistoriaPage() {
   if (!patientId) {
     return (
       <AppShell>
-        <NoPatientSelected patients={patients} onPick={(id) => setPatientId(id)} />
+        <NoPatientSelected patients={patients} onPick={selectPatient} />
       </AppShell>
     );
   }
@@ -142,7 +153,7 @@ function HistoriaPage() {
         />
       </div>
 
-      {pickerOpen && <PatientPickerModal patients={patients} currentId={patient.id} onPick={(id) => { setPatientId(id); setPickerOpen(false); }} onClose={() => setPickerOpen(false)} />}
+      {pickerOpen && <PatientPickerModal patients={patients} currentId={patient.id} onPick={(id) => { selectPatient(id); setPickerOpen(false); }} onClose={() => setPickerOpen(false)} />}
       {apptOpen && <NewAppointmentModal patients={patients} prefilledPatient={patient} onClose={() => setApptOpen(false)} />}
     </AppShell>
   );
@@ -169,9 +180,9 @@ function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: 
       <div className="inline-flex h-14 w-14 rounded-2xl bg-brand-50 text-brand-700 items-center justify-center mb-4">
         <FileText className="h-6 w-6" />
       </div>
-      <h1 className="font-serif text-2xl text-ink-900">Elegí un paciente</h1>
+      <h1 className="font-serif text-2xl text-ink-900">Selecciona un paciente</h1>
       <p className="text-sm text-ink-500 mt-1.5 mb-6">
-        Buscá por nombre, documento o ID y abrí su historia clínica.
+        Busca por nombre, documento o ID y abre su historia clínica.
       </p>
       <div className="relative max-w-md mx-auto">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
@@ -195,7 +206,7 @@ function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: 
               >
                 <span className="min-w-0">
                   <span className="block text-sm text-ink-900 font-medium truncate">
-                    {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+                    {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
                   </span>
                   <span className="block text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</span>
                 </span>
@@ -591,7 +602,7 @@ function SessionNotes({
           <div className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Trayectoria terapéutica</div>
           <h2 className="font-serif text-2xl text-ink-900 mt-1">Notas de sesión</h2>
           <p className="text-sm text-ink-500 mt-1.5 max-w-xl">
-            Las notas firmadas son inmodificables; podés crear una nueva versión que deja el historial.
+            Las notas firmadas son inmodificables; puedes crear una nueva versión y la anterior queda en el historial.
           </p>
         </div>
         <button
@@ -849,7 +860,7 @@ function GenerateDocFromNoteModal({ note, patientId, onClose }: { note: Clinical
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium inline-flex items-center gap-1">
               <Sparkles className="h-3 w-3" /> Generar documento
             </p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Elegí una plantilla</h3>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Selecciona una plantilla</h3>
             <p className="text-xs text-ink-500 mt-1">
               Las variables <code className="text-brand-700">{"{{sesion.*}}"}</code> y <code className="text-brand-700">{"{{paciente.*}}"}</code> se rellenan con datos reales de esta nota.
             </p>

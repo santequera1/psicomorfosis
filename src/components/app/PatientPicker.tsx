@@ -149,7 +149,7 @@ export function PatientPicker({
         )}>
           <User className="h-3.5 w-3.5 text-ink-400 shrink-0" />
           <span className="flex-1 min-w-0 truncate text-sm text-ink-900">
-            {selected.preferredName ? `${selected.preferredName} · ${selected.name}` : selected.name}
+            {selected.name}{selected.preferredName ? ` · ${selected.preferredName}` : ""}
             <span className="text-ink-400 ml-1">({selected.id})</span>
           </span>
           {allowEmpty && (
@@ -226,7 +226,7 @@ export function PatientPicker({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-ink-900 truncate">
-                      {p.preferredName ? `${p.preferredName} · ` : ""}{p.name}
+                      {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
                     </div>
                     <div className="text-[11px] text-ink-500 tabular truncate">
                       {p.doc} · {p.id}

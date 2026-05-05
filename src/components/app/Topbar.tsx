@@ -460,7 +460,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
     .slice(0, 6)
     .map((p) => ({
       kind: "paciente" as const,
-      label: p.preferredName ? `${p.preferredName} · ${p.name}` : p.name,
+      label: p.preferredName ? `${p.name} · ${p.preferredName}` : p.name,
       to: "/pacientes/$id",
       params: { id: p.id },
       description: `${p.id} · ${p.reason}`,

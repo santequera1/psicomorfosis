@@ -200,7 +200,7 @@ function PatientsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-ink-900 truncate">
-                        {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+                        {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
                       </span>
                     </div>
                     <div className="text-[11px] text-ink-500 truncate tabular mt-0.5">{p.doc} · {p.id}</div>
@@ -276,7 +276,7 @@ function PatientsPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="text-ink-900 font-medium truncate flex items-center gap-1.5">
-                            {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+                            {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
                             {p.pronouns && p.pronouns !== "—" && <span className="text-[10px] text-ink-400 font-normal">({p.pronouns})</span>}
                           </div>
                           <div className="text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</div>
@@ -436,7 +436,7 @@ function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-ink-900 truncate">
-              {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+              {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
             </div>
             <div className="text-[11px] text-ink-500 tabular truncate">{p.doc} · {p.id}</div>
           </div>

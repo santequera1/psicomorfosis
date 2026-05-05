@@ -21,7 +21,7 @@ export function TagEditor({
   value,
   onChange,
   suggestions = [],
-  placeholder = "Escribí una etiqueta y presioná Enter",
+  placeholder = "Escribe una etiqueta y presiona Enter",
 }: {
   value: string[];
   onChange: (next: string[]) => void;
