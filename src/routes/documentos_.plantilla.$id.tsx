@@ -1,12 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ChevronLeft, Save, AlertCircle, Loader2, Trash2, Sparkles, Info,
+  ChevronLeft, Save, AlertCircle, Loader2, Trash2, Sparkles, Info, Eye, EyeOff, Plus,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
+import { VARIABLES } from "@/components/documents/VariableSuggest";
+import type { VariableContextValue } from "@/components/documents/VariableNode";
 import { api, type TipTapDoc, type TemplateCategory } from "@/lib/api";
 
 export const Route = createFileRoute("/documentos_/plantilla/$id")({
@@ -30,6 +32,20 @@ function TemplateEditPage() {
   const [body, setBody] = useState<TipTapDoc | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  // Contexto de muestra para la vista previa: arma { paciente: { nombre: "Andrés…" }, ... }
+  // a partir de los `example` de cada variable. El editor ya sabe resolver
+  // VariableNode contra este shape (ver VariableNode.tsx → resolveVariable).
+  const previewContext = useMemo<VariableContextValue>(() => {
+    const ctx: VariableContextValue = {};
+    for (const v of VARIABLES) {
+      const [group, field] = v.key.split(".");
+      if (!field) continue;
+      (ctx[group] ??= {})[field] = v.example;
+    }
+    return ctx;
+  }, []);
 
   useEffect(() => {
     if (tpl) {
@@ -76,7 +92,7 @@ function TemplateEditPage() {
 
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <header className="psm-no-print sticky top-0 z-10 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 bg-bg/95 backdrop-blur border-b border-line-100 mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -163,32 +179,116 @@ function TemplateEditPage() {
           {tpl.legal_disclaimer && (
             <div className="mt-2 text-[11px] text-amber-700">⚠️ {tpl.legal_disclaimer}</div>
           )}
-          <div className="mt-2 text-[11px] text-ink-500">
-            Variables disponibles: <code className="text-brand-700">{"{{paciente.nombre}}"}</code>, <code className="text-brand-700">{"{{paciente.documento}}"}</code>, <code className="text-brand-700">{"{{profesional.nombre}}"}</code>, <code className="text-brand-700">{"{{profesional.tarjeta_profesional}}"}</code>, <code className="text-brand-700">{"{{clinica.razon_social}}"}</code>, <code className="text-brand-700">{"{{fecha.larga}}"}</code> — se reemplazan al crear documento desde la plantilla.
-          </div>
         </header>
 
-        <DocumentEditor
-          initialDoc={body}
-          editable={!isSystem}
-          placeholder="Escribe la plantilla… usa /  para insertar bloques"
-          onChange={(d) => setBody(d)}
-          onUploadImage={async (file) => {
-            const asset = await api.uploadDocumentAsset(file);
-            return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
-          }}
-          onUploadAttachment={async (file) => {
-            const asset = await api.uploadDocumentAsset(file);
-            const absoluteUrl = asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
-            return {
-              url: absoluteUrl,
-              name: file.name,
-              mime: file.type || asset.mime,
-              sizeBytes: file.size,
-            };
-          }}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
+          <div className="min-w-0">
+            <DocumentEditor
+              initialDoc={body}
+              editable={!isSystem}
+              placeholder="Escribe la plantilla… usa / para bloques o {{ para insertar variables"
+              onChange={(d) => setBody(d)}
+              variableContext={previewMode ? previewContext : null}
+              onUploadImage={async (file) => {
+                const asset = await api.uploadDocumentAsset(file);
+                return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
+              }}
+              onUploadAttachment={async (file) => {
+                const asset = await api.uploadDocumentAsset(file);
+                const absoluteUrl = asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
+                return {
+                  url: absoluteUrl,
+                  name: file.name,
+                  mime: file.type || asset.mime,
+                  sizeBytes: file.size,
+                };
+              }}
+            />
+          </div>
+
+          <VariablesPanel
+            previewMode={previewMode}
+            onTogglePreview={() => setPreviewMode((v) => !v)}
+            disabled={isSystem}
+          />
+        </div>
       </div>
     </AppShell>
+  );
+}
+
+/** Panel lateral del editor de plantillas: variables agrupadas + toggle de vista previa. */
+function VariablesPanel({ previewMode, onTogglePreview, disabled }: { previewMode: boolean; onTogglePreview: () => void; disabled: boolean }) {
+  // Agrupar las variables del catálogo por su `group` (Paciente/Profesional/etc).
+  const grouped = useMemo(() => {
+    const map: Record<string, typeof VARIABLES> = {};
+    for (const v of VARIABLES) (map[v.group] ??= []).push(v);
+    return map;
+  }, []);
+
+  function insertVariable(key: string) {
+    if (disabled) return;
+    window.dispatchEvent(new CustomEvent("psm:editor:insert-variable", { detail: { key } }));
+  }
+
+  return (
+    <aside className="hidden lg:block lg:sticky lg:top-32 h-fit">
+      <div className="rounded-xl border border-line-200 bg-surface overflow-hidden">
+        <div className="p-3 border-b border-line-100 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.08em] text-brand-700 font-medium">Variables</p>
+            <p className="text-[11px] text-ink-500 mt-0.5">Click para insertar en el cursor</p>
+          </div>
+          <button
+            type="button"
+            onClick={onTogglePreview}
+            title={previewMode ? "Volver a ver los placeholders {{...}}" : "Ver cómo quedaría con datos de ejemplo"}
+            className={
+              "h-8 px-2.5 rounded-md text-[11px] font-medium inline-flex items-center gap-1.5 transition-colors " +
+              (previewMode ? "bg-brand-700 text-white hover:bg-brand-800" : "border border-line-200 text-ink-700 hover:border-brand-400")
+            }
+          >
+            {previewMode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {previewMode ? "Ocultar" : "Vista previa"}
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto">
+          {Object.entries(grouped).map(([group, vars]) => (
+            <div key={group} className="border-b border-line-100 last:border-b-0">
+              <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium">{group}</div>
+              <ul className="pb-1.5">
+                {vars.map((v) => (
+                  <li key={v.key}>
+                    <button
+                      type="button"
+                      onClick={() => insertVariable(v.key)}
+                      disabled={disabled}
+                      title={`Insertar {{${v.key}}}`}
+                      className="group w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-bg-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="h-3 w-3 text-ink-400 group-hover:text-brand-700 mt-1 shrink-0" />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[12px] text-ink-900 font-medium truncate">{v.label}</span>
+                        <span className="block text-[10px] text-ink-500 truncate font-mono">{`{{${v.key}}}`}</span>
+                      </span>
+                      <span className="text-[10px] text-ink-400 truncate max-w-24 mt-1 hidden xl:inline">{v.example}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-3 border-t border-line-100 bg-bg-100/40 text-[11px] text-ink-500 leading-relaxed">
+          {previewMode ? (
+            <span>Vista previa <strong className="text-brand-700">activa</strong>: las variables muestran datos de ejemplo. Lo guardado es la plantilla original.</span>
+          ) : (
+            <span>También podés escribir <code className="text-brand-700">{"{{"}</code> dentro del editor para abrir el autocompletado.</span>
+          )}
+        </div>
+      </div>
+    </aside>
   );
 }

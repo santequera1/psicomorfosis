@@ -214,11 +214,22 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
         }
       }
     };
+    // Insertar variable desde el panel lateral del editor de plantillas.
+    const onInsertVariable = (e: Event) => {
+      const key = (e as CustomEvent).detail?.key as string | undefined;
+      if (!key || !editor) return;
+      editor.chain().focus().insertContent([
+        { type: "variable", attrs: { key } },
+        { type: "text", text: " " },
+      ]).run();
+    };
     window.addEventListener("psm:editor:pick-attachment", onPickAttachment);
     window.addEventListener("psm:editor:insert-signature", onInsertSignature);
+    window.addEventListener("psm:editor:insert-variable", onInsertVariable);
     return () => {
       window.removeEventListener("psm:editor:pick-attachment", onPickAttachment);
       window.removeEventListener("psm:editor:insert-signature", onInsertSignature);
+      window.removeEventListener("psm:editor:insert-variable", onInsertVariable);
     };
   }, [editor, editable]);
 
