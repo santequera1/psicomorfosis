@@ -407,6 +407,7 @@ function TabDatos({ patient, tasks }: { patient: import("@/lib/api").ApiPatient;
             <p className="text-sm text-ink-400 italic">Sin motivo registrado. Edita los datos del paciente para agregarlo.</p>
           )}
         </Section>
+        <EmergencyContactsCard patientId={patient.id} />
       </div>
       <div className="space-y-5">
         <Section title="Resumen clínico">
@@ -443,8 +444,286 @@ function TabDatos({ patient, tasks }: { patient: import("@/lib/api").ApiPatient;
             <ClipboardList className="h-3.5 w-3.5" /> Abrir historia clínica
           </Link>
         </Section>
+        <InsuranceCard patient={patient} />
       </div>
     </div>
+  );
+}
+
+/** Tarjeta con CRUD inline de contactos de emergencia del paciente. */
+function EmergencyContactsCard({ patientId }: { patientId: string }) {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const { data: contacts = [], isLoading } = useQuery({
+    queryKey: ["emergency-contacts", patientId],
+    queryFn: () => api.listEmergencyContacts(patientId),
+  });
+
+  const deleteMu = useMutation({
+    mutationFn: (id: number) => api.deleteEmergencyContact(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["emergency-contacts", patientId] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Section
+      title="Contactos de emergencia"
+      action={
+        !adding && editingId === null ? (
+          <button
+            onClick={() => setAdding(true)}
+            className="h-7 px-2.5 rounded-md border border-line-200 text-[11px] text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3 w-3" /> Agregar
+          </button>
+        ) : null
+      }
+    >
+      {isLoading ? (
+        <p className="text-xs text-ink-500">Cargando…</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {contacts.map((c) =>
+            editingId === c.id ? (
+              <li key={c.id}>
+                <EmergencyContactForm
+                  initial={c}
+                  onCancel={() => setEditingId(null)}
+                  onSaved={() => {
+                    setEditingId(null);
+                    qc.invalidateQueries({ queryKey: ["emergency-contacts", patientId] });
+                  }}
+                  onSubmit={(values) => api.updateEmergencyContact(c.id, values)}
+                />
+              </li>
+            ) : (
+              <li key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-line-200">
+                <div className="min-w-0">
+                  <div className="text-ink-900 font-medium truncate">
+                    {c.relation ? `${c.relation} · ` : ""}{c.name}
+                  </div>
+                  {c.phone && (
+                    <div className="text-xs text-ink-500 tabular">{c.phone}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {c.phone && (() => {
+                    const wa = whatsappUrl(c.phone);
+                    return wa ? (
+                      <a href={wa} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp"
+                        className="h-7 w-7 rounded text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 inline-flex items-center justify-center">
+                        <MessageCircle className="h-3.5 w-3.5" />
+                      </a>
+                    ) : null;
+                  })()}
+                  <button
+                    onClick={() => setEditingId(c.id)}
+                    title="Editar"
+                    className="h-7 w-7 rounded text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`¿Eliminar el contacto "${c.name}"?`)) deleteMu.mutate(c.id);
+                    }}
+                    title="Eliminar"
+                    className="h-7 w-7 rounded text-rose-700 hover:bg-rose-500/10 inline-flex items-center justify-center"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </li>
+            )
+          )}
+
+          {adding && (
+            <li>
+              <EmergencyContactForm
+                initial={null}
+                onCancel={() => setAdding(false)}
+                onSaved={() => {
+                  setAdding(false);
+                  qc.invalidateQueries({ queryKey: ["emergency-contacts", patientId] });
+                }}
+                onSubmit={(values) => api.createEmergencyContact(patientId, values)}
+              />
+            </li>
+          )}
+
+          {contacts.length === 0 && !adding && (
+            <li className="text-sm text-ink-400 italic">Aún no hay contactos. Agregá al menos uno para emergencias.</li>
+          )}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+/** Form pequeño y reutilizable para crear o editar un contacto. */
+function EmergencyContactForm({
+  initial, onSubmit, onSaved, onCancel,
+}: {
+  initial: import("@/lib/api").EmergencyContact | null;
+  onSubmit: (values: { name: string; relation: string; phone: string; priority: number }) => Promise<unknown>;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [relation, setRelation] = useState(initial?.relation ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [priority, setPriority] = useState<number>(initial?.priority ?? 0);
+  const [saving, setSaving] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error("El nombre es obligatorio");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSubmit({ name: name.trim(), relation: relation.trim(), phone: phone.trim(), priority });
+      toast.success(initial ? "Contacto actualizado" : "Contacto agregado");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-lg border border-brand-700/30 bg-brand-50/30 p-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre completo *" autoFocus
+          className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+        <input value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Relación (Madre, Pareja…)"
+          className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+57 …"
+          className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
+        <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}
+          className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700">
+          <option value={0}>Primer contacto</option>
+          <option value={1}>Segundo contacto</option>
+          <option value={2}>Tercer contacto</option>
+        </select>
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onCancel} disabled={saving}
+          className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 disabled:opacity-50">
+          Cancelar
+        </button>
+        <button type="submit" disabled={saving}
+          className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5">
+          {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+          {initial ? "Guardar" : "Agregar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Sección con datos de seguro/EPS — editable inline. */
+function InsuranceCard({ patient }: { patient: import("@/lib/api").ApiPatient }) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [provider, setProvider] = useState(patient.insuranceProvider ?? "");
+  const [plan, setPlan] = useState(patient.insurancePlan ?? "");
+  const [policy, setPolicy] = useState(patient.insurancePolicy ?? "");
+  const [validUntil, setValidUntil] = useState(patient.insuranceValidUntil ?? "");
+
+  const mu = useMutation({
+    mutationFn: () => api.updatePatient(patient.id, {
+      insuranceProvider: provider.trim() || null,
+      insurancePlan: plan.trim() || null,
+      insurancePolicy: policy.trim() || null,
+      insuranceValidUntil: validUntil || null,
+    } as any),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patient", patient.id] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      toast.success("Seguro actualizado");
+      setEditing(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const hasAny = !!(patient.insuranceProvider || patient.insurancePlan || patient.insurancePolicy || patient.insuranceValidUntil);
+
+  // Reset si cancelo edición sin guardar.
+  function cancel() {
+    setProvider(patient.insuranceProvider ?? "");
+    setPlan(patient.insurancePlan ?? "");
+    setPolicy(patient.insurancePolicy ?? "");
+    setValidUntil(patient.insuranceValidUntil ?? "");
+    setEditing(false);
+  }
+
+  return (
+    <Section
+      title="Seguro / EPS"
+      action={
+        !editing ? (
+          <button
+            onClick={() => setEditing(true)}
+            className="h-7 px-2.5 rounded-md border border-line-200 text-[11px] text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3 w-3" /> {hasAny ? "Editar" : "Agregar"}
+          </button>
+        ) : null
+      }
+    >
+      {editing ? (
+        <form
+          onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
+          className="space-y-2"
+        >
+          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="Proveedor (Sura, EPS Sanitas, …)"
+            className="w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          <input value={plan} onChange={(e) => setPlan(e.target.value)} placeholder="Plan / Categoría"
+            className="w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          <input value={policy} onChange={(e) => setPolicy(e.target.value)} placeholder="N° de póliza / afiliación"
+            className="w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500">Vigente hasta</span>
+            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
+              className="mt-1 w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={cancel} disabled={mu.isPending}
+              className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 disabled:opacity-50">
+              Cancelar
+            </button>
+            <button type="submit" disabled={mu.isPending}
+              className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5">
+              {mu.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Guardar
+            </button>
+          </div>
+        </form>
+      ) : !hasAny ? (
+        <p className="text-sm text-ink-400 italic">Sin información de seguro.</p>
+      ) : (
+        <div className="text-sm space-y-1">
+          {patient.insuranceProvider && (
+            <div className="text-ink-900 font-medium">
+              {patient.insuranceProvider}{patient.insurancePlan ? ` · ${patient.insurancePlan}` : ""}
+            </div>
+          )}
+          {patient.insurancePolicy && (
+            <div className="text-xs text-ink-500 tabular">Póliza {patient.insurancePolicy}</div>
+          )}
+          {patient.insuranceValidUntil && (
+            <div className="text-xs text-ink-500">Vigente hasta {patient.insuranceValidUntil}</div>
+          )}
+        </div>
+      )}
+    </Section>
   );
 }
 

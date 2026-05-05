@@ -140,6 +140,23 @@ export interface ApiPatient {
   risk: "none" | "low" | "moderate" | "high" | "critical";
   riskTypes?: ("suicida" | "autolesion" | "heteroagresion" | "abandono_tto" | "reagudizacion" | "descompensacion")[];
   tags?: string[];
+  // Seguro / EPS — opcionales, todos texto libre.
+  insuranceProvider?: string;
+  insurancePlan?: string;
+  insurancePolicy?: string;
+  /** Fecha YYYY-MM-DD hasta la que la póliza está vigente (opcional). */
+  insuranceValidUntil?: string;
+}
+
+export interface EmergencyContact {
+  id: number;
+  patientId: string;
+  name: string;
+  relation: string;
+  phone: string;
+  priority: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Invoice {
@@ -624,6 +641,20 @@ export const api = {
     request<ApiPatient>(`/api/patients/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deletePatient: (id: string) => request<void>(`/api/patients/${id}`, { method: "DELETE" }),
   archivePatient: (id: string) => request<ApiPatient>(`/api/patients/${id}/archive`, { method: "POST" }),
+
+  // Contactos de emergencia (anidados al paciente)
+  listEmergencyContacts: (patientId: string) =>
+    request<EmergencyContact[]>(`/api/patients/${patientId}/emergency-contacts`),
+  createEmergencyContact: (patientId: string, body: Omit<Partial<EmergencyContact>, "id" | "patientId">) =>
+    request<EmergencyContact>(`/api/patients/${patientId}/emergency-contacts`, {
+      method: "POST", body: JSON.stringify(body),
+    }),
+  updateEmergencyContact: (id: number, body: Omit<Partial<EmergencyContact>, "id" | "patientId">) =>
+    request<EmergencyContact>(`/api/patients/emergency-contacts/${id}`, {
+      method: "PATCH", body: JSON.stringify(body),
+    }),
+  deleteEmergencyContact: (id: number) =>
+    request<void>(`/api/patients/emergency-contacts/${id}`, { method: "DELETE" }),
   restorePatient: (id: string) => request<ApiPatient>(`/api/patients/${id}/restore`, { method: "POST" }),
 
   // Appointments

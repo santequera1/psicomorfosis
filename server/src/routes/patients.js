@@ -48,6 +48,10 @@ function rowToPatient(r) {
     riskTypes: r.risk_type ? safeParseArray(r.risk_type) : [],
     tags: r.tags ? r.tags.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     archivedAt: r.archived_at ?? undefined,
+    insuranceProvider: r.insurance_provider ?? undefined,
+    insurancePlan: r.insurance_plan ?? undefined,
+    insurancePolicy: r.insurance_policy ?? undefined,
+    insuranceValidUntil: r.insurance_valid_until ?? undefined,
   };
 }
 
@@ -175,8 +179,8 @@ router.post("/", (req, res) => {
   const p = req.body ?? {};
   const id = p.id ?? nextPatientId(req.user.workspace_id);
   db.prepare(`
-    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags)
-    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags)
+    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags, insurance_provider, insurance_plan, insurance_policy, insurance_valid_until)
+    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags, @insurance_provider, @insurance_plan, @insurance_policy, @insurance_valid_until)
   `).run({
     id,
     workspace_id: req.user.workspace_id,
@@ -198,6 +202,10 @@ router.post("/", (req, res) => {
     risk: p.risk ?? "none",
     risk_type: serializeRiskTypes(p.riskTypes),
     tags: Array.isArray(p.tags) ? p.tags.join(",") : null,
+    insurance_provider: p.insuranceProvider ?? null,
+    insurance_plan: p.insurancePlan ?? null,
+    insurance_policy: p.insurancePolicy ?? null,
+    insurance_valid_until: p.insuranceValidUntil ?? null,
   });
   const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(id);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("patient:created", rowToPatient(row));
@@ -208,6 +216,9 @@ router.patch("/:id", (req, res) => {
   const existing = db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Paciente no encontrado" });
   const p = req.body ?? {};
+  // Para los campos de seguro usamos `?? existing.x` solo cuando el campo NO
+  // viene en el body. Si viene como null o "", se respeta (permite limpiar).
+  const pickInsurance = (key, col) => Object.prototype.hasOwnProperty.call(p, key) ? (p[key] || null) : existing[col];
   const mapped = {
     name: p.name ?? existing.name,
     preferred_name: p.preferredName ?? existing.preferred_name,
@@ -227,6 +238,10 @@ router.patch("/:id", (req, res) => {
     risk: p.risk ?? existing.risk,
     risk_type: p.riskTypes !== undefined ? serializeRiskTypes(p.riskTypes) : existing.risk_type,
     tags: Array.isArray(p.tags) ? p.tags.join(",") : existing.tags,
+    insurance_provider: pickInsurance("insuranceProvider", "insurance_provider"),
+    insurance_plan: pickInsurance("insurancePlan", "insurance_plan"),
+    insurance_policy: pickInsurance("insurancePolicy", "insurance_policy"),
+    insurance_valid_until: pickInsurance("insuranceValidUntil", "insurance_valid_until"),
   };
   db.prepare(`
     UPDATE patients SET
@@ -234,6 +249,8 @@ router.patch("/:id", (req, res) => {
       phone=@phone, email=@email, professional=@professional, professional_id=@professional_id,
       sede_id=@sede_id, modality=@modality, status=@status, reason=@reason,
       last_contact=@last_contact, next_session=@next_session, risk=@risk, risk_type=@risk_type, tags=@tags,
+      insurance_provider=@insurance_provider, insurance_plan=@insurance_plan,
+      insurance_policy=@insurance_policy, insurance_valid_until=@insurance_valid_until,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=@id
   `).run({ ...mapped, id: req.params.id });
@@ -246,6 +263,99 @@ router.delete("/:id", (req, res) => {
   const r = db.prepare("DELETE FROM patients WHERE id = ? AND workspace_id = ?").run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "No encontrado" });
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("patient:deleted", { id: req.params.id });
+  res.status(204).end();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONTACTOS DE EMERGENCIA — anidados al paciente
+// ════════════════════════════════════════════════════════════════════════════
+
+function rowToEmergencyContact(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    patientId: r.patient_id,
+    name: r.name,
+    relation: r.relation ?? "",
+    phone: r.phone ?? "",
+    priority: r.priority ?? 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+/** Verifica que el paciente exista y sea del workspace del usuario. */
+function assertPatientInWorkspace(patientId, workspaceId) {
+  const p = db.prepare("SELECT id FROM patients WHERE id = ? AND workspace_id = ?").get(patientId, workspaceId);
+  return !!p;
+}
+
+router.get("/:patientId/emergency-contacts", (req, res) => {
+  if (!assertPatientInWorkspace(req.params.patientId, req.user.workspace_id)) {
+    return res.status(404).json({ error: "Paciente no encontrado" });
+  }
+  const rows = db.prepare(
+    "SELECT * FROM emergency_contacts WHERE patient_id = ? AND workspace_id = ? ORDER BY priority ASC, id ASC"
+  ).all(req.params.patientId, req.user.workspace_id);
+  res.json(rows.map(rowToEmergencyContact));
+});
+
+router.post("/:patientId/emergency-contacts", (req, res) => {
+  if (!assertPatientInWorkspace(req.params.patientId, req.user.workspace_id)) {
+    return res.status(404).json({ error: "Paciente no encontrado" });
+  }
+  const c = req.body ?? {};
+  if (!c.name || !String(c.name).trim()) {
+    return res.status(400).json({ error: "El nombre es obligatorio" });
+  }
+  const r = db.prepare(`
+    INSERT INTO emergency_contacts (workspace_id, patient_id, name, relation, phone, priority)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    req.user.workspace_id,
+    req.params.patientId,
+    String(c.name).trim(),
+    c.relation ? String(c.relation).trim() : null,
+    c.phone ? String(c.phone).trim() : null,
+    Number.isFinite(c.priority) ? c.priority : 0,
+  );
+  const row = db.prepare("SELECT * FROM emergency_contacts WHERE id = ?").get(r.lastInsertRowid);
+  res.status(201).json(rowToEmergencyContact(row));
+});
+
+// PATCH y DELETE viven en el mismo router pero por id de contacto
+// (no anidado al paciente — el id es global). Para mantener seguridad
+// validamos que el contacto pertenezca al workspace.
+router.patch("/emergency-contacts/:id", (req, res) => {
+  const existing = db.prepare(
+    "SELECT * FROM emergency_contacts WHERE id = ? AND workspace_id = ?"
+  ).get(req.params.id, req.user.workspace_id);
+  if (!existing) return res.status(404).json({ error: "Contacto no encontrado" });
+  const c = req.body ?? {};
+  db.prepare(`
+    UPDATE emergency_contacts SET
+      name = @name,
+      relation = @relation,
+      phone = @phone,
+      priority = @priority,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = @id
+  `).run({
+    id: existing.id,
+    name: c.name !== undefined ? String(c.name).trim() : existing.name,
+    relation: c.relation !== undefined ? (c.relation ? String(c.relation).trim() : null) : existing.relation,
+    phone: c.phone !== undefined ? (c.phone ? String(c.phone).trim() : null) : existing.phone,
+    priority: Number.isFinite(c.priority) ? c.priority : existing.priority,
+  });
+  const row = db.prepare("SELECT * FROM emergency_contacts WHERE id = ?").get(existing.id);
+  res.json(rowToEmergencyContact(row));
+});
+
+router.delete("/emergency-contacts/:id", (req, res) => {
+  const r = db.prepare(
+    "DELETE FROM emergency_contacts WHERE id = ? AND workspace_id = ?"
+  ).run(req.params.id, req.user.workspace_id);
+  if (r.changes === 0) return res.status(404).json({ error: "Contacto no encontrado" });
   res.status(204).end();
 });
 

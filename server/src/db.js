@@ -482,6 +482,20 @@ CREATE TABLE IF NOT EXISTS tareas_pomodoro_sessions (
   FOREIGN KEY (task_id) REFERENCES tareas(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS emergency_contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL,
+  patient_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  relation TEXT,
+  phone TEXT,
+  priority INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+);
 `;
 
 /**
@@ -539,6 +553,11 @@ function runMigrations() {
     // Notas clínicas firmadas: borrado lógico (Res. 1995/1999 prohíbe DELETE
     // físico, pero permite archivo si los datos siguen disponibles para audit)
     "ALTER TABLE clinical_notes ADD COLUMN archived_at TEXT",
+    // Seguro / EPS del paciente (5 may) — opcional, todos sirven texto libre.
+    "ALTER TABLE patients ADD COLUMN insurance_provider TEXT",
+    "ALTER TABLE patients ADD COLUMN insurance_plan TEXT",
+    "ALTER TABLE patients ADD COLUMN insurance_policy TEXT",
+    "ALTER TABLE patients ADD COLUMN insurance_valid_until TEXT",
   ];
   for (const sql of migrations) {
     try {
