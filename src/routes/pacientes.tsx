@@ -13,6 +13,7 @@ import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
+import { TagEditor } from "@/components/app/TagEditor";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/pacientes")({
@@ -58,6 +59,7 @@ function PatientsPage() {
   const [status, setStatus] = useState<PatientStatus | "todos">("todos");
   const [modality, setModality] = useState<Modality | "todas">("todas");
   const [riskFilter, setRiskFilter] = useState<Risk | "todos">("todos");
+  const [tagFilter, setTagFilter] = useState<string>("todos");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
@@ -70,16 +72,24 @@ function PatientsPage() {
     queryFn: () => api.listPatients(),
   });
 
+  // Lista de etiquetas únicas usadas en el workspace para alimentar el filtro.
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of patients) (p.tags ?? []).forEach((t) => set.add(t));
+    return Array.from(set).sort();
+  }, [patients]);
+
   const filtered = useMemo(() => patients.filter((p) => {
     if (status !== "todos" && p.status !== status) return false;
     if (modality !== "todas" && p.modality !== modality) return false;
     if (riskFilter !== "todos" && p.risk !== riskFilter) return false;
+    if (tagFilter !== "todos" && !(p.tags ?? []).includes(tagFilter)) return false;
     if (query.trim()) {
       const q = query.toLowerCase();
       if (!p.name.toLowerCase().includes(q) && !p.id.toLowerCase().includes(q) && !p.reason.toLowerCase().includes(q) && !p.doc.toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [patients, query, status, modality, riskFilter]);
+  }), [patients, query, status, modality, riskFilter, tagFilter]);
 
   function exportCSV() {
     if (filtered.length === 0) {
@@ -130,7 +140,7 @@ function PatientsPage() {
                 className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
                 <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
                 <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
@@ -161,6 +171,13 @@ function PatientsPage() {
                   <option value="moderate">Moderado</option>
                   <option value="high">Alto</option>
                   <option value="critical">Crítico</option>
+                </select>
+              </div>
+              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
+                <Tag className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+                <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="bg-transparent outline-none cursor-pointer min-w-0 flex-1" disabled={allTags.length === 0}>
+                  <option value="todos">{allTags.length === 0 ? "Sin etiquetas" : "Etiqueta"}</option>
+                  {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
             </div>
@@ -624,8 +641,17 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
     reason: patient.reason,
     risk: patient.risk,
     riskTypes: patient.riskTypes ?? [],
+    tags: patient.tags ?? [],
   });
   const [err, setErr] = useState<string | null>(null);
+
+  // Sugerencias: tags ya usadas en cualquier paciente del workspace.
+  const { data: allPatients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
+  const tagSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of allPatients) (p.tags ?? []).forEach((t) => set.add(t));
+    return Array.from(set).sort();
+  }, [allPatients]);
 
   const mu = useMutation({
     mutationFn: (body: Partial<Patient>) => api.updatePatient(patient.id, body),
@@ -712,6 +738,16 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               onTypesChange={(t) => update("riskTypes", t as Patient["riskTypes"])}
             />
           </div>
+
+          <Labeled label="Etiquetas">
+            <div className="mt-1">
+              <TagEditor
+                value={form.tags ?? []}
+                onChange={(t) => update("tags", t as Patient["tags"])}
+                suggestions={tagSuggestions}
+              />
+            </div>
+          </Labeled>
         </div>
 
         {err && (

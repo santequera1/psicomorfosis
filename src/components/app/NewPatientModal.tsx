@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskPicker } from "@/components/app/RiskPicker";
+import { TagEditor } from "@/components/app/TagEditor";
 import { type Patient, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
 import { X, Loader2, AlertCircle } from "lucide-react";
 
@@ -19,9 +20,17 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
   const mainProfessional = professionals[0];
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({ pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [] });
+  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({ pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [], tags: [] });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Sugerencias de etiquetas: tags ya usadas en otros pacientes del workspace.
+  const { data: existingPatients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
+  const tagSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of existingPatients) (p.tags ?? []).forEach((t) => set.add(t));
+    return Array.from(set).sort();
+  }, [existingPatients]);
 
   const createMutation = useMutation({
     mutationFn: (body: Partial<Patient> & { professionalId?: number }) => api.createPatient(body),
@@ -64,6 +73,7 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
       lastContact: "Hoy",
       risk: form.risk,
       riskTypes: form.riskTypes,
+      tags: form.tags ?? [],
     });
   }
 
@@ -149,6 +159,15 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
                   onTypesChange={(t) => updateField("riskTypes", t as Patient["riskTypes"])}
                 />
               </div>
+              <Labeled label="Etiquetas">
+                <div className="mt-1">
+                  <TagEditor
+                    value={form.tags ?? []}
+                    onChange={(t) => updateField("tags", t as Patient["tags"])}
+                    suggestions={tagSuggestions}
+                  />
+                </div>
+              </Labeled>
             </>
           )}
           {step === 3 && (
