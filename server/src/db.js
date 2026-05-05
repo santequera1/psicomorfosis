@@ -619,14 +619,16 @@ function backfillExisting() {
     console.warn("[db] backfill seed templates falló:", err.message);
   }
 
-  // 1c. Definiciones JSON completas de los 8 tests psicométricos.
-  // El seed antiguo solo tenía metadata; ahora agregamos questions_json para
-  // que el aplicador interactivo funcione con todos.
+  // 1c. Definiciones de tests psicométricos. La función es idempotente
+  // (INSERT ... ON CONFLICT(id) DO UPDATE) así que correrla en cada
+  // arranque permite agregar tests nuevos al catálogo sin tocar la DB.
+  // Tests existentes solo se actualizan en questions_json/items/description.
   try {
-    const missing = db.prepare("SELECT COUNT(*) AS n FROM psych_tests WHERE questions_json IS NULL OR questions_json = ''").get().n;
-    if (missing > 0) {
-      seedTestDefinitions(db);
-      console.log(`[db] backfill: cargadas definiciones de ${missing} tests psicométricos`);
+    const before = db.prepare("SELECT COUNT(*) AS n FROM psych_tests").get().n;
+    seedTestDefinitions(db);
+    const after = db.prepare("SELECT COUNT(*) AS n FROM psych_tests").get().n;
+    if (after > before) {
+      console.log(`[db] backfill: agregados ${after - before} tests nuevos al catálogo (total: ${after})`);
     }
   } catch (err) {
     console.warn("[db] backfill test definitions falló:", err.message);
