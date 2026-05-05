@@ -40,6 +40,15 @@ export const VARIABLES: Variable[] = [
   { key: "fecha.hoy",                      label: "Fecha (YYYY-MM-DD)",             example: "2026-04-26",             group: "Fecha" },
   { key: "fecha.larga",                    label: "Fecha (humana)",                 example: "26 de abril de 2026",    group: "Fecha" },
   { key: "sesion.fecha",                   label: "Fecha de sesión",                example: "2026-04-26",             group: "Sesión" },
+  { key: "sesion.fecha_larga",             label: "Fecha de sesión (humana)",       example: "26 de abril de 2026",    group: "Sesión" },
+  { key: "sesion.numero",                  label: "Número de sesión",               example: "12",                     group: "Sesión" },
+  { key: "sesion.tipo",                    label: "Tipo de nota",                   example: "sesion",                 group: "Sesión" },
+  { key: "sesion.autor",                   label: "Autor de la nota",               example: "Nathaly Ferrer Pacheco", group: "Sesión" },
+  { key: "sesion.s",                       label: "Subjetivo (S)",                  example: "Reporta mejor sueño…",   group: "Sesión" },
+  { key: "sesion.o",                       label: "Objetivo (O)",                   example: "Afecto eutímico…",       group: "Sesión" },
+  { key: "sesion.a",                       label: "Análisis (A)",                   example: "Reducción de síntomas…", group: "Sesión" },
+  { key: "sesion.p",                       label: "Plan (P)",                       example: "Continuar TCC…",         group: "Sesión" },
+  { key: "sesion.contenido",               label: "Contenido completo",             example: "S: …\nO: …\nA: …\nP: …", group: "Sesión" },
 ];
 
 export type VariableListRef = {

@@ -1,15 +1,16 @@
-import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   User, Phone, Mail, IdCard, MapPin, Stethoscope, Brain, Pill, FileText,
-  ClipboardList, MessageSquareText, MessageCircle,
+  ClipboardList, MessageSquareText, MessageCircle, Sparkles,
   ChevronDown, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type ApiPatient, type ClinicalNote, type NoteKind, BLOCK_LABELS, type SoapContent } from "@/lib/api";
+import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -514,6 +515,7 @@ function SessionNotes({ patientId, onOpenNew }: { patientId: string; onOpenNew: 
 function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const soap = parseSoap(note.content);
 
   const KIND_STYLE: Record<string, { label: string; bg: string }> = {
@@ -571,38 +573,176 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
           <p className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">{note.content}</p>
         )}
 
-        {!editing && note.isDraft && (
-          <div className="mt-4 flex items-center justify-end gap-2">
+        {!editing && (
+          <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
             <button
-              onClick={() => {
-                if (confirm("¿Eliminar esta nota borrador? Esta acción no se puede deshacer.")) {
-                  deleteMu.mutate();
-                }
-              }}
-              disabled={deleteMu.isPending}
-              className="h-8 px-3 rounded-md border border-line-200 text-xs text-rose-700 hover:border-rose-400 hover:bg-rose-500/5 disabled:opacity-50 inline-flex items-center gap-1.5"
-              title="Eliminar borrador"
-            >
-              <Trash2 className="h-3 w-3" /> Eliminar
-            </button>
-            <button
-              onClick={() => setEditing(true)}
+              onClick={() => setPickerOpen(true)}
               className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+              title="Generar un documento (informe, certificado, etc) usando los datos de esta nota"
             >
-              <Edit3 className="h-3 w-3" /> Editar
+              <Sparkles className="h-3 w-3 text-brand-700" /> Generar documento
             </button>
-            <button
-              onClick={() => signMu.mutate()}
-              disabled={signMu.isPending}
-              className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5"
-            >
-              {signMu.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-              Firmar
-            </button>
+
+            {note.isDraft && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm("¿Eliminar esta nota borrador? Esta acción no se puede deshacer.")) {
+                      deleteMu.mutate();
+                    }
+                  }}
+                  disabled={deleteMu.isPending}
+                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-rose-700 hover:border-rose-400 hover:bg-rose-500/5 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  title="Eliminar borrador"
+                >
+                  <Trash2 className="h-3 w-3" /> Eliminar
+                </button>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                >
+                  <Edit3 className="h-3 w-3" /> Editar
+                </button>
+                <button
+                  onClick={() => signMu.mutate()}
+                  disabled={signMu.isPending}
+                  className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5"
+                >
+                  {signMu.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  Firmar
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {pickerOpen && (
+        <GenerateDocFromNoteModal
+          note={note}
+          patientId={patientId}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </article>
+  );
+}
+
+/**
+ * Modal de selección de plantilla para generar un documento desde una nota.
+ * El backend rellena las {{sesion.*}}, {{paciente.*}}, etc. con datos reales
+ * de la nota y el paciente, deja un borrador y abrimos el editor.
+ */
+function GenerateDocFromNoteModal({ note, patientId, onClose }: { note: ClinicalNote; patientId: string; onClose: () => void }) {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState<number | null>(null);
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ["document-templates"],
+    queryFn: () => api.listDocumentTemplates(),
+  });
+
+  // Cerrar con Esc.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Agrupar por categoría para presentar de forma ordenada.
+  const grouped = useMemo(() => {
+    const order = ["informe", "certificado", "consentimiento", "remision", "contrato", "otro"];
+    const map: Record<string, DocumentTemplate[]> = {};
+    for (const t of templates) (map[t.category] ??= []).push(t);
+    return order.filter((c) => map[c]?.length).map((c) => ({ category: c, items: map[c] }));
+  }, [templates]);
+
+  async function pick(t: DocumentTemplate) {
+    setCreating(t.id);
+    try {
+      const created = await api.createDocument({
+        name: `${t.name} — sesión ${note.id}`,
+        type: t.category,
+        patient_id: patientId,
+        template_id: t.id,
+        note_id: note.id,
+      });
+      toast.success("Documento creado");
+      onClose();
+      navigate({ to: "/documentos/$id", params: { id: created.id } });
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo crear el documento");
+      setCreating(null);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-12 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+        <header className="p-5 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium inline-flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> Generar documento
+            </p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Elegí una plantilla</h3>
+            <p className="text-xs text-ink-500 mt-1">
+              Las variables <code className="text-brand-700">{"{{sesion.*}}"}</code> y <code className="text-brand-700">{"{{paciente.*}}"}</code> se rellenan con datos reales de esta nota.
+            </p>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="p-5 max-h-[60vh] overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10 text-sm text-ink-500">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Cargando plantillas…
+            </div>
+          ) : templates.length === 0 ? (
+            <div className="text-center py-10 text-sm text-ink-500">
+              No hay plantillas disponibles. <Link to="/documentos" className="text-brand-700 hover:underline">Creá una primero</Link>.
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {grouped.map((g) => (
+                <div key={g.category}>
+                  <div className="text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium mb-2">{g.category}</div>
+                  <ul className="space-y-1.5">
+                    {g.items.map((t) => (
+                      <li key={t.id}>
+                        <button
+                          onClick={() => pick(t)}
+                          disabled={creating !== null}
+                          className="w-full text-left rounded-lg border border-line-200 p-3 hover:border-brand-400 hover:bg-brand-50/40 transition-colors flex items-start gap-3 disabled:opacity-50 disabled:cursor-wait"
+                        >
+                          <FileText className="h-4 w-4 text-brand-700 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-ink-900 font-medium flex items-center gap-2">
+                              {t.name}
+                              {t.scope === "system" && (
+                                <span className="text-[10px] uppercase tracking-wider text-ink-400">Sistema</span>
+                              )}
+                            </div>
+                            {t.description && (
+                              <div className="text-xs text-ink-500 mt-0.5 line-clamp-2">{t.description}</div>
+                            )}
+                          </div>
+                          {creating === t.id && <Loader2 className="h-4 w-4 animate-spin text-brand-700 shrink-0 mt-0.5" />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end">
+          <button onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

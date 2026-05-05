@@ -296,9 +296,10 @@ function rowToDoc(r) {
 
 /**
  * Resuelve el contexto de interpolación de variables en plantillas.
- * Soporta {{paciente.*}}, {{profesional.*}}, {{clinica.*}}, {{fecha.*}}.
+ * Soporta {{paciente.*}}, {{profesional.*}}, {{clinica.*}}, {{fecha.*}},
+ * {{sesion.*}} (cuando se pasa noteId, jala datos reales de esa nota clínica).
  */
-function buildInterpolationContext(workspaceId, patientId, professionalName) {
+function buildInterpolationContext(workspaceId, patientId, professionalName, noteId = null) {
   const ws = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(workspaceId);
   const settingsRows = db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(workspaceId);
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value]));
@@ -317,6 +318,54 @@ function buildInterpolationContext(workspaceId, patientId, professionalName) {
 
   const today = new Date();
   const longDate = today.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
+  // Sesión: por defecto datos de hoy (sin nota); con noteId, valores reales.
+  const sesion = {
+    fecha: today.toISOString().slice(0, 10),
+    fecha_larga: longDate,
+    tipo: "",
+    autor: prof?.name ?? "",
+    numero: "",
+    s: "", o: "", a: "", p: "",
+    contenido: "",
+  };
+
+  if (noteId) {
+    const note = db.prepare(
+      "SELECT * FROM clinical_notes WHERE id = ? AND workspace_id = ? AND patient_id = ?"
+    ).get(noteId, workspaceId, patientId);
+    if (note) {
+      const noteDate = new Date(note.signed_at ?? note.created_at);
+      sesion.fecha = noteDate.toISOString().slice(0, 10);
+      sesion.fecha_larga = noteDate.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+      sesion.tipo = note.kind ?? "";
+      sesion.autor = note.author_name ?? sesion.autor;
+
+      // content puede ser JSON SOAP {s,o,a,p} (kind=sesion) o texto libre.
+      let parsed = null;
+      try { parsed = JSON.parse(note.content ?? ""); } catch { parsed = null; }
+      if (parsed && typeof parsed === "object" && ("s" in parsed || "o" in parsed || "a" in parsed || "p" in parsed)) {
+        sesion.s = String(parsed.s ?? "");
+        sesion.o = String(parsed.o ?? "");
+        sesion.a = String(parsed.a ?? "");
+        sesion.p = String(parsed.p ?? "");
+        sesion.contenido = ["S: " + sesion.s, "O: " + sesion.o, "A: " + sesion.a, "P: " + sesion.p].filter(l => l.length > 4).join("\n\n");
+      } else {
+        sesion.contenido = String(note.content ?? "");
+      }
+
+      // Número de sesión: posición cronológica entre las notas sesion/evolucion
+      // del paciente, contando hasta la fecha de creación de esta nota.
+      const numero = db.prepare(`
+        SELECT COUNT(*) AS n FROM clinical_notes
+        WHERE workspace_id = ? AND patient_id = ?
+          AND (kind = 'sesion' OR kind = 'evolucion')
+          AND superseded_by_id IS NULL
+          AND created_at <= ?
+      `).get(workspaceId, patientId, note.created_at);
+      sesion.numero = String(numero?.n ?? "");
+    }
+  }
 
   return {
     paciente: {
@@ -345,28 +394,37 @@ function buildInterpolationContext(workspaceId, patientId, professionalName) {
       hoy: today.toISOString().slice(0, 10),
       larga: longDate,
     },
-    sesion: {
-      fecha: today.toISOString().slice(0, 10),
-    },
+    sesion,
   };
 }
 
+/** Resolución de una key dotted ("paciente.nombre") sobre el contexto. */
+function resolveKey(key, ctx) {
+  const parts = String(key).split(".");
+  let val = ctx;
+  for (const p of parts) {
+    if (val == null) return "";
+    val = val[p];
+  }
+  return val == null ? "" : String(val);
+}
+
 /**
- * Recorre un documento TipTap y reemplaza placeholders {{ruta.dentro.del.contexto}}
- * en los nodes de tipo 'text'. No altera la estructura, solo el contenido.
+ * Recorre un documento TipTap y materializa las variables a su valor actual.
+ *
+ * Cubre dos formatos:
+ * - Texto literal `{{ruta.dentro.del.contexto}}` dentro de nodes 'text' (legado).
+ * - Nodes atómicos `{ type: "variable", attrs: { key } }` (nuevo, los inserta el
+ *   panel/autocomplete del editor). Estos se convierten en `text` con el valor,
+ *   así el documento queda como snapshot de la fecha en que se creó.
  */
 function interpolateDoc(node, ctx) {
   if (!node) return node;
+  if (node.type === "variable" && node.attrs?.key) {
+    return { type: "text", text: resolveKey(node.attrs.key, ctx) };
+  }
   if (node.type === "text" && typeof node.text === "string") {
-    return { ...node, text: node.text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
-      const parts = key.split(".");
-      let val = ctx;
-      for (const p of parts) {
-        if (val == null) return "";
-        val = val[p];
-      }
-      return val == null ? "" : String(val);
-    })};
+    return { ...node, text: node.text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => resolveKey(key, ctx)) };
   }
   if (Array.isArray(node.content)) {
     return { ...node, content: node.content.map((c) => interpolateDoc(c, ctx)) };
@@ -653,7 +711,7 @@ router.get("/:id", (req, res) => {
  * - Si nada: crea un body vacío.
  */
 router.post("/", (req, res) => {
-  const { name, type, patient_id, patient_name, template_id, body_json } = req.body ?? {};
+  const { name, type, patient_id, patient_name, template_id, body_json, note_id } = req.body ?? {};
   if (!name) return res.status(400).json({ error: "name requerido" });
 
   let finalBody = body_json ?? { type: "doc", content: [{ type: "paragraph" }] };
@@ -668,7 +726,9 @@ router.post("/", (req, res) => {
     if (!tpl) return res.status(404).json({ error: "Plantilla no encontrada" });
     const tplBody = safeJSON(tpl.body_json);
     if (tplBody) {
-      const ctx = buildInterpolationContext(ws(req), patient_id, req.user.name);
+      // Si viene note_id, las {{sesion.*}} se rellenan con datos reales de
+      // esa nota clínica; si no, sesion.* queda con defaults (fecha de hoy).
+      const ctx = buildInterpolationContext(ws(req), patient_id, req.user.name, note_id ?? null);
       finalBody = interpolateDoc(tplBody, ctx);
     }
     resolvedType = tpl.category || resolvedType;

@@ -674,7 +674,7 @@ export const api = {
       include_archived: params.include_archived ? "true" : undefined,
     })}`),
   getDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}`),
-  createDocument: (body: { name: string; type?: string; patient_id?: string | null; patient_name?: string | null; template_id?: number; body_json?: TipTapDoc }) =>
+  createDocument: (body: { name: string; type?: string; patient_id?: string | null; patient_name?: string | null; template_id?: number; note_id?: number; body_json?: TipTapDoc }) =>
     request<PsmDocument>("/api/documents", { method: "POST", body: JSON.stringify(body) }),
   updateDocument: (id: string, body: Partial<PsmDocument>) =>
     request<PsmDocument>(`/api/documents/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
