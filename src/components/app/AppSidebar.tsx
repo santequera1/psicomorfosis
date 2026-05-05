@@ -145,18 +145,19 @@ export function AppSidebar() {
                         to={it.to}
                         onClick={() => setOpen(false)}
                         className={cn(
-                          "relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors",
+                          "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
                           // Touch target ≥44px en mobile, 40px en desktop
                           "min-h-[44px] md:min-h-[40px] py-2.5",
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                          // Hover: bg-accent + leve translate del ícono para feedback claro.
+                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400"
                             : "text-sidebar-foreground/85",
-                          collapsed && "md:justify-center md:px-0"
+                          collapsed && "md:justify-center md:px-0 md:hover:pl-0"
                         )}
                         title={collapsed ? it.label : undefined}
                       >
-                        <Icon className="h-[18px] w-[18px] shrink-0" />
+                        <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200" />
                         <span className={cn(collapsed && "md:hidden")}>{it.label}</span>
                       </Link>
                     </li>

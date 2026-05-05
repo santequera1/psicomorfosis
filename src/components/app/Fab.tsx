@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Plus, X, Calendar, UserPlus, FilePen } from "lucide-react";
+import { Plus, Calendar, UserPlus, FilePen } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
 import { NewNoteShortcutModal } from "@/components/app/NewNoteShortcutModal";
@@ -55,20 +56,26 @@ export function Fab() {
   return (
     <>
       <div ref={containerRef} className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 print:hidden">
-        {menuOpen && (
-          <div className="flex flex-col items-end gap-2 mb-1">
-            <FabItem icon={Calendar} label="Nueva cita" onClick={() => pick("appointment")} />
-            <FabItem icon={UserPlus} label="Nuevo paciente" onClick={() => pick("patient")} />
-            <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} />
-          </div>
-        )}
+        {/* Los items siempre están montados; alternamos opacity/translate/pointer-events
+            para tener animación real de entrada y salida con un pequeño stagger. */}
+        <div
+          aria-hidden={!menuOpen}
+          className={cn(
+            "flex flex-col items-end gap-2 mb-1 transition-all duration-200 ease-out",
+            menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-3 pointer-events-none"
+          )}
+        >
+          <FabItem icon={Calendar} label="Nueva cita" onClick={() => pick("appointment")} stagger={2} open={menuOpen} />
+          <FabItem icon={UserPlus} label="Nuevo paciente" onClick={() => pick("patient")} stagger={1} open={menuOpen} />
+          <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} stagger={0} open={menuOpen} />
+        </div>
         <button
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? "Cerrar acciones" : "Abrir acciones"}
           aria-expanded={menuOpen}
-          className="h-14 w-14 rounded-full bg-brand-700 text-white shadow-lg hover:bg-brand-800 hover:shadow-xl active:scale-95 transition-all flex items-center justify-center"
+          className="h-14 w-14 rounded-full bg-brand-700 text-white shadow-lg hover:bg-brand-800 hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center"
         >
-          {menuOpen ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          <Plus className={cn("h-5 w-5 transition-transform duration-200", menuOpen && "rotate-45")} />
         </button>
       </div>
 
@@ -85,13 +92,23 @@ export function Fab() {
   );
 }
 
-function FabItem({ icon: Icon, label, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; onClick: () => void }) {
+function FabItem({ icon: Icon, label, onClick, stagger = 0, open = true }: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  stagger?: number;
+  open?: boolean;
+}) {
+  // Stagger: cada item entra 40ms después del anterior. Al cerrar, todos
+  // salen al mismo tiempo (más natural visualmente).
+  const delay = open ? `${stagger * 40}ms` : "0ms";
   return (
     <button
       onClick={onClick}
-      className="group flex items-center gap-3 pl-3 pr-4 h-11 rounded-full bg-surface border border-line-200 shadow-md text-sm text-ink-900 hover:border-brand-400 hover:bg-brand-50/40 transition-colors"
+      style={{ transitionDelay: delay }}
+      className="group flex items-center gap-3 pl-3 pr-4 h-11 rounded-full bg-surface border border-line-200 shadow-md text-sm text-ink-900 hover:border-brand-400 hover:bg-brand-50/40 transition-all duration-150"
     >
-      <span className="h-7 w-7 rounded-full bg-brand-50 text-brand-800 flex items-center justify-center shrink-0 group-hover:bg-brand-100">
+      <span className="h-7 w-7 rounded-full bg-brand-50 text-brand-800 flex items-center justify-center shrink-0 group-hover:bg-brand-100 transition-colors">
         <Icon className="h-3.5 w-3.5" />
       </span>
       <span className="font-medium whitespace-nowrap">{label}</span>

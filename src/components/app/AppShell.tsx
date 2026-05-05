@@ -52,7 +52,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex-1 min-w-0 flex flex-col">
           <Topbar />
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+          {/* pb-24 reserva espacio para que el FAB (bottom-5 right-5, h-14)
+              no tape los últimos elementos de la página al scrollear hasta abajo. */}
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24">
             {children}
           </main>
         </div>

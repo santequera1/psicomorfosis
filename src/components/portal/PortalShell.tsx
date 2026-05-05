@@ -1,17 +1,20 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain } from "lucide-react";
 import { Logo } from "@/components/app/Logo";
-import { clearSession, getStoredUser, type ApiUser } from "@/lib/api";
+import { api, clearSession, getStoredUser, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const TABS: { to: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { to: "/p/inicio",     label: "Inicio",     icon: Home },
-  { to: "/p/citas",      label: "Mis citas",  icon: Calendar },
-  { to: "/p/tareas",     label: "Tareas",     icon: ListChecks },
-  { to: "/p/tests",      label: "Tests",      icon: Brain },
-  { to: "/p/documentos", label: "Documentos", icon: FileText },
-  { to: "/p/perfil",     label: "Perfil",     icon: User },
+type TabKey = "inicio" | "citas" | "tareas" | "tests" | "documentos" | "perfil";
+
+const TABS: { key: TabKey; to: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "inicio",     to: "/p/inicio",     label: "Inicio",     icon: Home },
+  { key: "citas",      to: "/p/citas",      label: "Mis citas",  icon: Calendar },
+  { key: "tareas",     to: "/p/tareas",     label: "Tareas",     icon: ListChecks },
+  { key: "tests",      to: "/p/tests",      label: "Tests",      icon: Brain },
+  { key: "documentos", to: "/p/documentos", label: "Documentos", icon: FileText },
+  { key: "perfil",     to: "/p/perfil",     label: "Perfil",     icon: User },
 ];
 
 /**
@@ -32,6 +35,20 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
     setUser(getStoredUser());
     return () => { if (wasDark) document.documentElement.classList.add("dark"); };
   }, []);
+
+  // Tests pendientes/en curso → badge en la pestaña "Tests" para que el
+  // paciente sepa que tiene algo asignado sin tener que entrar a revisar.
+  // Polling cada 60s mientras el portal esté abierto, para captar
+  // asignaciones nuevas hechas por el psicólogo durante la sesión.
+  const { data: tests = [] } = useQuery({
+    queryKey: ["portal-tests"],
+    queryFn: () => api.portalTests(),
+    refetchInterval: 60_000,
+    enabled: !!user,
+  });
+  const badges: Partial<Record<TabKey, number>> = {
+    tests: tests.filter((t) => t.status === "pendiente" || t.status === "en_curso").length,
+  };
 
   function logout() {
     clearSession();
@@ -71,18 +88,27 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
             {TABS.map((t) => {
               const active = path === t.to || path.startsWith(t.to + "/");
               const Icon = t.icon;
+              const badge = badges[t.key];
               return (
                 <Link
                   key={t.to}
                   to={t.to}
                   className={cn(
-                    "px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5",
+                    "relative px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5",
                     active
                       ? "border-brand-700 text-brand-700"
                       : "border-transparent text-ink-500 hover:text-ink-900"
                   )}
                 >
                   <Icon className="h-4 w-4" /> {t.label}
+                  {badge != null && badge > 0 && (
+                    <span
+                      title={`${badge} ${badge === 1 ? "pendiente" : "pendientes"}`}
+                      className="ml-0.5 inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full bg-brand-700 text-white text-[10px] font-semibold tabular leading-none"
+                    >
+                      {badge > 9 ? "9+" : badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

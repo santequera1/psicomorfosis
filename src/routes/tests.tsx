@@ -37,6 +37,7 @@ function TestsPage() {
   const [activeTest, setActiveTest] = useState<PsychTest | null>(null);
   const [applyContext, setApplyContext] = useState<{ test: PsychTest; patientId?: string; patientName?: string } | null>(null);
   const [assignContext, setAssignContext] = useState<PsychTest | null>(null);
+  const [detailApp, setDetailApp] = useState<TestApplication | null>(null);
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery({
     queryKey: ["test-catalog"],
@@ -130,7 +131,7 @@ function TestsPage() {
             ) : (
               <ul className="divide-y divide-line-100 max-h-96 overflow-y-auto">
                 {applications.slice(0, 20).map((a) => (
-                  <ApplicationRow key={a.id} app={a} />
+                  <ApplicationRow key={a.id} app={a} onOpen={() => setDetailApp(a)} />
                 ))}
               </ul>
             )}
@@ -166,7 +167,52 @@ function TestsPage() {
           onClose={() => setAssignContext(null)}
         />
       )}
+
+      {/* Modal: detalle de aplicación completada (al click en una row) */}
+      {detailApp && (
+        <ApplicationDetailModal app={detailApp} onClose={() => setDetailApp(null)} />
+      )}
     </AppShell>
+  );
+}
+
+/**
+ * Modal de detalle al abrir una aplicación completada desde la lista.
+ * Para tests Millon usa MillonResultView; para los demás muestra el resumen
+ * estándar (score + interpretación + alerta crítica si aplica).
+ */
+function ApplicationDetailModal({ app, onClose }: { app: TestApplication; onClose: () => void }) {
+  const isMillon = app.alerts_json?.meta?.type === "millon";
+  const lvl = app.level && LEVEL_STYLE[app.level];
+  return (
+    <Modal onClose={onClose} title={`${app.test_code} · ${app.patient_name ?? ""}`} wide={isMillon}>
+      {isMillon ? (
+        <MillonResultView result={app} onClose={onClose} />
+      ) : (
+        <div className="p-6 text-center">
+          <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{app.test_code}</p>
+          <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {app.score ?? "—"}</h3>
+          {lvl && app.interpretation && (
+            <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
+              {app.interpretation}
+            </span>
+          )}
+          {app.alerts_json?.critical_response && (
+            <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
+              <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+            </div>
+          )}
+          <p className="text-xs text-ink-500 mt-4">
+            Completado el {app.completed_at ? new Date(app.completed_at).toLocaleString("es-CO") : "—"}
+            {app.applied_by === "paciente" && " · auto-aplicado"}
+          </p>
+          <button onClick={onClose} className="mt-6 h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+            Cerrar
+          </button>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -210,7 +256,7 @@ function CatalogRow({ test, onApply, onAssign, onView }: { test: PsychTest; onAp
   );
 }
 
-function ApplicationRow({ app }: { app: TestApplication }) {
+function ApplicationRow({ app, onOpen }: { app: TestApplication; onOpen: () => void }) {
   const status = STATUS_STYLE[app.status] ?? STATUS_STYLE.pendiente;
   const StatusIcon = status.icon;
   const level = app.level && LEVEL_STYLE[app.level];
@@ -219,42 +265,56 @@ function ApplicationRow({ app }: { app: TestApplication }) {
     : app.assigned_at
       ? `asignado ${new Date(app.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
       : app.date ?? "";
+  const isMillon = app.alerts_json?.meta?.type === "millon";
   return (
-    <li className="px-4 py-3 hover:bg-bg-100/30">
-      <div className="flex items-start gap-3">
-        <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded-full font-medium shrink-0", status.bg, status.text)}>
-          <StatusIcon className="h-3 w-3" /> {status.label}
-        </span>
-      </div>
-      <div className="mt-1.5">
-        <p className="text-sm font-medium text-ink-900">{app.test_code} · <span className="text-ink-700 font-normal">{app.patient_name}</span></p>
-        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-500 flex-wrap">
-          <span>{dateStr}</span>
-          {app.status === "en_curso" && app.total_items != null && (
-            <>
-              <span className="text-ink-300">·</span>
-              <span className="tabular text-brand-800 font-medium">{app.answered_items ?? 0}/{app.total_items} respondidas</span>
-            </>
-          )}
-          {app.score != null && app.status === "completado" && (
-            <>
-              <span className="text-ink-300">·</span>
-              <span className="tabular">Score {app.score}</span>
-              {level && (
-                <span className={cn("px-1.5 py-0.5 rounded text-[10px]", level.bg, level.text)}>{app.interpretation}</span>
-              )}
-            </>
-          )}
-          {app.applied_by === "paciente" && app.status === "completado" && (
-            <span className="text-[10px] text-brand-700">· auto-aplicado</span>
+    <li>
+      <button
+        onClick={onOpen}
+        disabled={app.status !== "completado"}
+        className="w-full text-left px-4 py-3 hover:bg-bg-100/30 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
+      >
+        <div className="flex items-start gap-3">
+          <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-1 rounded-full font-medium shrink-0", status.bg, status.text)}>
+            <StatusIcon className="h-3 w-3" /> {status.label}
+          </span>
+        </div>
+        <div className="mt-1.5">
+          <p className="text-sm font-medium text-ink-900">{app.test_code} · <span className="text-ink-700 font-normal">{app.patient_name}</span></p>
+          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-500 flex-wrap">
+            <span>{dateStr}</span>
+            {app.status === "en_curso" && app.total_items != null && (
+              <>
+                <span className="text-ink-300">·</span>
+                <span className="tabular text-brand-800 font-medium">{app.answered_items ?? 0}/{app.total_items} respondidas</span>
+              </>
+            )}
+            {app.status === "completado" && (
+              isMillon ? (
+                <>
+                  <span className="text-ink-300">·</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand-50 text-brand-800 font-medium">Ver detalle por escala →</span>
+                </>
+              ) : (app.score != null && (
+                <>
+                  <span className="text-ink-300">·</span>
+                  <span className="tabular">Score {app.score}</span>
+                  {level && (
+                    <span className={cn("px-1.5 py-0.5 rounded text-[10px]", level.bg, level.text)}>{app.interpretation}</span>
+                  )}
+                </>
+              ))
+            )}
+            {app.applied_by === "paciente" && app.status === "completado" && (
+              <span className="text-[10px] text-brand-700">· auto-aplicado</span>
+            )}
+          </div>
+          {app.alerts_json?.critical_response && (
+            <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-risk-critical bg-error-soft px-2 py-0.5 rounded-full">
+              <AlertOctagon className="h-3 w-3" /> Respuesta crítica
+            </div>
           )}
         </div>
-        {app.alerts_json?.critical_response && (
-          <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-risk-critical bg-error-soft px-2 py-0.5 rounded-full">
-            <AlertOctagon className="h-3 w-3" /> Respuesta crítica
-          </div>
-        )}
-      </div>
+      </button>
     </li>
   );
 }
