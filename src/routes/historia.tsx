@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import {
   User, Phone, Mail, IdCard, MapPin, Stethoscope, Brain, Pill, FileText,
   ClipboardList, MessageSquareText, MessageCircle, Sparkles,
-  ChevronDown, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
+  ChevronDown, ChevronRight, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent } from "@/lib/api";
@@ -63,20 +64,46 @@ function HistoriaPage() {
 
   const [patientId, setPatientId] = useState<string | null>(search.id ?? null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteEditorOpen, setNoteEditorOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
 
-  // Cuando carguen los pacientes, si no hay id seleccionado, usar el primero
+  // Si llega un id nuevo en la URL (navegación desde otra página), respetarlo.
+  // Antes había auto-selección del primer paciente, lo que confundía: parecía
+  // que un paciente nuevo "ya tenía" notas que en realidad eran de otro.
   useEffect(() => {
-    if (!patientId && patients.length > 0) setPatientId(patients[0].id);
-    if (search.id) setPatientId(search.id);
-  }, [patients, search.id, patientId]);
+    if (search.id && search.id !== patientId) setPatientId(search.id);
+  }, [search.id, patientId]);
 
   const { data: patient, isLoading } = useQuery({
     queryKey: ["patient", patientId],
     queryFn: () => api.getPatient(patientId!),
     enabled: !!patientId,
   });
+
+  // Atajo "N" para abrir el editor de nueva nota cuando hay paciente activo.
+  useEffect(() => {
+    if (!patient) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "n" && e.key !== "N") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      setNoteEditorOpen(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [patient]);
+
+  // Sin paciente seleccionado: empty state con buscador. Esto reemplazó el
+  // auto-select del primer paciente que confundía a los usuarios.
+  if (!patientId) {
+    return (
+      <AppShell>
+        <NoPatientSelected patients={patients} onPick={(id) => setPatientId(id)} />
+      </AppShell>
+    );
+  }
 
   if (isLoading || !patient) {
     return (
@@ -87,11 +114,6 @@ function HistoriaPage() {
       </AppShell>
     );
   }
-
-  // Si el paciente fue auto-seleccionado (no vino en la URL), mostrar
-  // un banner suave para que el psicólogo no se confunda — antes la app
-  // abría el primer paciente sin avisar.
-  const autoSelected = !search.id && patientId === patients[0]?.id;
 
   return (
     <AppShell>
@@ -110,30 +132,80 @@ function HistoriaPage() {
           </button>
         </div>
 
-        {autoSelected && (
-          <div className="mb-4 rounded-lg border border-brand-100 bg-brand-50/50 px-4 py-3 flex items-center gap-3 text-xs text-ink-700">
-            <span className="text-brand-700">ⓘ</span>
-            <span className="flex-1">
-              Mostrando la historia de <strong>{patient.preferredName ?? patient.name}</strong> (seleccionado por defecto al ser tu primer paciente).
-            </span>
-            <button
-              onClick={() => setPickerOpen(true)}
-              className="text-brand-700 font-medium hover:underline shrink-0"
-            >
-              Cambiar paciente →
-            </button>
-          </div>
-        )}
-
-        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteOpen(true)} onOpenAppt={() => setApptOpen(true)} />
+        <PatientHeader patient={patient} isOrg={isOrg} patients={patients} onOpenNote={() => setNoteEditorOpen(true)} onOpenAppt={() => setApptOpen(true)} />
         <ClinicalBlocks patientId={patient.id} />
-        <SessionNotes patientId={patient.id} onOpenNew={() => setNoteOpen(true)} />
+        <SessionNotes
+          patient={patient}
+          editorOpen={noteEditorOpen}
+          onOpenEditor={() => setNoteEditorOpen(true)}
+          onCloseEditor={() => setNoteEditorOpen(false)}
+        />
       </div>
 
       {pickerOpen && <PatientPickerModal patients={patients} currentId={patient.id} onPick={(id) => { setPatientId(id); setPickerOpen(false); }} onClose={() => setPickerOpen(false)} />}
-      {noteOpen && <NewSoapNoteModal patient={patient} onClose={() => setNoteOpen(false)} />}
       {apptOpen && <NewAppointmentModal patients={patients} prefilledPatient={patient} onClose={() => setApptOpen(false)} />}
     </AppShell>
+  );
+}
+
+/** Pantalla de bienvenida cuando no hay paciente seleccionado en /historia. */
+function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: (id: string) => void }) {
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? patients.filter((p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.preferredName ?? "").toLowerCase().includes(q) ||
+          p.doc.toLowerCase().includes(q) ||
+          p.id.toLowerCase().includes(q)
+        )
+      : patients;
+    return list.slice(0, 12);
+  }, [patients, query]);
+
+  return (
+    <div className="max-w-2xl mx-auto py-12 sm:py-20 text-center">
+      <div className="inline-flex h-14 w-14 rounded-2xl bg-brand-50 text-brand-700 items-center justify-center mb-4">
+        <FileText className="h-6 w-6" />
+      </div>
+      <h1 className="font-serif text-2xl text-ink-900">Elegí un paciente</h1>
+      <p className="text-sm text-ink-500 mt-1.5 mb-6">
+        Buscá por nombre, documento o ID y abrí su historia clínica.
+      </p>
+      <div className="relative max-w-md mx-auto">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+          placeholder="Buscar paciente…"
+          className="w-full h-12 pl-11 pr-4 rounded-xl border border-line-200 bg-surface text-sm shadow-sm focus:border-brand-700 focus:outline-none"
+        />
+      </div>
+      <ul className="mt-3 max-w-md mx-auto rounded-xl border border-line-200 bg-surface overflow-hidden divide-y divide-line-100">
+        {filtered.length === 0 ? (
+          <li className="p-4 text-sm text-ink-500 text-center">Sin coincidencias.</li>
+        ) : (
+          filtered.map((p) => (
+            <li key={p.id}>
+              <button
+                onClick={() => onPick(p.id)}
+                className="w-full text-left px-4 py-3 hover:bg-brand-50/50 flex items-center justify-between gap-3"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink-900 font-medium truncate">
+                    {p.preferredName ? `${p.preferredName} · ${p.name}` : p.name}
+                  </span>
+                  <span className="block text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</span>
+                </span>
+                <ChevronRight className="h-4 w-4 text-ink-300 shrink-0" />
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
   );
 }
 
@@ -341,6 +413,26 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
   const isPending = patchMu.isPending || supersedeMu.isPending || createMu.isPending;
 
+  // Bloque sin contenido y sin estar editándose: render compacto clickeable
+  // tipo "+ Agregar X" para no saturar la vista de un paciente nuevo.
+  if (!note && !editing) {
+    return (
+      <button
+        onClick={startEdit}
+        className="rounded-xl bg-surface border border-dashed border-line-200 p-4 text-left hover:border-brand-400 hover:bg-brand-50/30 transition-colors flex items-center gap-3 group"
+      >
+        <div className="h-8 w-8 rounded-lg bg-bg-100 text-ink-400 group-hover:bg-brand-100 group-hover:text-brand-700 flex items-center justify-center transition-colors">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-serif text-[15px] text-ink-700 group-hover:text-ink-900">{title}</div>
+          <div className="text-xs text-ink-400 group-hover:text-ink-500">Sin contenido — click para agregar</div>
+        </div>
+        <Plus className="h-4 w-4 text-ink-400 group-hover:text-brand-700" />
+      </button>
+    );
+  }
+
   return (
     <article className="rounded-xl bg-surface border border-line-200 p-5 shadow-xs hover:shadow-soft transition-shadow">
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -426,10 +518,10 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
               )}
               <button
                 onClick={() => setShowHistory((v) => !v)}
-                className="text-ink-500 hover:text-brand-700 inline-flex items-center gap-1"
-                title="Ver historial de versiones"
+                className="h-7 px-2 rounded-md border border-line-200 text-[11px] text-ink-700 hover:border-brand-400 hover:bg-brand-50/50 inline-flex items-center gap-1.5"
+                title="Ver versiones anteriores firmadas"
               >
-                <History className="h-3 w-3" /> {showHistory ? "Ocultar" : "Historial"}
+                <History className="h-3 w-3" /> {showHistory ? "Ocultar historial" : "Ver historial"}
               </button>
             </div>
           </div>
@@ -463,32 +555,78 @@ function BlockHistory({ patientId, kind }: { patientId: string; kind: keyof type
 }
 
 /**
- * Lista de notas de sesión con formato SOAP. Permite firmar borradores y crear nueva.
+ * Lista de notas de sesión con formato SOAP. Permite firmar borradores,
+ * crear nueva versión de firmadas, y crear nuevas con un editor inline.
  */
-function SessionNotes({ patientId, onOpenNew }: { patientId: string; onOpenNew: () => void }) {
+function SessionNotes({
+  patient, editorOpen, onOpenEditor, onCloseEditor,
+}: {
+  patient: Patient;
+  editorOpen: boolean;
+  onOpenEditor: () => void;
+  onCloseEditor: () => void;
+}) {
   const { data: notes = [], isLoading } = useQuery({
-    queryKey: ["notes", patientId],
-    queryFn: () => api.listNotes(patientId),
+    queryKey: ["notes", patient.id],
+    queryFn: () => api.listNotes(patient.id),
   });
   const sessionNotes = notes.filter((n) => n.kind === "sesion" || n.kind === "evolucion" || n.kind === "privada");
 
+  // Buscador local: filtra por contenido (texto plano de SOAP o libre).
+  const [search, setSearch] = useState("");
+  const visibleNotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sessionNotes;
+    return sessionNotes.filter((n) => {
+      const txt = (n.content || "").toLowerCase();
+      const author = (n.authorName || "").toLowerCase();
+      return txt.includes(q) || author.includes(q);
+    });
+  }, [sessionNotes, search]);
+
   return (
     <section className="mb-8">
-      <div className="flex items-end justify-between mb-5">
+      <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
         <div>
           <div className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Trayectoria terapéutica</div>
           <h2 className="font-serif text-2xl text-ink-900 mt-1">Notas de sesión</h2>
           <p className="text-sm text-ink-500 mt-1.5 max-w-xl">
-            Formato SOAP (Subjetivo · Objetivo · Análisis · Plan). Las notas firmadas son inmodificables; se pueden crear versiones nuevas que dejen el historial.
+            Las notas firmadas son inmodificables; podés crear una nueva versión que deja el historial.
           </p>
         </div>
         <button
-          onClick={onOpenNew}
-          className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shrink-0"
+          onClick={onOpenEditor}
+          disabled={editorOpen}
+          title="Atajo: N"
+          className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shrink-0 disabled:opacity-60"
         >
           <Plus className="h-4 w-4" /> Nueva nota
+          <kbd className="ml-1 hidden sm:inline-block px-1.5 rounded bg-white/20 text-[10px] font-mono">N</kbd>
         </button>
       </div>
+
+      {sessionNotes.length > 0 && (
+        <div className="mb-4 relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar en las notas (texto o autor)…"
+            className="w-full h-9 pl-9 pr-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+          />
+        </div>
+      )}
+
+      {/* Editor inline arriba de la lista. Reemplaza el modal anterior. */}
+      {editorOpen && (
+        <div className="mb-4">
+          <NoteEditor
+            patientId={patient.id}
+            patientName={patient.preferredName ?? patient.name}
+            onClose={onCloseEditor}
+          />
+        </div>
+      )}
 
       {isLoading && (
         <div className="rounded-xl border border-line-200 bg-surface p-6 text-sm text-ink-500 inline-flex items-center gap-2">
@@ -496,16 +634,26 @@ function SessionNotes({ patientId, onOpenNew }: { patientId: string; onOpenNew: 
         </div>
       )}
 
-      {!isLoading && sessionNotes.length === 0 && (
+      {!isLoading && sessionNotes.length === 0 && !editorOpen && (
         <div className="rounded-xl border border-dashed border-line-200 bg-surface p-10 text-center">
           <MessageSquareText className="h-6 w-6 text-ink-400 mx-auto mb-2" />
           <p className="text-sm text-ink-500">Aún no hay notas de sesión para este paciente.</p>
+          <button
+            onClick={onOpenEditor}
+            className="mt-3 h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" /> Crear la primera nota
+          </button>
         </div>
       )}
 
+      {!isLoading && sessionNotes.length > 0 && visibleNotes.length === 0 && (
+        <div className="text-sm text-ink-500 italic">Ninguna nota coincide con "{search}".</div>
+      )}
+
       <div className="space-y-3">
-        {sessionNotes.map((n) => (
-          <SessionNoteCard key={n.id} note={n} patientId={patientId} />
+        {visibleNotes.map((n) => (
+          <SessionNoteCard key={n.id} note={n} patientId={patient.id} />
         ))}
       </div>
     </section>
@@ -515,6 +663,7 @@ function SessionNotes({ patientId, onOpenNew }: { patientId: string; onOpenNew: 
 function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: string }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [supersedeOpen, setSupersedeOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const soap = parseSoap(note.content);
 
@@ -573,7 +722,7 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
           <p className="text-sm text-ink-700 whitespace-pre-wrap leading-relaxed">{note.content}</p>
         )}
 
-        {!editing && (
+        {!editing && !supersedeOpen && (
           <div className="mt-4 flex items-center justify-between gap-2 flex-wrap">
             <button
               onClick={() => setPickerOpen(true)}
@@ -583,7 +732,7 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
               <Sparkles className="h-3 w-3 text-brand-700" /> Generar documento
             </button>
 
-            {note.isDraft && (
+            {note.isDraft ? (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
@@ -612,8 +761,25 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
                   Firmar
                 </button>
               </div>
+            ) : (
+              // Nota firmada: no se puede editar pero sí crear nueva versión.
+              <button
+                onClick={() => setSupersedeOpen(true)}
+                title="La nota original queda en el historial firmado. Se crea una versión nueva con el contenido actualizado."
+                className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+              >
+                <History className="h-3 w-3" /> Crear nueva versión
+              </button>
             )}
           </div>
+        )}
+
+        {supersedeOpen && (
+          <SupersedeNoteEditor
+            note={note}
+            patientId={patientId}
+            onClose={() => setSupersedeOpen(false)}
+          />
         )}
       </div>
 
@@ -802,6 +968,17 @@ function PatientPickerModal({ patients, currentId, onPick, onClose }: { patients
   const filtered = patients.filter((p) =>
     !q || p.name.toLowerCase().includes(q.toLowerCase()) || p.id.toLowerCase().includes(q.toLowerCase())
   );
+
+  // Esc cierra el picker; Enter selecciona el primer match.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+      else if (e.key === "Enter" && filtered[0]) { e.preventDefault(); onPick(filtered[0].id); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filtered, onClose, onPick]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-24 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -839,7 +1016,12 @@ function PatientPickerModal({ patients, currentId, onPick, onClose }: { patients
   );
 }
 
-function NewSoapNoteModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
+/**
+ * Editor inline de nueva nota. Reemplaza al modal anterior — ahora vive
+ * directamente dentro del flujo de SessionNotes, sin abrir backdrop ni
+ * desconectar al psicólogo de la lista de notas existentes.
+ */
+function NoteEditor({ patientId, patientName, onClose }: { patientId: string; patientName: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [kind, setKind] = useState<NoteKind>("sesion");
   const [soap, setSoap] = useState<SoapContent>({ s: "", o: "", a: "", p: "" });
@@ -847,114 +1029,220 @@ function NewSoapNoteModal({ patient, onClose }: { patient: Patient; onClose: () 
   const [signNow, setSignNow] = useState(false);
   const useSoap = kind === "sesion";
 
+  // Esc cierra el editor (siempre que no estemos en un input/textarea con
+  // contenido — el usuario puede esperar que Esc le saque del input primero,
+  // pero como cerramos el editor entero igual, va directo).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const createMu = useMutation({
     mutationFn: async () => {
       const content = useSoap ? JSON.stringify(soap) : freeText;
-      const note = await api.createNote(patient.id, { kind, content });
+      const note = await api.createNote(patientId, { kind, content });
       if (signNow) await api.signNote(note.id);
       return note;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["notes", patient.id] });
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      toast.success(signNow ? "Nota creada y firmada" : "Borrador guardado");
       onClose();
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const canSubmit = useSoap
-    ? soap.s.trim() || soap.o.trim() || soap.a.trim() || soap.p.trim()
+    ? !!(soap.s.trim() || soap.o.trim() || soap.a.trim() || soap.p.trim())
     : freeText.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-10 p-4 overflow-y-auto" onClick={onClose}>
-      <form
-        onSubmit={(e) => { e.preventDefault(); createMu.mutate(); }}
-        className="w-full max-w-2xl rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="p-5 border-b border-line-100 flex items-start justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Historia clínica</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Nueva nota · {patient.preferredName ?? patient.name}</h3>
-            <p className="text-xs text-ink-500 mt-1">Las notas firmadas son inmodificables (Res. 1995/1999). Si no firmas, queda como borrador.</p>
-          </div>
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
-            <X className="h-4 w-4" />
-          </button>
-        </header>
+    <form
+      onSubmit={(e) => { e.preventDefault(); if (canSubmit) createMu.mutate(); }}
+      className="rounded-xl border border-brand-700/40 bg-surface shadow-soft"
+    >
+      <div className="px-5 py-3 border-b border-line-100 flex items-center justify-between gap-3">
+        <p className="text-sm text-ink-900 font-medium">
+          Nueva nota · <span className="text-ink-500">{patientName}</span>
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Cerrar (Esc)"
+          className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
-        <div className="p-5 space-y-5">
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              { id: "sesion", label: "Sesión · SOAP", hint: "4 campos estructurados" },
-              { id: "evolucion", label: "Evolución", hint: "texto libre" },
-              { id: "privada", label: "Nota privada", hint: "solo para ti" },
-            ] as const).map((k) => (
-              <button
-                key={k.id}
-                type="button"
-                onClick={() => setKind(k.id)}
-                className={
-                  "p-3 rounded-lg border text-center transition-colors " +
-                  (kind === k.id ? "border-brand-700 bg-brand-50" : "border-line-200 hover:border-brand-400")
-                }
-              >
-                <div className="text-xs font-medium text-ink-900">{k.label}</div>
-                <div className="text-[10px] text-ink-500 mt-0.5">{k.hint}</div>
-              </button>
+      <div className="p-5 space-y-5">
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { id: "sesion", label: "Sesión · SOAP", hint: "4 campos estructurados" },
+            { id: "evolucion", label: "Evolución", hint: "texto libre" },
+            { id: "privada", label: "Nota privada", hint: "solo para ti" },
+          ] as const).map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => setKind(k.id)}
+              className={
+                "p-3 rounded-lg border text-center transition-colors " +
+                (kind === k.id ? "border-brand-700 bg-brand-50" : "border-line-200 hover:border-brand-400")
+              }
+            >
+              <div className="text-xs font-medium text-ink-900">{k.label}</div>
+              <div className="text-[10px] text-ink-500 mt-0.5">{k.hint}</div>
+            </button>
+          ))}
+        </div>
+
+        {useSoap ? (
+          <div className="space-y-3">
+            {(["s", "o", "a", "p"] as const).map((k, i) => (
+              <label key={k} className="block">
+                <span className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold inline-flex items-center gap-2">
+                  <span className="h-5 w-5 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center text-[10px] font-serif">{k.toUpperCase()}</span>
+                  {({ s: "Subjetivo — lo que reporta el paciente", o: "Objetivo — observaciones del terapeuta / escalas", a: "Análisis — interpretación clínica / progreso", p: "Plan — técnicas, tareas, próxima sesión" } as const)[k]}
+                </span>
+                <textarea
+                  rows={2}
+                  value={soap[k]}
+                  onChange={(e) => setSoap((p) => ({ ...p, [k]: e.target.value }))}
+                  autoFocus={i === 0}
+                  className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+                />
+              </label>
             ))}
           </div>
+        ) : (
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Contenido</span>
+            <textarea
+              rows={8}
+              autoFocus
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              placeholder={kind === "privada" ? "Hipótesis de conceptualización, proceso, impresiones…" : "Resumen de la evolución del caso…"}
+              className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+            />
+          </label>
+        )}
 
-          {useSoap ? (
-            <div className="space-y-3">
-              {(["s", "o", "a", "p"] as const).map((k) => (
-                <label key={k} className="block">
-                  <span className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold inline-flex items-center gap-2">
-                    <span className="h-5 w-5 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center text-[10px] font-serif">{k.toUpperCase()}</span>
-                    {({ s: "Subjetivo — lo que reporta el paciente", o: "Objetivo — observaciones del terapeuta / escalas", a: "Análisis — interpretación clínica / progreso", p: "Plan — técnicas, tareas, próxima sesión" } as const)[k]}
-                  </span>
-                  <textarea
-                    rows={2}
-                    value={soap[k]}
-                    onChange={(e) => setSoap((p) => ({ ...p, [k]: e.target.value }))}
-                    className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
-                  />
-                </label>
-              ))}
-            </div>
-          ) : (
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Contenido</span>
+        <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer select-none">
+          <input type="checkbox" checked={signNow} onChange={(e) => setSignNow(e.target.checked)} className="sr-only peer" />
+          <span className="h-[18px] w-[18px] rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
+            {signNow && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
+          </span>
+          Firmar inmediatamente <span className="text-[11px] text-ink-500">(no se podrá editar; Res. 1995/1999)</span>
+        </label>
+      </div>
+
+      <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">
+          Cancelar <kbd className="ml-1 hidden sm:inline-block px-1 rounded bg-bg-100 text-[10px] font-mono">Esc</kbd>
+        </button>
+        <button
+          type="submit"
+          disabled={!canSubmit || createMu.isPending}
+          className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
+        >
+          {createMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {signNow ? "Crear y firmar" : "Guardar borrador"}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+/**
+ * Editor inline para crear una nueva versión de una nota firmada (supersede).
+ * La nota original queda en el historial como superseded; la nueva queda
+ * firmada con el contenido editado.
+ */
+function SupersedeNoteEditor({ note, patientId, onClose }: { note: ClinicalNote; patientId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const initialSoap = parseSoap(note.content) ?? { s: "", o: "", a: "", p: "" };
+  const isSoap = note.kind === "sesion";
+  const [soap, setSoap] = useState<SoapContent>(initialSoap);
+  const [freeText, setFreeText] = useState(isSoap ? "" : note.content);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const supersedeMu = useMutation({
+    mutationFn: () => api.supersedeNote(note.id, {
+      content: isSoap ? JSON.stringify(soap) : freeText,
+      sign: true,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      toast.success("Nueva versión firmada");
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); supersedeMu.mutate(); }}
+      className="mt-4 rounded-lg border border-warning/40 bg-warning-soft/30 p-4 space-y-3"
+    >
+      <div className="flex items-start gap-2 text-xs text-ink-700">
+        <AlertCircle className="h-4 w-4 text-risk-moderate shrink-0 mt-0.5" />
+        <span>
+          La versión actual está firmada y queda intacta en el historial. Vas a crear una <strong>nueva versión firmada</strong> con el contenido editado.
+        </span>
+      </div>
+      {isSoap ? (
+        <div className="space-y-2">
+          {(["s", "o", "a", "p"] as const).map((k) => (
+            <label key={k} className="block">
+              <span className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">{k.toUpperCase()}</span>
               <textarea
-                rows={8}
-                value={freeText}
-                onChange={(e) => setFreeText(e.target.value)}
-                placeholder={kind === "privada" ? "Hipótesis de conceptualización, proceso, impresiones…" : "Resumen de la evolución del caso…"}
+                rows={2}
+                value={soap[k]}
+                onChange={(e) => setSoap((p) => ({ ...p, [k]: e.target.value }))}
                 className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
               />
             </label>
-          )}
-
-          <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer select-none">
-            <input type="checkbox" checked={signNow} onChange={(e) => setSignNow(e.target.checked)} className="sr-only peer" />
-            <span className="h-[18px] w-[18px] rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
-              {signNow && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
-            </span>
-            Firmar inmediatamente (no se podrá editar)
-          </label>
+          ))}
         </div>
-
-        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
-          <button
-            type="submit"
-            disabled={!canSubmit || createMu.isPending}
-            className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
-          >
-            {createMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {signNow ? "Crear y firmar" : "Guardar borrador"}
-          </button>
-        </footer>
-      </form>
-    </div>
+      ) : (
+        <textarea
+          rows={6}
+          value={freeText}
+          onChange={(e) => setFreeText(e.target.value)}
+          autoFocus
+          className="w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+        />
+      )}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={supersedeMu.isPending}
+          className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={supersedeMu.isPending}
+          className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5"
+        >
+          {supersedeMu.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+          Guardar nueva versión
+        </button>
+      </div>
+    </form>
   );
 }
