@@ -19,6 +19,7 @@ import {
 import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { ApplicationDetailModal } from "@/components/tests/ApplicationDetailModal";
 
 export const Route = createFileRoute("/pacientes_/$id")({
   head: ({ params }: { params: { id: string } }) => ({
@@ -761,6 +762,8 @@ function TabTests({ rows }: { rows: any[] }) {
     critical: "bg-error-soft text-risk-critical",
   };
 
+  const [detailApp, setDetailApp] = useState<any | null>(null);
+
   // Agrupar aplicaciones COMPLETADAS por test_code para gráficas evolutivas.
   // Solo mostramos gráfica si hay 2 o más aplicaciones del mismo test.
   const completed = rows.filter((r) => r.status === "completado" && r.score != null);
@@ -834,48 +837,75 @@ function TabTests({ rows }: { rows: any[] }) {
           </div>
         ) : (
           <ul className="divide-y divide-line-100">
-            {rows.map((r) => (
-              <li key={r.id} className="px-5 py-4 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
-                  <Brain className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-ink-900">{r.test_code}</span>
-                    <span className="text-xs text-ink-500">{r.test_name}</span>
-                    {r.applied_by === "paciente" && r.status === "completado" && (
-                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">Auto-aplicado</span>
-                    )}
-                    {r.alerts_json?.critical_response && (
-                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error-soft text-risk-critical">⚠ Respuesta crítica</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-ink-500 mt-0.5 tabular">
-                    {r.completed_at
-                      ? new Date(r.completed_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })
-                      : r.assigned_at
-                        ? `Asignado ${new Date(r.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
-                        : r.date}
-                    {" · "}{r.professional}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  {r.status === "completado" && r.score != null ? (
-                    <>
-                      <div className="font-serif text-2xl text-ink-900 tabular">{r.score}</div>
-                      <span className={"inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium " + (LEVEL_STYLE[r.level ?? "none"] ?? LEVEL_STYLE.none)}>{r.interpretation}</span>
-                    </>
-                  ) : (
-                    <span className="text-xs text-ink-500 inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {r.status === "pendiente" ? "Pendiente" : "Sin completar"}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
+            {rows.map((r) => {
+              const isMillon = r.alerts_json?.meta?.type === "millon";
+              const isCompleted = r.status === "completado";
+              const clickable = isCompleted;
+              const RowTag: any = clickable ? "button" : "div";
+              return (
+                <li key={r.id}>
+                  <RowTag
+                    {...(clickable ? { onClick: () => setDetailApp(r), type: "button" } : {})}
+                    className={
+                      "w-full text-left px-5 py-4 flex items-center gap-4 " +
+                      (clickable ? "hover:bg-bg-100/40 transition-colors cursor-pointer" : "")
+                    }
+                  >
+                    <div className="h-10 w-10 rounded-lg bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
+                      <Brain className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-ink-900">{r.test_code}</span>
+                        <span className="text-xs text-ink-500">{r.test_name}</span>
+                        {r.applied_by === "paciente" && isCompleted && (
+                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-700">Auto-aplicado</span>
+                        )}
+                        {r.alerts_json?.critical_response && (
+                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error-soft text-risk-critical">⚠ Respuesta crítica</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-ink-500 mt-0.5 tabular">
+                        {r.completed_at
+                          ? new Date(r.completed_at).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" })
+                          : r.assigned_at
+                            ? `Asignado ${new Date(r.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
+                            : r.date}
+                        {" · "}{r.professional}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {isCompleted ? (
+                        isMillon ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors">
+                            Ver detalle por escala
+                            <ChevronRight className="h-3 w-3" />
+                          </span>
+                        ) : r.score != null ? (
+                          <>
+                            <div className="font-serif text-2xl text-ink-900 tabular">{r.score}</div>
+                            <span className={"inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-medium " + (LEVEL_STYLE[r.level ?? "none"] ?? LEVEL_STYLE.none)}>{r.interpretation}</span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-ink-500">Ver detalle</span>
+                        )
+                      ) : (
+                        <span className="text-xs text-ink-500 inline-flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> {r.status === "pendiente" ? "Pendiente" : "Sin completar"}
+                        </span>
+                      )}
+                    </div>
+                  </RowTag>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
+
+      {detailApp && (
+        <ApplicationDetailModal app={detailApp} onClose={() => setDetailApp(null)} />
+      )}
     </div>
   );
 }
