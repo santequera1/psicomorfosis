@@ -542,44 +542,72 @@ function Modal({ children, title, onClose, wide }: { children: React.ReactNode; 
 }
 
 // ─── MCMI-II: catálogo de escalas con nombres y agrupación ───────────────
+// `max` es el peso teórico máximo posible de cada escala — calculado
+// sumando los pesos de todos los ítems que aportan (V y F, ya que un ítem
+// solo contribuye a una escala vía una de las dos respuestas). Se usa
+// para los badges relativos bajo/medio/alto. NO sustituye la conversión
+// a tasa base (BR) del Excel oficial — son rangos relativos internos.
+// X queda con max=null porque su fórmula no es lineal.
 type MillonScaleGroup = "validity" | "personality" | "severe_personality" | "clinical" | "severe_clinical";
-const MILLON_SCALES: Array<{ code: string; name: string; group: MillonScaleGroup }> = [
-  { code: "V",  name: "Validez",                            group: "validity" },
-  { code: "X",  name: "Sinceridad",                         group: "validity" },
-  { code: "Y",  name: "Deseabilidad social",                group: "validity" },
-  { code: "Z",  name: "Devaluación / Alteración",           group: "validity" },
-  { code: "1",  name: "Esquizoide",                         group: "personality" },
-  { code: "2",  name: "Fóbica (Evitativa)",                 group: "personality" },
-  { code: "3",  name: "Dependiente",                        group: "personality" },
-  { code: "4",  name: "Histriónica",                        group: "personality" },
-  { code: "5",  name: "Narcisista",                         group: "personality" },
-  { code: "6A", name: "Antisocial",                         group: "personality" },
-  { code: "6B", name: "Agresivo / Sádica",                  group: "personality" },
-  { code: "7",  name: "Compulsiva (Rígida)",                group: "personality" },
-  { code: "8A", name: "Pasivo-Agresiva (Negativista)",      group: "personality" },
-  { code: "8B", name: "Autodestructiva (Masoquista)",       group: "personality" },
-  { code: "S",  name: "Esquizotípica",                      group: "severe_personality" },
-  { code: "C",  name: "Límite (Borderline)",                group: "severe_personality" },
-  { code: "P",  name: "Paranoide",                          group: "severe_personality" },
-  { code: "A",  name: "Ansiedad",                           group: "clinical" },
-  { code: "H",  name: "Histeriforme / Somatoforme",         group: "clinical" },
-  { code: "N",  name: "Hipomanía",                          group: "clinical" },
-  { code: "D",  name: "Distimia",                           group: "clinical" },
-  { code: "B",  name: "Dependencia de alcohol",             group: "clinical" },
-  { code: "T",  name: "Dependencia de drogas",              group: "clinical" },
-  { code: "SS", name: "Pensamiento psicótico",              group: "severe_clinical" },
-  { code: "CC", name: "Depresión mayor",                    group: "severe_clinical" },
-  { code: "PP", name: "Trastorno delirante",                group: "severe_clinical" },
+const MILLON_SCALES: Array<{ code: string; name: string; group: MillonScaleGroup; max: number | null }> = [
+  { code: "V",  name: "Validez",                       group: "validity",           max: 4 },
+  { code: "X",  name: "Sinceridad",                    group: "validity",           max: null },
+  { code: "Y",  name: "Deseabilidad",                  group: "validity",           max: 23 },
+  { code: "Z",  name: "Devaluación",                   group: "validity",           max: 46 },
+  { code: "1",  name: "Esquizoide",                    group: "personality",        max: 58 },
+  { code: "2",  name: "Fóbico (Evitativo)",            group: "personality",        max: 73 },
+  { code: "3",  name: "Dependiente",                   group: "personality",        max: 62 },
+  { code: "4",  name: "Histriónico",                   group: "personality",        max: 69 },
+  { code: "5",  name: "Narcisista",                    group: "personality",        max: 85 },
+  { code: "6A", name: "Antisocial",                    group: "personality",        max: 86 },
+  { code: "6B", name: "Sádico (Agresivo)",             group: "personality",        max: 81 },
+  { code: "7",  name: "Compulsivo",                    group: "personality",        max: 68 },
+  { code: "8A", name: "Pasivo-Agresivo (Negativista)", group: "personality",        max: 78 },
+  { code: "8B", name: "Autodestructivo",               group: "personality",        max: 71 },
+  { code: "S",  name: "Esquizotípico",                 group: "severe_personality", max: 79 },
+  { code: "C",  name: "Límite (Borderline)",           group: "severe_personality", max: 103 },
+  { code: "P",  name: "Paranoide",                     group: "severe_personality", max: 74 },
+  { code: "A",  name: "Ansiedad",                      group: "clinical",           max: 43 },
+  { code: "H",  name: "Histeriforme (Somatoforme)",    group: "clinical",           max: 49 },
+  { code: "N",  name: "Bipolar (Hipomanía)",           group: "clinical",           max: 57 },
+  { code: "D",  name: "Distimia",                      group: "clinical",           max: 69 },
+  { code: "B",  name: "Dependencia de alcohol",        group: "clinical",           max: 65 },
+  { code: "T",  name: "Dependencia de drogas",         group: "clinical",           max: 90 },
+  { code: "SS", name: "Pensamiento psicótico",         group: "severe_clinical",    max: 58 },
+  { code: "CC", name: "Depresión mayor",               group: "severe_clinical",    max: 55 },
+  { code: "PP", name: "Trastorno delirante",           group: "severe_clinical",    max: 38 },
 ];
 const MILLON_GROUP_LABELS: Record<MillonScaleGroup, string> = {
   validity: "Escalas de validez",
-  personality: "Patrones de personalidad",
+  personality: "Patrones básicos de personalidad",
   severe_personality: "Patología severa de personalidad",
   clinical: "Síndromes clínicos",
   severe_clinical: "Síndromes severos",
 };
 
-/** Vista de resultado para MCMI-II — tabla de raw scores por escala. */
+/**
+ * Clasifica un raw score relativo al máximo teórico de su escala.
+ * Umbrales: <33% bajo, 33-66% medio, ≥66% alto.
+ *
+ * IMPORTANTE: estos rangos son INTERNOS para lectura rápida; NO sustituyen
+ * la conversión a Tasa Base (BR) del MCMI-II oficial. La interpretación
+ * clínica final se hace con el Excel oficial de Millon.
+ */
+function millonRelativeLevel(raw: number | null | undefined, max: number | null): "bajo" | "medio" | "alto" | null {
+  if (raw == null || max == null || max === 0) return null;
+  const pct = raw / max;
+  if (pct < 0.33) return "bajo";
+  if (pct < 0.66) return "medio";
+  return "alto";
+}
+
+const MILLON_LEVEL_STYLE: Record<"bajo" | "medio" | "alto", { bg: string; text: string; label: string }> = {
+  bajo:  { bg: "bg-bg-100",       text: "text-ink-500",        label: "Bajo" },
+  medio: { bg: "bg-warning-soft", text: "text-risk-moderate",  label: "Medio" },
+  alto:  { bg: "bg-error-soft",   text: "text-risk-high",      label: "Alto" },
+};
+
+/** Vista de resultado para MCMI-II — perfil agrupado por categorías clínicas. */
 function MillonResultView({ result, onClose }: { result: TestApplication; onClose: () => void }) {
   const raw = result.alerts_json?.scales_raw ?? {};
   const validityWarning = result.alerts_json?.meta?.validity_warning;
@@ -609,43 +637,54 @@ function MillonResultView({ result, onClose }: { result: TestApplication; onClos
   }
 
   return (
-    <div className="p-6">
-      <div className="text-center mb-5">
+    <div className="p-5 sm:p-6">
+      <div className="mb-5">
         <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code} · {result.patient_name}</p>
-        <h3 className="font-serif text-2xl text-ink-900 mt-1">Puntuaciones brutas por escala</h3>
-        <p className="text-xs text-ink-500 mt-1.5 max-w-lg mx-auto">
-          Estos son los <strong>raw scores (PD)</strong>. La conversión a Tasa Base (BR) y la interpretación clínica las haces con el Excel oficial del MCMI-II ajustado por sexo del paciente.
+        <h3 className="font-serif text-2xl text-ink-900 mt-1">Perfil por escala</h3>
+        <p className="text-xs text-ink-500 mt-1.5">
+          Estos resultados son puntuaciones brutas. La interpretación clínica debe realizarse con las tablas oficiales del MCMI-II.
         </p>
       </div>
 
       {validityWarning && (
-        <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 inline-flex items-start gap-2">
+        <div className="mb-4 rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2">
           <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
           <span>{validityWarning}</span>
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
         {(Object.keys(groups) as MillonScaleGroup[]).map((g) => (
           <div key={g}>
-            <div className="text-[10px] uppercase tracking-[0.08em] text-brand-700 font-semibold mb-1.5">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-brand-700 font-semibold mb-2 pb-1 border-b border-line-100">
               {MILLON_GROUP_LABELS[g]}
             </div>
-            <ul className="rounded-lg border border-line-200 divide-y divide-line-100 bg-surface">
+            <ul className="rounded-lg border border-line-200 divide-y divide-line-100 bg-surface overflow-hidden">
               {groups[g].map((sc) => {
                 const v = raw[sc.code];
+                const lvl = millonRelativeLevel(v as number | null, sc.max);
+                const lvlStyle = lvl ? MILLON_LEVEL_STYLE[lvl] : null;
+                const isXNotCalc = sc.code === "X";
                 return (
-                  <li key={sc.code} className="px-3 py-2 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-ink-500 w-8 shrink-0">{sc.code}</span>
+                  <li key={sc.code} className="px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <span className="text-[11px] font-mono text-ink-500 w-8 shrink-0 tabular">{sc.code}</span>
                       <span className="text-sm text-ink-900 truncate">{sc.name}</span>
                     </div>
-                    <span className={cn(
-                      "tabular text-sm font-medium shrink-0",
-                      v == null ? "text-ink-400 italic font-normal" : "text-ink-900"
-                    )}>
-                      {v == null ? "no calc." : v}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isXNotCalc ? (
+                        <span className="text-xs text-ink-400 italic">No calculado</span>
+                      ) : (
+                        <>
+                          <span className="tabular text-sm font-medium text-ink-900">{v ?? "—"}</span>
+                          {lvlStyle && (
+                            <span className={cn("text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium", lvlStyle.bg, lvlStyle.text)}>
+                              {lvlStyle.label}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -654,8 +693,8 @@ function MillonResultView({ result, onClose }: { result: TestApplication; onClos
         ))}
       </div>
 
-      <div className="mt-5 rounded-lg bg-bg-100/50 border border-line-100 p-3 text-xs text-ink-500">
-        <strong className="text-ink-700">Nota clínica:</strong> el MCMI-II requiere conversión a tasa base (BR), corrección por escala X y otros ajustes para una interpretación válida. La escala X (Sinceridad) no se calcula automáticamente — su fórmula vive en el Excel oficial. Aplica criterio clínico antes de comunicar resultados al paciente.
+      <div className="mt-5 rounded-lg bg-bg-100/50 border border-line-100 p-3 text-xs text-ink-500 leading-relaxed">
+        <strong className="text-ink-700">Nota:</strong> los rangos <em>bajo / medio / alto</em> son una lectura rápida basada en el porcentaje de la puntuación máxima posible de cada escala — <strong>no son la Tasa Base (BR)</strong>. Para la interpretación clínica final, exporta las respuestas y úsalas en el Excel oficial del MCMI-II ajustado por sexo del paciente.
       </div>
 
       <div className="mt-5 flex justify-between gap-3 flex-wrap">
