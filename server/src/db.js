@@ -558,6 +558,15 @@ function runMigrations() {
     "ALTER TABLE patients ADD COLUMN insurance_plan TEXT",
     "ALTER TABLE patients ADD COLUMN insurance_policy TEXT",
     "ALTER TABLE patients ADD COLUMN insurance_valid_until TEXT",
+    // Sexo asignado al nacer (5 may) — dato clínico requerido por algunos
+    // tests psicométricos cuya tabla de baremos depende de M/F. Se mantiene
+    // separado de pronouns (identidad de género). Valores: 'M' | 'F' | NULL.
+    "ALTER TABLE patients ADD COLUMN sex TEXT",
+    // Tests psicométricos: pausa y reanudación (5 may).
+    "ALTER TABLE test_applications ADD COLUMN total_items INTEGER",
+    "ALTER TABLE test_applications ADD COLUMN answered_items INTEGER DEFAULT 0",
+    "ALTER TABLE test_applications ADD COLUMN started_at TEXT",
+    "ALTER TABLE test_applications ADD COLUMN paused_at TEXT",
   ];
   for (const sql of migrations) {
     try {

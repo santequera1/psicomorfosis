@@ -142,6 +142,8 @@ export interface ApiPatient {
   tags?: string[];
   /** Dirección de residencia o ciudad/barrio. Texto libre. */
   address?: string;
+  /** Sexo asignado al nacer ("M"|"F"). Distinto de pronombres/identidad de género — se usa en tests cuya interpretación depende de baremos diferenciados (ej. MCMI-II). */
+  sex?: "M" | "F";
   // Seguro / EPS — opcionales, todos texto libre.
   insuranceProvider?: string;
   insurancePlan?: string;
@@ -415,6 +417,10 @@ export interface TestApplication {
   completed_at: string | null;
   answers_json: Record<string, number> | null;
   alerts_json: { critical_response?: boolean; critical_question_id?: string; critical_value?: number } | null;
+  total_items?: number | null;
+  answered_items?: number | null;
+  started_at?: string | null;
+  paused_at?: string | null;
 }
 
 // ─── Documentos & Plantillas ───────────────────────────────────────────────
@@ -683,6 +689,9 @@ export const api = {
     request<TestApplication>("/api/tests/applications", { method: "POST", body: JSON.stringify({ ...body, assign_to_patient: true }) }),
   submitTestApplication: (id: string, answers: Record<string, number>) =>
     request<TestApplication>(`/api/tests/applications/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) }),
+  /** Guardar respuestas parciales (pausa) — staff. Cambia status a 'en_curso'. */
+  saveTestApplicationProgress: (id: string, answers: Record<string, number>) =>
+    request<TestApplication>(`/api/tests/applications/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
 
   // Portal del paciente — tests
@@ -692,6 +701,9 @@ export const api = {
       `/api/portal/tests/${id}/submit`,
       { method: "POST", body: JSON.stringify({ answers }) }
     ),
+  /** Guardar respuestas parciales (pausa) — paciente. */
+  portalSaveTestProgress: (id: string, answers: Record<string, number>) =>
+    request<{ ok: true; answered_items: number }>(`/api/portal/tests/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
 
   // Tasks
   listTasks: (params: Record<string, string> = {}) =>

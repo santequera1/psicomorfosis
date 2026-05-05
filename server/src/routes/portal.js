@@ -372,6 +372,38 @@ router.get("/portal/tests", requirePatient, (req, res) => {
 });
 
 /**
+ * PATCH /api/portal/tests/:id/progress — el paciente guarda respuestas
+ * parciales para retomar después. Cambia status pendiente → en_curso.
+ * NO marca completada — eso es exclusivo del submit.
+ */
+router.patch("/portal/tests/:id/progress", requirePatient, (req, res) => {
+  const app = db.prepare("SELECT * FROM test_applications WHERE id = ? AND patient_id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!app) return res.status(404).json({ error: "Test no encontrado" });
+  if (app.status === "completado") return res.status(409).json({ error: "Ya completaste este test" });
+
+  const { answers } = req.body ?? {};
+  if (!answers || typeof answers !== "object") return res.status(400).json({ error: "answers requerido" });
+
+  const previous = app.answers_json ? safeJSON(app.answers_json) : {};
+  const merged = { ...previous, ...answers };
+  const answeredCount = Object.keys(merged).filter((k) => merged[k] != null).length;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE test_applications
+    SET answers_json = ?,
+        answered_items = ?,
+        status = CASE WHEN status = 'pendiente' THEN 'en_curso' ELSE status END,
+        started_at = COALESCE(started_at, ?),
+        paused_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(merged), answeredCount, nowIso, nowIso, req.params.id);
+
+  res.json({ ok: true, answered_items: answeredCount });
+});
+
+/**
  * POST /api/portal/tests/:id/submit — el paciente envía sus respuestas.
  * Calcula score, marca completada, genera alerta al psicólogo si aplica.
  */

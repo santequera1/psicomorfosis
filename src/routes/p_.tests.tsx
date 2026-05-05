@@ -37,7 +37,9 @@ function PortalTestsPage() {
     onError: (e: Error) => toast.error(e.message ?? "Error al enviar"),
   });
 
-  const pending = tests.filter((t) => t.status === "pendiente");
+  // Tests pendientes (sin empezar) y en curso (con respuestas parciales) van
+  // ambos en "Por completar". Solo cambia el botón: "Comenzar" vs "Continuar".
+  const todo = tests.filter((t) => t.status === "pendiente" || t.status === "en_curso");
   const completed = tests.filter((t) => t.status === "completado");
 
   // Vista del aplicador
@@ -62,7 +64,12 @@ function PortalTestsPage() {
           <TestRunner
             definition={{ ...active.definition, code: active.test_code, name: active.test_name }}
             variant="patient"
+            initialAnswers={active.answers_json ?? undefined}
             onSubmit={async (answers) => { await submitMu.mutateAsync({ id: active.id, answers }); }}
+            onSaveProgress={async (answers) => {
+              await api.portalSaveTestProgress(active.id, answers);
+              qc.invalidateQueries({ queryKey: ["portal-tests"] });
+            }}
             submitting={submitMu.isPending}
             onCancel={() => setActive(null)}
           />
@@ -135,42 +142,66 @@ function PortalTestsPage() {
         </div>
       )}
 
-      {pending.length > 0 && (
+      {todo.length > 0 && (
         <section className="mb-8">
-          <h2 className="font-serif text-lg text-ink-900 mb-3">Por completar ({pending.length})</h2>
+          <h2 className="font-serif text-lg text-ink-900 mb-3">Por completar ({todo.length})</h2>
           <ul className="space-y-3">
-            {pending.map((t) => (
-              <li key={t.id} className="rounded-xl border border-line-200 bg-surface p-5 hover:shadow-soft transition-shadow">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-                    <Brain className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">{t.test_code}</p>
-                    <h3 className="font-medium text-ink-900 mt-0.5">{t.test_name}</h3>
-                    {t.definition && (
-                      <p className="text-xs text-ink-500 mt-1">
-                        {t.definition.questions.length} preguntas · ~{Math.max(3, Math.round(t.definition.questions.length * 0.5))} min
+            {todo.map((t) => {
+              const totalItems = t.total_items ?? t.definition?.questions.length ?? 0;
+              const answered = t.answered_items ?? 0;
+              const inProgress = t.status === "en_curso" && answered > 0;
+              const pct = totalItems > 0 ? Math.round((answered / totalItems) * 100) : 0;
+              return (
+                <li key={t.id} className="rounded-xl border border-line-200 bg-surface p-5 hover:shadow-soft transition-shadow">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+                      <Brain className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">{t.test_code}</p>
+                        {inProgress && (
+                          <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-warning-soft text-risk-moderate font-medium">
+                            En progreso
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-medium text-ink-900 mt-0.5">{t.test_name}</h3>
+                      {t.definition && !inProgress && (
+                        <p className="text-xs text-ink-500 mt-1">
+                          {totalItems} preguntas · ~{Math.max(3, Math.round(totalItems * 0.5))} min
+                        </p>
+                      )}
+                      {inProgress && (
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-[11px] text-ink-500 mb-1">
+                            <span>{answered} de {totalItems} respondidas</span>
+                            <span className="tabular">{pct}%</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-bg-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-brand-700 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-ink-500 mt-1">
+                        <Clock className="inline h-3 w-3 mr-1" />
+                        Asignado {t.assigned_at ? new Date(t.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "long" }) : "recientemente"}
                       </p>
+                    </div>
+                    {t.definition ? (
+                      <button
+                        onClick={() => setActive(t)}
+                        className="h-10 px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 shrink-0"
+                      >
+                        {inProgress ? "Continuar" : "Comenzar"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-500 shrink-0">No disponible</span>
                     )}
-                    <p className="text-[11px] text-ink-500 mt-1">
-                      <Clock className="inline h-3 w-3 mr-1" />
-                      Asignado {t.assigned_at ? new Date(t.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "long" }) : "recientemente"}
-                    </p>
                   </div>
-                  {t.definition ? (
-                    <button
-                      onClick={() => setActive(t)}
-                      className="h-10 px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 shrink-0"
-                    >
-                      Comenzar
-                    </button>
-                  ) : (
-                    <span className="text-xs text-ink-500 shrink-0">No disponible</span>
-                  )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

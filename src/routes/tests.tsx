@@ -230,6 +230,12 @@ function ApplicationRow({ app }: { app: TestApplication }) {
         <p className="text-sm font-medium text-ink-900">{app.test_code} · <span className="text-ink-700 font-normal">{app.patient_name}</span></p>
         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-500 flex-wrap">
           <span>{dateStr}</span>
+          {app.status === "en_curso" && app.total_items != null && (
+            <>
+              <span className="text-ink-300">·</span>
+              <span className="tabular text-brand-800 font-medium">{app.answered_items ?? 0}/{app.total_items} respondidas</span>
+            </>
+          )}
           {app.score != null && app.status === "completado" && (
             <>
               <span className="text-ink-300">·</span>

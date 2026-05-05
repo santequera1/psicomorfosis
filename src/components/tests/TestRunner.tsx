@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, AlertCircle, ChevronLeft, ChevronRight, Loader2, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ScaleOption {
@@ -35,6 +35,13 @@ interface Props {
   initialAnswers?: Record<string, number>;
   submitting?: boolean;
   onCancel?: () => void;
+  /**
+   * Cuando se provee, habilita el modo "pausa": las respuestas se autoguardan
+   * con debounce y aparece un botón "Pausar y continuar después" que cierra
+   * el runner sin enviar el test al backend para calcular score. Útil para
+   * tests largos como MCMI-II (175 ítems).
+   */
+  onSaveProgress?: (answers: Record<string, number>) => Promise<void> | void;
 }
 
 /**
@@ -48,14 +55,45 @@ interface Props {
  *  - "staff": todas las preguntas en una página. Más rápido para aplicar
  *    en sesión.
  */
-export function TestRunner({ definition, onSubmit, variant = "patient", initialAnswers, submitting, onCancel }: Props) {
+export function TestRunner({ definition, onSubmit, variant = "patient", initialAnswers, submitting, onCancel, onSaveProgress }: Props) {
   const [answers, setAnswers] = useState<Record<string, number>>(initialAnswers ?? {});
-  const [currentIdx, setCurrentIdx] = useState<number>(initialAnswers ? definition.questions.length : -1);
+  // currentIdx inicial: si hay respuestas previas, saltamos directo a la
+  // primera no respondida (resume); si no, mostramos las instrucciones (-1).
+  const [currentIdx, setCurrentIdx] = useState<number>(() => {
+    if (initialAnswers && Object.keys(initialAnswers).length > 0) {
+      for (let i = 0; i < definition.questions.length; i++) {
+        if (initialAnswers[definition.questions[i].id] == null) return i;
+      }
+      return definition.questions.length;
+    }
+    return -1;
+  });
   // -1 = pantalla de instrucciones, 0..N-1 = preguntas, N = confirmación
 
   const total = definition.questions.length;
   const answered = useMemo(() => definition.questions.filter((q) => answers[q.id] != null).length, [answers, definition.questions]);
   const progress = total > 0 ? (answered / total) * 100 : 0;
+
+  // Autosave debounced 2s tras cada cambio (solo si onSaveProgress está).
+  // Evita que el paciente pierda progreso si cierra la pestaña sin pausar.
+  const lastSavedRef = useRef<string>("");
+  const [savingProgress, setSavingProgress] = useState(false);
+  useEffect(() => {
+    if (!onSaveProgress) return;
+    if (answered === 0) return;
+    const snapshot = JSON.stringify(answers);
+    if (snapshot === lastSavedRef.current) return;
+    const t = setTimeout(async () => {
+      setSavingProgress(true);
+      try {
+        await onSaveProgress(answers);
+        lastSavedRef.current = snapshot;
+      } finally {
+        setSavingProgress(false);
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [answers, answered, onSaveProgress]);
 
   function setAnswer(qId: string, v: number) {
     setAnswers((prev) => ({ ...prev, [qId]: v }));
@@ -63,6 +101,15 @@ export function TestRunner({ definition, onSubmit, variant = "patient", initialA
 
   async function handleSubmit() {
     await onSubmit(answers);
+  }
+
+  async function handlePause() {
+    if (!onSaveProgress) return;
+    if (answered > 0) {
+      setSavingProgress(true);
+      try { await onSaveProgress(answers); } finally { setSavingProgress(false); }
+    }
+    onCancel?.();
   }
 
   if (variant === "staff") {
@@ -76,6 +123,8 @@ export function TestRunner({ definition, onSubmit, variant = "patient", initialA
         onSubmit={handleSubmit}
         onCancel={onCancel}
         submitting={submitting}
+        onPause={onSaveProgress ? handlePause : undefined}
+        savingProgress={savingProgress}
       />
     );
   }
@@ -197,6 +246,24 @@ export function TestRunner({ definition, onSubmit, variant = "patient", initialA
                 {currentIdx === total - 1 ? "Revisar" : "Siguiente"} <ChevronRight className="h-4 w-4" />
               </button>
             </div>
+            {onSaveProgress && (
+              <div className="mt-4 pt-4 border-t border-line-100 flex items-center justify-between text-xs">
+                <span className="text-ink-400 inline-flex items-center gap-1.5">
+                  {savingProgress ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Guardando progreso…</>
+                  ) : (
+                    "Tu progreso se guarda automáticamente."
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={handlePause}
+                  className="text-ink-700 hover:text-brand-700 inline-flex items-center gap-1.5 font-medium"
+                >
+                  <Pause className="h-3 w-3" /> Pausar y continuar después
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -239,7 +306,7 @@ export function TestRunner({ definition, onSubmit, variant = "patient", initialA
 }
 
 // ─── Variante STAFF: todas en una página ──────────────────────────────────
-function StaffLayout({ definition, answers, setAnswer, answered, total, onSubmit, onCancel, submitting }: {
+function StaffLayout({ definition, answers, setAnswer, answered, total, onSubmit, onCancel, submitting, onPause, savingProgress }: {
   definition: TestDefinition;
   answers: Record<string, number>;
   setAnswer: (id: string, v: number) => void;
@@ -248,6 +315,8 @@ function StaffLayout({ definition, answers, setAnswer, answered, total, onSubmit
   onSubmit: () => void;
   onCancel?: () => void;
   submitting?: boolean;
+  onPause?: () => void;
+  savingProgress?: boolean;
 }) {
   return (
     <div className="max-w-3xl mx-auto">
@@ -311,13 +380,26 @@ function StaffLayout({ definition, answers, setAnswer, answered, total, onSubmit
         })}
       </ol>
 
-      <footer className="mt-6 sticky bottom-0 bg-bg/95 backdrop-blur py-4 -mx-4 px-4 border-t border-line-100 flex items-center justify-between gap-3">
+      <footer className="mt-6 sticky bottom-0 bg-bg/95 backdrop-blur py-4 -mx-4 px-4 border-t border-line-100 flex items-center justify-between gap-3 flex-wrap">
         {onCancel && (
           <button onClick={onCancel} className="h-10 px-3 text-sm text-ink-700 hover:text-ink-900">
             Cancelar
           </button>
         )}
-        <span className="text-xs text-ink-500 tabular ml-auto">{answered}/{total} respondidas</span>
+        {onPause && (
+          <button
+            onClick={onPause}
+            disabled={!!submitting}
+            className="h-10 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50"
+            title="Guarda el progreso y cierra. Podrás retomar después."
+          >
+            <Pause className="h-3.5 w-3.5" /> Pausar
+          </button>
+        )}
+        <span className="text-xs text-ink-500 tabular ml-auto inline-flex items-center gap-2">
+          {savingProgress && <Loader2 className="h-3 w-3 animate-spin" />}
+          {answered}/{total} respondidas
+        </span>
         <button
           onClick={onSubmit}
           disabled={submitting || answered < total}

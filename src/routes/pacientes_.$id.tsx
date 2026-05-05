@@ -255,6 +255,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
     phone: patient.phone,
     email: patient.email,
     address: patient.address ?? "",
+    sex: (patient.sex ?? "") as "" | "M" | "F",
     reason: patient.reason,
     modality: patient.modality,
     status: patient.status,
@@ -262,7 +263,11 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
     riskTypes: (patient.riskTypes ?? []) as RiskType[],
   });
   const mu = useMutation({
-    mutationFn: () => api.updatePatient(patient.id, form),
+    mutationFn: () => api.updatePatient(patient.id, {
+      ...form,
+      // "" en sex significa "sin especificar" — el backend lo guarda como NULL.
+      sex: form.sex || (null as any),
+    } as any),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["patient", patient.id] });
       qc.invalidateQueries({ queryKey: ["patients"] });
@@ -295,10 +300,24 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Correo</span>
             <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </label>
-          <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Dirección</span>
-            <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
-          </label>
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Dirección</span>
+              <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium" title="Dato clínico — algunos tests usan baremos por sexo biológico.">Sexo al nacer</span>
+              <select
+                value={form.sex}
+                onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value as "" | "M" | "F" }))}
+                className="mt-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+              >
+                <option value="">—</option>
+                <option value="F">Femenino</option>
+                <option value="M">Masculino</option>
+              </select>
+            </label>
+          </div>
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Motivo de consulta</span>
             <textarea rows={2} value={form.reason} onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))} className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
@@ -387,6 +406,7 @@ function TabDatos({ patient, tasks }: { patient: import("@/lib/api").ApiPatient;
             <div><dt className="text-xs text-ink-500">Documento</dt><dd className="text-ink-900 mt-0.5 tabular">{patient.doc || "—"}</dd></div>
             <div><dt className="text-xs text-ink-500">Edad</dt><dd className="text-ink-900 mt-0.5">{patient.age || "—"}</dd></div>
             <div><dt className="text-xs text-ink-500">Pronombres</dt><dd className="text-ink-900 mt-0.5">{patient.pronouns || "—"}</dd></div>
+            <div><dt className="text-xs text-ink-500" title="Dato clínico — separado de pronombres.">Sexo al nacer</dt><dd className="text-ink-900 mt-0.5">{patient.sex === "F" ? "Femenino" : patient.sex === "M" ? "Masculino" : "—"}</dd></div>
             <div>
               <dt className="text-xs text-ink-500">Teléfono</dt>
               <dd className="text-ink-900 mt-0.5 tabular flex items-center gap-2">

@@ -99,10 +99,11 @@ router.post("/applications", (req, res) => {
     const patient = db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?").get(patientId, req.user.workspace_id);
     if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
 
+    const totalItems = def?.questions?.length ?? 0;
     db.prepare(`
-      INSERT INTO test_applications (id, workspace_id, patient_id, patient_name, test_code, test_name, status, applied_by, assigned_at, professional)
-      VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 'paciente', ?, ?)
-    `).run(id, req.user.workspace_id, patient.id, patient.name, test.code, test.name, now(), req.user.name ?? "");
+      INSERT INTO test_applications (id, workspace_id, patient_id, patient_name, test_code, test_name, status, applied_by, assigned_at, professional, total_items, answered_items)
+      VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 'paciente', ?, ?, ?, 0)
+    `).run(id, req.user.workspace_id, patient.id, patient.name, test.code, test.name, now(), req.user.name ?? "", totalItems);
 
     return res.status(201).json(parseApplication(db.prepare("SELECT * FROM test_applications WHERE id = ?").get(id)));
   }
@@ -197,6 +198,42 @@ router.post("/applications/:id/submit", (req, res) => {
       now()
     );
   }
+
+  const row = db.prepare("SELECT * FROM test_applications WHERE id = ?").get(req.params.id);
+  res.json(parseApplication(row));
+});
+
+/**
+ * Save progress de un test (pausa). Acepta respuestas parciales y conserva
+ * las anteriores no enviadas. NO marca completado — solo persiste el estado
+ * para que el paciente/psicólogo pueda retomar después.
+ *
+ * Cambia status: 'pendiente' → 'en_curso'.
+ */
+router.patch("/applications/:id/progress", (req, res) => {
+  const app = db.prepare("SELECT * FROM test_applications WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.workspace_id);
+  if (!app) return res.status(404).json({ error: "Aplicación no encontrada" });
+  if (app.status === "completado") return res.status(409).json({ error: "Esta aplicación ya fue completada" });
+
+  const { answers } = req.body ?? {};
+  if (!answers || typeof answers !== "object") return res.status(400).json({ error: "answers requerido" });
+
+  // Merge con respuestas previas: el cliente puede mandar solo el delta, o
+  // las completas; ambos casos funcionan.
+  const previous = safeJSON(app.answers_json) ?? {};
+  const merged = { ...previous, ...answers };
+  const answeredCount = Object.keys(merged).filter((k) => merged[k] != null).length;
+
+  db.prepare(`
+    UPDATE test_applications
+    SET answers_json = ?,
+        answered_items = ?,
+        status = CASE WHEN status = 'pendiente' THEN 'en_curso' ELSE status END,
+        started_at = COALESCE(started_at, ?),
+        paused_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(merged), answeredCount, now(), now(), req.params.id);
 
   const row = db.prepare("SELECT * FROM test_applications WHERE id = ?").get(req.params.id);
   res.json(parseApplication(row));

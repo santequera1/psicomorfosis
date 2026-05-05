@@ -75,6 +75,7 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
       riskTypes: form.riskTypes,
       tags: form.tags ?? [],
       address: (form as any).address ?? "",
+      sex: (form as any).sex ?? null,
     } as any);
   }
 
@@ -116,6 +117,20 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
                   </select>
                 </Labeled>
                 <Labeled label="Teléfono"><input onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Labeled label="Sexo asignado al nacer">
+                  <select
+                    value={(form as any).sex ?? ""}
+                    onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value || undefined } as any))}
+                    className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+                    title="Dato clínico — algunos tests psicométricos (ej. MCMI-II) usan baremos diferenciados por sexo biológico."
+                  >
+                    <option value="">— sin especificar —</option>
+                    <option value="F">Femenino</option>
+                    <option value="M">Masculino</option>
+                  </select>
+                </Labeled>
               </div>
               <Labeled label="Correo"><input type="email" onChange={(e) => updateField("email", e.target.value)} placeholder="paciente@correo.co" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               <Labeled label="Dirección (opcional)">

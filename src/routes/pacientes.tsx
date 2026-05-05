@@ -627,7 +627,7 @@ function ArchiveOrDeleteModal({ patient, onClose }: { patient: Patient; onClose:
 
 function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<Partial<Patient>>({
+  const [form, setForm] = useState<Partial<Patient> & { sex?: "" | "M" | "F" }>({
     name: patient.name,
     preferredName: patient.preferredName,
     pronouns: patient.pronouns,
@@ -636,6 +636,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
     phone: patient.phone,
     email: patient.email,
     address: patient.address ?? "",
+    sex: ((patient as any).sex ?? "") as "" | "M" | "F",
     professional: patient.professional,
     modality: patient.modality,
     status: patient.status,
@@ -671,7 +672,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
       <form
-        onSubmit={(e) => { e.preventDefault(); setErr(null); mu.mutate(form); }}
+        onSubmit={(e) => { e.preventDefault(); setErr(null); mu.mutate({ ...form, sex: form.sex || undefined } as any); }}
         className="w-full max-w-xl rounded-2xl bg-surface shadow-modal"
         onClick={(e) => e.stopPropagation()}
       >
@@ -715,9 +716,23 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               <input type="email" value={form.email ?? ""} onChange={(e) => update("email", e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </Labeled>
           </div>
-          <Labeled label="Dirección">
-            <input value={form.address ?? ""} onChange={(e) => update("address", e.target.value)} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
-          </Labeled>
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Labeled label="Dirección">
+              <input value={form.address ?? ""} onChange={(e) => update("address", e.target.value)} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+            </Labeled>
+            <Labeled label="Sexo al nacer">
+              <select
+                value={form.sex ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value as "" | "M" | "F" }))}
+                className="mt-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+                title="Dato clínico — separado de pronombres."
+              >
+                <option value="">—</option>
+                <option value="F">Femenino</option>
+                <option value="M">Masculino</option>
+              </select>
+            </Labeled>
+          </div>
           <Labeled label="Motivo de consulta">
             <textarea rows={2} value={form.reason ?? ""} onChange={(e) => update("reason", e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </Labeled>
