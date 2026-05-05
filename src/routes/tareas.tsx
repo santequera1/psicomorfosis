@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Plus, Search, Filter, Circle, Clock, AlertCircle, CheckCircle2,
-  CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X,
+  CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X, UserPlus, Users,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import {
@@ -15,8 +15,12 @@ import {
 import { useWorkspace } from "@/lib/workspace";
 import { cn } from "@/lib/utils";
 
+type TareasSearch = { patient?: string };
 export const Route = createFileRoute("/tareas")({
   head: () => ({ meta: [{ title: "Tareas — Psicomorfosis" }] }),
+  validateSearch: (s: Record<string, unknown>): TareasSearch => ({
+    patient: typeof s.patient === "string" ? s.patient : undefined,
+  }),
   component: TareasPage,
 });
 
@@ -36,11 +40,13 @@ const COLUMN_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 };
 
 type DateFilter = "all" | "today" | "week" | "overdue";
+type ScopeFilter = "all" | "with_patient" | "internal";
 
 function TareasPage() {
   const queryClient = useQueryClient();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
+  const searchParams = useSearch({ from: "/tareas" });
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["tareas"],
@@ -67,6 +73,8 @@ function TareasPage() {
   const [filterPriority, setFilterPriority] = useState<TareaPriority | "all">("all");
   const [filterAssignee, setFilterAssignee] = useState<number | "all">("all");
   const [filterProject, setFilterProject] = useState<number | "all">("all");
+  const [filterPatient, setFilterPatient] = useState<string | "all">(searchParams.patient ?? "all");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(searchParams.patient ? "with_patient" : "all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const [editing, setEditing] = useState<Tarea | null>(null);
@@ -85,12 +93,15 @@ function TareasPage() {
       if (filterPriority !== "all" && t.priority !== filterPriority) return false;
       if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false;
       if (filterProject !== "all" && t.project_id !== filterProject) return false;
+      if (filterPatient !== "all" && t.patient_id !== filterPatient) return false;
+      if (scopeFilter === "with_patient" && !t.patient_id) return false;
+      if (scopeFilter === "internal" && t.patient_id) return false;
       if (dateFilter === "today") return isToday(t.due_date);
       if (dateFilter === "week") return isThisWeek(t.due_date);
       if (dateFilter === "overdue") return isOverdue(t.due_date) && t.status !== "DONE";
       return true;
     });
-  }, [tasks, search, filterPriority, filterAssignee, filterProject, dateFilter]);
+  }, [tasks, search, filterPriority, filterAssignee, filterProject, filterPatient, scopeFilter, dateFilter]);
 
   // DnD
   const moveMutation = useMutation({
@@ -205,6 +216,19 @@ function TareasPage() {
             </FilterScroll>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-2">
+            <FilterScroll>
+              <FilterChip active={scopeFilter === "all"} onClick={() => setScopeFilter("all")}>
+                <Filter className="h-3.5 w-3.5" /> Todo
+              </FilterChip>
+              <FilterChip active={scopeFilter === "with_patient"} onClick={() => setScopeFilter("with_patient")}>
+                <UserPlus className="h-3.5 w-3.5" /> Con paciente
+              </FilterChip>
+              <FilterChip active={scopeFilter === "internal"} onClick={() => setScopeFilter("internal")}>
+                <Users className="h-3.5 w-3.5" /> Internas
+              </FilterChip>
+            </FilterScroll>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             <Select
               value={filterPriority}
               onChange={(v) => setFilterPriority(v as TareaPriority | "all")}
@@ -239,6 +263,17 @@ function TareasPage() {
                 ]}
               />
             )}
+            {patients.length > 0 && (
+              <Select
+                value={filterPatient}
+                onChange={(v) => setFilterPatient(v)}
+                icon={<UserPlus className="h-3.5 w-3.5" />}
+                options={[
+                  { value: "all", label: "Todos los pacientes" },
+                  ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
+                ]}
+              />
+            )}
           </div>
         </div>
 
@@ -252,6 +287,7 @@ function TareasPage() {
                 tasks={filteredTasks.filter((t) => t.status === col.status).sort(sortTasks)}
                 projects={projects}
                 professionals={professionals}
+                patients={patients}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.status)}
                 onTaskDragStart={handleDragStart}
@@ -335,7 +371,7 @@ function Select({
 }
 
 function KanbanColumn({
-  column, tasks, projects, professionals,
+  column, tasks, projects, professionals, patients,
   onDragOver, onDrop, onTaskDragStart, draggedId,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate,
 }: {
@@ -343,6 +379,7 @@ function KanbanColumn({
   tasks: Tarea[];
   projects: TareaProject[];
   professionals: Professional[];
+  patients: ApiPatient[];
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onTaskDragStart: (e: React.DragEvent, id: number) => void;
@@ -378,6 +415,7 @@ function KanbanColumn({
               task={t}
               project={projects.find((p) => p.id === t.project_id) ?? null}
               assignee={professionals.find((p) => p.id === t.assignee_id) ?? null}
+              patient={patients.find((p) => p.id === t.patient_id) ?? null}
               dragging={draggedId === t.id}
               onDragStart={(e) => onTaskDragStart(e, t.id)}
               onClick={() => onTaskClick(t)}
@@ -393,12 +431,13 @@ function KanbanColumn({
 }
 
 function TareaCard({
-  task, project, assignee, dragging,
+  task, project, assignee, patient, dragging,
   onDragStart, onClick, onDelete, onArchive, onDuplicate,
 }: {
   task: Tarea;
   project: TareaProject | null;
   assignee: Professional | null;
+  patient: ApiPatient | null;
   dragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
@@ -409,6 +448,7 @@ function TareaCard({
   const overdue = isOverdue(task.due_date) && task.status !== "DONE";
   const initials = (assignee?.name ?? "")
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const patientLabel = patient ? (patient.preferredName ?? patient.name) : null;
 
   return (
     <div
@@ -436,6 +476,13 @@ function TareaCard({
       </div>
       {task.description && (
         <p className="text-xs text-ink-500 line-clamp-2 mb-2">{task.description}</p>
+      )}
+      {patientLabel && (
+        <div className="mb-2">
+          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-800 border border-brand-100 truncate max-w-full">
+            <UserPlus className="h-3 w-3 shrink-0" /> <span className="truncate">{patientLabel}</span>
+          </span>
+        </div>
       )}
       <div className="flex items-center justify-between gap-2 mt-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
@@ -645,12 +692,7 @@ function TareaDialog({
               />
             </Field>
             <Field label="Vencimiento">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
-              />
+              <DateInput value={dueDate} onChange={setDueDate} />
             </Field>
 
             {isOrg && (
@@ -680,14 +722,7 @@ function TareaDialog({
             )}
 
             <Field label="Paciente relacionado">
-              <FormSelect
-                value={patientId}
-                onChange={(v) => setPatientId(v)}
-                options={[
-                  { value: "", label: "Ninguno" },
-                  ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
-                ]}
-              />
+              <PatientCombobox patients={patients} value={patientId} onChange={setPatientId} />
             </Field>
 
             <Field label="Visibilidad">
@@ -753,6 +788,151 @@ function FormSelect({
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
     </select>
+  );
+}
+
+// Wrapper sobre <input type="date"> que llama showPicker() al click. En
+// algunos navegadores el ícono nativo del calendario es invisible o muy
+// pequeño y los usuarios no se dan cuenta de que el campo es interactivo;
+// con showPicker() basta tocar cualquier parte del input para que abra.
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={() => { try { ref.current?.showPicker?.(); } catch { /* no-op */ } }}
+        style={{ colorScheme: "light" }}
+        className="w-full h-10 pl-3 pr-9 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 cursor-pointer"
+      />
+      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
+    </div>
+  );
+}
+
+// Combobox con búsqueda para elegir paciente. El select nativo se vuelve
+// inusable a partir de unas decenas de pacientes; este permite teclear y
+// filtrar por nombre, alias o documento.
+function PatientCombobox({
+  patients, value, onChange,
+}: { patients: ApiPatient[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  const selected = patients.find((p) => p.id === value) ?? null;
+  const selectedLabel = selected ? (selected.preferredName ?? selected.name) : "";
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = normalize(query);
+    if (!q) return patients.slice(0, 50);
+    return patients.filter((p) => {
+      const haystack = normalize(`${p.name} ${p.preferredName ?? ""} ${p.doc ?? ""}`);
+      return haystack.includes(q);
+    }).slice(0, 50);
+  }, [patients, query]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 flex items-center justify-between gap-2 cursor-pointer text-left"
+      >
+        <span className={cn("truncate", !selectedLabel && "text-ink-400")}>
+          {selectedLabel || "Buscar paciente…"}
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          {value && (
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => { e.stopPropagation(); onChange(""); }}
+              className="text-ink-400 hover:text-ink-700 p-0.5 rounded inline-flex items-center"
+              title="Quitar paciente"
+            >
+              <X className="h-3.5 w-3.5" />
+            </span>
+          )}
+          <Search className="h-3.5 w-3.5 text-ink-400" />
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-line-200 bg-surface shadow-soft-lg overflow-hidden">
+          <div className="p-2 border-b border-line-100">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-400" />
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Nombre, alias o documento…"
+                className="w-full h-8 pl-7 pr-2 rounded-md border border-line-200 bg-bg text-xs text-ink-900 focus:outline-none focus:border-brand-400"
+              />
+            </div>
+          </div>
+          <ul className="max-h-60 overflow-y-auto py-1">
+            <li>
+              <button
+                type="button"
+                onClick={() => { onChange(""); setOpen(false); setQuery(""); }}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-xs hover:bg-bg-100/50",
+                  !value && "bg-brand-50/50 text-brand-800"
+                )}
+              >
+                Ninguno
+              </button>
+            </li>
+            {filtered.length === 0 ? (
+              <li className="px-3 py-3 text-xs text-ink-400 text-center">Sin coincidencias</li>
+            ) : (
+              filtered.map((p) => {
+                const label = p.preferredName ?? p.name;
+                const active = p.id === value;
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onChange(p.id); setOpen(false); setQuery(""); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-sm hover:bg-bg-100/50",
+                        active && "bg-brand-50/50 text-brand-800"
+                      )}
+                    >
+                      <div className="font-medium text-ink-900 truncate">{label}</div>
+                      <div className="text-[10px] text-ink-500 truncate tabular">
+                        {p.doc ?? p.id}{p.preferredName && p.name !== p.preferredName ? ` · ${p.name}` : ""}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

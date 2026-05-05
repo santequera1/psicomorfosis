@@ -233,6 +233,7 @@ export type TareaPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TareaVisibility = "private" | "team" | "workspace";
 export type TareaType =
   | "Sesión clínica"
+  | "Tests"
   | "Documentación"
   | "Llamada / Seguimiento"
   | "Administrativo"
@@ -254,6 +255,7 @@ export const TRACKING_PRESETS: { id: TrackingPreset; label: string; minutes: num
 
 export const TAREA_TYPES: TareaType[] = [
   "Sesión clínica",
+  "Tests",
   "Documentación",
   "Llamada / Seguimiento",
   "Administrativo",

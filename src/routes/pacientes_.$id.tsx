@@ -68,6 +68,7 @@ function PatientDetailPage() {
   // React exige que el número y orden de hooks sea idéntico entre renders.
   const { data: allTests = [] } = useQuery({ queryKey: ["test-applications"], queryFn: () => api.listTestApplications() as Promise<any> });
   const { data: allTasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() as Promise<any> });
+  const { data: allTareas = [] } = useQuery({ queryKey: ["tareas"], queryFn: () => api.listTareas() as Promise<any> });
   // Filtrar documentos por paciente directo en el backend para que el listado
   // sea consistente sin importar el cache global. La queryKey incluye el id
   // para que se invalide cuando navegues entre pacientes.
@@ -84,6 +85,7 @@ function PatientDetailPage() {
 
   const tests = (allTests as any[]).filter((t) => t.patient_id === id);
   const tasks = (allTasks as any[]).filter((t) => t.patient_id === id);
+  const linkedTareas = (allTareas as any[]).filter((t) => t.patient_id === id);
 
   if (isLoading) {
     return (
@@ -208,8 +210,9 @@ function PatientDetailPage() {
               const active = tab === t.id;
               const badge =
                 t.id === "tests" ? tests.length :
-                t.id === "prescripcion" ? tasks.filter((x) => x.status !== "completada").length :
-                t.id === "documentos" ? docs.length : 0;
+                t.id === "prescripcion"
+                  ? tasks.filter((x) => x.status !== "completada").length + linkedTareas.filter((x) => x.status !== "DONE").length
+                  : t.id === "documentos" ? docs.length : 0;
               return (
                 <button
                   key={t.id}
@@ -918,50 +921,123 @@ function TabPrescripcion({ rows, patientId }: { rows: any[]; patientId: string }
     vencida: { bg: "bg-error-soft", text: "text-risk-high", label: "Vencida", Icon: AlertCircle },
   };
 
+  // Tareas internas del equipo (kanban) vinculadas a este paciente. Se
+  // filtran client-side porque ya tenemos la lista global cacheada por la
+  // página /tareas y queremos invalidar de forma consistente.
+  const { data: tareas = [] } = useQuery({
+    queryKey: ["tareas"],
+    queryFn: () => api.listTareas(),
+  });
+  const linkedTareas = (tareas as any[]).filter((t) => t.patient_id === patientId);
+
   return (
-    <div className="rounded-xl border border-line-200 bg-surface">
-      <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
-        <h3 className="font-serif text-base text-ink-900">Plan terapéutico · tareas</h3>
-        <Link
-          to="/prescripcion"
-          search={{ patientId, openAssign: true } as any}
-          className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
-        >
-          <Plus className="h-3.5 w-3.5" /> Asignar tarea
-        </Link>
-      </div>
-      {rows.length === 0 ? (
-        <div className="p-10 text-center text-sm text-ink-500">Sin tareas asignadas.</div>
-      ) : (
-        <ul className="divide-y divide-line-100">
-          {rows.map((t) => {
-            const s = STATUS[t.status];
-            return (
-              <li key={t.id} className="px-5 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={"inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full font-medium " + s.bg + " " + s.text}>
-                        <s.Icon className="h-3 w-3" /> {s.label}
-                      </span>
-                      <span className="text-[10px] text-ink-400 uppercase tracking-wider">vence {t.due_at}</span>
+    <div className="space-y-5">
+      {/* Tareas del kanban relacionadas al paciente */}
+      <div className="rounded-xl border border-line-200 bg-surface">
+        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-base text-ink-900">Tareas del equipo</h3>
+            <p className="text-xs text-ink-500 mt-0.5">
+              Pendientes internos vinculados a este paciente (llamadas, seguimiento, tests…)
+            </p>
+          </div>
+          <Link
+            to="/tareas"
+            search={{ patient: patientId } as any}
+            className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            Ver en Tareas <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        {linkedTareas.length === 0 ? (
+          <div className="p-8 text-center text-sm text-ink-500">
+            Sin tareas internas vinculadas. Crea una desde el módulo de Tareas y selecciona a este paciente.
+          </div>
+        ) : (
+          <ul className="divide-y divide-line-100">
+            {linkedTareas.map((t) => {
+              const overdueT = t.due_date && new Date(t.due_date).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0) && t.status !== "DONE";
+              const statusLabel = t.status === "DONE" ? "Hecho" : t.status === "IN_PROGRESS" ? "En progreso" : t.status === "IN_REVIEW" ? "En revisión" : "Por hacer";
+              const statusClass = t.status === "DONE"
+                ? "bg-success-soft text-success"
+                : t.status === "IN_PROGRESS" || t.status === "IN_REVIEW"
+                  ? "bg-warning-soft text-risk-moderate"
+                  : "bg-bg-100 text-ink-700";
+              const priorityClass = t.priority === "URGENT" ? "bg-rose-500/12 text-rose-700"
+                : t.priority === "HIGH" ? "bg-amber-500/12 text-amber-700"
+                : t.priority === "MEDIUM" ? "bg-brand-50 text-brand-700"
+                : "bg-sage-500/15 text-sage-700";
+              const priorityLabel = t.priority === "URGENT" ? "Urgente" : t.priority === "HIGH" ? "Alta" : t.priority === "MEDIUM" ? "Media" : "Baja";
+              return (
+                <li key={t.id} className="px-5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={"text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium " + statusClass}>{statusLabel}</span>
+                        <span className={"text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium " + priorityClass}>{priorityLabel}</span>
+                        {t.type && <span className="text-[10px] text-ink-500">· {t.type}</span>}
+                      </div>
+                      <div className="text-sm font-medium text-ink-900 mt-1">{t.title}</div>
+                      {t.description && <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{t.description}</p>}
                     </div>
-                    <div className="text-sm font-medium text-ink-900 mt-1">{t.title}</div>
-                    <p className="text-xs text-ink-500 mt-1">{t.description}</p>
+                    {t.due_date && (
+                      <span className={"text-[11px] inline-flex items-center gap-1 shrink-0 " + (overdueT ? "text-rose-700 font-medium" : "text-ink-500")}>
+                        <Calendar className="h-3 w-3" /> {new Date(t.due_date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-[10px] text-ink-500 uppercase tracking-wider">Adherencia</div>
-                    <div className="font-serif text-lg text-ink-900 tabular">{t.adherence}%</div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* Plan terapéutico (tasks legacy / prescripción) */}
+      <div className="rounded-xl border border-line-200 bg-surface">
+        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+          <h3 className="font-serif text-base text-ink-900">Plan terapéutico · prescripciones</h3>
+          <Link
+            to="/prescripcion"
+            search={{ patientId, openAssign: true } as any}
+            className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" /> Asignar tarea
+          </Link>
+        </div>
+        {rows.length === 0 ? (
+          <div className="p-8 text-center text-sm text-ink-500">Sin prescripciones asignadas.</div>
+        ) : (
+          <ul className="divide-y divide-line-100">
+            {rows.map((t) => {
+              const s = STATUS[t.status];
+              return (
+                <li key={t.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={"inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full font-medium " + s.bg + " " + s.text}>
+                          <s.Icon className="h-3 w-3" /> {s.label}
+                        </span>
+                        <span className="text-[10px] text-ink-400 uppercase tracking-wider">vence {t.due_at}</span>
+                      </div>
+                      <div className="text-sm font-medium text-ink-900 mt-1">{t.title}</div>
+                      <p className="text-xs text-ink-500 mt-1">{t.description}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] text-ink-500 uppercase tracking-wider">Adherencia</div>
+                      <div className="font-serif text-lg text-ink-900 tabular">{t.adherence}%</div>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2 h-1 rounded-full bg-bg-100 overflow-hidden">
-                  <div className={"h-full " + (t.adherence >= 80 ? "bg-success" : t.adherence >= 50 ? "bg-warning" : "bg-risk-high")} style={{ width: `${t.adherence}%` }} />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  <div className="mt-2 h-1 rounded-full bg-bg-100 overflow-hidden">
+                    <div className={"h-full " + (t.adherence >= 80 ? "bg-success" : t.adherence >= 50 ? "bg-warning" : "bg-risk-high")} style={{ width: `${t.adherence}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
