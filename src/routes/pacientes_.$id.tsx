@@ -29,11 +29,10 @@ export const Route = createFileRoute("/pacientes_/$id")({
   component: PatientDetailPage,
 });
 
-type Tab = "datos" | "historia" | "tests" | "prescripcion" | "documentos" | "facturacion";
+type Tab = "datos" | "tests" | "prescripcion" | "documentos" | "facturacion";
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "datos", label: "Datos", icon: User },
-  { id: "historia", label: "Historia", icon: ClipboardList },
   { id: "tests", label: "Tests", icon: Brain },
   { id: "prescripcion", label: "Prescripción", icon: Pill },
   { id: "documentos", label: "Documentos", icon: FileText },
@@ -233,8 +232,7 @@ function PatientDetailPage() {
           </nav>
         </div>
 
-        {tab === "datos" && <TabDatos patient={patient} />}
-        {tab === "historia" && <TabHistoria patient={patient} />}
+        {tab === "datos" && <TabDatos patient={patient} tasks={tasks} />}
         {tab === "tests" && <TabTests rows={patientTests as any[]} />}
         {tab === "prescripcion" && <TabPrescripcion rows={tasks} patientId={id} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
@@ -355,15 +353,35 @@ function Section({ title, children, action }: { title: string; children: React.R
   );
 }
 
-function TabDatos({ patient }: { patient: import("@/lib/api").ApiPatient }) {
+function TabDatos({ patient, tasks }: { patient: import("@/lib/api").ApiPatient; tasks: any[] }) {
+  // Citas del paciente para derivar #sesiones atendidas + fecha de primera sesión.
+  const { data: appointments = [] } = useQuery({
+    queryKey: ["appointments", { patient_id: patient.id }],
+    queryFn: () => api.listAppointments({ patient_id: patient.id }),
+  });
+
+  const summary = useMemo(() => {
+    const attended = (appointments as any[]).filter((a) => a.status === "atendida");
+    const sessionsCount = attended.length;
+    const startDate = (appointments as any[])
+      .map((a) => a.date)
+      .filter(Boolean)
+      .sort()[0] ?? null;
+    const patientTasks = (tasks ?? []).filter((t: any) => t.patient_id === patient.id);
+    const adherence = patientTasks.length > 0
+      ? Math.round(patientTasks.reduce((a: number, t: any) => a + (t.adherence ?? 0), 0) / patientTasks.length)
+      : null;
+    return { sessionsCount, startDate, adherence };
+  }, [appointments, tasks, patient.id]);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       <div className="md:col-span-2 space-y-5">
         <Section title="Contacto y datos básicos">
           <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div><dt className="text-xs text-ink-500">Documento</dt><dd className="text-ink-900 mt-0.5 tabular">{patient.doc}</dd></div>
+            <div><dt className="text-xs text-ink-500">Documento</dt><dd className="text-ink-900 mt-0.5 tabular">{patient.doc || "—"}</dd></div>
             <div><dt className="text-xs text-ink-500">Edad</dt><dd className="text-ink-900 mt-0.5">{patient.age || "—"}</dd></div>
-            <div><dt className="text-xs text-ink-500">Pronombres</dt><dd className="text-ink-900 mt-0.5">{patient.pronouns}</dd></div>
+            <div><dt className="text-xs text-ink-500">Pronombres</dt><dd className="text-ink-900 mt-0.5">{patient.pronouns || "—"}</dd></div>
             <div>
               <dt className="text-xs text-ink-500">Teléfono</dt>
               <dd className="text-ink-900 mt-0.5 tabular flex items-center gap-2">
@@ -379,116 +397,52 @@ function TabDatos({ patient }: { patient: import("@/lib/api").ApiPatient }) {
                 })()}
               </dd>
             </div>
-            <div className="col-span-2"><dt className="text-xs text-ink-500">Correo</dt><dd className="text-ink-900 mt-0.5">{patient.email}</dd></div>
+            <div className="col-span-2"><dt className="text-xs text-ink-500">Correo</dt><dd className="text-ink-900 mt-0.5">{patient.email || "—"}</dd></div>
           </dl>
         </Section>
-        <Section title="Contactos de emergencia">
-          <ul className="space-y-2 text-sm">
-            <li className="flex items-center justify-between p-3 rounded-lg border border-line-200">
-              <div>
-                <div className="text-ink-900 font-medium">Madre · Luz Helena Rondón</div>
-                <div className="text-xs text-ink-500">Primer contacto · +57 310 555 4412</div>
-              </div>
-              <button className="text-xs text-brand-700 hover:underline">Llamar</button>
-            </li>
-            <li className="flex items-center justify-between p-3 rounded-lg border border-line-200">
-              <div>
-                <div className="text-ink-900 font-medium">Pareja · Julián Ortega</div>
-                <div className="text-xs text-ink-500">Segundo contacto · +57 311 889 2211</div>
-              </div>
-              <button className="text-xs text-brand-700 hover:underline">Llamar</button>
-            </li>
-          </ul>
+        <Section title="Motivo de consulta">
+          {patient.reason ? (
+            <p className="text-sm text-ink-700 whitespace-pre-wrap">{patient.reason}</p>
+          ) : (
+            <p className="text-sm text-ink-400 italic">Sin motivo registrado. Edita los datos del paciente para agregarlo.</p>
+          )}
         </Section>
       </div>
       <div className="space-y-5">
-        <Section title="Seguro / EPS">
-          <div className="text-sm">
-            <div className="text-ink-900 font-medium">Sura · Plan Clásico</div>
-            <div className="text-xs text-ink-500 mt-0.5">Póliza 008-4412 · vigente hasta 2026-12-31</div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-line-100 text-xs text-ink-500">
-            Cobertura: psicología, psiquiatría, terapia individual.
-          </div>
-        </Section>
         <Section title="Resumen clínico">
           <ul className="space-y-2 text-sm">
-            <li className="flex items-center justify-between text-ink-700"><span>Sesiones</span><span className="tabular">12</span></li>
-            <li className="flex items-center justify-between text-ink-700"><span>Inicio</span><span className="tabular">2025-11-04</span></li>
-            <li className="flex items-center justify-between text-ink-700"><span>Enfoque</span><span>TCC</span></li>
-            <li className="flex items-center justify-between text-ink-700"><span>Adherencia</span><span className="tabular text-success font-medium">92%</span></li>
+            <li className="flex items-center justify-between text-ink-700">
+              <span>Sesiones atendidas</span>
+              <span className="tabular">{summary.sessionsCount}</span>
+            </li>
+            <li className="flex items-center justify-between text-ink-700">
+              <span>Inicio</span>
+              <span className="tabular">{summary.startDate ?? "—"}</span>
+            </li>
+            <li className="flex items-center justify-between text-ink-700">
+              <span>Profesional</span>
+              <span className="text-right">{patient.professional || "—"}</span>
+            </li>
+            {summary.adherence !== null && (
+              <li className="flex items-center justify-between text-ink-700">
+                <span>Adherencia</span>
+                <span className="tabular text-success font-medium">{summary.adherence}%</span>
+              </li>
+            )}
           </ul>
         </Section>
-      </div>
-    </div>
-  );
-}
-
-function TabHistoria({ patient }: { patient: import("@/lib/api").ApiPatient }) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <Section title="Motivo de consulta">
-        <p className="text-sm text-ink-700">
-          Paciente consulta por episodios de ansiedad creciente en contextos laborales y sociales. Reporta palpitaciones,
-          rumiación cognitiva y evitación progresiva de reuniones de equipo desde hace 6 meses.
-        </p>
-      </Section>
-      <Section title="Antecedentes personales">
-        <p className="text-sm text-ink-700">
-          Sin antecedentes psiquiátricos previos. Diagnóstico de hipotiroidismo compensado. Historia familiar:
-          madre con depresión en tratamiento farmacológico. No consumo de sustancias.
-        </p>
-      </Section>
-      <Section title="Examen mental">
-        <ul className="text-sm text-ink-700 space-y-1.5">
-          <li><strong className="text-ink-900">Apariencia:</strong> cuidada, acorde al contexto.</li>
-          <li><strong className="text-ink-900">Afecto:</strong> restringido, congruente con el contenido.</li>
-          <li><strong className="text-ink-900">Pensamiento:</strong> rumiativo, sin desorganización.</li>
-          <li><strong className="text-ink-900">Ideación:</strong> niega ideas auto/heterolesivas.</li>
-          <li><strong className="text-ink-900">Insight:</strong> preservado.</li>
-        </ul>
-      </Section>
-      <Section title="Diagnóstico CIE-11">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 text-brand-800 text-xs font-medium mb-2">
-          6B00 · Trastorno de ansiedad generalizada
-        </div>
-        <p className="text-xs text-ink-500">Especificador: intensidad moderada. Sin comorbilidades activas.</p>
-      </Section>
-      <Section title="Plan de tratamiento · TCC">
-        <ol className="text-sm text-ink-700 space-y-2 list-decimal pl-5">
-          <li>Psicoeducación sobre ansiedad y ciclo del miedo.</li>
-          <li>Entrenamiento en respiración 4-7-8 y relajación muscular progresiva.</li>
-          <li>Registro de pensamientos automáticos y reestructuración cognitiva.</li>
-          <li>Exposición gradual a situaciones sociales evitadas.</li>
-          <li>Prevención de recaídas y consolidación.</li>
-        </ol>
-      </Section>
-      <Section title="Notas de proceso · privadas">
-        <div className="text-xs text-ink-500 uppercase tracking-wider mb-2">Solo visibles para Dra. Lucía Méndez</div>
-        <p className="text-sm text-ink-700 italic">
-          Hipótesis de conceptualización: esquema de "necesidad de aprobación" activado en contexto laboral.
-          Revisar en sesión 14 el trabajo sobre creencias intermedias.
-        </p>
-      </Section>
-      <div className="md:col-span-2 rounded-xl border border-line-200 bg-surface p-5">
-        <h3 className="font-serif text-base text-ink-900 mb-4">Línea de tiempo · últimas sesiones</h3>
-        <ol className="space-y-3">
-          {[
-            { date: "2026-04-09", title: "Sesión 12 · exposición in vivo", note: "Presentó pitch en reunión. SUDS de 80 a 45." },
-            { date: "2026-04-02", title: "Sesión 11 · jerarquía laboral", note: "Construimos jerarquía de 8 situaciones." },
-            { date: "2026-03-26", title: "GAD-7 · 11 (moderada)", note: "Reducción sostenida respecto a febrero." },
-            { date: "2026-03-19", title: "Sesión 10 · reestructuración", note: "Trabajo sobre pensamiento 'voy a fallar'." },
-          ].map((e, i) => (
-            <li key={i} className="flex gap-4">
-              <div className="shrink-0 text-xs text-ink-500 tabular w-24 pt-1">{e.date}</div>
-              <div className="h-2 w-2 rounded-full bg-brand-700 mt-2 shrink-0" />
-              <div>
-                <div className="text-sm font-medium text-ink-900">{e.title}</div>
-                <div className="text-xs text-ink-500 mt-0.5">{e.note}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <Section title="Historia clínica">
+          <p className="text-xs text-ink-500 mb-3">
+            Las notas, antecedentes, examen mental, diagnóstico y plan de tratamiento viven en la historia clínica completa.
+          </p>
+          <Link
+            to="/historia"
+            search={{ id: patient.id }}
+            className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 w-full"
+          >
+            <ClipboardList className="h-3.5 w-3.5" /> Abrir historia clínica
+          </Link>
+        </Section>
       </div>
     </div>
   );
