@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { Topbar } from "./Topbar";
 import { SidebarProvider } from "./SidebarContext";
+import { Fab } from "./Fab";
 import { getToken } from "@/lib/api";
 
 /**
@@ -55,6 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <Fab />
       </div>
     </SidebarProvider>
   );

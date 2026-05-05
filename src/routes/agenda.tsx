@@ -39,11 +39,45 @@ function formatToday() {
   return new Date().toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
 }
 
+function toIso(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDayLong(d: Date) {
+  // "Viernes, 2 de mayo" — sin año (lo da el contexto del año actual).
+  return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function formatWeekRange(d: Date) {
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (x: Date) => x.toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+  return `${fmt(monday)} – ${fmt(sunday)}`;
+}
+
+function formatMonthLong(d: Date) {
+  return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" });
+}
+
 function AgendaPage() {
   const navigate = useNavigate();
   const [view, setView] = useState<View>("dia");
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [createOpen, setCreateOpen] = useState(false);
+
+  function shiftDate(direction: -1 | 1) {
+    setCurrentDate((d) => {
+      const next = new Date(d);
+      if (view === "dia") next.setDate(next.getDate() + direction);
+      else if (view === "semana") next.setDate(next.getDate() + direction * 7);
+      else if (view === "mes") next.setMonth(next.getMonth() + direction);
+      return next;
+    });
+  }
+  const goToday = () => setCurrentDate(new Date());
+  const isToday = toIso(currentDate) === toIso(new Date());
   const [detailSlot, setDetailSlot] = useState<any | null>(null);
 
   const { data: workspace } = useWorkspace();
@@ -133,20 +167,35 @@ function AgendaPage() {
           <div className="xl:col-span-2 rounded-xl border border-line-200 bg-surface">
             <div className="p-5 flex items-center justify-between gap-4 border-b border-line-100 flex-wrap">
               <div className="flex items-center gap-3">
-                <button onClick={() => setWeekOffset((w) => w - 1)} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
+                {view !== "lista" && (
+                  <button onClick={() => shiftDate(-1)} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title={view === "dia" ? "Día anterior" : view === "semana" ? "Semana anterior" : "Mes anterior"}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                )}
                 <div>
-                  <h3 className="font-serif text-lg text-ink-900">
-                    {view === "dia" ? "Agenda del día" : view === "semana" ? "Semana" : view === "mes" ? "Mes en curso" : "Lista general"}
+                  <h3 className="font-serif text-lg text-ink-900 capitalize">
+                    {view === "dia"
+                      ? (isToday ? "Agenda del día" : formatDayLong(currentDate))
+                      : view === "semana"
+                      ? formatWeekRange(currentDate)
+                      : view === "mes"
+                      ? formatMonthLong(currentDate)
+                      : "Próximas citas"}
                   </h3>
                   <p className="text-xs text-ink-500 inline-flex items-center gap-1">
                     <MapPin className="h-3 w-3" /> {headerLocation}
                   </p>
                 </div>
-                <button onClick={() => setWeekOffset((w) => w + 1)} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                {view !== "lista" && (
+                  <button onClick={() => shiftDate(1)} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title={view === "dia" ? "Día siguiente" : view === "semana" ? "Semana siguiente" : "Mes siguiente"}>
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+                {view !== "lista" && !isToday && (
+                  <button onClick={goToday} className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400">
+                    Hoy
+                  </button>
+                )}
               </div>
               <div className="flex gap-1 p-1 rounded-md bg-bg-100">
                 {(["dia", "semana", "mes", "lista"] as View[]).map((v) => (
@@ -164,10 +213,10 @@ function AgendaPage() {
               </div>
             </div>
 
-            {view === "dia" && <DayView appointments={todayAppointments} onPick={setDetailSlot} />}
-            {view === "semana" && <WeekView onPick={(slot) => setDetailSlot(slot as any)} />}
-            {view === "mes" && <MonthView />}
-            {view === "lista" && <ListView appointments={todayAppointments} onPick={setDetailSlot} />}
+            {view === "dia" && <DayView date={currentDate} onPick={setDetailSlot} />}
+            {view === "semana" && <WeekView date={currentDate} onPick={(slot) => setDetailSlot(slot as any)} />}
+            {view === "mes" && <MonthView date={currentDate} />}
+            {view === "lista" && <ListView onPick={setDetailSlot} />}
           </div>
 
           <div className="space-y-5">
@@ -245,12 +294,18 @@ function AgendaPage() {
   );
 }
 
-function DayView({ appointments, onPick }: { appointments: any[]; onPick: (s: any) => void }) {
+function DayView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
+  const dateIso = toIso(date);
+  const { data: appointments = [] } = useQuery({
+    queryKey: ["appointments", dateIso],
+    queryFn: () => api.listAppointments({ date: dateIso }),
+  });
+  const isTodayLocal = dateIso === toIso(new Date());
   if (appointments.length === 0) {
     return (
       <div className="p-10 text-center text-sm text-ink-500">
         <CalendarDays className="h-6 w-6 text-ink-400 mx-auto mb-2" />
-        Sin citas programadas para hoy.
+        {isTodayLocal ? "Sin citas programadas para hoy." : `Sin citas el ${formatDayLong(date)}.`}
       </div>
     );
   }
@@ -294,22 +349,22 @@ function DayView({ appointments, onPick }: { appointments: any[]; onPick: (s: an
   );
 }
 
-function WeekView({ onPick }: { onPick: (s: any) => void }) {
-  // Semana de lunes a domingo que contiene hoy
+function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
+  // Semana de lunes a domingo que contiene `date`.
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=dom, 1=lun, …
-  const daysFromMonday = (dayOfWeek + 6) % 7; // 0 si hoy es lunes
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday);
+  const dayOfWeek = date.getDay(); // 0=dom, 1=lun, …
+  const daysFromMonday = (dayOfWeek + 6) % 7; // 0 si es lunes
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - daysFromMonday);
   monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
-  const fromIso = monday.toISOString().slice(0, 10);
-  const toIso = sunday.toISOString().slice(0, 10);
+  const fromIso = toIso(monday);
+  const untilIso = toIso(sunday);
 
   const { data: weekAppointments = [] } = useQuery({
     queryKey: ["appointments", "week", fromIso],
-    queryFn: () => api.listAppointments({ from: fromIso, to: toIso }),
+    queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
   });
 
   const WEEK_DAYS_LOCAL = useMemo(() => {
@@ -317,7 +372,7 @@ function WeekView({ onPick }: { onPick: (s: any) => void }) {
     return names.map((n, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      return { label: n, num: d.getDate(), iso: d.toISOString().slice(0, 10), isToday: d.toDateString() === now.toDateString() };
+      return { label: n, num: d.getDate(), iso: toIso(d), isToday: d.toDateString() === now.toDateString() };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromIso]);
@@ -395,21 +450,35 @@ function WeekView({ onPick }: { onPick: (s: any) => void }) {
   );
 }
 
-function MonthView() {
-  const daysInMonth = 30;
-  const firstDayOffset = 3; // Abril 2026 empieza miércoles
+function MonthView({ date }: { date: Date }) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const firstDayOffset = firstDay.getDay(); // 0=Dom (header empieza en Dom)
+
+  const fromIso = toIso(firstDay);
+  const untilIso = toIso(lastDay);
+  const { data: monthAppointments = [] } = useQuery({
+    queryKey: ["appointments", "month", fromIso],
+    queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
+  });
+
+  // Agrupar por día (1..31)
+  const byDay: Record<number, number> = {};
+  for (const a of monthAppointments as any[]) {
+    const d = parseInt(String(a.date).slice(8, 10), 10);
+    if (!Number.isNaN(d)) byDay[d] = (byDay[d] ?? 0) + 1;
+  }
+
   const cells: Array<number | null> = [];
   for (let i = 0; i < firstDayOffset; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const withEvents: Record<number, { count: number; risk: boolean }> = {
-    14: { count: 6, risk: false }, 15: { count: 8, risk: true }, 16: { count: 5, risk: false },
-    17: { count: 7, risk: false }, 18: { count: 4, risk: false }, 20: { count: 9, risk: true },
-    21: { count: 6, risk: false }, 22: { count: 5, risk: false }, 23: { count: 8, risk: false },
-    24: { count: 3, risk: false }, 27: { count: 7, risk: false }, 28: { count: 6, risk: true },
-    29: { count: 5, risk: false }, 30: { count: 4, risk: false },
-  };
+  const todayDate = new Date();
+  const todayDay = todayDate.getFullYear() === year && todayDate.getMonth() === month ? todayDate.getDate() : -1;
 
   return (
     <div className="p-3 sm:p-5">
@@ -418,13 +487,13 @@ function MonthView() {
       </div>
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
         {cells.map((d, i) => {
-          const isToday = d === 18;
-          const ev = d ? withEvents[d] : undefined;
+          const isToday = d === todayDay;
+          const count = d ? byDay[d] ?? 0 : 0;
           return (
             <div
               key={i}
               className={
-                "relative aspect-square rounded-md border p-1.5 text-xs cursor-pointer transition-colors " +
+                "relative aspect-square rounded-md border p-1.5 text-xs transition-colors " +
                 (!d ? "border-transparent" :
                  isToday ? "border-brand-700 bg-brand-50 text-ink-900 font-medium" :
                  "border-line-200 hover:border-brand-400 bg-surface text-ink-700")
@@ -433,12 +502,12 @@ function MonthView() {
               {d && (
                 <>
                   <div className="tabular">{d}</div>
-                  {ev && (
+                  {count > 0 && (
                     <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between">
-                      <span className={"text-[10px] tabular " + (ev.risk ? "text-risk-high font-medium" : "text-ink-500")}>{ev.count}</span>
+                      <span className="text-[10px] tabular text-ink-500">{count}</span>
                       <div className="flex gap-0.5">
-                        {Array.from({ length: Math.min(ev.count, 3) }).map((_, k) => (
-                          <span key={k} className={"h-1 w-1 rounded-full " + (ev.risk ? "bg-risk-high" : "bg-brand-700")} />
+                        {Array.from({ length: Math.min(count, 3) }).map((_, k) => (
+                          <span key={k} className="h-1 w-1 rounded-full bg-brand-700" />
                         ))}
                       </div>
                     </div>
@@ -453,45 +522,84 @@ function MonthView() {
   );
 }
 
-function ListView({ appointments, onPick }: { appointments: any[]; onPick: (s: any) => void }) {
+function ListView({ onPick }: { onPick: (s: any) => void }) {
+  const today = new Date();
+  const future = new Date();
+  future.setDate(today.getDate() + 60);
+  const fromIso = toIso(today);
+  const untilIso = toIso(future);
+
+  const { data: appointments = [] } = useQuery({
+    queryKey: ["appointments", "list", fromIso],
+    queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
+  });
+
   if (appointments.length === 0) {
-    return <div className="p-10 text-center text-sm text-ink-500">Sin citas programadas.</div>;
+    return <div className="p-10 text-center text-sm text-ink-500">Sin citas programadas en los próximos 60 días.</div>;
   }
+
+  // Agrupar por fecha; cada grupo lleva un encabezado.
+  const groups: Record<string, any[]> = {};
+  for (const a of appointments as any[]) {
+    const k = String(a.date);
+    (groups[k] ||= []).push(a);
+  }
+  const orderedKeys = Object.keys(groups).sort();
+  const todayIso = toIso(new Date());
+
+  function dayHeader(iso: string) {
+    const d = new Date(iso + "T00:00:00");
+    if (iso === todayIso) return "Hoy";
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (iso === toIso(tomorrow)) return "Mañana";
+    return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+  }
+
   return (
-    <ul className="divide-y divide-line-100">
-      {appointments.map((s) => {
-        const Icon = MODALITY_ICON[s.modality as Modality] ?? Users;
-        return (
-          <li key={s.id}>
-            <button onClick={() => onPick(s)} className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-brand-50/40 text-left transition-colors">
-              <div className="shrink-0 text-center">
-                <div className="font-serif text-base text-ink-900 tabular">{s.time}</div>
-                <div className="text-[10px] text-ink-400 uppercase">{s.duration_min ?? 50} min</div>
-              </div>
-              <div className="h-9 w-9 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-ink-900 truncate flex items-center gap-2">
-                  {s.patient_name}
-                </div>
-                <div className="text-xs text-ink-500">
-                  {MODALITY_LABEL[s.modality as Modality] ?? s.modality}{s.room ? ` · ${s.room}` : ""}{s.professional ? ` · ${s.professional}` : ""}
-                </div>
-              </div>
-              <span className={
-                "text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0 " +
-                (s.status === "atendida" ? "bg-success-soft text-success" :
-                 s.status === "en_curso" ? "bg-brand-50 text-brand-800" :
-                 s.status === "confirmada" ? "bg-brand-50 text-brand-800" :
-                 "bg-bg-100 text-ink-500")
-              }>{String(s.status).replace("_", " ")}</span>
-              <ChevronRight className="h-4 w-4 text-ink-300 shrink-0" />
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div>
+      {orderedKeys.map((iso) => (
+        <div key={iso}>
+          <div className="px-5 py-2 bg-bg-100/40 border-y border-line-100 text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+            {dayHeader(iso)}
+          </div>
+          <ul className="divide-y divide-line-100">
+            {groups[iso].sort((a, b) => String(a.time).localeCompare(String(b.time))).map((s: any) => {
+              const Icon = MODALITY_ICON[s.modality as Modality] ?? Users;
+              return (
+                <li key={s.id}>
+                  <button onClick={() => onPick(s)} className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-brand-50/40 text-left transition-colors">
+                    <div className="shrink-0 text-center">
+                      <div className="font-serif text-base text-ink-900 tabular">{s.time}</div>
+                      <div className="text-[10px] text-ink-400 uppercase">{s.duration_min ?? 50} min</div>
+                    </div>
+                    <div className="h-9 w-9 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-ink-900 truncate flex items-center gap-2">
+                        {s.patient_name}
+                      </div>
+                      <div className="text-xs text-ink-500">
+                        {MODALITY_LABEL[s.modality as Modality] ?? s.modality}{s.room ? ` · ${s.room}` : ""}{s.professional ? ` · ${s.professional}` : ""}
+                      </div>
+                    </div>
+                    <span className={
+                      "text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0 " +
+                      (s.status === "atendida" ? "bg-success-soft text-success" :
+                       s.status === "en_curso" ? "bg-brand-50 text-brand-800" :
+                       s.status === "confirmada" ? "bg-brand-50 text-brand-800" :
+                       "bg-bg-100 text-ink-500")
+                    }>{String(s.status).replace("_", " ")}</span>
+                    <ChevronRight className="h-4 w-4 text-ink-300 shrink-0" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 
