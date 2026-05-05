@@ -222,7 +222,7 @@ function PatientHeader({ patient, isOrg, onOpenNote, onOpenAppt }: { patient: Pa
               </a>
             ) : null}
           />
-          <ContactItem icon={MapPin} label="Ciudad" value="Bogotá · Chapinero" />
+          <ContactItem icon={MapPin} label="Dirección" value={patient.address ?? "Sin dirección"} />
           <ContactItem icon={IdCard} label="Identificación" value={patient.doc} />
         </div>
 

@@ -254,6 +254,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
     pronouns: patient.pronouns,
     phone: patient.phone,
     email: patient.email,
+    address: patient.address ?? "",
     reason: patient.reason,
     modality: patient.modality,
     status: patient.status,
@@ -293,6 +294,10 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Correo</span>
             <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          </label>
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Dirección</span>
+            <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </label>
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Motivo de consulta</span>

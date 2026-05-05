@@ -47,6 +47,7 @@ function rowToPatient(r) {
     risk: r.risk,
     riskTypes: r.risk_type ? safeParseArray(r.risk_type) : [],
     tags: r.tags ? r.tags.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+    address: r.address ?? undefined,
     archivedAt: r.archived_at ?? undefined,
     insuranceProvider: r.insurance_provider ?? undefined,
     insurancePlan: r.insurance_plan ?? undefined,
@@ -179,8 +180,8 @@ router.post("/", (req, res) => {
   const p = req.body ?? {};
   const id = p.id ?? nextPatientId(req.user.workspace_id);
   db.prepare(`
-    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags, insurance_provider, insurance_plan, insurance_policy, insurance_valid_until)
-    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags, @insurance_provider, @insurance_plan, @insurance_policy, @insurance_valid_until)
+    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags, address, insurance_provider, insurance_plan, insurance_policy, insurance_valid_until)
+    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags, @address, @insurance_provider, @insurance_plan, @insurance_policy, @insurance_valid_until)
   `).run({
     id,
     workspace_id: req.user.workspace_id,
@@ -202,6 +203,7 @@ router.post("/", (req, res) => {
     risk: p.risk ?? "none",
     risk_type: serializeRiskTypes(p.riskTypes),
     tags: Array.isArray(p.tags) ? p.tags.join(",") : null,
+    address: p.address ? String(p.address).trim() || null : null,
     insurance_provider: p.insuranceProvider ?? null,
     insurance_plan: p.insurancePlan ?? null,
     insurance_policy: p.insurancePolicy ?? null,
@@ -238,6 +240,9 @@ router.patch("/:id", (req, res) => {
     risk: p.risk ?? existing.risk,
     risk_type: p.riskTypes !== undefined ? serializeRiskTypes(p.riskTypes) : existing.risk_type,
     tags: Array.isArray(p.tags) ? p.tags.join(",") : existing.tags,
+    address: Object.prototype.hasOwnProperty.call(p, "address")
+      ? (p.address ? String(p.address).trim() || null : null)
+      : existing.address,
     insurance_provider: pickInsurance("insuranceProvider", "insurance_provider"),
     insurance_plan: pickInsurance("insurancePlan", "insurance_plan"),
     insurance_policy: pickInsurance("insurancePolicy", "insurance_policy"),
@@ -249,6 +254,7 @@ router.patch("/:id", (req, res) => {
       phone=@phone, email=@email, professional=@professional, professional_id=@professional_id,
       sede_id=@sede_id, modality=@modality, status=@status, reason=@reason,
       last_contact=@last_contact, next_session=@next_session, risk=@risk, risk_type=@risk_type, tags=@tags,
+      address=@address,
       insurance_provider=@insurance_provider, insurance_plan=@insurance_plan,
       insurance_policy=@insurance_policy, insurance_valid_until=@insurance_valid_until,
       updated_at=CURRENT_TIMESTAMP

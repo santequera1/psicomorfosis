@@ -32,6 +32,7 @@ export interface Patient {
   risk: Risk;
   riskTypes?: RiskType[];
   tags?: string[];
+  address?: string;
 }
 
 export const PATIENTS: Patient[] = [

@@ -635,6 +635,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
     age: patient.age,
     phone: patient.phone,
     email: patient.email,
+    address: patient.address ?? "",
     professional: patient.professional,
     modality: patient.modality,
     status: patient.status,
@@ -714,6 +715,9 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               <input type="email" value={form.email ?? ""} onChange={(e) => update("email", e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </Labeled>
           </div>
+          <Labeled label="Dirección">
+            <input value={form.address ?? ""} onChange={(e) => update("address", e.target.value)} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+          </Labeled>
           <Labeled label="Motivo de consulta">
             <textarea rows={2} value={form.reason ?? ""} onChange={(e) => update("reason", e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
           </Labeled>

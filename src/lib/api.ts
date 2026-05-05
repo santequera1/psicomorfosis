@@ -140,6 +140,8 @@ export interface ApiPatient {
   risk: "none" | "low" | "moderate" | "high" | "critical";
   riskTypes?: ("suicida" | "autolesion" | "heteroagresion" | "abandono_tto" | "reagudizacion" | "descompensacion")[];
   tags?: string[];
+  /** Dirección de residencia o ciudad/barrio. Texto libre. */
+  address?: string;
   // Seguro / EPS — opcionales, todos texto libre.
   insuranceProvider?: string;
   insurancePlan?: string;

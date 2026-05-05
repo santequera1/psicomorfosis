@@ -74,7 +74,8 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
       risk: form.risk,
       riskTypes: form.riskTypes,
       tags: form.tags ?? [],
-    });
+      address: (form as any).address ?? "",
+    } as any);
   }
 
   return (
@@ -117,6 +118,14 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
                 <Labeled label="Teléfono"><input onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               </div>
               <Labeled label="Correo"><input type="email" onChange={(e) => updateField("email", e.target.value)} placeholder="paciente@correo.co" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+              <Labeled label="Dirección (opcional)">
+                <input
+                  value={(form as any).address ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, address: e.target.value } as any))}
+                  placeholder="Cra 11 # 82-32, Chapinero, Bogotá"
+                  className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+                />
+              </Labeled>
             </>
           )}
           {step === 2 && (
@@ -159,14 +168,15 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
                   onTypesChange={(t) => updateField("riskTypes", t as Patient["riskTypes"])}
                 />
               </div>
-              <Labeled label="Etiquetas">
-                <div className="mt-1">
-                  <TagEditor
-                    value={form.tags ?? []}
-                    onChange={(t) => updateField("tags", t as Patient["tags"])}
-                    suggestions={tagSuggestions}
-                  />
-                </div>
+              <Labeled label="Etiquetas (opcional)">
+                <p className="text-[11px] text-ink-500 mt-1 mb-2 leading-snug">
+                  Sirven para agrupar pacientes y filtrar la lista (ej. <em>Ansiedad</em>, <em>Adolescente</em>, <em>Alto riesgo</em>). Hacé click en una sugerida o escribí la tuya y presioná <kbd className="px-1 rounded bg-bg-100 text-ink-700 text-[10px] font-mono">Enter</kbd>.
+                </p>
+                <TagEditor
+                  value={form.tags ?? []}
+                  onChange={(t) => updateField("tags", t as Patient["tags"])}
+                  suggestions={tagSuggestions}
+                />
               </Labeled>
             </>
           )}
