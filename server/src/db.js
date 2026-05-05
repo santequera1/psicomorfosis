@@ -581,12 +581,12 @@ function backfillExisting() {
     }
   }
 
-  // 1b. Plantillas de documentos del sistema (compartidas, workspace_id IS NULL)
+  // 1b. Plantillas de documentos del sistema (compartidas, workspace_id IS NULL).
+  // Idempotente por NOMBRE: en cada arranque se asegura que todas las plantillas
+  // del catálogo existan; las nuevas se insertan, las ya existentes no se duplican
+  // ni se pisan (porque el psicólogo puede haberlas clonado y editado).
   try {
-    const tCount = db.prepare("SELECT COUNT(*) AS n FROM document_templates WHERE workspace_id IS NULL").get().n;
-    if (tCount === 0) {
-      seedSystemDocumentTemplates();
-    }
+    ensureSystemDocumentTemplatesExist();
   } catch (err) {
     console.warn("[db] backfill seed templates falló:", err.message);
   }
@@ -976,7 +976,11 @@ function seedClinicalDataFor(wsId, patients, singleProfessional) {
 // {{paciente.edad}}, {{profesional.nombre}}, {{profesional.tarjeta_profesional}},
 // {{clinica.razon_social}}, {{clinica.direccion}}, {{clinica.telefono}},
 // {{fecha.hoy}}, {{fecha.larga}}, {{sesion.fecha}}.
-function seedSystemDocumentTemplates() {
+/**
+ * Catálogo de plantillas del sistema. Función pura (sin acceso a DB) para
+ * permitir su uso tanto en seed inicial como en ensure-exists idempotente.
+ */
+function getSystemTemplates() {
   // Helper para construir bloques TipTap de forma legible
   const h1 = (text) => ({ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text }] });
   const h2 = (text) => ({ type: "heading", attrs: { level: 2 }, content: [{ type: "text", text }] });
@@ -986,7 +990,7 @@ function seedSystemDocumentTemplates() {
 
   const DISCLAIMER = "⚠️ Este documento es un borrador de referencia generado por Psicomorfosis. Antes de usarlo con pacientes reales, hágalo revisar por su asesoría legal y ajústelo a su contexto particular.";
 
-  const templates = [
+  return [
     {
       name: "Consentimiento informado de psicoterapia",
       description: "Consentimiento general según Ley 1090/2006 y código deontológico del psicólogo en Colombia.",
@@ -1259,8 +1263,112 @@ function seedSystemDocumentTemplates() {
         ],
       },
     },
+    // ── Plantillas que aprovechan {{sesion.*}} (Fase 1) ──
+    {
+      name: "Nota de evolución de sesión",
+      description: "Plantilla SOAP para evolución clínica. Si se genera desde una nota de sesión, los campos S/O/A/P se rellenan con el contenido de la nota.",
+      category: "informe",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Nota de evolución de sesión"),
+          p("Paciente: {{paciente.nombre}}  ·  Documento: {{paciente.documento}}"),
+          p("Profesional: {{profesional.nombre}}  ·  TP {{profesional.tarjeta_profesional}}"),
+          p("Modalidad: {{paciente.modalidad}}  ·  Sesión #{{sesion.numero}}  ·  Fecha: {{sesion.fecha_larga}}"),
+          hr(),
+          h2("S — Subjetivo"),
+          p("{{sesion.s}}"),
+          h2("O — Objetivo"),
+          p("{{sesion.o}}"),
+          h2("A — Análisis"),
+          p("{{sesion.a}}"),
+          h2("P — Plan"),
+          p("{{sesion.p}}"),
+          hr(),
+          p("Firmado por {{profesional.nombre}} el {{fecha.larga}}."),
+        ],
+      },
+    },
+    {
+      name: "Informe de sesión",
+      description: "Resumen narrativo de una sesión, útil para inter-consulta o derivación. Si se genera desde una nota, incluye automáticamente el contenido de la sesión.",
+      category: "informe",
+      legal_disclaimer: null,
+      body: {
+        type: "doc",
+        content: [
+          h1("Informe de sesión"),
+          p("Fecha de emisión: {{fecha.larga}}"),
+          hr(),
+          h2("Datos del paciente"),
+          ul([
+            "Nombre: {{paciente.nombre}}",
+            "Documento: {{paciente.documento}}",
+            "Edad: {{paciente.edad}} años",
+            "Modalidad de atención: {{paciente.modalidad}}",
+          ]),
+          h2("Sesión documentada"),
+          p("Sesión #{{sesion.numero}} realizada el {{sesion.fecha_larga}} por {{sesion.autor}}."),
+          h2("Contenido de la sesión"),
+          p("{{sesion.contenido}}"),
+          h2("Observaciones del profesional"),
+          p("[Agregar comentarios narrativos adicionales si aplica.]"),
+          hr(),
+          p("Atentamente,"),
+          p(""),
+          p("{{profesional.nombre}}"),
+          p("Tarjeta profesional {{profesional.tarjeta_profesional}}"),
+          p("{{profesional.email}}  ·  {{profesional.telefono}}"),
+        ],
+      },
+    },
+    {
+      name: "Informe para autoridad o juzgado",
+      description: "Informe formal para entidades judiciales, custodia o autoridad competente. Se entrega solo bajo requerimiento legal.",
+      category: "informe",
+      legal_disclaimer: "⚠️ Este informe debe entregarse únicamente ante requerimiento legal escrito. Antes de divulgar información confidencial del paciente, verifique el oficio que lo solicita y consulte con asesoría jurídica. Se recomienda incluir solo la información estrictamente necesaria para responder el requerimiento.",
+      body: {
+        type: "doc",
+        content: [
+          h1("Informe psicológico"),
+          p("Dirigido a: ____________________________________________"),
+          p("Asunto: ____________________________________________"),
+          p("Referencia: [N° de oficio o radicado]"),
+          hr(),
+          p("Yo, {{profesional.nombre}}, psicólogo(a) con tarjeta profesional {{profesional.tarjeta_profesional}}, en cumplimiento del oficio de la referencia, presento el siguiente informe relativo a:"),
+          h2("1. Identificación del paciente"),
+          ul([
+            "Nombre: {{paciente.nombre}}",
+            "Documento de identidad: {{paciente.documento}}",
+            "Edad: {{paciente.edad}} años",
+          ]),
+          h2("2. Marco de la atención"),
+          p("El consultante asiste a proceso psicológico en {{clinica.razon_social}} desde [fecha de inicio del proceso]. La modalidad de atención es {{paciente.modalidad}}."),
+          h2("3. Motivo de consulta"),
+          p("[Resumen breve y respetuoso del motivo, sin transcribir información que no sea pertinente al oficio.]"),
+          h2("4. Aspectos relevantes para el requerimiento"),
+          p("[Información estrictamente necesaria para responder lo solicitado, sin exceder el alcance de la pregunta legal. No transcribir contenidos verbales literales del consultante salvo solicitud expresa.]"),
+          h2("5. Conclusiones"),
+          p("[Conclusiones técnicas redactadas en lenguaje claro, no diagnóstico definitivo si no se ha aplicado evaluación específica con instrumentos validados.]"),
+          h2("6. Reserva profesional"),
+          p("La información aquí expuesta corresponde al ejercicio profesional protegido por el secreto profesional (Ley 1090 de 2006). Se entrega exclusivamente para los fines del oficio de la referencia y no debe ser divulgada para otros propósitos sin autorización del titular o de la autoridad competente."),
+          hr(),
+          p("Cordialmente,"),
+          p(""),
+          p("{{profesional.nombre}}"),
+          p("Tarjeta profesional {{profesional.tarjeta_profesional}}"),
+          p("{{clinica.razon_social}}  ·  {{clinica.direccion}}"),
+          p("{{fecha.larga}}"),
+        ],
+      },
+    },
   ];
+}
 
+/** Inserta todas las plantillas del catálogo (siembra inicial). */
+function seedSystemDocumentTemplates() {
+  const templates = getSystemTemplates();
   const ins = db.prepare(`
     INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_at, updated_at)
     VALUES (NULL, ?, ?, ?, 'system', ?, ?, ?, datetime('now'), datetime('now'))
@@ -1270,6 +1378,36 @@ function seedSystemDocumentTemplates() {
     ins.run(t.name, t.description, t.category, JSON.stringify(t.body), text, t.legal_disclaimer ?? null);
   }
   console.log(`[db] seeded ${templates.length} system document templates`);
+}
+
+/**
+ * Idempotente. Recorre el catálogo y agrega solo las plantillas que aún no
+ * existen (matching por `name` exacto + `scope = 'system'`). NO modifica las
+ * existentes — el psicólogo puede haberlas clonado y editado, no queremos
+ * pisar su trabajo.
+ *
+ * Esto se llama en cada arranque del servidor (backfillExisting), así que un
+ * deploy a la VPS automáticamente trae plantillas nuevas del catálogo sin
+ * intervención manual.
+ */
+function ensureSystemDocumentTemplatesExist() {
+  const templates = getSystemTemplates();
+  const existing = new Set(
+    db.prepare("SELECT name FROM document_templates WHERE scope = 'system' AND workspace_id IS NULL")
+      .all().map((r) => r.name)
+  );
+  const missing = templates.filter((t) => !existing.has(t.name));
+  if (missing.length === 0) return;
+
+  const ins = db.prepare(`
+    INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_at, updated_at)
+    VALUES (NULL, ?, ?, ?, 'system', ?, ?, ?, datetime('now'), datetime('now'))
+  `);
+  for (const t of missing) {
+    const text = extractTextFromTipTap(t.body);
+    ins.run(t.name, t.description, t.category, JSON.stringify(t.body), text, t.legal_disclaimer ?? null);
+  }
+  console.log(`[db] ensured ${missing.length} new system templates: ${missing.map((t) => t.name).join(", ")}`);
 }
 
 /**

@@ -15,6 +15,7 @@ import PdfPrinter from "pdfmake";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { buildReceiptDoc } from "../lib/receiptTemplates.js";
+import { buildCertificateDoc } from "../lib/certificateTemplate.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -256,6 +257,94 @@ router.get("/preview-pdf", (req, res) => {
   } catch (e) {
     console.error("[invoices/preview-pdf]", e);
     res.status(500).json({ error: "No se pudo generar el preview: " + (e?.message ?? e) });
+  }
+});
+
+/**
+ * GET /api/invoices/certificate
+ * Query: patient_id (req), from (YYYY-MM-DD, opcional), to (YYYY-MM-DD, opcional)
+ *
+ * Agrega los recibos pagados de un paciente en el rango y genera un PDF
+ * "certificado de atención" — útil para EPS, declaración de renta, etc.
+ *
+ * Por defecto cubre el año en curso (1 ene → hoy).
+ */
+router.get("/certificate", (req, res) => {
+  try {
+    const patientId = req.query.patient_id;
+    if (!patientId) return res.status(400).json({ error: "patient_id requerido" });
+
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const from = String(req.query.from || `${yyyy}-01-01`);
+    const to = String(req.query.to || today.toISOString().slice(0, 10));
+
+    // Validación mínima de fechas (formato YYYY-MM-DD).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return res.status(400).json({ error: "Fechas inválidas. Formato YYYY-MM-DD." });
+    }
+
+    const patient = db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?")
+      .get(patientId, req.user.workspace_id);
+    if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
+
+    const invoices = db.prepare(`
+      SELECT * FROM invoices
+      WHERE workspace_id = ? AND patient_id = ? AND status = 'pagada'
+        AND date >= ? AND date <= ?
+      ORDER BY date ASC
+    `).all(req.user.workspace_id, patientId, from, to);
+
+    if (invoices.length === 0) {
+      return res.status(404).json({ error: "No hay recibos pagados de este paciente en el período seleccionado." });
+    }
+
+    const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+    const settings = Object.fromEntries(
+      db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(req.user.workspace_id)
+        .map((s) => [s.key, s.value])
+    );
+    // Profesional firmante: el primero que atendió en esos recibos, sino el primero del workspace.
+    const firstProfName = invoices.find((i) => i.professional)?.professional;
+    const prof = firstProfName
+      ? db.prepare("SELECT name, title, email, phone FROM professionals WHERE workspace_id = ? AND name = ?")
+          .get(req.user.workspace_id, firstProfName)
+      : db.prepare("SELECT name, title, email, phone FROM professionals WHERE workspace_id = ? LIMIT 1")
+          .get(req.user.workspace_id);
+
+    const showLogo = settings.receipt_show_logo !== "0";
+    const showName = settings.receipt_show_name !== "0";
+    const orientation = settings.receipt_logo_orientation ?? "horizontal";
+    const logoPath = showLogo ? findLogoPath(req.user.workspace_id) : null;
+    const LOGO_SIZES = {
+      horizontal: { width: 117, height: 36 },
+      vertical:   { width: 49,  height: 73 },
+      square:     { width: 57,  height: 57 },
+    };
+    const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
+
+    const ctx = {
+      invoices, patient, ws, prof, settings,
+      showLogo, showName, logoPath, logoSize,
+      range: { from, to },
+      issuedAt: new Date(),
+    };
+    const docDef = buildCertificateDoc(ctx);
+    const stream = printer.createPdfKitDocument(docDef);
+
+    const safeName = (patient.name || "paciente").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="certificado_${safeName}_${from}_${to}.pdf"`);
+    stream.on("error", (err) => {
+      console.error("[invoices/certificate stream error]", err);
+      if (!res.headersSent) res.status(500).json({ error: "Error generando certificado: " + (err?.message ?? err) });
+      else res.destroy(err);
+    });
+    stream.pipe(res);
+    stream.end();
+  } catch (e) {
+    console.error("[invoices/certificate]", e);
+    res.status(500).json({ error: "No se pudo generar el certificado: " + (e?.message ?? e) });
   }
 });
 

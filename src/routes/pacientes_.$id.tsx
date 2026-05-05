@@ -14,6 +14,7 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, ClipboardList, FileText, Pill,
   MessagesSquare, Receipt, Brain, Plus, User, IdCard, ChevronRight, Edit3,
   TrendingDown, CheckCircle2, Clock, AlertCircle, MessageCircle, UserPlus,
+  X, Loader2,
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
@@ -740,10 +741,12 @@ function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) 
 }
 
 function TabFacturacion({ patientId }: { patientId: string }) {
+  const [certOpen, setCertOpen] = useState(false);
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices", { patient_id: patientId }],
     queryFn: () => api.listInvoices({ patient_id: patientId }),
   });
+  const paidCount = invoices.filter((i) => i.status === "pagada").length;
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
@@ -771,14 +774,24 @@ function TabFacturacion({ patientId }: { patientId: string }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       <div className="md:col-span-2 rounded-xl border border-line-200 bg-surface">
-        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-serif text-base text-ink-900">Recibos del paciente</h3>
-          <Link
-            to="/facturacion"
-            className="text-xs text-brand-700 hover:underline"
-          >
-            Ver todos →
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setCertOpen(true)}
+              disabled={paidCount === 0}
+              title={paidCount === 0 ? "Necesitas al menos un recibo pagado" : "Generar certificado de atención agregando recibos pagados"}
+              className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileText className="h-3 w-3 text-brand-700" /> Certificado
+            </button>
+            <Link
+              to="/facturacion"
+              className="text-xs text-brand-700 hover:underline"
+            >
+              Ver todos →
+            </Link>
+          </div>
         </div>
         {isLoading ? (
           <div className="px-5 py-10 text-center text-sm text-ink-500">Cargando…</div>
@@ -816,6 +829,108 @@ function TabFacturacion({ patientId }: { patientId: string }) {
           )}
           <li className="flex items-center justify-between text-ink-700"><span>Método más usado</span><span>{summary.preferred}</span></li>
         </ul>
+      </div>
+
+      {certOpen && (
+        <CertificateModal patientId={patientId} onClose={() => setCertOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/** Modal para generar el certificado de atención del paciente en un rango. */
+function CertificateModal({ patientId, onClose }: { patientId: string; onClose: () => void }) {
+  const yyyy = new Date().getFullYear();
+  const [from, setFrom] = useState(`${yyyy}-01-01`);
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
+
+  // Cerrar con Esc.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function generate() {
+    if (!from || !to) return;
+    setBusy(true);
+    try {
+      const blob = await api.downloadCertificatePdf({ patient_id: patientId, from, to });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `certificado_${patientId}_${from}_${to}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success("Certificado descargado");
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo generar el certificado");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function setPreset(preset: "year" | "lastyear" | "ytd" | "all") {
+    const now = new Date();
+    if (preset === "ytd" || preset === "year") {
+      setFrom(`${now.getFullYear()}-01-01`);
+      setTo(now.toISOString().slice(0, 10));
+    } else if (preset === "lastyear") {
+      setFrom(`${now.getFullYear() - 1}-01-01`);
+      setTo(`${now.getFullYear() - 1}-12-31`);
+    } else if (preset === "all") {
+      setFrom("2020-01-01");
+      setTo(now.toISOString().slice(0, 10));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Recibos</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Certificado de atención</h3>
+            <p className="text-xs text-ink-500 mt-1">
+              Agrega los recibos pagados del paciente en el rango seleccionado. Útil para EPS o declaración de renta.
+            </p>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Desde</span>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700" />
+            </label>
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hasta</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700" />
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider text-ink-400">Atajos:</span>
+            <button type="button" onClick={() => setPreset("ytd")} className="text-[11px] px-2 py-0.5 rounded-full border border-line-200 text-ink-700 hover:border-brand-400">Año en curso</button>
+            <button type="button" onClick={() => setPreset("lastyear")} className="text-[11px] px-2 py-0.5 rounded-full border border-line-200 text-ink-700 hover:border-brand-400">Año anterior</button>
+            <button type="button" onClick={() => setPreset("all")} className="text-[11px] px-2 py-0.5 rounded-full border border-line-200 text-ink-700 hover:border-brand-400">Histórico</button>
+          </div>
+        </div>
+        <footer className="p-4 border-t border-line-100 bg-bg-100/30 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="h-9 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+          <button
+            type="button"
+            onClick={generate}
+            disabled={busy || !from || !to}
+            className="h-9 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            Generar PDF
+          </button>
+        </footer>
       </div>
     </div>
   );

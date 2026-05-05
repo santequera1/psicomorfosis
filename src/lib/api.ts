@@ -877,6 +877,24 @@ export const api = {
     }
     return r.blob();
   },
+  /**
+   * Genera y descarga un certificado de atención agregando todos los recibos
+   * pagados del paciente en el rango. Útil para EPS / declaración de renta.
+   */
+  downloadCertificatePdf: async (params: { patient_id: string; from?: string; to?: string }): Promise<Blob> => {
+    const token = localStorage.getItem("psm.token");
+    const qsObj: Record<string, string> = { patient_id: params.patient_id };
+    if (params.from) qsObj.from = params.from;
+    if (params.to) qsObj.to = params.to;
+    const r = await fetch(`${API_BASE}/api/invoices/certificate?${new URLSearchParams(qsObj)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo generar el certificado");
+    }
+    return r.blob();
+  },
 
   // Notifications
   listNotifications: () => request<Array<Record<string, unknown>>>("/api/notifications"),

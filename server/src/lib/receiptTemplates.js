@@ -16,17 +16,18 @@
  * como alias por compatibilidad con el dispatcher y settings antiguos.
  */
 
-function fmtCop(n) {
+// Helpers exportados — reusados también por certificateTemplate.js (Fase 4).
+export function fmtCop(n) {
   return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n ?? 0);
 }
 
-function fmtDate(iso) {
+export function fmtDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
   return d.toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
 }
 
-function fmtDateShort(iso) {
+export function fmtDateShort(iso) {
   if (!iso) return "—";
   const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
   const day = d.getDate();
@@ -42,7 +43,7 @@ function methodSummary(inv) {
   return parts.length ? parts.join(" ") : "Sin método";
 }
 
-function joinAddress(address, city) {
+export function joinAddress(address, city) {
   const a = (address ?? "").trim();
   const c = (city ?? "").trim();
   if (!a && !c) return "";
@@ -55,7 +56,7 @@ function joinAddress(address, city) {
 // Mezcla un hex con blanco (`ratio` = porcentaje de blanco). Devuelve hex.
 // Permite derivar la paleta completa (background tintado + texto sobre brand)
 // a partir de un único color base elegido por el usuario.
-function tintWithWhite(hex, ratio) {
+export function tintWithWhite(hex, ratio) {
   const h = (hex || "").replace("#", "");
   if (h.length !== 6) return hex;
   const r = parseInt(h.slice(0, 2), 16);
@@ -66,7 +67,7 @@ function tintWithWhite(hex, ratio) {
   return `#${toHex(mix(r))}${toHex(mix(g))}${toHex(mix(b))}`;
 }
 
-function isValidHex(s) {
+export function isValidHex(s) {
   return typeof s === "string" && /^#[0-9a-f]{6}$/i.test(s);
 }
 
