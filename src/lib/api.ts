@@ -400,6 +400,36 @@ export interface PsychTest {
   ageRange: string | null;
   scoring: PsychTestRange[];
   definition: PsychTestDefinition | null;
+  /** false = instrumento clínico oficial; true = formulario del consultorio. */
+  isCustom?: boolean;
+  workspaceId?: number | null;
+}
+
+export interface TestRequest {
+  id: number;
+  workspace_id: number;
+  requested_by: number | null;
+  requester_name: string | null;
+  test_name: string;
+  reason: string | null;
+  status: "open" | "in_progress" | "completed" | "rejected" | string;
+  created_at: string;
+}
+
+export interface CreateFormBody {
+  name: string;
+  short_name?: string;
+  description?: string;
+  category?: string;
+  age_range?: string;
+  minutes?: number;
+  definition: {
+    instructions?: string;
+    scale: PsychTestScaleOption[];
+    questions: Array<{ id: string; text: string; reverse?: boolean }>;
+    scoring: { type: "sum" | "sum_reversed" };
+    ranges: PsychTestRange[];
+  };
 }
 export interface TestApplication {
   id: string;
@@ -719,6 +749,18 @@ export const api = {
     return r.blob();
   },
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
+
+  // Formularios personalizados del consultorio (workspace-scoped)
+  createTestForm: (body: CreateFormBody) =>
+    request<PsychTest>("/api/tests/forms", { method: "POST", body: JSON.stringify(body) }),
+  deleteTestForm: (id: string) =>
+    request<{ ok: true }>(`/api/tests/forms/${id}`, { method: "DELETE" }),
+
+  // Solicitudes de tests al equipo Psicomorfosis (canal para tests clínicos
+  // complejos que solo el equipo puede implementar de forma validada)
+  listTestRequests: () => request<TestRequest[]>("/api/tests/requests"),
+  createTestRequest: (body: { test_name: string; reason?: string }) =>
+    request<TestRequest>("/api/tests/requests", { method: "POST", body: JSON.stringify(body) }),
 
   // Portal del paciente — tests
   portalTests: () => request<Array<TestApplication & { definition: PsychTestDefinition | null }>>("/api/portal/tests"),

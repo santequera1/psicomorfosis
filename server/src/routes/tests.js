@@ -27,6 +27,11 @@ function parseTest(row) {
     // Si questions_json no está cargado (BD vieja), devuelve null y la UI lo
     // tratará como "no aplicable" (no hay aplicador).
     definition: def,
+    // Distinción "instrumento clínico" vs "formulario del consultorio":
+    // - isCustom=false: instrumento oficial mantenido por Psicomorfosis.
+    // - isCustom=true: formulario simple creado por el psicólogo en su workspace.
+    isCustom: !!row.is_custom,
+    workspaceId: row.workspace_id ?? null,
   };
 }
 
@@ -43,15 +48,190 @@ function parseApplication(row) {
 // CATÁLOGO (global, compartido)
 // ════════════════════════════════════════════════════════════════════════════
 
-router.get("/catalog", (_req, res) => {
-  const rows = db.prepare("SELECT * FROM psych_tests ORDER BY category, code").all();
+// El catálogo devuelve los instrumentos clínicos oficiales (workspace_id NULL)
+// + los formularios personalizados del workspace del usuario actual. Los
+// formularios de otros workspaces nunca se exponen.
+router.get("/catalog", (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM psych_tests
+    WHERE (is_custom = 0 OR is_custom IS NULL) OR workspace_id = ?
+    ORDER BY is_custom ASC, category, code
+  `).all(req.user.workspace_id);
   res.json(rows.map(parseTest));
 });
 
 router.get("/catalog/:id", (req, res) => {
-  const row = db.prepare("SELECT * FROM psych_tests WHERE id = ?").get(req.params.id);
+  const row = db.prepare(`
+    SELECT * FROM psych_tests
+    WHERE id = ? AND ((is_custom = 0 OR is_custom IS NULL) OR workspace_id = ?)
+  `).get(req.params.id, req.user.workspace_id);
   if (!row) return res.status(404).json({ error: "Test no encontrado" });
   res.json(parseTest(row));
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// FORMULARIOS PERSONALIZADOS (workspace-scoped). Crear/eliminar formularios
+// simples tipo cuestionario. La estructura del `definition` se mantiene
+// idéntica a la de los instrumentos oficiales para que el TestRunner y el
+// scoring engine los manejen sin código condicional.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/tests/forms — crea un formulario personalizado.
+ *
+ * Body esperado:
+ *   {
+ *     name: string,
+ *     short_name?: string,
+ *     description?: string,
+ *     category?: string,
+ *     age_range?: string,
+ *     minutes?: number,
+ *     definition: {
+ *       instructions?: string,
+ *       scale: [{ value, label }, ...],     // global para Likert; [{1,V},{0,F}] para V/F
+ *       questions: [{ id, text, reverse? }, ...],
+ *       scoring: { type: "sum" | "sum_reversed" },
+ *       ranges: [{ min, max, label, level }, ...]
+ *     }
+ *   }
+ *
+ * El servidor calcula `items` (n preguntas) y deriva un `id`/`code` únicos
+ * con prefijo `form-` para distinguirlos visualmente. Validamos lo mínimo
+ * para no aceptar formularios que el aplicador no pueda renderizar.
+ */
+router.post("/forms", (req, res) => {
+  const { name, short_name, description, category, age_range, minutes, definition } = req.body ?? {};
+
+  if (typeof name !== "string" || !name.trim()) {
+    return res.status(400).json({ error: "El nombre es obligatorio" });
+  }
+  if (!definition || typeof definition !== "object") {
+    return res.status(400).json({ error: "La definición es obligatoria" });
+  }
+  const questions = Array.isArray(definition.questions) ? definition.questions : [];
+  if (questions.length === 0) {
+    return res.status(400).json({ error: "El formulario debe tener al menos una pregunta" });
+  }
+  const scale = Array.isArray(definition.scale) ? definition.scale : [];
+  if (scale.length < 2) {
+    return res.status(400).json({ error: "La escala debe tener al menos 2 opciones" });
+  }
+  const ranges = Array.isArray(definition.ranges) ? definition.ranges : [];
+  if (ranges.length === 0) {
+    return res.status(400).json({ error: "Define al menos un rango de severidad" });
+  }
+  const scoringType = definition.scoring?.type;
+  if (scoringType !== "sum" && scoringType !== "sum_reversed") {
+    return res.status(400).json({ error: "Tipo de scoring no soportado para formularios" });
+  }
+
+  // ID único: form-<workspace>-<timestamp>-<random>. El code lo usa la UI
+  // como "etiqueta corta" — short_name si lo dan, si no derivamos algo.
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const id = `form-${req.user.workspace_id}-${ts}-${rand}`;
+  const code = (short_name && short_name.trim()) || `FORM-${rand}`;
+
+  // Normalizamos las preguntas: id estable, texto limpio, flag reverse.
+  const normQuestions = questions.map((q, i) => ({
+    id: typeof q.id === "string" && q.id.trim() ? q.id : `q${i + 1}`,
+    text: String(q.text ?? "").trim(),
+    ...(q.reverse ? { reverse: true } : {}),
+  }));
+  const normRanges = ranges.map((r) => ({
+    min: Number(r.min),
+    max: Number(r.max),
+    label: String(r.label ?? "").trim(),
+    level: r.level ?? "none",
+  }));
+
+  const questions_json = JSON.stringify({
+    version: 1,
+    instructions: typeof definition.instructions === "string" ? definition.instructions : "",
+    scale,
+    questions: normQuestions,
+    scoring: { type: scoringType },
+    ranges: normRanges,
+    alerts: null,
+  });
+  const scoringJson = JSON.stringify(normRanges);
+  const created = now();
+
+  db.prepare(`
+    INSERT INTO psych_tests
+      (id, code, name, short_name, items, minutes, category, description, age_range,
+       scoring, questions_json, is_custom, workspace_id, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+  `).run(
+    id,
+    code,
+    name.trim(),
+    (short_name && short_name.trim()) || null,
+    normQuestions.length,
+    Number.isFinite(minutes) ? Math.max(1, Math.min(120, Number(minutes))) : 5,
+    (category && category.trim()) || "Personalizado",
+    (description && description.trim()) || null,
+    (age_range && age_range.trim()) || null,
+    scoringJson,
+    questions_json,
+    req.user.workspace_id,
+    req.user.id,
+    created,
+    created,
+  );
+
+  const row = db.prepare("SELECT * FROM psych_tests WHERE id = ?").get(id);
+  res.status(201).json(parseTest(row));
+});
+
+/**
+ * DELETE /api/tests/forms/:id — elimina un formulario personalizado del
+ * workspace. No toca aplicaciones ya hechas (siguen vivas en
+ * test_applications). Solo el workspace propietario puede borrarlo.
+ */
+router.delete("/forms/:id", (req, res) => {
+  const r = db.prepare(`
+    DELETE FROM psych_tests
+    WHERE id = ? AND is_custom = 1 AND workspace_id = ?
+  `).run(req.params.id, req.user.workspace_id);
+  if (r.changes === 0) return res.status(404).json({ error: "Formulario no encontrado" });
+  res.json({ ok: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SOLICITUDES DE TESTS (canal para que el psicólogo pida tests clínicos
+// complejos que solo el equipo Psicomorfosis puede implementar de forma
+// validada — Goldberg, GADS, etc.)
+// ════════════════════════════════════════════════════════════════════════════
+
+router.get("/requests", (req, res) => {
+  const rows = db.prepare(`
+    SELECT * FROM test_requests
+    WHERE workspace_id = ?
+    ORDER BY created_at DESC
+  `).all(req.user.workspace_id);
+  res.json(rows);
+});
+
+router.post("/requests", (req, res) => {
+  const { test_name, reason } = req.body ?? {};
+  if (typeof test_name !== "string" || !test_name.trim()) {
+    return res.status(400).json({ error: "Nombre del test requerido" });
+  }
+  const requesterName = req.user.name ?? null;
+  const r = db.prepare(`
+    INSERT INTO test_requests (workspace_id, requested_by, requester_name, test_name, reason, status, created_at)
+    VALUES (?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)
+  `).run(
+    req.user.workspace_id,
+    req.user.id,
+    requesterName,
+    test_name.trim(),
+    (typeof reason === "string" ? reason.trim() : "") || null,
+  );
+  const row = db.prepare("SELECT * FROM test_requests WHERE id = ?").get(r.lastInsertRowid);
+  res.status(201).json(row);
 });
 
 // ════════════════════════════════════════════════════════════════════════════

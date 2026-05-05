@@ -6,10 +6,13 @@ import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { TestRunner } from "@/components/tests/TestRunner";
 import { ApplicationDetailModal, MillonResultView } from "@/components/tests/ApplicationDetailModal";
+import { FormBuilderModal } from "@/components/tests/FormBuilderModal";
+import { RequestTestModal } from "@/components/tests/RequestTestModal";
 import { api, type ApiPatient, type PsychTest, type TestApplication } from "@/lib/api";
 import {
   Brain, CheckCircle2, Clock, Send, Search, X, ChevronRight,
-  Loader2, AlertOctagon, ShieldAlert, UserPlus,
+  Loader2, AlertOctagon, ShieldAlert, UserPlus, Plus, FileText,
+  Trash2, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,11 +36,14 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string; ic
 };
 
 function TestsPage() {
+  const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [activeTest, setActiveTest] = useState<PsychTest | null>(null);
   const [applyContext, setApplyContext] = useState<{ test: PsychTest; patientId?: string; patientName?: string } | null>(null);
   const [assignContext, setAssignContext] = useState<PsychTest | null>(null);
   const [detailApp, setDetailApp] = useState<TestApplication | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery({
     queryKey: ["test-catalog"],
@@ -62,6 +68,18 @@ function TestsPage() {
     );
   }, [catalog, query]);
 
+  const officialTests = useMemo(() => filteredCatalog.filter((t) => !t.isCustom), [filteredCatalog]);
+  const customForms   = useMemo(() => filteredCatalog.filter((t) =>  t.isCustom), [filteredCatalog]);
+
+  const deleteFormMu = useMutation({
+    mutationFn: (id: string) => api.deleteTestForm(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["test-catalog"] });
+      toast.success("Formulario eliminado");
+    },
+    onError: (e: Error) => toast.error(e.message ?? "No se pudo eliminar"),
+  });
+
   const kpis = useMemo(() => ({
     total: applications.length,
     pending: applications.filter((a) => a.status === "pendiente").length,
@@ -76,7 +94,24 @@ function TestsPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Evaluación clínica</p>
             <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Tests psicométricos</h1>
-            <p className="text-sm text-ink-500 mt-1">8 instrumentos validados — aplicar en sesión o asignar al paciente.</p>
+            <p className="text-sm text-ink-500 mt-1">
+              Instrumentos clínicos oficiales + tus formularios personalizados.
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setRequestOpen(true)}
+              className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-1.5"
+              title="Solicitar al equipo Psicomorfosis un test clínico complejo"
+            >
+              <MessageSquarePlus className="h-4 w-4" /> Solicitar test
+            </button>
+            <button
+              onClick={() => setBuilderOpen(true)}
+              className="h-10 px-3 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+            >
+              <Plus className="h-4 w-4" /> Crear formulario
+            </button>
           </div>
         </header>
 
@@ -104,17 +139,68 @@ function TestsPage() {
             {catalogLoading ? (
               <div className="p-10 text-center text-sm text-ink-500"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando…</div>
             ) : (
-              <ul className="divide-y divide-line-100">
-                {filteredCatalog.map((t) => (
-                  <CatalogRow
-                    key={t.id}
-                    test={t}
-                    onApply={() => setApplyContext({ test: t })}
-                    onAssign={() => setAssignContext(t)}
-                    onView={() => setActiveTest(t)}
-                  />
-                ))}
-              </ul>
+              <div>
+                {/* Sección 1: instrumentos clínicos oficiales */}
+                <CatalogSectionHeader
+                  icon={<ShieldAlert className="h-3.5 w-3.5" />}
+                  title="Instrumentos clínicos"
+                  subtitle={`${officialTests.length} oficiales · validados clínicamente`}
+                />
+                {officialTests.length === 0 ? (
+                  <div className="px-5 py-6 text-center text-xs text-ink-500">Sin coincidencias.</div>
+                ) : (
+                  <ul className="divide-y divide-line-100">
+                    {officialTests.map((t) => (
+                      <CatalogRow
+                        key={t.id}
+                        test={t}
+                        onApply={() => setApplyContext({ test: t })}
+                        onAssign={() => setAssignContext(t)}
+                        onView={() => setActiveTest(t)}
+                      />
+                    ))}
+                  </ul>
+                )}
+
+                {/* Sección 2: formularios del consultorio */}
+                <CatalogSectionHeader
+                  icon={<Sparkles className="h-3.5 w-3.5" />}
+                  title="Formularios del consultorio"
+                  subtitle={
+                    customForms.length === 0
+                      ? "Crea tu primer formulario o tamizaje personalizado"
+                      : `${customForms.length} ${customForms.length === 1 ? "formulario" : "formularios"} · creados por ti`
+                  }
+                />
+                {customForms.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <p className="text-sm text-ink-500">Aún no has creado ningún formulario.</p>
+                    <button
+                      onClick={() => setBuilderOpen(true)}
+                      className="mt-3 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Crear formulario
+                    </button>
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-line-100">
+                    {customForms.map((t) => (
+                      <CatalogRow
+                        key={t.id}
+                        test={t}
+                        onApply={() => setApplyContext({ test: t })}
+                        onAssign={() => setAssignContext(t)}
+                        onView={() => setActiveTest(t)}
+                        onDelete={() => {
+                          if (confirm(`¿Eliminar el formulario "${t.name}"? Las aplicaciones ya hechas se conservan.`)) {
+                            deleteFormMu.mutate(t.id);
+                          }
+                        }}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
 
@@ -172,25 +258,62 @@ function TestsPage() {
       {detailApp && (
         <ApplicationDetailModal app={detailApp} onClose={() => setDetailApp(null)} />
       )}
+
+      {/* Modal: crear formulario personalizado */}
+      {builderOpen && <FormBuilderModal onClose={() => setBuilderOpen(false)} />}
+
+      {/* Modal: solicitar test al equipo Psicomorfosis */}
+      {requestOpen && <RequestTestModal onClose={() => setRequestOpen(false)} />}
     </AppShell>
+  );
+}
+
+function CatalogSectionHeader({ icon, title, subtitle }: {
+  icon: React.ReactNode; title: string; subtitle: string;
+}) {
+  return (
+    <div className="px-5 py-3 bg-bg-100/40 border-y border-line-100 first:border-t-0 flex items-center gap-2">
+      <span className="h-6 w-6 rounded-md bg-brand-50 text-brand-700 inline-flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">{title}</p>
+        <p className="text-[11px] text-ink-500 truncate">{subtitle}</p>
+      </div>
+    </div>
   );
 }
 
 // ─── Componentes ───────────────────────────────────────────────────────────
 
-function CatalogRow({ test, onApply, onAssign, onView }: { test: PsychTest; onApply: () => void; onAssign: () => void; onView: () => void }) {
+function CatalogRow({ test, onApply, onAssign, onView, onDelete }: {
+  test: PsychTest;
+  onApply: () => void;
+  onAssign: () => void;
+  onView: () => void;
+  onDelete?: () => void;
+}) {
   const ready = !!test.definition?.questions?.length;
+  const isCustom = !!test.isCustom;
   return (
     <li className="px-5 py-4 hover:bg-brand-50/40 transition-colors group">
       <div className="flex items-start gap-3">
-        <div className="h-10 w-10 rounded-lg bg-lavender-100 text-lavender-500 flex items-center justify-center shrink-0">
-          <Brain className="h-5 w-5" />
+        <div className={cn(
+          "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+          isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
+        )}>
+          {isCustom ? <FileText className="h-5 w-5" /> : <Brain className="h-5 w-5" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="font-serif text-base text-ink-900">{test.code}</span>
             <span className="text-xs text-ink-500">{test.shortName}</span>
             <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-bg-100 text-ink-500 font-medium">{test.category}</span>
+            {isCustom && (
+              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium border border-brand-100">
+                Mío
+              </span>
+            )}
           </div>
           <p className="text-xs text-ink-700 mt-1 line-clamp-2">{test.description}</p>
           <p className="text-[11px] text-ink-500 mt-1">{test.items} ítems · ~{test.minutes} min · {test.ageRange}</p>
@@ -204,6 +327,15 @@ function CatalogRow({ test, onApply, onAssign, onView }: { test: PsychTest; onAp
               <button onClick={onAssign} className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5">
                 <UserPlus className="h-3.5 w-3.5" /> Asignar
               </button>
+              {onDelete && (
+                <button
+                  onClick={onDelete}
+                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center gap-1.5"
+                  title="Eliminar formulario"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                </button>
+              )}
             </>
           ) : (
             <button onClick={onView} className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-500 inline-flex items-center gap-1.5">

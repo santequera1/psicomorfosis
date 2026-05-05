@@ -567,6 +567,26 @@ function runMigrations() {
     "ALTER TABLE test_applications ADD COLUMN answered_items INTEGER DEFAULT 0",
     "ALTER TABLE test_applications ADD COLUMN started_at TEXT",
     "ALTER TABLE test_applications ADD COLUMN paused_at TEXT",
+    // Formularios personalizados del consultorio (5 may noche). Distingue
+    // los instrumentos clínicos oficiales (workspace_id NULL, is_custom=0)
+    // de los formularios creados por el psicólogo en su propio workspace.
+    "ALTER TABLE psych_tests ADD COLUMN is_custom INTEGER DEFAULT 0",
+    "ALTER TABLE psych_tests ADD COLUMN workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE",
+    "ALTER TABLE psych_tests ADD COLUMN created_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE psych_tests ADD COLUMN created_at TEXT",
+    "ALTER TABLE psych_tests ADD COLUMN updated_at TEXT",
+    `CREATE TABLE IF NOT EXISTS test_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      requester_name TEXT,
+      test_name TEXT NOT NULL,
+      reason TEXT,
+      status TEXT DEFAULT 'open',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_test_requests_workspace ON test_requests(workspace_id)",
+    "CREATE INDEX IF NOT EXISTS idx_psych_tests_workspace ON psych_tests(workspace_id)",
   ];
   for (const sql of migrations) {
     try {
