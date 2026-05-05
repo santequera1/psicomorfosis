@@ -55,13 +55,14 @@ export function Fab() {
 
   return (
     <>
-      <div ref={containerRef} className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 print:hidden">
-        {/* Los items siempre están montados; alternamos opacity/translate/pointer-events
-            para tener animación real de entrada y salida con un pequeño stagger. */}
+      {/* El contenedor solo ocupa el tamaño del botón circular. Los items
+          quedan posicionados absolutamente arriba para no reservar espacio
+          ni capturar hover cuando el menú está cerrado. */}
+      <div ref={containerRef} className="fixed bottom-5 right-5 z-40 h-14 w-14 print:hidden">
         <div
           aria-hidden={!menuOpen}
           className={cn(
-            "flex flex-col items-end gap-2 mb-1 transition-all duration-200 ease-out",
+            "absolute bottom-full right-0 mb-2 flex flex-col items-end gap-2 transition-all duration-200 ease-out",
             menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-3 pointer-events-none"
           )}
         >

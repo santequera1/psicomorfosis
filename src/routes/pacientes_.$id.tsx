@@ -14,7 +14,7 @@ import {
   ArrowLeft, Phone, Mail, MapPin, Calendar, ClipboardList, FileText, Pill,
   MessagesSquare, Receipt, Brain, Plus, User, IdCard, ChevronRight, Edit3,
   TrendingDown, CheckCircle2, Clock, AlertCircle, MessageCircle, UserPlus,
-  X, Loader2,
+  X, Loader2, ListTodo,
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
@@ -35,7 +35,7 @@ type Tab = "datos" | "tests" | "prescripcion" | "documentos" | "facturacion";
 const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "datos", label: "Datos", icon: User },
   { id: "tests", label: "Tests", icon: Brain },
-  { id: "prescripcion", label: "Prescripción", icon: Pill },
+  { id: "prescripcion", label: "Tareas", icon: ListTodo },
   { id: "documentos", label: "Documentos", icon: FileText },
   { id: "facturacion", label: "Facturación", icon: Receipt },
 ];
@@ -210,9 +210,8 @@ function PatientDetailPage() {
               const active = tab === t.id;
               const badge =
                 t.id === "tests" ? tests.length :
-                t.id === "prescripcion"
-                  ? tasks.filter((x) => x.status !== "completada").length + linkedTareas.filter((x) => x.status !== "DONE").length
-                  : t.id === "documentos" ? docs.length : 0;
+                t.id === "prescripcion" ? linkedTareas.filter((x) => x.status !== "DONE").length :
+                t.id === "documentos" ? docs.length : 0;
               return (
                 <button
                   key={t.id}
@@ -238,7 +237,7 @@ function PatientDetailPage() {
 
         {tab === "datos" && <TabDatos patient={patient} tasks={tasks} />}
         {tab === "tests" && <TabTests rows={patientTests as any[]} />}
-        {tab === "prescripcion" && <TabPrescripcion rows={tasks} patientId={id} />}
+        {tab === "prescripcion" && <TabPrescripcion patientId={id} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
         {tab === "facturacion" && <TabFacturacion patientId={id} />}
       </div>
@@ -913,14 +912,7 @@ function TabTests({ rows }: { rows: any[] }) {
   );
 }
 
-function TabPrescripcion({ rows, patientId }: { rows: any[]; patientId: string }) {
-  const STATUS: Record<string, { bg: string; text: string; label: string; Icon: React.ComponentType<{ className?: string }> }> = {
-    asignada: { bg: "bg-brand-50", text: "text-brand-800", label: "Asignada", Icon: Clock },
-    en_progreso: { bg: "bg-warning-soft", text: "text-risk-moderate", label: "En progreso", Icon: Clock },
-    completada: { bg: "bg-success-soft", text: "text-success", label: "Completada", Icon: CheckCircle2 },
-    vencida: { bg: "bg-error-soft", text: "text-risk-high", label: "Vencida", Icon: AlertCircle },
-  };
-
+function TabPrescripcion({ patientId }: { patientId: string }) {
   // Tareas internas del equipo (kanban) vinculadas a este paciente. Se
   // filtran client-side porque ya tenemos la lista global cacheada por la
   // página /tareas y queremos invalidar de forma consistente.
@@ -993,51 +985,9 @@ function TabPrescripcion({ rows, patientId }: { rows: any[]; patientId: string }
         )}
       </div>
 
-      {/* Plan terapéutico (tasks legacy / prescripción) */}
-      <div className="rounded-xl border border-line-200 bg-surface">
-        <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
-          <h3 className="font-serif text-base text-ink-900">Plan terapéutico · prescripciones</h3>
-          <Link
-            to="/prescripcion"
-            search={{ patientId, openAssign: true } as any}
-            className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" /> Asignar tarea
-          </Link>
-        </div>
-        {rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-ink-500">Sin prescripciones asignadas.</div>
-        ) : (
-          <ul className="divide-y divide-line-100">
-            {rows.map((t) => {
-              const s = STATUS[t.status];
-              return (
-                <li key={t.id} className="px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={"inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full font-medium " + s.bg + " " + s.text}>
-                          <s.Icon className="h-3 w-3" /> {s.label}
-                        </span>
-                        <span className="text-[10px] text-ink-400 uppercase tracking-wider">vence {t.due_at}</span>
-                      </div>
-                      <div className="text-sm font-medium text-ink-900 mt-1">{t.title}</div>
-                      <p className="text-xs text-ink-500 mt-1">{t.description}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-[10px] text-ink-500 uppercase tracking-wider">Adherencia</div>
-                      <div className="font-serif text-lg text-ink-900 tabular">{t.adherence}%</div>
-                    </div>
-                  </div>
-                  <div className="mt-2 h-1 rounded-full bg-bg-100 overflow-hidden">
-                    <div className={"h-full " + (t.adherence >= 80 ? "bg-success" : t.adherence >= 50 ? "bg-warning" : "bg-risk-high")} style={{ width: `${t.adherence}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+      {/* La sección de "prescripciones" (módulo legacy de psiquiatría) se
+          oculta porque el equipo no la usa por ahora. Quedan disponibles los
+          datos en el módulo /prescripcion para cuando se reactive. */}
     </div>
   );
 }

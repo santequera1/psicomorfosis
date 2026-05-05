@@ -723,6 +723,11 @@ function TareaDialog({
 
             <Field label="Paciente relacionado">
               <PatientCombobox patients={patients} value={patientId} onChange={setPatientId} />
+              {patientId && visibility !== "private" && (
+                <p className="text-[11px] text-ink-500 mt-1">
+                  ⓘ El paciente verá esta tarea en su portal. Si es una nota interna, marca la visibilidad como <span className="font-medium">Privada</span>.
+                </p>
+              )}
             </Field>
 
             <Field label="Visibilidad">

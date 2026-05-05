@@ -305,25 +305,74 @@ router.get("/portal/appointments", requirePatient, (req, res) => {
 });
 
 /**
- * GET /api/portal/tasks — tareas terapéuticas del paciente.
+ * GET /api/portal/tasks — tareas del paciente. Une dos fuentes:
+ *  - therapy_tasks: prescripciones terapéuticas legacy (módulo psiquiatría).
+ *  - tareas (kanban): tareas internas del equipo vinculadas al paciente,
+ *    excluyendo las marcadas como `private` (notas personales del psicólogo)
+ *    y las archivadas/borradas. Se les pone prefijo `tarea-` en el id para
+ *    distinguir el origen al completar.
  */
 router.get("/portal/tasks", requirePatient, (req, res) => {
-  const rows = db.prepare(`
+  const therapy = db.prepare(`
     SELECT * FROM therapy_tasks
     WHERE patient_id = ? AND workspace_id = ?
     ORDER BY due_at ASC
   `).all(req.user.patient_id, req.user.workspace_id);
-  res.json(rows);
+
+  const kanban = db.prepare(`
+    SELECT id, title, description, type, status, priority, due_date, completed_at, created_at
+    FROM tareas
+    WHERE patient_id = ? AND workspace_id = ?
+      AND visibility != 'private'
+      AND archived_at IS NULL
+      AND deleted_at IS NULL
+    ORDER BY due_date ASC, created_at DESC
+  `).all(req.user.patient_id, req.user.workspace_id);
+
+  // Mapear las kanban al shape que espera el portal.
+  const kanbanMapped = kanban.map((t) => ({
+    id: `tarea-${t.id}`,
+    title: t.title,
+    description: t.description,
+    type: t.type ?? "interna",
+    status: t.status === "DONE" ? "completada" : "asignada",
+    adherence: t.status === "DONE" ? 100 : 0,
+    due_at: t.due_date ?? null,
+    completed_at: t.completed_at ?? null,
+    created_at: t.created_at,
+    source: "team",
+  }));
+
+  // Anotar las terapéuticas con source para que el front pueda diferenciar.
+  const therapyMapped = therapy.map((t) => ({ ...t, source: "therapy" }));
+
+  res.json([...kanbanMapped, ...therapyMapped]);
 });
 
 /**
  * POST /api/portal/tasks/:id/complete — marca la tarea como completada.
+ * El id puede ser numérico (therapy_tasks) o `tarea-N` (tareas kanban).
  */
 router.post("/portal/tasks/:id/complete", requirePatient, (req, res) => {
+  const rawId = req.params.id;
+
+  if (typeof rawId === "string" && rawId.startsWith("tarea-")) {
+    const tareaId = parseInt(rawId.slice(6), 10);
+    if (!Number.isFinite(tareaId)) return res.status(400).json({ error: "ID inválido" });
+    const r = db.prepare(`
+      UPDATE tareas
+      SET status = 'DONE', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND patient_id = ? AND workspace_id = ?
+        AND visibility != 'private'
+    `).run(tareaId, req.user.patient_id, req.user.workspace_id);
+    if (r.changes === 0) return res.status(404).json({ error: "Tarea no encontrada" });
+    return res.json({ ok: true });
+  }
+
   const r = db.prepare(`
     UPDATE therapy_tasks SET status = 'completada', adherence = 100
     WHERE id = ? AND patient_id = ? AND workspace_id = ?
-  `).run(req.params.id, req.user.patient_id, req.user.workspace_id);
+  `).run(rawId, req.user.patient_id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "Tarea no encontrada" });
   res.json({ ok: true });
 });
