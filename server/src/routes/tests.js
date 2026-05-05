@@ -239,6 +239,48 @@ router.patch("/applications/:id/progress", (req, res) => {
   res.json(parseApplication(row));
 });
 
+/**
+ * GET /api/tests/applications/:id/export.csv
+ * Exporta las respuestas de una aplicación en CSV. Útil para tests cuya
+ * matriz de scoring oficial vive en un Excel externo (MCMI-II) — el
+ * psicólogo copia la columna PUNTOS y la pega en su hoja oficial sin
+ * tener que transcribir 175 respuestas a mano.
+ *
+ * Formato: ITEM,PUNTOS  (1=V, 2=F, 0=Sin respuesta) — coincide con la
+ * convención de la hoja "Respuestas" del Excel oficial del MCMI-II.
+ */
+router.get("/applications/:id/export.csv", (req, res) => {
+  const app = db.prepare("SELECT * FROM test_applications WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.workspace_id);
+  if (!app) return res.status(404).json({ error: "Aplicación no encontrada" });
+
+  const test = db.prepare("SELECT * FROM psych_tests WHERE code = ?").get(app.test_code);
+  if (!test) return res.status(404).json({ error: "Test no encontrado en el catálogo" });
+  const def = test.questions_json ? safeJSON(test.questions_json) : null;
+  if (!def?.questions) return res.status(500).json({ error: "Definición del test no disponible" });
+
+  const answers = app.answers_json ? safeJSON(app.answers_json) : {};
+  const lines = ["ITEM,PUNTOS"];
+  for (const q of def.questions) {
+    const v = answers[q.id];
+    // 0 = sin respuesta (convención del Excel oficial). 1=V, 2=F.
+    const cell = (v === 1 || v === 2) ? v : 0;
+    lines.push(`${q.id},${cell}`);
+  }
+  // Agregar metadata al final como comentario (las herramientas de Excel
+  // que toman CSV ignoran comillas; lo dejamos como filas extra al pie).
+  lines.push("");
+  lines.push(`# Test,${app.test_code}`);
+  lines.push(`# Paciente,${(app.patient_name ?? "").replace(/,/g, " ")}`);
+  if (app.completed_at) lines.push(`# Completado,${app.completed_at}`);
+
+  const csv = "﻿" + lines.join("\r\n"); // BOM para Excel UTF-8
+  const safeName = (app.patient_name ?? "paciente").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${app.test_code}_${safeName}.csv"`);
+  res.send(csv);
+});
+
 router.delete("/applications/:id", (req, res) => {
   const r = db.prepare("DELETE FROM test_applications WHERE id = ? AND workspace_id = ?")
     .run(req.params.id, req.user.workspace_id);

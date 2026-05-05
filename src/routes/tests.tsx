@@ -8,7 +8,7 @@ import { TestRunner } from "@/components/tests/TestRunner";
 import { api, type ApiPatient, type PsychTest, type TestApplication } from "@/lib/api";
 import {
   Brain, CheckCircle2, Clock, Send, Search, X, ChevronRight,
-  FileBarChart, Plus, ArrowLeft, Loader2,
+  FileBarChart, Plus, ArrowLeft, Loader2, Download,
   AlertOctagon, ShieldAlert, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -523,11 +523,30 @@ const MILLON_GROUP_LABELS: Record<MillonScaleGroup, string> = {
 function MillonResultView({ result, onClose }: { result: TestApplication; onClose: () => void }) {
   const raw = result.alerts_json?.scales_raw ?? {};
   const validityWarning = result.alerts_json?.meta?.validity_warning;
+  const [exporting, setExporting] = useState(false);
 
   const groups: Record<MillonScaleGroup, typeof MILLON_SCALES> = {
     validity: [], personality: [], severe_personality: [], clinical: [], severe_clinical: [],
   };
   for (const sc of MILLON_SCALES) groups[sc.group].push(sc);
+
+  async function downloadCsv() {
+    setExporting(true);
+    try {
+      const blob = await api.exportTestApplicationCsv(result.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${result.test_code}_${(result.patient_name ?? "paciente").replace(/\s+/g, "_")}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success("CSV descargado");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo exportar");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="p-6">
@@ -579,7 +598,16 @@ function MillonResultView({ result, onClose }: { result: TestApplication; onClos
         <strong className="text-ink-700">Nota clínica:</strong> el MCMI-II requiere conversión a tasa base (BR), corrección por escala X y otros ajustes para una interpretación válida. La escala X (Sinceridad) no se calcula automáticamente — su fórmula vive en el Excel oficial. Aplica criterio clínico antes de comunicar resultados al paciente.
       </div>
 
-      <div className="mt-5 flex justify-end">
+      <div className="mt-5 flex justify-between gap-3 flex-wrap">
+        <button
+          onClick={downloadCsv}
+          disabled={exporting}
+          title="CSV con las 175 respuestas (1=V, 2=F, 0=Sin respuesta) listo para pegar en el Excel oficial."
+          className="h-10 px-4 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 disabled:opacity-60"
+        >
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Exportar respuestas (CSV)
+        </button>
         <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
           Cerrar
         </button>

@@ -704,6 +704,18 @@ export const api = {
   /** Guardar respuestas parciales (pausa) — staff. Cambia status a 'en_curso'. */
   saveTestApplicationProgress: (id: string, answers: Record<string, number>) =>
     request<TestApplication>(`/api/tests/applications/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
+  /** Descarga las respuestas como CSV listo para pegar en Excel oficial (MCMI-II). */
+  exportTestApplicationCsv: async (id: string): Promise<Blob> => {
+    const token = localStorage.getItem("psm.token");
+    const r = await fetch(`${API_BASE}/api/tests/applications/${id}/export.csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo exportar el CSV");
+    }
+    return r.blob();
+  },
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
 
   // Portal del paciente — tests
