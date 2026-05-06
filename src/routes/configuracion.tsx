@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Video, Calendar, MessageCircle, Plus, MapPin,
-  CheckCircle2, Circle, Home, Loader2, Trash2, Edit3, AlertCircle, CreditCard,
+  Circle, Home, Loader2, Trash2, Edit3, AlertCircle, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode } from "@/lib/api";
@@ -778,50 +778,44 @@ function ProfessionalFormModal({ professional, sedes, isOrg, onClose, onSaved }:
 }
 
 function IntegracionesPanel() {
+  // Catálogo de integraciones futuras. Todas marcadas como "Próximamente"
+  // hasta que cada una se implemente realmente. Google Calendar entra
+  // primero en el roadmap.
   const integrations = [
-    { id: "gcal", name: "Google Calendar", Icon: Calendar, desc: "Sincroniza tu agenda con Google Calendar en dos sentidos.", status: "conectado" as const, meta: "nathaly@psicomorfosis.co" },
-    { id: "zoom", name: "Zoom",             Icon: Video,    desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología.", status: "conectado" as const, meta: "Plan Pro · licencia institucional" },
-    { id: "jitsi", name: "Jitsi Meet",      Icon: Video,    desc: "Alternativa open-source para telepsicología sin licencias.", status: "disponible" as const, meta: "" },
-    { id: "wa", name: "WhatsApp Business",  Icon: MessageCircle, desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp.", status: "requiere configuracion" as const, meta: "Pendiente verificación del número" },
-    { id: "dian", name: "DIAN · Factura electrónica", Icon: CreditCard, desc: "Emisión de factura electrónica con validación DIAN para Colombia.", status: "disponible" as const, meta: "" },
-    { id: "fhir", name: "HL7 / FHIR",       Icon: Globe,   desc: "Intercambio de información clínica estructurada con EPS y prestadores.", status: "disponible" as const, meta: "" },
+    { id: "gcal", name: "Google Calendar", Icon: Calendar, desc: "Sincroniza tu agenda con Google Calendar en dos sentidos." },
+    { id: "zoom", name: "Zoom", Icon: Video, desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología." },
+    { id: "jitsi", name: "Jitsi Meet", Icon: Video, desc: "Alternativa open-source para telepsicología sin licencias." },
+    { id: "wa", name: "WhatsApp Business", Icon: MessageCircle, desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp." },
+    { id: "dian", name: "DIAN · Factura electrónica", Icon: CreditCard, desc: "Emisión de factura electrónica con validación DIAN para Colombia." },
+    { id: "fhir", name: "HL7 / FHIR", Icon: Globe, desc: "Intercambio de información clínica estructurada con EPS y prestadores." },
   ];
-
-  const styleFor = (s: typeof integrations[number]["status"]) => ({
-    conectado:             { bg: "bg-success-soft",   text: "text-success",       Icon: CheckCircle2, label: "Conectado" },
-    disponible:            { bg: "bg-bg-100",         text: "text-ink-500",       Icon: Circle,       label: "Disponible" },
-    "requiere configuracion": { bg: "bg-warning-soft",text: "text-risk-moderate", Icon: Circle,       label: "Configurar" },
-  }[s]);
 
   return (
     <>
-      <SectionHeader title="Integraciones" desc="Conecta Psicomorfosis con tus herramientas favoritas." />
+      <SectionHeader title="Integraciones" desc="Conecta Psicomorfosis con tus herramientas favoritas. Todas en desarrollo." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {integrations.map((it) => {
-          const s = styleFor(it.status);
-          const StatusIcon = s.Icon;
           const ItIcon = it.Icon;
           return (
-            <article key={it.id} className="rounded-xl border border-line-200 p-4 flex items-start gap-3 hover:border-brand-400 transition-colors">
-              <div className="h-10 w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+            <article key={it.id} className="rounded-xl border border-line-200 p-4 flex items-start gap-3 opacity-90">
+              <div className="h-10 w-10 rounded-lg bg-bg-100 text-ink-500 flex items-center justify-center shrink-0">
                 <ItIcon className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-sm font-medium text-ink-900">{it.name}</h4>
-                  <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
-                    <StatusIcon className="h-3 w-3" /> {s.label}
+                  <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
+                    <Circle className="h-3 w-3" /> Próximamente
                   </span>
                 </div>
                 <p className="text-xs text-ink-500 mt-1">{it.desc}</p>
-                {it.meta && <p className="text-[11px] text-ink-400 mt-1 tabular">{it.meta}</p>}
-                <button className={cn(
-                  "mt-3 h-8 px-3 rounded-md text-xs font-medium transition-colors",
-                  it.status === "conectado"
-                    ? "border border-line-200 text-ink-700 hover:border-brand-400"
-                    : "bg-brand-700 text-primary-foreground hover:bg-brand-800"
-                )}>
-                  {it.status === "conectado" ? "Desconectar" : it.status === "requiere configuracion" ? "Continuar configuración" : "Conectar"}
+                <button
+                  type="button"
+                  disabled
+                  className="mt-3 h-8 px-3 rounded-md text-xs font-medium border border-line-200 text-ink-400 cursor-not-allowed"
+                  title="Esta integración está en desarrollo"
+                >
+                  En desarrollo
                 </button>
               </div>
             </article>

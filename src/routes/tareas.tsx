@@ -42,6 +42,143 @@ const COLUMN_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 type DateFilter = "all" | "today" | "week" | "overdue";
 type ScopeFilter = "all" | "with_patient" | "internal";
 
+/**
+ * Plantillas hardcoded para acelerar la creación de tareas comunes.
+ * `type` opcional — si está, el modal lo selecciona automáticamente.
+ * `{{nombre}}` se reemplaza por el primer nombre del paciente seleccionado
+ * (si hay paciente). Si no, se sustituye por una cadena vacía y se limpia
+ * el saludo redundante.
+ */
+interface TareaTemplate {
+  id: string;
+  label: string;
+  type?: TareaType;
+  title: string;
+  description: string;
+}
+
+const TAREA_TEMPLATES: TareaTemplate[] = [
+  {
+    id: "test-millon",
+    label: "Asignación de test · MCMI-II",
+    type: "Tests",
+    title: "Realizar test de Millon",
+    description: `Te he asignado un cuestionario psicológico que forma parte de tu proceso terapéutico. Se trata del Inventario Clínico de Millon (MCMI-II).
+
+Información importante:
+
+• Consta de 175 preguntas con respuestas de Verdadero / Falso
+• Tiene una duración aproximada de 25 a 30 minutos
+• Puedes hacerlo con calma y, si lo necesitas, puedes pausarlo y retomarlo después
+• No hay respuestas "buenas" o "malas", lo importante es responder con sinceridad`,
+  },
+  {
+    id: "test-generico",
+    label: "Asignación de test · genérica",
+    type: "Tests",
+    title: "Realizar test psicométrico",
+    description: `{{saludo}}te he asignado un test que vas a encontrar en la sección "Tests" de tu portal.
+
+• Reserva un momento tranquilo para responderlo
+• No hay respuestas correctas o incorrectas — responde con sinceridad
+• Si tienes dudas durante el test, podemos hablarlas en la próxima sesión
+
+Si necesitas ayuda con el portal, no dudes en escribirme.`,
+  },
+  {
+    id: "firma-documento",
+    label: "Firma de documento",
+    type: "Documentación",
+    title: "Firmar documento pendiente",
+    description: `{{saludo}}te he compartido un documento que necesito que firmes. Lo encuentras en la sección "Documentos" de tu portal con el botón "Firmar ahora".
+
+Cuando lo firmes:
+
+• Léelo completo antes de firmar
+• La firma desde el portal tiene la misma validez legal que la del enlace por correo
+• Si guardas tu firma, la próxima vez no tendrás que dibujarla otra vez
+
+Cualquier duda, me cuentas.`,
+  },
+  {
+    id: "recordatorio-cita",
+    label: "Recordatorio de cita",
+    title: "Recordatorio de tu próxima cita",
+    description: `{{saludo}}este es un recordatorio amistoso de tu próxima cita.
+
+Si necesitas reprogramar o cancelar, por favor avísame con al menos 24 horas de anticipación.
+
+Nos vemos pronto.`,
+  },
+  {
+    id: "mindfulness-diario",
+    label: "Mindfulness diario",
+    title: "Práctica de mindfulness — 10 minutos al día",
+    description: `Te invito a sumar a tu rutina diaria una práctica corta de mindfulness.
+
+Cómo hacerlo:
+
+• Elige un horario fijo (puede ser al despertar o antes de dormir)
+• 10 minutos de respiración consciente — sin distracciones
+• Si tu mente se distrae, simplemente vuelve la atención a la respiración
+• Lleva un registro breve: ¿cómo te sentiste antes y después?
+
+En la próxima sesión revisamos cómo te fue.`,
+  },
+  {
+    id: "registro-pensamientos",
+    label: "Registro de pensamientos (TCC)",
+    title: "Registro de pensamientos automáticos",
+    description: `Cada vez que notes una emoción intensa esta semana, anota:
+
+1. Situación: ¿qué estaba pasando?
+2. Emoción: ¿qué sentiste? (intensidad 0-10)
+3. Pensamiento automático: ¿qué pasó por tu mente?
+4. Evidencia a favor del pensamiento
+5. Evidencia en contra del pensamiento
+6. Pensamiento alternativo más equilibrado
+
+Trae el registro a nuestra próxima sesión para trabajarlo juntos.`,
+  },
+  {
+    id: "activacion-conductual",
+    label: "Activación conductual (TCC)",
+    title: "Plan de actividades placenteras",
+    description: `Esta semana vas a programar 3 actividades que te conecten con sensaciones positivas. Pueden ser pequeñas — no necesitan ser grandes planes.
+
+Pasos:
+
+• Lista 5 actividades que solías disfrutar
+• Elige 3 y agéndalas en horarios concretos esta semana
+• Después de cada una, anota tu estado de ánimo del 1 al 10
+• Si una actividad no te genera placer la primera vez, no la descartes — los efectos a veces aparecen con la repetición`,
+  },
+  {
+    id: "exposicion-gradual",
+    label: "Ejercicio de exposición gradual",
+    title: "Tarea de exposición — paso 1 de tu jerarquía",
+    description: `Te asigné el primer paso de la jerarquía de exposición que armamos juntos.
+
+Recuerda:
+
+• La ansiedad es esperable — el objetivo NO es no sentirla, sino atravesarla
+• Quédate en la situación hasta que la ansiedad baje de manera natural
+• No uses conductas de seguridad
+• Anota tu nivel de ansiedad al inicio, durante y al final (0-10)
+
+Cuando termines, dime cómo te fue. Si fue manejable, en la próxima sesión avanzamos al siguiente paso.`,
+  },
+];
+
+/** Renderiza el template aplicando la sustitución de {{saludo}}/{{nombre}}. */
+function renderTemplate(tpl: TareaTemplate, patientFirstName: string | null): { title: string; description: string } {
+  const greeting = patientFirstName ? `Hola ${patientFirstName}, ` : "";
+  const sub = (s: string) => s
+    .replace(/\{\{saludo\}\}/g, greeting)
+    .replace(/\{\{nombre\}\}/g, patientFirstName ?? "");
+  return { title: sub(tpl.title), description: sub(tpl.description) };
+}
+
 function TareasPage() {
   const queryClient = useQueryClient();
   const { data: workspace } = useWorkspace();
@@ -634,6 +771,19 @@ function TareaDialog({
         </header>
 
         <div className="p-5 space-y-4">
+          {!isEdit && (
+            <TemplatePicker
+              patient={patients.find((p) => p.id === patientId) ?? null}
+              currentTitle={title}
+              currentDescription={description}
+              onApply={(title, description, type) => {
+                setTitle(title);
+                setDescription(description);
+                if (type) setType(type);
+              }}
+            />
+          )}
+
           <Field label="Título" required>
             <input
               autoFocus
@@ -773,6 +923,63 @@ function Field({ label, required, children }: { label: string; required?: boolea
       </span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Banner con dropdown de plantillas para acelerar la creación de tareas
+ * comunes (asignación de test, firma de documento, ejercicios TCC). Al
+ * elegir una plantilla, prellena título + descripción + tipo. Si ya hay
+ * contenido, pide confirmación antes de pisar.
+ */
+function TemplatePicker({ patient, currentTitle, currentDescription, onApply }: {
+  patient: ApiPatient | null;
+  currentTitle: string;
+  currentDescription: string;
+  onApply: (title: string, description: string, type?: TareaType) => void;
+}) {
+  const firstName = patient
+    ? (patient.preferredName?.split(" ")[0] ?? patient.name?.split(" ")[0] ?? null)
+    : null;
+
+  function handleSelect(id: string) {
+    if (!id) return;
+    const tpl = TAREA_TEMPLATES.find((t) => t.id === id);
+    if (!tpl) return;
+    const hasContent = currentTitle.trim().length > 0 || currentDescription.trim().length > 0;
+    if (hasContent && !confirm("Ya tienes contenido en título o descripción. ¿Reemplazarlo con la plantilla?")) {
+      return;
+    }
+    const rendered = renderTemplate(tpl, firstName);
+    onApply(rendered.title, rendered.description, tpl.type);
+  }
+
+  return (
+    <div className="rounded-lg border border-brand-100 bg-brand-50/30 p-3">
+      <div className="flex items-start gap-2 flex-wrap">
+        <div className="flex-1 min-w-50">
+          <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">Plantilla (opcional)</p>
+          <p className="text-xs text-ink-500 mt-0.5">
+            Acelera tareas comunes — asignación de test, firma de documento, ejercicios TCC.
+          </p>
+        </div>
+        <select
+          defaultValue=""
+          onChange={(e) => { handleSelect(e.target.value); e.target.value = ""; }}
+          className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-900 focus:outline-none focus:border-brand-400 cursor-pointer min-w-50"
+        >
+          <option value="">— Elige una plantilla —</option>
+          {TAREA_TEMPLATES.map((t) => (
+            <option key={t.id} value={t.id}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+      {firstName && (
+        <p className="text-[11px] text-ink-500 mt-2">
+          ⓘ Las plantillas saludarán a <strong className="text-ink-900">{firstName}</strong> automáticamente.
+        </p>
+      )}
+    </div>
   );
 }
 
