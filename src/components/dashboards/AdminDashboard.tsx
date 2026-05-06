@@ -6,6 +6,7 @@ import { RiskBadge } from "@/components/app/RiskBadge";
 import { NewNoteShortcutModal } from "@/components/app/NewNoteShortcutModal";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
+import { ReceiptFormModal } from "@/routes/facturacion";
 import {
   CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video,
   FilePen, Brain, ClipboardList, FileSignature, ListTodo,
@@ -41,6 +42,7 @@ export function AdminDashboard() {
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [newApptOpen, setNewApptOpen] = useState(false);
   const [newPatientOpen, setNewPatientOpen] = useState(false);
+  const [newReceiptOpen, setNewReceiptOpen] = useState(false);
   const { data: workspace } = useWorkspace();
   const user = getStoredUser();
   const firstName = user?.name.split(" ")[0] ?? "";
@@ -150,10 +152,11 @@ export function AdminDashboard() {
           fricción cuando el psicólogo abre el dashboard sabiendo qué quiere
           hacer. Convive con el FAB para usuarios mobile. */}
       <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Agendar cita" onClick={() => setNewApptOpen(true)} />
           <QuickAction icon={<UserPlus className="h-4 w-4" />} label="Nuevo paciente" onClick={() => setNewPatientOpen(true)} />
           <QuickAction icon={<FilePen className="h-4 w-4" />} label="Nueva nota" onClick={() => setNewNoteOpen(true)} />
+          <QuickAction icon={<Receipt className="h-4 w-4" />} label="Nuevo recibo" onClick={() => setNewReceiptOpen(true)} />
           <QuickAction icon={<Brain className="h-4 w-4" />} label="Aplicar test" to="/tests" />
           <QuickAction icon={<ListTodo className="h-4 w-4" />} label="Crear tarea" to="/tareas" />
         </div>
@@ -419,6 +422,7 @@ export function AdminDashboard() {
       {newNoteOpen && <NewNoteShortcutModal onClose={() => setNewNoteOpen(false)} />}
       {newApptOpen && <NewAppointmentModal patients={patients} onClose={() => setNewApptOpen(false)} />}
       {newPatientOpen && <NewPatientModal onClose={() => setNewPatientOpen(false)} />}
+      {newReceiptOpen && <ReceiptFormModal mode="create" onClose={() => setNewReceiptOpen(false)} />}
     </div>
   );
 }

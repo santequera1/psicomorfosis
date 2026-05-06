@@ -100,7 +100,7 @@ function PortalHome() {
         <div>
           <p className="text-sm text-ink-700 leading-relaxed">
             Este es tu espacio. Tu información está protegida y solo tú y tu psicóloga pueden verla.
-            Si tienes una urgencia fuera de tu sesión, recuerda que la línea oficial 24/7 en Bogotá es <strong>106</strong> y la línea nacional de emergencias es <strong>123</strong>.
+            Si tienes una urgencia fuera de tu sesión, recuerda que la línea nacional de emergencias es <strong>123</strong>.
           </p>
         </div>
       </section>

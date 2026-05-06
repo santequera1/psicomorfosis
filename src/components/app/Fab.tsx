@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Plus, Calendar, UserPlus, FilePen } from "lucide-react";
+import { Plus, Calendar, UserPlus, FilePen, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
 import { NewNoteShortcutModal } from "@/components/app/NewNoteShortcutModal";
+import { ReceiptFormModal } from "@/routes/facturacion";
 
-type Action = "appointment" | "patient" | "note";
+type Action = "appointment" | "patient" | "note" | "receipt";
 
 /**
  * FAB global de acción rápida. Vive dentro de AppShell, así que aparece en
@@ -66,9 +67,10 @@ export function Fab() {
             menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-3 pointer-events-none"
           )}
         >
-          <FabItem icon={Calendar} label="Nueva cita" onClick={() => pick("appointment")} stagger={2} open={menuOpen} />
-          <FabItem icon={UserPlus} label="Nuevo paciente" onClick={() => pick("patient")} stagger={1} open={menuOpen} />
-          <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} stagger={0} open={menuOpen} />
+          <FabItem icon={Calendar} label="Nueva cita" onClick={() => pick("appointment")} stagger={3} open={menuOpen} />
+          <FabItem icon={UserPlus} label="Nuevo paciente" onClick={() => pick("patient")} stagger={2} open={menuOpen} />
+          <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} stagger={1} open={menuOpen} />
+          <FabItem icon={Receipt} label="Nuevo recibo" onClick={() => pick("receipt")} stagger={0} open={menuOpen} />
         </div>
         <button
           onClick={() => setMenuOpen((v) => !v)}
@@ -88,6 +90,9 @@ export function Fab() {
       )}
       {active === "note" && (
         <NewNoteShortcutModal onClose={() => setActive(null)} />
+      )}
+      {active === "receipt" && (
+        <ReceiptFormModal mode="create" onClose={() => setActive(null)} />
       )}
     </>
   );

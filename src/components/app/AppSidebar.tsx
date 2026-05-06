@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
-  ChevronsLeft, ChevronsRight, X, Shield, LogOut,
+  PanelLeftClose, PanelLeftOpen, X, Shield, LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -208,7 +208,7 @@ export function AppSidebar() {
               collapsed && "justify-center"
             )}
           >
-            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <><ChevronsLeft className="h-4 w-4" /> Colapsar</>}
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <><PanelLeftClose className="h-4 w-4" /> Colapsar</>}
           </button>
         </div>
       </aside>
