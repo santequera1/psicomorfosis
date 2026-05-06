@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
-  Pill, FileText, Receipt, BarChart3, Settings, ListTodo,
+  FileText, Receipt, BarChart3, Settings, ListTodo,
   ChevronsLeft, ChevronsRight, X, Shield, LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,7 +28,9 @@ const groups: Array<{
     items: [
       { to: "/historia", label: "Historia clínica", icon: ClipboardList },
       { to: "/tests", label: "Tests psicométricos", icon: Brain },
-      { to: "/prescripcion", label: "Prescripción", icon: Pill },
+      // Prescripción oculta del sidebar (módulo legacy de psiquiatría que el
+      // equipo no usa por ahora). La ruta sigue activa en /prescripcion para
+      // no romper enlaces, pero no se navega desde aquí.
       { to: "/documentos", label: "Documentos", icon: FileText },
     ],
   },
