@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 
 /**
  * Carpeta estilo Apple Files / Photos: SVG de folder con tab y una "polaroid"
@@ -54,7 +54,11 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
   const h = hashName(name);
   const tone = FOLDER_TONES[h % FOLDER_TONES.length];
   const avatarTone = AVATAR_TONES[h % AVATAR_TONES.length];
-  const displayName = preferredName ?? name;
+  // displayPatientName trata "" y "   " como "no hay apodo" y cae al
+  // nombre completo. El form guarda preferredName como string vacío
+  // cuando el usuario lo borra, y un `??` antes dejaba la carpeta en
+  // blanco (incluyendo iniciales).
+  const displayName = displayPatientName({ name, preferredName });
 
   return (
     <button
@@ -122,7 +126,7 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
         {/* min-h reserva siempre 2 líneas para que las cards queden alineadas
             entre sí: nombres cortos (apodos) y nombres largos producen la
             misma altura, y la línea "X documentos" cae a la misma Y. */}
-        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-9 flex items-start justify-center">
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-10 flex items-start justify-center">
           <span>{displayName}</span>
         </div>
         {typeof count === "number" && (
@@ -185,7 +189,7 @@ export function GenericFolder({
       </div>
       <div className="text-center w-full px-1">
         {/* Misma reserva de 2 líneas que PatientFolder para alineación uniforme. */}
-        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-9 flex items-start justify-center">
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-10 flex items-start justify-center">
           <span>{name}</span>
         </div>
         {typeof count === "number" && (

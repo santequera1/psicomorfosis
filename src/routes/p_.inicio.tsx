@@ -20,7 +20,12 @@ function PortalHome() {
   const pendingTasks = tasks.filter((t) => t.status !== "completada").length;
   const pendingDocs = docs.filter((d) => d.status === "pendiente_firma").length;
 
-  const firstName = me?.patient?.preferredName ?? me?.patient?.name?.split(" ")[0] ?? "";
+  // Trim + ?? para tratar preferredName="" como "no hay apodo" y caer
+  // al primer nombre. El form de paciente guarda "" cuando se borra.
+  const trimmedPreferred = me?.patient?.preferredName?.trim();
+  const firstName = (trimmedPreferred && trimmedPreferred.length > 0)
+    ? trimmedPreferred
+    : (me?.patient?.name?.split(" ")[0] ?? "");
 
   return (
     <PortalShell>

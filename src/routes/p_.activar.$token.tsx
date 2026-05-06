@@ -97,7 +97,7 @@ function ActivatePage() {
             <Sparkles className="h-7 w-7 text-brand-700" />
           </div>
           <h1 className="font-serif text-3xl text-ink-900 leading-tight">
-            Hola, {data.patient.preferred_name ?? data.patient.name.split(" ")[0]}
+            Hola, {(data.patient.preferred_name?.trim() || data.patient.name.split(" ")[0])}
           </h1>
           <p className="text-base text-ink-500 mt-2 leading-relaxed">
             {data.professional?.name && (

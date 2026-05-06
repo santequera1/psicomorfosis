@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ApiPatient } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 import { Search, X, Check, User, Loader2 } from "lucide-react";
 
 /**
@@ -222,7 +222,7 @@ export function PatientPicker({
                   )}
                 >
                   <div className="h-7 w-7 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-[10px] font-semibold shrink-0">
-                    {(p.preferredName ?? p.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                    {displayPatientName(p).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-ink-900 truncate">

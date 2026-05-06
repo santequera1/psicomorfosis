@@ -17,6 +17,7 @@ import {
   X, Loader2, ListTodo,
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
+import { displayPatientName } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { ApplicationDetailModal } from "@/components/tests/ApplicationDetailModal";
@@ -121,7 +122,7 @@ function PatientDetailPage() {
         <header className="rounded-xl border border-line-200 bg-surface p-4 sm:p-6">
           <div className="flex items-start gap-3 sm:gap-5">
             <div className="h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-serif text-base sm:text-2xl shrink-0">
-              {(patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+              {displayPatientName(patient).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -184,7 +185,7 @@ function PatientDetailPage() {
             </button>
             <button
               onClick={() => {
-                if (confirm(`¿Archivar a ${patient.preferredName ?? patient.name}? Deja de aparecer en listados activos pero su historia clínica se conserva.`)) {
+                if (confirm(`¿Archivar a ${displayPatientName(patient)}? Deja de aparecer en listados activos pero su historia clínica se conserva.`)) {
                   archiveMu.mutate();
                 }
               }}
@@ -1294,7 +1295,7 @@ function InvitePortalModal({ patient, onClose }: { patient: import("@/lib/api").
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Portal del paciente</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Invitar a {patient.preferredName ?? patient.name}</h3>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Invitar a {displayPatientName(patient)}</h3>
             <p className="text-xs text-ink-500 mt-1">{patient.email ? `Se generará un link único para que cree su contraseña.` : "Este paciente no tiene email registrado. Edítalo primero."}</p>
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400">×</button>

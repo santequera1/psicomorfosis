@@ -11,6 +11,7 @@ import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, Calendar } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
+import { displayPatientName } from "@/lib/utils";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
 import { TagEditor } from "@/components/app/TagEditor";
@@ -202,7 +203,7 @@ function PatientsPage() {
               <li key={p.id} className="relative">
                 <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-start gap-3 p-3 hover:bg-brand-50/60 transition-colors">
                   <div className={`h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarTone(p.name)}`}>
-                    {initials(p.preferredName ?? p.name)}
+                    {initials(displayPatientName(p))}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -283,7 +284,7 @@ function PatientsPage() {
                     <td className="px-5 py-3.5">
                       <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-3">
                         <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatarTone(p.name)}`}>
-                          {initials(p.preferredName ?? p.name)}
+                          {initials(displayPatientName(p))}
                         </div>
                         <div className="min-w-0">
                           <div className="text-ink-900 font-medium truncate flex items-center gap-1.5">
@@ -447,7 +448,7 @@ function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
       <Link to="/pacientes/$id" params={{ id: p.id }} className="block">
         <div className="flex items-start gap-3">
           <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarTone(p.name)}`}>
-            {initials(p.preferredName ?? p.name)}
+            {initials(displayPatientName(p))}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-ink-900 truncate">
@@ -537,7 +538,7 @@ function ArchiveOrDeleteModal({ patient, onClose }: { patient: Patient; onClose:
     },
   });
 
-  const expectedConfirmation = patient.preferredName ?? patient.name;
+  const expectedConfirmation = displayPatientName(patient);
   const canDelete = confirmText.trim() === expectedConfirmation;
   const isPending = archiveMu.isPending || deleteMu.isPending;
 
@@ -547,7 +548,7 @@ function ArchiveOrDeleteModal({ patient, onClose }: { patient: Patient; onClose:
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-risk-high font-medium">Acción destructiva</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Archivar o eliminar · {patient.preferredName ?? patient.name}</h3>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Archivar o eliminar · {displayPatientName(patient)}</h3>
             <p className="text-xs text-ink-500 mt-1">Las historias clínicas deben conservarse mínimo 15 años (Res. 1995/1999). Se recomienda archivar.</p>
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">

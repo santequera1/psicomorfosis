@@ -13,7 +13,7 @@ import {
   MoreHorizontal, X, Eye, Loader2, Trash2, Archive, FilePen, Sparkles,
   ScrollText, ClipboardList, ChevronRight, ChevronLeft, Pencil, Copy,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
@@ -168,7 +168,7 @@ function DocumentosPage() {
             <p className="text-sm text-ink-500">
               {filterPatient ? <>
                 Documentos del paciente
-                {patient && <span className="text-ink-700"> · {patient.preferredName ?? patient.name}</span>}
+                {patient && <span className="text-ink-700"> · {displayPatientName(patient)}</span>}
               </> : "Biblioteca documental"}
             </p>
             <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">
@@ -929,7 +929,7 @@ function TemplateGrid({
     try {
       const p = patients.find((x) => x.id === patientId);
       const created = await api.createDocument({
-        name: t.name + (p ? ` · ${p.preferredName ?? p.name}` : ""),
+        name: t.name + (p ? ` · ${displayPatientName(p)}` : ""),
         type: t.category,
         template_id: t.id,
         patient_id: patientId || null,
@@ -1205,7 +1205,7 @@ function PatientSelect({
     <Field label={compact ? "Paciente" : "Paciente relacionado"}>
       {preset ? (
         <div className="h-10 px-3 rounded-md border border-line-200 bg-brand-50 text-sm flex items-center gap-2">
-          <span className="text-ink-900 truncate">{preset.preferredName ?? preset.name}</span>
+          <span className="text-ink-900 truncate">{displayPatientName(preset)}</span>
           <span className="text-xs text-ink-500">· {preset.id}</span>
         </div>
       ) : (
@@ -1327,7 +1327,7 @@ async function createFromTemplate(
   }
   try {
     const created = await api.createDocument({
-      name: t.name + (patient ? ` · ${patient.preferredName ?? patient.name}` : ""),
+      name: t.name + (patient ? ` · ${displayPatientName(patient)}` : ""),
       type: t.category,
       template_id: t.id,
       patient_id: patientId,

@@ -6,6 +6,7 @@ import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { KpiCard } from "@/components/app/KpiCard";
 import { api, type ApiPatient } from "@/lib/api";
+import { displayPatientName } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -268,7 +269,7 @@ function AgendaPage() {
                       onClick={() => navigate({ to: "/pacientes/$id", params: { id: p.id } })}
                       className="text-ink-900 truncate hover:text-brand-700 text-left"
                     >
-                      {p.preferredName ?? p.name}
+                      {displayPatientName(p)}
                     </button>
                     <RiskBadge risk={p.risk} types={p.riskTypes} compact />
                   </li>

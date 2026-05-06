@@ -10,7 +10,7 @@ import {
   ChevronDown, ChevronRight, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
   Search,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName, displayPatientShortName } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
@@ -139,7 +139,7 @@ function HistoriaPage() {
             className="inline-flex items-center gap-1 px-2 h-6 rounded-md text-ink-700 hover:bg-bg-100 hover:text-brand-700 transition-colors"
             title="Cambiar paciente"
           >
-            {patient.preferredName ?? patient.name.split(" ")[0]} <ChevronDown className="h-3 w-3" />
+            {displayPatientShortName(patient)} <ChevronDown className="h-3 w-3" />
           </button>
         </div>
 
@@ -221,7 +221,7 @@ function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: 
 }
 
 function PatientHeader({ patient, isOrg, onOpenNote, onOpenAppt }: { patient: Patient; isOrg: boolean; patients: Patient[]; onOpenNote: () => void; onOpenAppt: () => void }) {
-  const initialsLetters = (patient.preferredName ?? patient.name).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const initialsLetters = displayPatientName(patient).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
   const wa = whatsappUrl(patient.phone);
   return (
     <section className="rounded-2xl bg-surface border border-line-200 shadow-soft overflow-hidden mb-6 sm:mb-8">
@@ -633,7 +633,7 @@ function SessionNotes({
         <div className="mb-4">
           <NoteEditor
             patientId={patient.id}
-            patientName={patient.preferredName ?? patient.name}
+            patientName={displayPatientName(patient)}
             onClose={onCloseEditor}
           />
         </div>

@@ -14,7 +14,7 @@ import {
   Loader2, AlertOctagon, ShieldAlert, UserPlus, Plus, FileText,
   Trash2, Pencil, MessageSquarePlus, Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 
 export const Route = createFileRoute("/tests")({
   head: () => ({ meta: [{ title: "Tests psicométricos · Psicomorfosis" }] }),
@@ -525,7 +525,7 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
             className="w-full h-11 px-3 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
           >
             <option value="">— Selecciona paciente —</option>
-            {patients.map((p) => <option key={p.id} value={p.id}>{p.preferredName ?? p.name} ({p.id})</option>)}
+            {patients.map((p) => <option key={p.id} value={p.id}>{displayPatientName(p)} ({p.id})</option>)}
           </select>
           <button
             onClick={() => setStep("run")}
@@ -622,7 +622,7 @@ function AssignTestModal({ test, patients, onClose }: { test: PsychTest; patient
           className="w-full h-11 px-3 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
         >
           <option value="">— Selecciona paciente —</option>
-          {patients.map((p) => <option key={p.id} value={p.id}>{p.preferredName ?? p.name} ({p.id})</option>)}
+          {patients.map((p) => <option key={p.id} value={p.id}>{displayPatientName(p)} ({p.id})</option>)}
         </select>
         <p className="text-xs text-ink-500">⚠️ El paciente debe tener cuenta activa en el portal para acceder al test. Invítalo desde su ficha si aún no la tiene.</p>
         <button

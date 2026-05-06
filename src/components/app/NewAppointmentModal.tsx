@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { api, type ApiPatient } from "@/lib/api";
+import { displayPatientName } from "@/lib/utils";
 import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { Search, X, Loader2 } from "lucide-react";
@@ -21,7 +22,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
-  const [query, setQuery] = useState(prefilledPatient ? (prefilledPatient.preferredName ?? prefilledPatient.name) : "");
+  const [query, setQuery] = useState(prefilledPatient ? displayPatientName(prefilledPatient) : "");
   const [selected, setSelected] = useState<ApiPatient | null>(prefilledPatient ?? null);
   const [showResults, setShowResults] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -66,7 +67,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
 
   function pick(p: ApiPatient) {
     setSelected(p);
-    setQuery(p.preferredName ?? p.name);
+    setQuery(displayPatientName(p));
     setShowResults(false);
     if (p.modality) setModality(p.modality);
   }
@@ -82,7 +83,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Nueva cita</p>
             <h3 className="font-serif text-xl text-ink-900 mt-0.5">
-              {prefilledPatient ? `Agendar con ${prefilledPatient.preferredName ?? prefilledPatient.name}` : "Crear cita"}
+              {prefilledPatient ? `Agendar con ${displayPatientName(prefilledPatient)}` : "Crear cita"}
             </h3>
           </div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center">

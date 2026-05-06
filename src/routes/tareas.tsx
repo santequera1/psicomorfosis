@@ -13,7 +13,7 @@ import {
   TAREA_TYPES, type TareaType, type TareaVisibility,
 } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
-import { cn } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 
 type TareasSearch = { patient?: string };
 export const Route = createFileRoute("/tareas")({
@@ -448,7 +448,7 @@ function TareasPage() {
                 icon={<UserPlus className="h-3.5 w-3.5" />}
                 options={[
                   { value: "all", label: "Todos los pacientes" },
-                  ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
+                  ...patients.map((p) => ({ value: p.id, label: displayPatientName(p) })),
                 ]}
               />
             )}
@@ -637,7 +637,7 @@ function TareaCard({
   const isDone = task.status === "DONE";
   const initials = (assignee?.name ?? "")
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
-  const patientLabel = patient ? (patient.preferredName ?? patient.name) : null;
+  const patientLabel = patient ? displayPatientName(patient) : null;
 
   return (
     <div
@@ -1107,7 +1107,7 @@ function PatientCombobox({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const selected = patients.find((p) => p.id === value) ?? null;
-  const selectedLabel = selected ? (selected.preferredName ?? selected.name) : "";
+  const selectedLabel = selected ? displayPatientName(selected) : "";
 
   useEffect(() => {
     if (!open) return;
@@ -1191,7 +1191,7 @@ function PatientCombobox({
               <li className="px-3 py-3 text-xs text-ink-400 text-center">Sin coincidencias</li>
             ) : (
               filtered.map((p) => {
-                const label = p.preferredName ?? p.name;
+                const label = displayPatientName(p);
                 const active = p.id === value;
                 return (
                   <li key={p.id}>
