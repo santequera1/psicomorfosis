@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, FileCheck2, FileClock, ShieldCheck } from "lucide-react";
+import { FileText, Loader2, FileCheck2, FileClock, ShieldCheck, Pen, ChevronRight } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -39,13 +39,16 @@ function PortalDocuments() {
         <ul className="space-y-2">
           {docs.map((d) => {
             const isSigned = d.status === "firmado";
+            const canSign = !!d.pending_signature_request_id;
             const Icon = isSigned ? FileCheck2 : FileClock;
             return (
               <li key={d.id} className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 hover:shadow-soft transition-shadow">
                 <div className="flex items-start gap-4">
                   <div className={cn(
                     "h-11 w-11 rounded-lg flex items-center justify-center shrink-0",
-                    isSigned ? "bg-success-soft text-success" : "bg-warning-soft text-risk-moderate"
+                    isSigned ? "bg-success-soft text-success"
+                      : canSign ? "bg-brand-50 text-brand-700"
+                      : "bg-warning-soft text-risk-moderate"
                   )}>
                     <Icon className="h-5 w-5" />
                   </div>
@@ -56,11 +59,22 @@ function PortalDocuments() {
                     </p>
                     <span className={cn(
                       "inline-block mt-2 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium",
-                      isSigned ? "bg-sage-200/40 text-sage-700" : "bg-warning-soft text-risk-moderate"
+                      isSigned ? "bg-sage-200/40 text-sage-700"
+                        : canSign ? "bg-brand-50 text-brand-800"
+                        : "bg-warning-soft text-risk-moderate"
                     )}>
-                      {isSigned ? "Firmado" : d.status === "pendiente_firma" ? "Por firmar" : "Borrador"}
+                      {isSigned ? "Firmado" : canSign ? "Por firmar" : d.status === "pendiente_firma" ? "Por firmar" : "Borrador"}
                     </span>
                   </div>
+                  {canSign && (
+                    <Link
+                      to="/p/firmar/$docId"
+                      params={{ docId: String(d.id) }}
+                      className="shrink-0 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
+                    >
+                      <Pen className="h-3.5 w-3.5" /> Firmar ahora <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                 </div>
               </li>
             );
@@ -72,7 +86,7 @@ function PortalDocuments() {
         <ShieldCheck className="h-5 w-5 text-sage-500 shrink-0 mt-0.5" />
         <p className="text-xs text-ink-500 leading-relaxed">
           Los documentos firmados son inmodificables y se conservan según la Resolución 1995/1999.
-          Próximamente podrás firmar documentos directamente desde aquí.
+          Tu firma electrónica desde el portal tiene la misma validez legal que la del enlace por correo.
         </p>
       </div>
     </PortalShell>

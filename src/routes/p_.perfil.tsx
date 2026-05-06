@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Phone, Mail, MapPin, ShieldCheck } from "lucide-react";
+import { Loader2, Phone, Mail, MapPin, ShieldCheck, Pen, Trash2 } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { api } from "@/lib/api";
 
@@ -128,6 +128,8 @@ function PortalProfile() {
         </button>
       </form>
 
+      <SignatureSection />
+
       {me.professional && (
         <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5">
           <p className="text-xs uppercase tracking-widest text-ink-500 font-medium">Tu psicóloga</p>
@@ -156,5 +158,69 @@ function Field({ label, icon, children }: { label: string; icon?: React.ReactNod
       </span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Sección "Mi firma": muestra preview de la firma guardada (si existe) y
+ * permite borrarla. Si no hay firma guardada, muestra mensaje informativo
+ * — la firma se crea automáticamente la primera vez que el paciente firma
+ * un documento desde el portal con el toggle "Guardar firma" activado.
+ */
+function SignatureSection() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["portal-my-signature"],
+    queryFn: () => api.portalGetMySignature(),
+  });
+
+  const deleteMu = useMutation({
+    mutationFn: () => api.portalDeleteMySignature(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portal-my-signature"] });
+      toast.success("Firma eliminada");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (isLoading) return null;
+  const sig = data?.signature_url ?? null;
+
+  return (
+    <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5">
+      <div className="flex items-start gap-3">
+        <Pen className="h-5 w-5 text-brand-700 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h3 className="font-serif text-lg text-ink-900">Mi firma</h3>
+          <p className="text-xs text-ink-500 mt-0.5 leading-relaxed">
+            Cuando firmes un documento desde el portal, puedes guardar tu firma para no tener que dibujarla cada vez. La firma se aplica con la misma validez legal.
+          </p>
+          {sig ? (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg border border-line-200 bg-white p-3 inline-block">
+                <img src={sig} alt="Tu firma guardada" className="h-20 max-w-70 object-contain" />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("¿Eliminar tu firma guardada? Tendrás que dibujarla la próxima vez que firmes un documento.")) {
+                    deleteMu.mutate();
+                  }
+                }}
+                disabled={deleteMu.isPending}
+                className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-rose-400 hover:text-rose-700 inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {deleteMu.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Eliminar firma guardada
+              </button>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-ink-400 italic">
+              Aún no tienes firma guardada. Aparecerá aquí la primera vez que firmes un documento con la opción de guardar activada.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

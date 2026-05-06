@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
+import { applyPatientSignature } from "./documents.js";
 
 const router = Router();
 
@@ -519,6 +520,10 @@ router.post("/portal/tests/:id/submit", requirePatient, (req, res) => {
 /**
  * GET /api/portal/documents — documentos compartidos con el paciente
  * (todos los documentos donde patient_id es el suyo y status no es eliminado).
+ *
+ * Anota cada doc con `pending_signature_request_id` si tiene una solicitud
+ * de firma abierta para este paciente — eso permite a la UI mostrar el
+ * botón "Firmar ahora" sin tener que hacer un fetch extra.
  */
 router.get("/portal/documents", requirePatient, (req, res) => {
   const rows = db.prepare(`
@@ -527,7 +532,146 @@ router.get("/portal/documents", requirePatient, (req, res) => {
     WHERE patient_id = ? AND workspace_id = ? AND archived_at IS NULL
     ORDER BY created_at DESC
   `).all(req.user.patient_id, req.user.workspace_id);
-  res.json(rows);
+
+  // Buscamos sign_requests abiertas (no firmadas, no expiradas) por este
+  // paciente para anotar cuáles docs son "firmables desde el portal".
+  const openRequests = db.prepare(`
+    SELECT id, document_id FROM document_sign_requests
+    WHERE patient_id = ? AND workspace_id = ? AND signed_at IS NULL AND expires_at > ?
+  `).all(req.user.patient_id, req.user.workspace_id, new Date().toISOString());
+  const byDocId = new Map(openRequests.map((r) => [r.document_id, r.id]));
+
+  res.json(rows.map((r) => ({
+    ...r,
+    pending_signature_request_id: byDocId.get(r.id) ?? null,
+  })));
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// FIRMA DEL PACIENTE DESDE EL PORTAL (autenticado por sesión, sin token)
+// Reutiliza el helper applyPatientSignature de documents.js para asegurar
+// paridad con el flujo de /firmar/$token.
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/portal/me/signature — firma guardada del paciente actual.
+ */
+router.get("/portal/me/signature", requirePatient, (req, res) => {
+  const row = db.prepare("SELECT signature_url FROM users WHERE id = ?").get(req.user.id);
+  res.json({ signature_url: row?.signature_url ?? null });
+});
+
+/**
+ * DELETE /api/portal/me/signature — borrar la firma guardada.
+ * El paciente conserva control total sobre sus datos.
+ */
+router.delete("/portal/me/signature", requirePatient, (req, res) => {
+  db.prepare("UPDATE users SET signature_url = NULL WHERE id = ?").run(req.user.id);
+  res.json({ ok: true });
+});
+
+/**
+ * GET /api/portal/documents/:id/signing — info para firmar un documento
+ * desde el portal. Solo se devuelve si:
+ *   - el documento pertenece al paciente actual
+ *   - existe una sign_request abierta (no firmada y no expirada)
+ *
+ * Devuelve el body del documento + clínica + firma guardada (si la hay)
+ * para que la UI pueda renderizar todo en un fetch.
+ */
+router.get("/portal/documents/:id/signing", requirePatient, (req, res) => {
+  const doc = db.prepare(`
+    SELECT * FROM documents
+    WHERE id = ? AND patient_id = ? AND workspace_id = ? AND archived_at IS NULL
+  `).get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+  const sr = db.prepare(`
+    SELECT * FROM document_sign_requests
+    WHERE document_id = ? AND patient_id = ? AND signed_at IS NULL AND expires_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(doc.id, req.user.patient_id, new Date().toISOString());
+  if (!sr) {
+    if (doc.status === "firmado") return res.status(409).json({ error: "Este documento ya fue firmado", signed: true });
+    return res.status(404).json({ error: "No hay una solicitud de firma abierta para este documento. Pídele a tu psicóloga que reenvíe el documento." });
+  }
+
+  const patient = db.prepare("SELECT name, preferred_name, doc FROM patients WHERE id = ?").get(req.user.patient_id);
+  const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+  const settings = Object.fromEntries(
+    db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(req.user.workspace_id)
+      .map((s) => [s.key, s.value])
+  );
+  const userRow = db.prepare("SELECT signature_url FROM users WHERE id = ?").get(req.user.id);
+
+  res.json({
+    valid: true,
+    document: {
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      kind: doc.kind,
+      body_json: safeJSON(doc.body_json),
+      body_text: doc.body_text,
+      professional: doc.professional,
+      created_at: doc.created_at,
+    },
+    patient,
+    clinic: { name: ws?.name, city: settings.city, address: settings.address },
+    expires_at: sr.expires_at,
+    saved_signature_url: userRow?.signature_url ?? null,
+  });
+});
+
+/**
+ * POST /api/portal/documents/:id/sign — aplica la firma del paciente.
+ *
+ * Body: {
+ *   signature_data_url: "data:image/png;base64,...",
+ *   geolocation?: { lat, lng, accuracy? },
+ *   save_signature?: boolean   // si true, guarda la firma para próxima vez
+ * }
+ *
+ * Reutiliza applyPatientSignature para mantener paridad con el flujo de
+ * token (mismo certificado, mismo audit log, misma notificación).
+ */
+router.post("/portal/documents/:id/sign", requirePatient, (req, res) => {
+  const { signature_data_url, geolocation, save_signature } = req.body ?? {};
+
+  const doc = db.prepare(`
+    SELECT * FROM documents
+    WHERE id = ? AND patient_id = ? AND workspace_id = ? AND archived_at IS NULL
+  `).get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+  const sr = db.prepare(`
+    SELECT * FROM document_sign_requests
+    WHERE document_id = ? AND patient_id = ? AND signed_at IS NULL AND expires_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(doc.id, req.user.patient_id, new Date().toISOString());
+  if (!sr) return res.status(404).json({ error: "No hay una solicitud de firma abierta para este documento" });
+
+  const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim()
+    || req.headers["x-real-ip"]?.toString()
+    || req.socket.remoteAddress
+    || "";
+  const userAgent = req.headers["user-agent"] || "";
+
+  const result = applyPatientSignature({
+    signRequest: sr,
+    signatureDataUrl: signature_data_url,
+    geolocation,
+    ip,
+    userAgent,
+  });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+
+  // Persistir la firma si el paciente lo pidió.
+  if (save_signature && typeof signature_data_url === "string" && signature_data_url.startsWith("data:image/")) {
+    db.prepare("UPDATE users SET signature_url = ? WHERE id = ?").run(signature_data_url, req.user.id);
+  }
+
+  res.json(result);
 });
 
 export default router;

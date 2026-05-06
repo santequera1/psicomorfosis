@@ -587,6 +587,11 @@ function runMigrations() {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_test_requests_workspace ON test_requests(workspace_id)",
     "CREATE INDEX IF NOT EXISTS idx_psych_tests_workspace ON psych_tests(workspace_id)",
+    // Firma guardada del paciente desde el portal. data:image/png;base64,...
+    // El paciente puede borrarla cuando quiera desde su perfil. Se persiste
+    // en users (no en patients) porque pertenece a la cuenta del portal y
+    // no al expediente clínico.
+    "ALTER TABLE users ADD COLUMN signature_url TEXT",
   ];
   for (const sql of migrations) {
     try {

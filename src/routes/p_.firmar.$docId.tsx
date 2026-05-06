@@ -1,52 +1,71 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  CheckCircle2, Loader2, AlertCircle, FileText, Pen, ShieldCheck,
-  MapPin, Lock,
+  CheckCircle2, Loader2, AlertCircle, FileText, Pen, ShieldCheck, ArrowLeft,
+  MapPin, Lock, Save,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { Logo } from "@/components/app/Logo";
+import { PortalShell } from "@/components/portal/PortalShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { SignaturePad } from "@/components/documents/SignaturePad";
+import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/firmar/$token")({
-  head: () => ({ meta: [{ title: "Firmar documento — Psicomorfosis" }] }),
-  component: SignPage,
+export const Route = createFileRoute("/p_/firmar/$docId")({
+  head: () => ({ meta: [{ title: "Firmar documento · Mi portal" }] }),
+  component: PortalSignPage,
 });
 
-function SignPage() {
-  const { token } = Route.useParams();
-  const [agreed, setAgreed] = useState(false);
+/**
+ * Página de firma de documento desde el portal del paciente. Equivalente a
+ * `/firmar/$token` pero autenticada por sesión y con dos quality-of-life
+ * extras:
+ *   1. Si el paciente ya guardó su firma, ofrece reutilizarla.
+ *   2. Al firmar, opcionalmente guarda la firma para próxima vez.
+ *
+ * El backend reutiliza el helper applyPatientSignature, así que la firma
+ * que se aplica acá es legalmente equivalente a la del flujo por link.
+ */
+function PortalSignPage() {
+  const { docId } = Route.useParams();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
   const [stage, setStage] = useState<"reading" | "signing" | "done">("reading");
+  const [agreed, setAgreed] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [useSavedFirst, setUseSavedFirst] = useState(true); // si hay guardada, mostrarla precargada
+  const [saveForLater, setSaveForLater] = useState(true);
   const [includeGeo, setIncludeGeo] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
-  const [result, setResult] = useState<{ signed_at: string; cert_sha256: string; cert_data: any } | null>(null);
+  const [result, setResult] = useState<{ signed_at: string; cert_sha256: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sign-request", token],
-    queryFn: () => api.validateSignToken(token),
+    queryKey: ["portal-doc-signing", docId],
+    queryFn: () => api.portalGetDocumentForSigning(docId),
     retry: false,
   });
 
-  // Forzar light theme — el firmante no debe heredar dark mode del staff
-  useEffect(() => {
-    const wasDark = document.documentElement.classList.contains("dark");
-    document.documentElement.classList.remove("dark");
-    return () => { if (wasDark) document.documentElement.classList.add("dark"); };
-  }, []);
-
   const submitMu = useMutation({
-    mutationFn: (body: { signature_data_url: string; geolocation?: { lat: number; lng: number; accuracy?: number } }) =>
-      api.submitSignature(token, body),
+    mutationFn: (body: { signature_data_url: string; geolocation?: { lat: number; lng: number; accuracy?: number }; save_signature?: boolean }) =>
+      api.portalSignDocument(docId, body),
     onSuccess: (res) => {
-      setResult(res);
+      setResult({ signed_at: res.signed_at, cert_sha256: res.cert_sha256 });
       setStage("done");
+      qc.invalidateQueries({ queryKey: ["portal-documents"] });
     },
     onError: (e: Error) => toast.error(e.message ?? "No se pudo enviar la firma"),
   });
+
+  // Si el paciente confirmó "no usar firma guardada", precargar pad vacío.
+  useEffect(() => {
+    if (!data) return;
+    // Si NO quiere usar guardada, vaciamos el dataUrl actual para forzar
+    // que firme de nuevo. Si SÍ quiere, el SignaturePad la precarga via
+    // defaultDataUrl y emite el dataUrl actual al onChange.
+    if (!useSavedFirst) setSignatureDataUrl(null);
+  }, [useSavedFirst, data]);
 
   function requestGeo() {
     if (!navigator.geolocation) {
@@ -72,44 +91,52 @@ function SignPage() {
     submitMu.mutate({
       signature_data_url: signatureDataUrl,
       geolocation: includeGeo && geo ? geo : undefined,
+      save_signature: saveForLater,
     });
   }
 
   if (isLoading) {
-    return <SignCanvas><div className="text-center py-20 text-ink-500"><Loader2 className="h-6 w-6 mx-auto mb-3 animate-spin" /> Verificando documento…</div></SignCanvas>;
+    return (
+      <PortalShell>
+        <div className="text-center py-20 text-ink-500">
+          <Loader2 className="h-6 w-6 mx-auto mb-3 animate-spin" /> Verificando documento…
+        </div>
+      </PortalShell>
+    );
   }
 
   if (error) {
-    const msg = (error as any)?.message ?? "El enlace no es válido.";
-    const expired = msg.toLowerCase().includes("expir");
+    const msg = (error as any)?.message ?? "El documento no está disponible.";
     const signed = msg.toLowerCase().includes("firmado");
     return (
-      <SignCanvas>
-        <div className="text-center py-12 max-w-sm mx-auto">
+      <PortalShell>
+        <div className="max-w-md mx-auto text-center py-12">
           <div className="h-14 w-14 mx-auto rounded-full bg-amber-50 flex items-center justify-center mb-4">
             <AlertCircle className="h-7 w-7 text-amber-700" />
           </div>
           <h1 className="font-serif text-2xl text-ink-900 mb-2">
-            {expired ? "Este enlace expiró" : signed ? "Documento ya firmado" : "Enlace no válido"}
+            {signed ? "Documento ya firmado" : "Sin solicitud de firma"}
           </h1>
           <p className="text-sm text-ink-500">
-            {expired
-              ? "Pide a tu psicóloga un enlace nuevo."
-              : signed
-                ? "Este documento ya fue firmado anteriormente."
-                : "Verifica el enlace que recibiste."}
+            {signed
+              ? "Este documento ya fue firmado anteriormente."
+              : "No hay una solicitud de firma abierta para este documento. Pídele a tu psicóloga que reenvíe el documento."}
           </p>
+          <Link to="/p/documentos" className="mt-6 inline-flex items-center gap-1.5 text-sm text-brand-700 hover:underline">
+            <ArrowLeft className="h-4 w-4" /> Volver a mis documentos
+          </Link>
         </div>
-      </SignCanvas>
+      </PortalShell>
     );
   }
 
   if (!data) return null;
   const doc = data.document;
+  const hasSavedSig = !!data.saved_signature_url;
 
   if (stage === "done" && result) {
     return (
-      <SignCanvas>
+      <PortalShell>
         <div className="max-w-md mx-auto text-center py-10">
           <div className="h-20 w-20 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-5">
             <CheckCircle2 className="h-10 w-10 text-sage-700" />
@@ -143,15 +170,22 @@ function SignPage() {
             Esta constancia incluye tu IP, navegador y huella criptográfica del documento al momento de firmar.
             Conforma una auditoría legal de tu firma electrónica.
           </p>
+
+          <Link to="/p/documentos" className="mt-6 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+            Volver a mis documentos
+          </Link>
         </div>
-      </SignCanvas>
+      </PortalShell>
     );
   }
 
   return (
-    <SignCanvas>
+    <PortalShell>
       <div className="max-w-3xl mx-auto">
-        {/* Banner explicativo */}
+        <Link to="/p/documentos" className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-brand-700 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Volver a mis documentos
+        </Link>
+
         <div className="mb-6 rounded-2xl bg-linear-to-br from-brand-700 to-brand-600 p-6 text-white shadow-card">
           <div className="flex items-start gap-3">
             <FileText className="h-6 w-6 shrink-0 mt-0.5" />
@@ -166,13 +200,11 @@ function SignPage() {
           </div>
         </div>
 
-        {/* Documento renderizado en read-only */}
         <section className="mb-6">
           <p className="text-xs uppercase tracking-widest text-ink-500 font-medium mb-2">Lee el documento completo</p>
           <DocumentEditor initialDoc={doc.body_json ?? null} editable={false} />
         </section>
 
-        {/* Aceptación */}
         {stage === "reading" && (
           <section className="rounded-xl border border-line-200 bg-surface p-5 mb-6">
             <label className="flex items-start gap-3 cursor-pointer">
@@ -197,13 +229,45 @@ function SignPage() {
           </section>
         )}
 
-        {/* Canvas de firma */}
         {stage === "signing" && (
           <section className="rounded-xl border border-line-200 bg-surface p-5 mb-6">
             <h2 className="font-serif text-lg text-ink-900 mb-2">Firma aquí</h2>
-            <p className="text-xs text-ink-500 mb-4">Dibuja tu firma como en papel. Toca y arrastra el dedo (o el mouse).</p>
+            <p className="text-xs text-ink-500 mb-4">
+              {hasSavedSig && useSavedFirst
+                ? "Esta es tu firma guardada. Si quieres dibujarla de nuevo, toca en \"Borrar y volver a firmar\"."
+                : "Dibuja tu firma como en papel. Toca y arrastra el dedo (o el mouse)."}
+            </p>
 
-            <SignaturePad onChange={setSignatureDataUrl} />
+            {hasSavedSig && (
+              <div className="mb-4 flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setUseSavedFirst(true)}
+                  className={cn(
+                    "h-8 px-3 rounded-full font-medium border transition-colors",
+                    useSavedFirst ? "bg-brand-50 border-brand-700 text-brand-800" : "border-line-200 text-ink-700 hover:border-brand-400"
+                  )}
+                >
+                  Usar firma guardada
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseSavedFirst(false)}
+                  className={cn(
+                    "h-8 px-3 rounded-full font-medium border transition-colors",
+                    !useSavedFirst ? "bg-brand-50 border-brand-700 text-brand-800" : "border-line-200 text-ink-700 hover:border-brand-400"
+                  )}
+                >
+                  Dibujar nueva
+                </button>
+              </div>
+            )}
+
+            <SignaturePad
+              key={useSavedFirst ? "saved" : "new"}
+              onChange={setSignatureDataUrl}
+              defaultDataUrl={useSavedFirst && hasSavedSig ? data.saved_signature_url : null}
+            />
 
             <div className="mt-4 rounded-md border border-line-100 bg-bg-100/50 p-3 space-y-2">
               <div className="flex items-start gap-2">
@@ -224,6 +288,19 @@ function SignPage() {
               )}
             </div>
 
+            <label className="mt-3 flex items-start gap-2 cursor-pointer text-xs text-ink-700">
+              <input
+                type="checkbox"
+                checked={saveForLater}
+                onChange={(e) => setSaveForLater(e.target.checked)}
+                className="mt-0.5 h-3.5 w-3.5 rounded border-line-200 accent-brand-700"
+              />
+              <span className="inline-flex items-center gap-1.5">
+                <Save className="h-3 w-3 text-ink-500" />
+                Guardar esta firma para próximos documentos. Puedes borrarla cuando quieras desde tu perfil.
+              </span>
+            </label>
+
             <button
               onClick={submit}
               disabled={!signatureDataUrl || submitMu.isPending}
@@ -235,27 +312,6 @@ function SignPage() {
           </section>
         )}
       </div>
-    </SignCanvas>
-  );
-}
-
-/** Lienzo cálido para la página pública de firma. Mismo estilo que /p/activar. */
-function SignCanvas({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-bg flex flex-col">
-      <header className="px-6 py-5 max-w-3xl mx-auto w-full flex items-center justify-between">
-        <div className="inline-flex items-center gap-2.5 text-ink-900">
-          <Logo className="h-7 w-7 text-brand-700" />
-          <span className="font-serif text-lg">Psicomorfosis</span>
-        </div>
-        <span className="text-xs text-ink-500 inline-flex items-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5 text-sage-500" /> Firma legal
-        </span>
-      </header>
-      <main className="flex-1 px-6 pb-12 pt-2">{children}</main>
-      <footer className="px-6 py-6 text-center text-xs text-ink-400">
-        © Psicomorfosis · Firma electrónica con validez según Ley 527/1999
-      </footer>
-    </div>
+    </PortalShell>
   );
 }

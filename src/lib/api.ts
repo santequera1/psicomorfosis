@@ -808,6 +808,29 @@ export const api = {
   portalSaveTestProgress: (id: string, answers: AnswersMap) =>
     request<{ ok: true; answered_items: number }>(`/api/portal/tests/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
 
+  // Portal del paciente — firma de documentos
+  /** Firma guardada del paciente (data:image/...) o null. */
+  portalGetMySignature: () =>
+    request<{ signature_url: string | null }>("/api/portal/me/signature"),
+  portalDeleteMySignature: () =>
+    request<{ ok: true }>("/api/portal/me/signature", { method: "DELETE" }),
+  /** Info para firmar un documento desde el portal: body, clínica, firma guardada. */
+  portalGetDocumentForSigning: (id: string) =>
+    request<{
+      valid: true;
+      document: { id: string; name: string; type: string; kind: string; body_json: any; body_text: string | null; professional: string | null; created_at: string };
+      patient: { name: string; preferred_name: string | null; doc: string | null } | null;
+      clinic: { name?: string; city?: string; address?: string };
+      expires_at: string;
+      saved_signature_url: string | null;
+    }>(`/api/portal/documents/${id}/signing`),
+  /** Aplica la firma del paciente desde el portal. */
+  portalSignDocument: (id: string, body: { signature_data_url: string; geolocation?: { lat: number; lng: number; accuracy?: number }; save_signature?: boolean }) =>
+    request<{ ok: true; signed_at: string; cert_sha256: string; cert_data: any }>(
+      `/api/portal/documents/${id}/sign`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+
   // Tasks
   listTasks: (params: Record<string, string> = {}) =>
     request<Array<Record<string, unknown>>>(`/api/tasks${qs(params)}`),

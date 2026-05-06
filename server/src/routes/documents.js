@@ -894,6 +894,110 @@ function docTextForHash(doc) {
 }
 
 /**
+ * Aplica una firma a un documento. Lógica compartida entre la firma vía
+ * token (anónima desde el link) y la firma desde el portal del paciente
+ * (autenticada). Devuelve { ok, signed_at, cert_sha256, cert_data } o null
+ * si la sign_request no es válida (ya firmada o expirada).
+ *
+ * Hace todo en una transacción: marca el sign_request, inyecta el bloque
+ * de firma en el body del documento, cambia status a 'firmado', e inserta
+ * notificación al psicólogo.
+ */
+export function applyPatientSignature({
+  signRequest, signatureDataUrl, geolocation, ip, userAgent,
+}) {
+  if (!signatureDataUrl || typeof signatureDataUrl !== "string" || !signatureDataUrl.startsWith("data:image/")) {
+    return { error: "Firma inválida", status: 400 };
+  }
+  if (signRequest.signed_at) return { error: "Este documento ya fue firmado", status: 409 };
+  if (new Date(signRequest.expires_at).getTime() < Date.now()) {
+    return { error: "Este enlace expiró", status: 410 };
+  }
+  const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(signRequest.document_id);
+  if (!doc) return { error: "Documento no encontrado", status: 404 };
+  const patient = signRequest.patient_id
+    ? db.prepare("SELECT * FROM patients WHERE id = ?").get(signRequest.patient_id)
+    : null;
+
+  const signedAt = new Date().toISOString();
+  const docText = docTextForHash(doc);
+  const docHash = crypto.createHash("sha256").update(docText).digest("hex");
+
+  const certData = {
+    version: 1,
+    document: { id: doc.id, name: doc.name, type: doc.type },
+    patient: patient ? { id: patient.id, name: patient.name, doc: patient.doc } : null,
+    workspace_id: signRequest.workspace_id,
+    signed_at: signedAt,
+    signed_ip: ip,
+    signed_user_agent: userAgent,
+    signed_geolocation: geolocation ?? null,
+    document_sha256: docHash,
+    signature_data_url_sha256: crypto.createHash("sha256").update(signatureDataUrl).digest("hex"),
+  };
+  const certJson = JSON.stringify(certData);
+  const certHash = crypto.createHash("sha256").update(certJson).digest("hex");
+
+  if (doc.kind === "editor") {
+    const body = safeJSON(doc.body_json) || { type: "doc", content: [] };
+    body.content = body.content || [];
+    body.content.push(
+      { type: "horizontalRule" },
+      {
+        type: "signature",
+        attrs: {
+          url: signatureDataUrl,
+          name: patient?.name ?? "Paciente",
+          tarjetaProfesional: patient?.doc ? `Doc: ${patient.doc}` : "",
+          signedAt,
+        },
+      },
+      {
+        type: "paragraph",
+        content: [{
+          type: "text",
+          text: `Firmado electrónicamente por ${patient?.name ?? "el paciente"} · IP ${ip} · ${new Date(signedAt).toLocaleString("es-CO")} · Cert SHA-256: ${certHash.slice(0, 16)}…`,
+          marks: [{ type: "italic" }],
+        }],
+      }
+    );
+    db.prepare("UPDATE documents SET body_json = ?, updated_at = ? WHERE id = ?")
+      .run(JSON.stringify(body), signedAt, doc.id);
+  }
+
+  db.prepare(`
+    UPDATE document_sign_requests
+    SET signed_at = ?, signature_data_url = ?, signed_ip = ?, signed_user_agent = ?,
+        signed_geolocation = ?, doc_snapshot_sha256 = ?, cert_sha256 = ?, cert_data_json = ?
+    WHERE id = ?
+  `).run(
+    signedAt, signatureDataUrl, ip, userAgent,
+    geolocation ? JSON.stringify(geolocation) : null,
+    docHash, certHash, certJson,
+    signRequest.id,
+  );
+
+  db.prepare("UPDATE documents SET status = 'firmado', updated_at = ? WHERE id = ?")
+    .run(signedAt, doc.id);
+
+  if (doc.workspace_id) {
+    db.prepare(`INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+                VALUES (?, ?, 'firma', ?, ?, ?, 0, 0)`)
+      .run(`N-sign-${signRequest.id}-${Date.now()}`, doc.workspace_id,
+           "Documento firmado por paciente",
+           `${patient?.name ?? "El paciente"} firmó "${doc.name}".`,
+           signedAt);
+  }
+
+  return {
+    ok: true,
+    signed_at: signedAt,
+    cert_sha256: certHash,
+    cert_data: certData,
+  };
+}
+
+/**
  * POST /api/documents/:id/sign-request
  * Genera un link de firma único y devuelve URL + texto WhatsApp pre-armado.
  * Solo el psicólogo lo crea; el documento se identifica por su id.
@@ -992,108 +1096,20 @@ router.get("/sign/:token", (req, res) => {
  */
 router.post("/sign/:token", (req, res) => {
   const { signature_data_url, geolocation } = req.body ?? {};
-  if (!signature_data_url || typeof signature_data_url !== "string" || !signature_data_url.startsWith("data:image/")) {
-    return res.status(400).json({ error: "Firma inválida" });
-  }
   const sr = db.prepare("SELECT * FROM document_sign_requests WHERE token = ?").get(req.params.token);
   if (!sr) return res.status(404).json({ error: "Solicitud no encontrada" });
-  if (sr.signed_at) return res.status(409).json({ error: "Este documento ya fue firmado" });
-  if (new Date(sr.expires_at).getTime() < Date.now()) {
-    return res.status(410).json({ error: "Este enlace expiró" });
-  }
-  const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(sr.document_id);
-  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
-  const patient = sr.patient_id ? db.prepare("SELECT * FROM patients WHERE id = ?").get(sr.patient_id) : null;
 
-  // Capturar metadata del request
   const ip = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim()
     || req.headers["x-real-ip"]?.toString()
     || req.socket.remoteAddress
     || "";
   const userAgent = req.headers["user-agent"] || "";
-  const signedAt = new Date().toISOString();
-  const docText = docTextForHash(doc);
-  const docHash = crypto.createHash("sha256").update(docText).digest("hex");
 
-  // Construir certificado (los datos que dan validez legal)
-  const certData = {
-    version: 1,
-    document: { id: doc.id, name: doc.name, type: doc.type },
-    patient: patient ? { id: patient.id, name: patient.name, doc: patient.doc } : null,
-    workspace_id: sr.workspace_id,
-    signed_at: signedAt,
-    signed_ip: ip,
-    signed_user_agent: userAgent,
-    signed_geolocation: geolocation ?? null,
-    document_sha256: docHash,
-    signature_data_url_sha256: crypto.createHash("sha256").update(signature_data_url).digest("hex"),
-  };
-  const certJson = JSON.stringify(certData);
-  const certHash = crypto.createHash("sha256").update(certJson).digest("hex");
-
-  // Insertar bloque de firma del paciente al final del body del documento
-  // (solo si es kind=editor con body_json válido)
-  if (doc.kind === "editor") {
-    const body = safeJSON(doc.body_json) || { type: "doc", content: [] };
-    body.content = body.content || [];
-    body.content.push(
-      { type: "horizontalRule" },
-      {
-        type: "signature",
-        attrs: {
-          url: signature_data_url,
-          name: patient?.name ?? "Paciente",
-          tarjetaProfesional: patient?.doc ? `Doc: ${patient.doc}` : "",
-          signedAt,
-        },
-      },
-      {
-        type: "paragraph",
-        content: [{
-          type: "text",
-          text: `Firmado electrónicamente por ${patient?.name ?? "el paciente"} · IP ${ip} · ${new Date(signedAt).toLocaleString("es-CO")} · Cert SHA-256: ${certHash.slice(0, 16)}…`,
-          marks: [{ type: "italic" }],
-        }],
-      }
-    );
-    db.prepare("UPDATE documents SET body_json = ?, updated_at = ? WHERE id = ?")
-      .run(JSON.stringify(body), signedAt, doc.id);
-  }
-
-  db.prepare(`
-    UPDATE document_sign_requests
-    SET signed_at = ?, signature_data_url = ?, signed_ip = ?, signed_user_agent = ?,
-        signed_geolocation = ?, doc_snapshot_sha256 = ?, cert_sha256 = ?, cert_data_json = ?
-    WHERE token = ?
-  `).run(
-    signedAt, signature_data_url, ip, userAgent,
-    geolocation ? JSON.stringify(geolocation) : null,
-    docHash, certHash, certJson,
-    req.params.token
-  );
-
-  // Si el psicólogo no había firmado, dejamos el documento en estado pendiente_firma
-  // (paciente firmó pero falta el profesional). Si ya estaba firmado, marcamos completo.
-  // Aquí simple: solo cambiamos a 'firmado' completo.
-  db.prepare("UPDATE documents SET status = 'firmado', updated_at = ? WHERE id = ?")
-    .run(signedAt, doc.id);
-
-  // Notificación al psicólogo
-  if (doc.workspace_id) {
-    db.prepare(`INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
-                VALUES (?, ?, 'firma', ?, ?, ?, 0, 0)`)
-      .run(`N-sign-${sr.id}-${Date.now()}`, doc.workspace_id,
-           "Documento firmado por paciente",
-           `${patient?.name ?? "El paciente"} firmó "${doc.name}".`,
-           signedAt);
-  }
-
-  res.json({
-    ok: true,
-    signed_at: signedAt,
-    cert_sha256: certHash,
-    cert_data: certData,
+  const result = applyPatientSignature({
+    signRequest: sr, signatureDataUrl: signature_data_url, geolocation, ip, userAgent,
   });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  res.json(result);
 });
 
 /**
