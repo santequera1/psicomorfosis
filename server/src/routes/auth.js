@@ -83,4 +83,37 @@ router.get("/me", requireAuth, (req, res) => {
   });
 });
 
+/**
+ * POST /api/auth/change-password — el usuario autenticado cambia su propia
+ * contraseña. Verifica la contraseña actual antes de actualizar para evitar
+ * que un token comprometido la cambie sin saber la actual.
+ *
+ * Body: { current_password: string, new_password: string }
+ *
+ * Validaciones:
+ *  - current_password debe coincidir con el hash actual
+ *  - new_password mínimo 8 caracteres
+ *  - new_password distinta de current_password
+ */
+router.post("/change-password", requireAuth, (req, res) => {
+  const { current_password, new_password } = req.body ?? {};
+  if (typeof current_password !== "string" || typeof new_password !== "string") {
+    return res.status(400).json({ error: "Datos inválidos" });
+  }
+  if (new_password.length < 8) {
+    return res.status(400).json({ error: "La nueva contraseña debe tener al menos 8 caracteres" });
+  }
+  if (current_password === new_password) {
+    return res.status(400).json({ error: "La nueva contraseña debe ser distinta de la actual" });
+  }
+  const user = db.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(req.user.id);
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (!bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: "La contraseña actual no es correcta" });
+  }
+  const newHash = bcrypt.hashSync(new_password, 10);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, user.id);
+  res.json({ ok: true });
+});
+
 export default router;

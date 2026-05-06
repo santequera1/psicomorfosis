@@ -642,6 +642,9 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   me: () => request<{ user: ApiUser }>("/api/auth/me"),
+  /** Cambia la contraseña del usuario autenticado. Requiere la actual. */
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    request<{ ok: true }>("/api/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
 
   // Portal del paciente — invitación + activación + login (públicos)
   invitePatient: (patientId: string) =>

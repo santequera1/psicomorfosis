@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
-  Check, X, Video, Calendar, CalendarClock, MessageCircle, Plus, MapPin,
+  Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -228,48 +229,203 @@ function LabeledInput({ label, value, onChange, type = "text", placeholder }: { 
   );
 }
 
-function Toggle({ label, desc, on = false }: { label: string; desc: string; on?: boolean }) {
+function Toggle({ label, desc, on = false, comingSoon = false }: {
+  label: string; desc: string; on?: boolean; comingSoon?: boolean;
+}) {
   const [v, setV] = useState(on);
   return (
-    <div className="flex items-start justify-between py-4 border-b border-line-100 last:border-0">
-      <div>
+    <div className="flex items-start justify-between gap-3 py-4 border-b border-line-100 last:border-0">
+      <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-ink-900">{label}</div>
         <div className="text-xs text-ink-500 mt-0.5">{desc}</div>
       </div>
-      <button
-        onClick={() => setV(!v)}
-        className={cn("h-6 w-11 rounded-full transition-colors relative shrink-0 mt-0.5", v ? "bg-brand-700" : "bg-line-200")}
-      >
-        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow-soft transition-transform", v ? "translate-x-5" : "translate-x-0.5")} />
-      </button>
+      {comingSoon ? (
+        <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
+          <Circle className="h-2.5 w-2.5" /> Próximamente
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setV(!v)}
+          aria-checked={v}
+          role="switch"
+          className={cn(
+            "shrink-0 mt-0.5 relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+            v ? "bg-brand-700" : "bg-line-200"
+          )}
+        >
+          <span className={cn(
+            "inline-block h-5 w-5 rounded-full bg-surface shadow-soft transition-transform",
+            v ? "translate-x-5" : "translate-x-0.5"
+          )} />
+        </button>
+      )}
     </div>
   );
 }
 
 function NotifPanel() {
+  // Por ahora todas las notificaciones se muestran como "Próximamente" — la
+  // infraestructura de envío (email/WhatsApp/push) aún no está cableada al
+  // backend. Se quitó "Mensajes de pacientes" porque la app no tiene chat.
   return (
     <>
       <SectionHeader title="Notificaciones" desc="Elige qué eventos quieres recibir y por qué canal." />
-      <Toggle label="Recordatorio de citas" desc="Recibirás un aviso 1h antes de cada sesión." on />
-      <Toggle label="Alertas de riesgo clínico" desc="Notificación inmediata ante banderas críticas." on />
-      <Toggle label="Resumen diario" desc="Cada mañana, panorama de tu agenda." on />
-      <Toggle label="Pagos recibidos" desc="Avisos cuando un paciente confirma pago." />
-      <Toggle label="Mensajes de pacientes" desc="Solo dentro del horario de atención." on />
+      <Toggle label="Recordatorio de citas" desc="Recibirás un aviso 1h antes de cada sesión." comingSoon />
+      <Toggle label="Alertas de riesgo clínico" desc="Notificación inmediata ante banderas críticas." comingSoon />
+      <Toggle label="Resumen diario" desc="Cada mañana, panorama de tu agenda." comingSoon />
+      <Toggle label="Pagos recibidos" desc="Avisos cuando un paciente confirma pago." comingSoon />
     </>
   );
 }
 
 function SeguridadPanel() {
+  const [pwOpen, setPwOpen] = useState(false);
   return (
     <>
       <SectionHeader title="Seguridad" desc="Cuida el acceso a información clínica protegida." />
-      <Toggle label="Autenticación de dos factores (2FA)" desc="Recomendado para roles clínicos y administrativos." on />
-      <Toggle label="Cierre automático de sesión" desc="Tras 30 min de inactividad." on />
-      <Toggle label="Notificar nuevos inicios de sesión" desc="Recibe correo si se accede desde un dispositivo nuevo." on />
+      <Toggle label="Autenticación de dos factores (2FA)" desc="Recomendado para roles clínicos y administrativos." comingSoon />
+      <Toggle label="Cierre automático de sesión" desc="Tras 30 min de inactividad." comingSoon />
+      <Toggle label="Notificar nuevos inicios de sesión" desc="Recibe correo si se accede desde un dispositivo nuevo." comingSoon />
       <div className="mt-6">
-        <button className="h-10 px-5 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400">Cambiar contraseña</button>
+        <button
+          type="button"
+          onClick={() => setPwOpen(true)}
+          className="h-10 px-5 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400"
+        >
+          Cambiar contraseña
+        </button>
       </div>
+      {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
     </>
+  );
+}
+
+/**
+ * Modal autogestionado de cambio de contraseña. Pide contraseña actual,
+ * nueva (con confirmación visual de "mostrar"), valida mínimo 8 caracteres
+ * y que coincidan; el backend valida que la actual sea correcta.
+ */
+function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  // Errores cliente-side (validación local). Los del servidor llegan via mu.error.
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const mu = useMutation({
+    mutationFn: () => api.changePassword({ current_password: current, new_password: next }),
+    onSuccess: () => {
+      toast.success("Contraseña actualizada");
+      onClose();
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLocalError(null);
+    if (next.length < 8) {
+      setLocalError("La nueva contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+    if (next !== confirm) {
+      setLocalError("La confirmación no coincide");
+      return;
+    }
+    if (next === current) {
+      setLocalError("La nueva contraseña debe ser distinta de la actual");
+      return;
+    }
+    mu.mutate();
+  }
+
+  const errorMessage = localError ?? (mu.error as Error | null)?.message ?? null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/40 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <form
+        onSubmit={handleSubmit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal"
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Seguridad</p>
+            <h3 className="font-serif text-lg text-ink-900 mt-0.5">Cambiar contraseña</h3>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="p-5 space-y-3">
+          <label className="block">
+            <span className="block text-xs font-medium text-ink-700 mb-1.5">Contraseña actual</span>
+            <input
+              type={show ? "text" : "password"}
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              autoFocus
+              required
+              className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-ink-700 mb-1.5">Nueva contraseña <span className="text-ink-400 font-normal">(mín 8 caracteres)</span></span>
+            <input
+              type={show ? "text" : "password"}
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              required
+              minLength={8}
+              className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-ink-700 mb-1.5">Confirma la nueva contraseña</span>
+            <input
+              type={show ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={show}
+              onChange={(e) => setShow(e.target.checked)}
+              className="h-3.5 w-3.5 accent-brand-700"
+            />
+            Mostrar contraseñas
+          </label>
+          {errorMessage && (
+            <div className="rounded-md border border-rose-300/50 bg-rose-500/5 p-2.5 text-xs text-rose-700 flex items-start gap-2">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+        </div>
+        <footer className="px-5 py-4 border-t border-line-100 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={mu.isPending}
+            className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
+          >
+            {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Actualizar contraseña
+          </button>
+        </footer>
+      </form>
+    </div>
   );
 }
 
@@ -375,21 +531,32 @@ function WorkspacePanel() {
       <h4 className="text-xs uppercase tracking-widest text-brand-700 font-semibold mb-3">Modo de operación</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
         {([
-          { id: "individual", title: "Individual", desc: "Un solo psicólogo atiende pacientes. Sin sedes ni equipo.", bullets: ["1 profesional", "Sin concepto de sede", "Ideal para consulta privada"] },
-          { id: "organization", title: "Organización", desc: "Clínica con múltiples profesionales y sedes. Un profesional puede trabajar en varias sedes.", bullets: ["Múltiples profesionales", "Múltiples sedes", "Asignaciones flexibles"] },
-        ] as Array<{ id: WorkspaceMode; title: string; desc: string; bullets: string[] }>).map((m) => (
+          { id: "individual",   title: "Individual",   desc: "Un solo psicólogo atiende pacientes. Sin sedes ni equipo.",                                            bullets: ["1 profesional", "Sin concepto de sede", "Ideal para consulta privada"], disabled: false },
+          { id: "organization", title: "Organización", desc: "Clínica con múltiples profesionales y sedes. Un profesional puede trabajar en varias sedes.",          bullets: ["Múltiples profesionales", "Múltiples sedes", "Asignaciones flexibles"], disabled: true },
+        ] as Array<{ id: WorkspaceMode; title: string; desc: string; bullets: string[]; disabled: boolean }>).map((m) => (
           <button
             key={m.id}
-            onClick={() => setPendingMode(m.id === workspace.mode ? null : m.id)}
+            type="button"
+            disabled={m.disabled}
+            onClick={() => !m.disabled && setPendingMode(m.id === workspace.mode ? null : m.id)}
             className={cn(
               "text-left rounded-xl border p-5 transition-colors",
-              currentMode === m.id ? "border-brand-700 bg-brand-50/50" : "border-line-200 hover:border-brand-400"
+              m.disabled
+                ? "border-line-200 opacity-70 cursor-not-allowed"
+                : currentMode === m.id
+                  ? "border-brand-700 bg-brand-50/50"
+                  : "border-line-200 hover:border-brand-400"
             )}
           >
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
               <h5 className="font-serif text-lg text-ink-900">{m.title}</h5>
-              {workspace.mode === m.id && <span className="text-[10px] uppercase tracking-wider text-brand-700 font-medium">Actual</span>}
-              {pendingMode === m.id && <span className="text-[10px] uppercase tracking-wider text-warning font-medium">Nuevo</span>}
+              {m.disabled
+                ? <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">Próximamente</span>
+                : workspace.mode === m.id
+                  ? <span className="text-[10px] uppercase tracking-wider text-brand-700 font-medium">Actual</span>
+                  : pendingMode === m.id
+                    ? <span className="text-[10px] uppercase tracking-wider text-warning font-medium">Nuevo</span>
+                    : null}
             </div>
             <p className="text-xs text-ink-700">{m.desc}</p>
             <ul className="mt-3 space-y-1">
@@ -551,7 +718,7 @@ function SedeFormModal({ sede, onClose, onSaved }: { sede: Sede | null; onClose:
           {sede && (
             <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer select-none">
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="sr-only peer" />
-              <span className="h-[18px] w-[18px] rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
+              <span className="h-4.5 w-4.5 rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
                 {active && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
               </span>
               Sede activa
@@ -758,7 +925,7 @@ function ProfessionalFormModal({ professional, sedes, isOrg, onClose, onSaved }:
           {professional && (
             <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer select-none">
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="sr-only peer" />
-              <span className="h-[18px] w-[18px] rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
+              <span className="h-4.5 w-4.5 rounded-[5px] border border-line-200 bg-surface flex items-center justify-center peer-checked:bg-brand-700 peer-checked:border-brand-700">
                 {active && <Check className="h-3 w-3 text-primary-foreground" strokeWidth={3} />}
               </span>
               Profesional activo
@@ -779,47 +946,59 @@ function ProfessionalFormModal({ professional, sedes, isOrg, onClose, onSaved }:
 
 function IntegracionesPanel() {
   // Catálogo de integraciones futuras. Todas marcadas como "Próximamente"
-  // hasta que cada una se implemente. El roadmap empieza por las de
-  // calendario y videollamada que son las que más demandan los psicólogos.
+  // hasta que cada una se implemente. Los logos vienen de Simple Icons
+  // (CDN público, licencia CC0) — si quisiéramos self-host después, basta
+  // con descargar los SVG y servirlos desde /public.
+  //
+  // El color hex es el oficial de cada marca:
+  //   - Google Calendar: 4285F4 (Google blue)
+  //   - Zoom: 0B5CFF
+  //   - Google Meet: 00897B (teal)
+  //   - WhatsApp: 25D366
+  //   - Calendly: 006BFF
   const integrations = [
-    { id: "gcal", name: "Google Calendar", Icon: Calendar, desc: "Sincroniza tu agenda con Google Calendar en dos sentidos." },
-    { id: "zoom", name: "Zoom", Icon: Video, desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología." },
-    { id: "gmeet", name: "Google Meet", Icon: Video, desc: "Crea enlaces de Google Meet asociados a cada cita virtual." },
-    { id: "wa", name: "WhatsApp Business", Icon: MessageCircle, desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp." },
-    { id: "calendly", name: "Calendly", Icon: CalendarClock, desc: "Recibe reservas de pacientes desde tu enlace público de Calendly." },
+    { id: "gcal",     name: "Google Calendar",   slug: "googlecalendar", color: "4285F4", desc: "Sincroniza tu agenda con Google Calendar en dos sentidos." },
+    { id: "zoom",     name: "Zoom",              slug: "zoom",           color: "0B5CFF", desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología." },
+    { id: "gmeet",    name: "Google Meet",       slug: "googlemeet",     color: "00897B", desc: "Crea enlaces de Google Meet asociados a cada cita virtual." },
+    { id: "wa",       name: "WhatsApp Business", slug: "whatsapp",       color: "25D366", desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp." },
+    { id: "calendly", name: "Calendly",          slug: "calendly",       color: "006BFF", desc: "Recibe reservas de pacientes desde tu enlace público de Calendly." },
   ];
 
   return (
     <>
       <SectionHeader title="Integraciones" desc="Conecta Psicomorfosis con tus herramientas favoritas. Todas en desarrollo." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {integrations.map((it) => {
-          const ItIcon = it.Icon;
-          return (
-            <article key={it.id} className="rounded-xl border border-line-200 p-4 flex items-start gap-3 opacity-90">
-              <div className="h-10 w-10 rounded-lg bg-bg-100 text-ink-500 flex items-center justify-center shrink-0">
-                <ItIcon className="h-5 w-5" />
+        {integrations.map((it) => (
+          <article key={it.id} className="rounded-xl border border-line-200 p-4 flex items-start gap-3 opacity-90">
+            <div className="h-10 w-10 rounded-lg bg-white border border-line-100 flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src={`https://cdn.simpleicons.org/${it.slug}/${it.color}`}
+                alt={`Logo de ${it.name}`}
+                width={22}
+                height={22}
+                loading="lazy"
+                className="h-[22px] w-[22px] object-contain"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-medium text-ink-900">{it.name}</h4>
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
+                  <Circle className="h-3 w-3" /> Próximamente
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-medium text-ink-900">{it.name}</h4>
-                  <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
-                    <Circle className="h-3 w-3" /> Próximamente
-                  </span>
-                </div>
-                <p className="text-xs text-ink-500 mt-1">{it.desc}</p>
-                <button
-                  type="button"
-                  disabled
-                  className="mt-3 h-8 px-3 rounded-md text-xs font-medium border border-line-200 text-ink-400 cursor-not-allowed"
-                  title="Esta integración está en desarrollo"
-                >
-                  En desarrollo
-                </button>
-              </div>
-            </article>
-          );
-        })}
+              <p className="text-xs text-ink-500 mt-1">{it.desc}</p>
+              <button
+                type="button"
+                disabled
+                className="mt-3 h-8 px-3 rounded-md text-xs font-medium border border-line-200 text-ink-400 cursor-not-allowed"
+                title="Esta integración está en desarrollo"
+              >
+                En desarrollo
+              </button>
+            </div>
+          </article>
+        ))}
       </div>
     </>
   );
