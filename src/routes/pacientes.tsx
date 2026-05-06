@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
@@ -53,6 +53,7 @@ function avatarTone(name: string) {
 
 function PatientsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
   const [query, setQuery] = useState("");
@@ -268,7 +269,11 @@ function PatientsPage() {
               </thead>
               <tbody>
                 {filtered.map((p) => (
-                  <tr key={p.id} className="border-b border-line-100 last:border-0 hover:bg-brand-50/60 transition-colors group cursor-pointer">
+                  <tr
+                    key={p.id}
+                    onClick={() => navigate({ to: "/pacientes/$id", params: { id: p.id } })}
+                    className="border-b border-line-100 last:border-0 hover:bg-brand-50/60 transition-colors group cursor-pointer"
+                  >
                     <td className="px-5 py-3.5">
                       <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-3">
                         <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatarTone(p.name)}`}>
@@ -294,7 +299,7 @@ function PatientsPage() {
                     </td>
                     <td className="px-3 py-3.5"><RiskBadge risk={p.risk} types={p.riskTypes} compact /></td>
                     <td className="px-3 py-3.5 text-ink-700 tabular">{p.nextSession ?? <span className="text-ink-400">—</span>}</td>
-                    <td className="px-3 py-3.5 relative">
+                    <td className="px-3 py-3.5 relative" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-0.5">
                         {(() => {
                           const wa = whatsappUrl(p.phone);
