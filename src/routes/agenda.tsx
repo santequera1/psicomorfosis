@@ -319,9 +319,13 @@ function DayView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
             <div className="font-serif text-sm text-ink-900 tabular">{s.time}</div>
             <div className="text-[10px] text-ink-400 uppercase tracking-wider">{s.duration_min ?? 50} min</div>
           </div>
+          {/* Punto de estado de la cita. pointer-events-none asegura que el
+              click pase a través hacia el botón debajo — antes interceptaba
+              el ~16px (h-2 + ring-4) más cercano del borde izquierdo del
+              card, haciendo que el primer tap no abriera el detalle. */}
           <div
             className={
-              "absolute left-[76px] top-[18px] h-2 w-2 rounded-full ring-4 ring-surface " +
+              "pointer-events-none absolute left-19 top-4.5 h-2 w-2 rounded-full ring-4 ring-surface " +
               (s.status === "en_curso" ? "bg-brand-700" : s.status === "atendida" ? "bg-success" : s.status === "confirmada" ? "bg-brand-400" : "bg-ink-300")
             }
           />
@@ -398,7 +402,7 @@ function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
         Forzamos un ancho mínimo de 700px y permitimos scroll horizontal:
         el usuario desliza para ver toda la semana sin que la columna se aplaste.
       */}
-      <div className="grid grid-cols-[50px_repeat(7,minmax(80px,1fr))] text-xs min-w-[700px]">
+      <div className="grid grid-cols-[50px_repeat(7,minmax(80px,1fr))] text-xs min-w-175">
         <div />
         {WEEK_DAYS_LOCAL.map((d) => (
           <div key={d.iso} className={"px-2 pb-2 text-center border-b " + (d.isToday ? "border-brand-700" : "border-line-100")}>
