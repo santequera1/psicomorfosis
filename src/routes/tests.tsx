@@ -75,7 +75,7 @@ function TestsPage() {
     mutationFn: (id: string) => api.deleteTestForm(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["test-catalog"] });
-      toast.success("Formulario eliminado");
+      toast.success("Test eliminado");
     },
     onError: (e: Error) => toast.error(e.message ?? "No se pudo eliminar"),
   });
@@ -110,7 +110,7 @@ function TestsPage() {
               onClick={() => setBuilderOpen(true)}
               className="h-10 px-3 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
             >
-              <Plus className="h-4 w-4" /> Crear formulario
+              <Plus className="h-4 w-4" /> Crear test
             </button>
           </div>
         </header>
@@ -165,21 +165,21 @@ function TestsPage() {
                 {/* Sección 2: formularios del consultorio */}
                 <CatalogSectionHeader
                   icon={<Sparkles className="h-3.5 w-3.5" />}
-                  title="Formularios del consultorio"
+                  title="Mis tests"
                   subtitle={
                     customForms.length === 0
-                      ? "Crea tu primer formulario o tamizaje personalizado"
-                      : `${customForms.length} ${customForms.length === 1 ? "formulario" : "formularios"} · creados por ti`
+                      ? "Crea tu primer test personalizado de tamizaje o autoevaluación"
+                      : `${customForms.length} ${customForms.length === 1 ? "test creado" : "tests creados"} por ti`
                   }
                 />
                 {customForms.length === 0 ? (
                   <div className="px-5 py-8 text-center">
-                    <p className="text-sm text-ink-500">Aún no has creado ningún formulario.</p>
+                    <p className="text-sm text-ink-500">Aún no has creado ningún test.</p>
                     <button
                       onClick={() => setBuilderOpen(true)}
                       className="mt-3 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
                     >
-                      <Plus className="h-3.5 w-3.5" /> Crear formulario
+                      <Plus className="h-3.5 w-3.5" /> Crear test
                     </button>
                   </div>
                 ) : (
@@ -192,7 +192,7 @@ function TestsPage() {
                         onAssign={() => setAssignContext(t)}
                         onView={() => setActiveTest(t)}
                         onDelete={() => {
-                          if (confirm(`¿Eliminar el formulario "${t.name}"? Las aplicaciones ya hechas se conservan.`)) {
+                          if (confirm(`¿Eliminar el test "${t.name}"? Las aplicaciones ya hechas se conservan.`)) {
                             deleteFormMu.mutate(t.id);
                           }
                         }}

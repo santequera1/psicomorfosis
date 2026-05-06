@@ -825,8 +825,10 @@ function TabTests({ rows }: { rows: any[] }) {
         </section>
       )}
 
-      {/* Lista de aplicaciones */}
-      <div className="rounded-xl border border-line-200 bg-surface">
+      {/* Lista de aplicaciones. pb-20 dentro del card asegura que el FAB
+          (fixed bottom-5 right-5, ~80px) no se solape con la última fila
+          cuando la tabla queda alineada con la zona del botón flotante. */}
+      <div className="rounded-xl border border-line-200 bg-surface pb-20">
         <div className="px-5 py-4 border-b border-line-100">
           <h3 className="font-serif text-base text-ink-900">Aplicaciones del paciente</h3>
           <p className="text-xs text-ink-500 mt-0.5">

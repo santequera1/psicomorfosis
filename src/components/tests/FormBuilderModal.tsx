@@ -160,10 +160,10 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
     mutationFn: (body: CreateFormBody) => api.createTestForm(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["test-catalog"] });
-      toast.success("Formulario creado");
+      toast.success("Test creado");
       onClose();
     },
-    onError: (e: Error) => toast.error(e.message ?? "Error al crear el formulario"),
+    onError: (e: Error) => toast.error(e.message ?? "Error al crear el test"),
   });
 
   function handleSave() {
@@ -201,8 +201,8 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Formulario del consultorio</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Crear formulario</h3>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Test personalizado</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Crear test</h3>
             <p className="text-xs text-ink-500 mt-1">
               Cuestionarios cortos para tamizaje o autoevaluación. No reemplaza un instrumento clínico validado.
             </p>
@@ -288,7 +288,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
               className="h-10 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
             >
               {createMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />}
-              Crear formulario
+              Crear test
             </button>
           ) : (
             <button
@@ -318,7 +318,7 @@ function MetaStep(props: {
 }) {
   return (
     <div className="space-y-4">
-      <Field label="Nombre del formulario" required>
+      <Field label="Nombre del test" required>
         <input
           autoFocus
           type="text"
@@ -496,12 +496,17 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
   }
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700">
+      <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
         <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
-        <span>
-          <strong>Ítem invertido:</strong> marca esta opción cuando una respuesta "alta" reste en lugar de sumar.
-          Útil cuando una pregunta está formulada en negativo (ej. "Me siento bien" en una escala de depresión).
-        </span>
+        <div>
+          <strong>¿Qué es "ítem invertido"?</strong> Marca esta casilla solo si una pregunta está formulada al
+          revés del resto. Ejemplo en un test de ansiedad:
+          <ul className="mt-1.5 space-y-0.5 list-disc list-inside marker:text-brand-700">
+            <li><span className="text-ink-900">"Me siento ansioso"</span> → "Siempre" suma alto. <em>Normal.</em></li>
+            <li><span className="text-ink-900">"Me siento tranquilo"</span> → "Siempre" debería <em>restar</em>. <em>Invertido.</em></li>
+          </ul>
+          <p className="mt-1.5">El sistema voltea la respuesta automáticamente al sumar el total. Si todas tus preguntas miden lo mismo en la misma dirección, no necesitas marcar ninguna.</p>
+        </div>
       </div>
       <ul className="space-y-2">
         {questions.map((q, i) => (
