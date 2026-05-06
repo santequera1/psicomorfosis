@@ -120,8 +120,15 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <footer className="px-6 py-6 text-center text-xs text-ink-400">
-        <span className="inline-flex items-center gap-1.5"><Heart className="h-3 w-3 text-brand-400" /> Tu espacio seguro · Psicomorfosis</span>
+      <footer className="px-6 py-6 text-center text-xs text-ink-400 space-y-2">
+        <div>
+          <span className="inline-flex items-center gap-1.5"><Heart className="h-3 w-3 text-brand-400" /> Tu espacio seguro · Psicomorfosis</span>
+        </div>
+        <div>
+          <Link to="/privacidad" className="hover:text-brand-700 hover:underline">Aviso de privacidad</Link>
+          {" · "}
+          <Link to="/terminos" className="hover:text-brand-700 hover:underline">Términos</Link>
+        </div>
       </footer>
     </div>
   );

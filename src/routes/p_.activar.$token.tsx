@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,6 +18,10 @@ function ActivatePage() {
   const [confirm, setConfirm] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Checkbox legal: requerido por Ley 1581/2012 Decreto 1377/2013 para
+  // tratamiento de datos sensibles (historia clínica + biométricos).
+  // Sin este consentimiento explícito no podemos activar la cuenta.
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["patient-invite", token],
@@ -27,14 +31,20 @@ function ActivatePage() {
 
   const strength = useMemo(() => calcStrength(password), [password]);
   const passwordsMatch = password.length > 0 && password === confirm;
-  const canSubmit = password.length >= 8 && passwordsMatch && !submitting;
+  const canSubmit = password.length >= 8 && passwordsMatch && acceptedLegal && !submitting;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const res = await api.activatePatientInvite(token, password);
+      const res = await api.activatePatientInvite(token, password, {
+        acceptedLegal: acceptedLegal,
+        // Mantener sincronizado con ULTIMA_ACTUALIZACION en /privacidad
+        // y /terminos. Si actualizas los documentos, actualiza también
+        // este string para que la auditoría refleje la versión correcta.
+        legalVersion: "2026-05-06",
+      });
       setSession(res.token, res.user as any);
       toast.success("¡Cuenta activada!");
       navigate({ to: "/p/inicio" });
@@ -77,7 +87,7 @@ function ActivatePage() {
                 : "Verifica el enlace que recibiste o pide uno nuevo."}
           </p>
           {used && (
-            <a href="/p/login" className="inline-block h-11 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center">
+            <a href="/p/login" className="inline-flex h-11 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 items-center justify-center">
               Ir a iniciar sesión
             </a>
           )}
@@ -187,6 +197,32 @@ function ActivatePage() {
               <p className="text-xs text-rose-700 mt-1">Las contraseñas no coinciden.</p>
             )}
           </div>
+
+          {/* Consentimiento informado para tratamiento de datos sensibles
+              (Ley 1581/2012 + Decreto 1377/2013). Sin este check no se
+              puede activar la cuenta — el botón queda deshabilitado. */}
+          <label className="flex items-start gap-2.5 text-xs text-ink-700 leading-relaxed cursor-pointer pt-1">
+            <input
+              type="checkbox"
+              checked={acceptedLegal}
+              onChange={(e) => setAcceptedLegal(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-line-300 text-brand-700 focus:ring-brand-400 shrink-0"
+            />
+            <span>
+              He leído y acepto el{" "}
+              <Link to="/privacidad" target="_blank" className="text-brand-700 underline">
+                aviso de privacidad
+              </Link>{" "}
+              y los{" "}
+              <Link to="/terminos" target="_blank" className="text-brand-700 underline">
+                términos y condiciones
+              </Link>
+              . Autorizo el tratamiento de mis datos personales y datos
+              sensibles (historia clínica, tests, firma) por parte de
+              Psicomorfosis y mi profesional tratante para los fines
+              descritos en el aviso.
+            </span>
+          </label>
 
           <button
             type="submit"

@@ -134,9 +134,18 @@ router.get("/patient-invite/:token", (req, res) => {
  * Crea el user del paciente con la contraseña que eligió. Devuelve JWT del paciente.
  */
 router.post("/patient-invite/:token/activate", (req, res) => {
-  const { password } = req.body ?? {};
+  const { password, accepted_legal, legal_version } = req.body ?? {};
   if (!password || typeof password !== "string" || password.length < 8) {
     return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres." });
+  }
+  // Consentimiento informado obligatorio para tratamiento de datos
+  // sensibles (Ley 1581/2012 + Decreto 1377/2013). El front bloquea el
+  // submit, este check protege contra clientes que llamen el endpoint
+  // directo. No se activa la cuenta sin aceptar.
+  if (accepted_legal !== true) {
+    return res.status(400).json({
+      error: "Debes aceptar el aviso de privacidad y los términos para activar tu cuenta.",
+    });
   }
   const inv = db.prepare("SELECT * FROM patient_invites WHERE token = ?").get(req.params.token);
   if (!inv) return res.status(404).json({ error: "Invitación no encontrada" });
@@ -157,6 +166,10 @@ router.post("/patient-invite/:token/activate", (req, res) => {
 
   const hash = bcrypt.hashSync(password, 10);
   const now = new Date().toISOString();
+  // Versión por defecto: si el cliente no la mandó usamos la fecha de
+  // hoy (los documentos legales tienen "Última actualización" como
+  // identificador, no número de versión semver).
+  const acceptedVersion = (typeof legal_version === "string" && legal_version.trim()) || now.slice(0, 10);
 
   const tx = db.transaction(() => {
     const ins = db.prepare(`
@@ -164,6 +177,11 @@ router.post("/patient-invite/:token/activate", (req, res) => {
       VALUES (?, ?, ?, ?, ?, 'paciente', ?)
     `).run(inv.workspace_id, patient.email, hash, patient.name, patient.email, patient.id);
     db.prepare("UPDATE patient_invites SET used_at = ? WHERE id = ?").run(now, inv.id);
+    // Auditoría del consentimiento: si la SIC pregunta, podemos probar
+    // qué versión del documento aceptó y cuándo.
+    db.prepare(
+      "UPDATE patients SET legal_accepted_at = ?, legal_accepted_version = ? WHERE id = ?"
+    ).run(now, acceptedVersion, patient.id);
     return ins.lastInsertRowid;
   });
   const userId = tx();

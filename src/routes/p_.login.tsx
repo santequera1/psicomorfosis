@@ -89,6 +89,12 @@ function PortalLoginPage() {
           ¿Eres profesional?{" "}
           <Link to="/login" className="text-brand-700 hover:underline">Ingresa por aquí</Link>.
         </p>
+
+        <p className="text-center text-xs text-ink-400 mt-4">
+          <Link to="/privacidad" className="hover:text-brand-700 hover:underline">Aviso de privacidad</Link>
+          {" · "}
+          <Link to="/terminos" className="hover:text-brand-700 hover:underline">Términos</Link>
+        </p>
       </div>
     </PortalCanvas>
   );

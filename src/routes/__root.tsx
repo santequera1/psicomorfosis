@@ -85,7 +85,7 @@ const BOOTSTRAP_SCRIPT = `
     // Las rutas /p/* son del portal del paciente — viven con sus propias reglas.
     // Las páginas públicas (/login y /p/activar/* y /p/login) no requieren token.
     var isPatientPortal = path === '/p' || path.indexOf('/p/') === 0;
-    var publicPaths = ['/login', '/p/login'];
+    var publicPaths = ['/login', '/p/login', '/privacidad', '/terminos'];
     var isPublic = publicPaths.indexOf(path) !== -1
       || path.indexOf('/p/activar/') === 0
       || path.indexOf('/firmar/') === 0;

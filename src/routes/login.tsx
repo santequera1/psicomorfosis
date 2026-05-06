@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api, setSession, getToken, ApiError } from "@/lib/api";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check } from "lucide-react";
@@ -47,7 +47,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-bg-50 flex items-center justify-center px-4 py-6 md:py-10">
+    <div className="min-h-screen w-full bg-bg-50 flex flex-col items-center justify-center px-4 py-6 md:py-10">
       <div className="relative w-full max-w-md rounded-[32px] overflow-hidden bg-surface shadow-modal">
         {/* Header textual: en lugar del logo, dejamos el wordmark
             tipográfico para no exponer marca específica de un cliente
@@ -119,6 +119,12 @@ function LoginPage() {
           )}
         </div>
       </div>
+      {/* Footer legal — visible siempre en la pantalla de login. */}
+      <p className="mt-6 text-center text-xs text-ink-500">
+        <Link to="/privacidad" className="hover:text-brand-700 hover:underline">Aviso de privacidad</Link>
+        {" · "}
+        <Link to="/terminos" className="hover:text-brand-700 hover:underline">Términos y condiciones</Link>
+      </p>
     </div>
   );
 }

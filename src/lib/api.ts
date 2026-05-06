@@ -660,10 +660,18 @@ export const api = {
       clinic: { name: string; city: string | null; address: string | null };
       expires_at: string;
     }>(`/api/patient-invite/${token}`),
-  activatePatientInvite: (token: string, password: string) =>
+  activatePatientInvite: (token: string, password: string, opts?: { acceptedLegal?: boolean; legalVersion?: string }) =>
     request<{ token: string; user: { id: number; name: string; email: string; role: "paciente"; patient_id: string; workspace_id: number } }>(
       `/api/patient-invite/${token}/activate`,
-      { method: "POST", body: JSON.stringify({ password }) }
+      {
+        method: "POST",
+        body: JSON.stringify({
+          password,
+          // El backend exige consentimiento explícito para activar (Ley 1581/2012).
+          accepted_legal: opts?.acceptedLegal === true,
+          legal_version: opts?.legalVersion,
+        }),
+      }
     ),
   loginPatient: (email: string, password: string) =>
     request<{ token: string; user: { id: number; name: string; email: string; role: "paciente"; patient_id: string; workspace_id: number } }>(

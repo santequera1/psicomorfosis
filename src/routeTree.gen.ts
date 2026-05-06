@@ -10,9 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestsRouteImport } from './routes/tests'
+import { Route as TerminosRouteImport } from './routes/terminos'
 import { Route as TareasRouteImport } from './routes/tareas'
 import { Route as ReportesRouteImport } from './routes/reportes'
 import { Route as RecibosRouteImport } from './routes/recibos'
+import { Route as PrivacidadRouteImport } from './routes/privacidad'
 import { Route as PrescripcionRouteImport } from './routes/prescripcion'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
@@ -43,6 +45,11 @@ const TestsRoute = TestsRouteImport.update({
   path: '/tests',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TerminosRoute = TerminosRouteImport.update({
+  id: '/terminos',
+  path: '/terminos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TareasRoute = TareasRouteImport.update({
   id: '/tareas',
   path: '/tareas',
@@ -56,6 +63,11 @@ const ReportesRoute = ReportesRouteImport.update({
 const RecibosRoute = RecibosRouteImport.update({
   id: '/recibos',
   path: '/recibos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadRoute = PrivacidadRouteImport.update({
+  id: '/privacidad',
+  path: '/privacidad',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrescripcionRoute = PrescripcionRouteImport.update({
@@ -191,9 +203,11 @@ export interface FileRoutesByFullPath {
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/privacidad': typeof PrivacidadRoute
   '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
+  '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
@@ -221,9 +235,11 @@ export interface FileRoutesByTo {
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/privacidad': typeof PrivacidadRoute
   '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
+  '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
@@ -252,9 +268,11 @@ export interface FileRoutesById {
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/privacidad': typeof PrivacidadRoute
   '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
+  '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
   '/documentos_/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
@@ -284,9 +302,11 @@ export interface FileRouteTypes {
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/privacidad'
     | '/recibos'
     | '/reportes'
     | '/tareas'
+    | '/terminos'
     | '/tests'
     | '/documentos/$id'
     | '/firmar/$token'
@@ -314,9 +334,11 @@ export interface FileRouteTypes {
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/privacidad'
     | '/recibos'
     | '/reportes'
     | '/tareas'
+    | '/terminos'
     | '/tests'
     | '/documentos/$id'
     | '/firmar/$token'
@@ -344,9 +366,11 @@ export interface FileRouteTypes {
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/privacidad'
     | '/recibos'
     | '/reportes'
     | '/tareas'
+    | '/terminos'
     | '/tests'
     | '/documentos_/$id'
     | '/firmar/$token'
@@ -375,9 +399,11 @@ export interface RootRouteChildren {
   PacientesRoute: typeof PacientesRoute
   PlatformRoute: typeof PlatformRoute
   PrescripcionRoute: typeof PrescripcionRoute
+  PrivacidadRoute: typeof PrivacidadRoute
   RecibosRoute: typeof RecibosRoute
   ReportesRoute: typeof ReportesRoute
   TareasRoute: typeof TareasRoute
+  TerminosRoute: typeof TerminosRoute
   TestsRoute: typeof TestsRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
   FirmarTokenRoute: typeof FirmarTokenRoute
@@ -403,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terminos': {
+      id: '/terminos'
+      path: '/terminos'
+      fullPath: '/terminos'
+      preLoaderRoute: typeof TerminosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tareas': {
       id: '/tareas'
       path: '/tareas'
@@ -422,6 +455,13 @@ declare module '@tanstack/react-router' {
       path: '/recibos'
       fullPath: '/recibos'
       preLoaderRoute: typeof RecibosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidad': {
+      id: '/privacidad'
+      path: '/privacidad'
+      fullPath: '/privacidad'
+      preLoaderRoute: typeof PrivacidadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/prescripcion': {
@@ -607,9 +647,11 @@ const rootRouteChildren: RootRouteChildren = {
   PacientesRoute: PacientesRoute,
   PlatformRoute: PlatformRoute,
   PrescripcionRoute: PrescripcionRoute,
+  PrivacidadRoute: PrivacidadRoute,
   RecibosRoute: RecibosRoute,
   ReportesRoute: ReportesRoute,
   TareasRoute: TareasRoute,
+  TerminosRoute: TerminosRoute,
   TestsRoute: TestsRoute,
   DocumentosIdRoute: DocumentosIdRoute,
   FirmarTokenRoute: FirmarTokenRoute,

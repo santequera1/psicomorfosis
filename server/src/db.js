@@ -592,6 +592,14 @@ function runMigrations() {
     // en users (no en patients) porque pertenece a la cuenta del portal y
     // no al expediente clínico.
     "ALTER TABLE users ADD COLUMN signature_url TEXT",
+    // Aceptación del aviso de privacidad y términos al activar la cuenta
+    // del portal (Ley 1581/2012 + Decreto 1377/2013). legal_accepted_at
+    // es el timestamp ISO; legal_accepted_version la fecha del documento
+    // que aceptó (para poder probar qué versión consintió si cambia).
+    // Se guardan en patients (no en users) porque la autorización aplica
+    // al titular del dato sensible, no al login.
+    "ALTER TABLE patients ADD COLUMN legal_accepted_at TEXT",
+    "ALTER TABLE patients ADD COLUMN legal_accepted_version TEXT",
   ];
   for (const sql of migrations) {
     try {
