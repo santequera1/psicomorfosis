@@ -51,6 +51,9 @@ export const Route = createRootRoute({
         rel: "stylesheet",
         href: appCss,
       },
+      // Favicon temporal en forma de carpeta. Se reemplazará cuando
+      // tengamos un asset propio de marca.
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
     ],
   }),
   shellComponent: RootShell,

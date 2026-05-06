@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Favicon temporal: carpeta tipo "folder" en azul Psicomorfosis.
+       Sin marca propia todavía; se reemplazará cuando definamos el logo. -->
+  <rect width="32" height="32" rx="6" fill="#0f4c81"/>
+  <path d="M6.5 10.5a1.5 1.5 0 0 1 1.5-1.5h4.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414a1.5 1.5 0 0 0 1.06.439H24a1.5 1.5 0 0 1 1.5 1.5V22a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 22z" fill="#ffffff"/>
+  <path d="M6.5 13.5h19V22a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 22z" fill="#e6eef7"/>
+</svg>
