@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { TestRunner } from "@/components/tests/TestRunner";
-import { ApplicationDetailModal, MillonResultView } from "@/components/tests/ApplicationDetailModal";
+import { ApplicationDetailModal, MillonResultView, QualitativeResultView } from "@/components/tests/ApplicationDetailModal";
 import { FormBuilderModal } from "@/components/tests/FormBuilderModal";
 import { RequestTestModal } from "@/components/tests/RequestTestModal";
 import { api, type ApiPatient, type PsychTest, type TestApplication } from "@/lib/api";
@@ -357,7 +357,9 @@ function ApplicationRow({ app, onOpen }: { app: TestApplication; onOpen: () => v
     : app.assigned_at
       ? `asignado ${new Date(app.assigned_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}`
       : app.date ?? "";
-  const isMillon = app.alerts_json?.meta?.type === "millon";
+  const metaType = app.alerts_json?.meta?.type;
+  const isMillon = metaType === "millon";
+  const isQualitative = metaType === "qualitative";
   return (
     <li>
       <button
@@ -385,6 +387,11 @@ function ApplicationRow({ app, onOpen }: { app: TestApplication; onOpen: () => v
                 <>
                   <span className="text-ink-300">·</span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand-50 text-brand-800 font-medium">Ver detalle por escala →</span>
+                </>
+              ) : isQualitative ? (
+                <>
+                  <span className="text-ink-300">·</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-brand-50 text-brand-800 font-medium">Ver respuestas →</span>
                 </>
               ) : (app.score != null && (
                 <>
@@ -537,11 +544,15 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
 
   if (step === "result" && result) {
     const lvl = result.level && LEVEL_STYLE[result.level];
-    const isMillon = result.alerts_json?.meta?.type === "millon";
+    const metaType = result.alerts_json?.meta?.type;
+    const isMillon = metaType === "millon";
+    const isQualitative = metaType === "qualitative";
     return (
-      <Modal onClose={onClose} title="Resultado" wide={isMillon}>
+      <Modal onClose={onClose} title="Resultado" wide={isMillon || isQualitative}>
         {isMillon ? (
           <MillonResultView result={result} onClose={onClose} />
+        ) : isQualitative ? (
+          <QualitativeResultView result={result} onClose={onClose} />
         ) : (
           <div className="p-6 text-center">
             <div className="h-16 w-16 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-4">

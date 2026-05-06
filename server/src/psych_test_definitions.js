@@ -573,6 +573,33 @@ export function calculateScore(testDef, answers) {
   let score = 0;
   const alerts = {};
 
+  // Tests cualitativos (formularios "Selección personalizada" sin scoring):
+  // no se calcula puntaje ni nivel. Solo se guarda un snapshot de las
+  // respuestas con la etiqueta de la opción elegida, para que el psicólogo
+  // pueda leerlas e interpretarlas a su criterio. La etiqueta se guarda
+  // junto al valor para que aplicaciones viejas sigan siendo legibles si
+  // el formulario se edita después.
+  if (testDef.scoring?.type === "none") {
+    const scaleByValue = new Map();
+    for (const opt of testDef.scale ?? []) scaleByValue.set(Number(opt.value), opt.label);
+    const answers_snapshot = (testDef.questions ?? []).map((q) => {
+      const v = answers[q.id];
+      const numV = v == null || v === "" ? null : Number(v);
+      return {
+        id: q.id,
+        text: q.text,
+        value: numV,
+        label: numV != null ? (scaleByValue.get(numV) ?? String(numV)) : null,
+      };
+    });
+    return {
+      score: null,
+      level: "none",
+      label: "Ver respuestas",
+      alerts: { meta: { type: "qualitative", answers_snapshot } },
+    };
+  }
+
   // Caso especial: MCMI-II — usa matriz V/F → escala+peso.
   if (testDef.scoring?.type === "millon") {
     const raw = calculateMillonScores(answers);

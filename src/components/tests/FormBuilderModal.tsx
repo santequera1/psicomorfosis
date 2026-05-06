@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X, Plus, Trash2, ArrowLeft, ArrowRight, GripVertical, Loader2,
-  CheckSquare, Sliders, Info,
+  CheckSquare, Sliders, Info, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type CreateFormBody, type PsychTestRange } from "@/lib/api";
@@ -21,10 +21,18 @@ import { api, type CreateFormBody, type PsychTestRange } from "@/lib/api";
  * scoring por suma en este v1.
  */
 
-type ResponseType = "vf" | "likert";
+type ResponseType = "vf" | "likert" | "custom";
 type Severity = "none" | "low" | "moderate" | "high" | "critical";
 
 type Step = "meta" | "scale" | "questions" | "ranges" | "review";
+
+/**
+ * Indica si un tipo de respuesta produce puntaje cuantitativo o no.
+ * Los tests cualitativos (custom) no calculan score ni rango — el psicólogo
+ * lee las respuestas y las interpreta clínicamente.
+ */
+const SCORED_TYPES: ResponseType[] = ["vf", "likert"];
+function isScored(t: ResponseType) { return SCORED_TYPES.includes(t); }
 
 const SEVERITY_OPTIONS: Array<{ value: Severity; label: string; class: string }> = [
   { value: "none",     label: "Sin riesgo",  class: "bg-success-soft text-success" },
@@ -63,6 +71,12 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   const [likertLabels, setLikertLabels] = useState<string[]>([
     "Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre",
   ]);
+  // Selección personalizada: el psicólogo define el set global de opciones
+  // (todas las preguntas comparten el mismo set, ej. "Nunca / A veces /
+  // Siempre"). Sin scoring — solo se guardan las respuestas tal cual.
+  const [customLabels, setCustomLabels] = useState<string[]>([
+    "Nunca", "A veces", "Siempre",
+  ]);
 
   // Step 3: questions
   const [questions, setQuestions] = useState<QuestionDraft[]>([
@@ -72,11 +86,18 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   // Step 4: ranges
   const [ranges, setRanges] = useState<RangeDraft[]>([]);
 
-  // Step navigation
+  // Step navigation. Para tests cualitativos saltamos el paso "ranges"
+  // — no hay severidad que definir cuando no se calcula puntaje.
   const [step, setStep] = useState<Step>("meta");
-  const stepIdx = STEPS.findIndex((s) => s.id === step);
+  const visibleSteps = useMemo<Array<{ id: Step; label: string }>>(
+    () => isScored(responseType) ? STEPS : STEPS.filter((s) => s.id !== "ranges"),
+    [responseType],
+  );
+  const stepIdx = visibleSteps.findIndex((s) => s.id === step);
 
-  // Escala efectiva según el tipo
+  // Escala efectiva según el tipo. Para "custom" usamos los labels del
+  // psicólogo y asignamos values 0..N-1 sólo para satisfacer el shape del
+  // engine; esos valores no se suman porque scoring={type:"none"}.
   const scale = useMemo(() => {
     if (responseType === "vf") {
       return [
@@ -84,17 +105,24 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
         { value: 0, label: "Falso" },
       ];
     }
+    if (responseType === "custom") {
+      return customLabels.map((label, i) => ({
+        value: i,
+        label: label.trim() || `Opción ${i + 1}`,
+      }));
+    }
     return likertLabels.slice(0, likertPoints).map((label, i) => ({
       value: i,
       label: label.trim() || `Opción ${i + 1}`,
     }));
-  }, [responseType, likertPoints, likertLabels]);
+  }, [responseType, likertPoints, likertLabels, customLabels]);
 
-  // Score máximo posible (para validación de rangos y precarga inicial)
+  // Score máximo posible (sólo para tipos puntuables — Likert/V/F).
   const maxScore = useMemo(() => {
+    if (!isScored(responseType)) return 0;
     const high = scale.reduce((m, o) => Math.max(m, o.value), 0);
     return high * questions.length;
-  }, [scale, questions.length]);
+  }, [scale, questions.length, responseType]);
 
   // Auto-genera 3 rangos al pasar al step "ranges" si está vacío.
   function ensureRanges() {
@@ -109,12 +137,12 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   }
 
   function nextStep() {
-    if (step === "questions") ensureRanges();
-    const next = STEPS[stepIdx + 1];
+    if (step === "questions" && isScored(responseType)) ensureRanges();
+    const next = visibleSteps[stepIdx + 1];
     if (next) setStep(next.id);
   }
   function prevStep() {
-    const prev = STEPS[stepIdx - 1];
+    const prev = visibleSteps[stepIdx - 1];
     if (prev) setStep(prev.id);
   }
 
@@ -127,6 +155,11 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
       if (likertPoints < 3 || likertPoints > 7) return "Likert debe tener entre 3 y 7 puntos";
       const labels = likertLabels.slice(0, likertPoints);
       if (labels.some((l) => !l.trim())) return "Todas las opciones de Likert necesitan etiqueta";
+    }
+    if (responseType === "custom") {
+      if (customLabels.length < 2) return "Selección personalizada necesita al menos 2 opciones";
+      if (customLabels.length > 10) return "Máximo 10 opciones por test";
+      if (customLabels.some((l) => !l.trim())) return "Todas las opciones necesitan etiqueta";
     }
     return null;
   }
@@ -151,7 +184,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
     if (step === "meta") err = validateMeta();
     else if (step === "scale") err = validateScale();
     else if (step === "questions") err = validateQuestions();
-    else if (step === "ranges") err = validateRanges();
+    else if (step === "ranges" && isScored(responseType)) err = validateRanges();
     if (err) { toast.error(err); return; }
     nextStep();
   }
@@ -167,8 +200,10 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   });
 
   function handleSave() {
-    const err = validateMeta() ?? validateScale() ?? validateQuestions() ?? validateRanges();
+    const err = validateMeta() ?? validateScale() ?? validateQuestions()
+      ?? (isScored(responseType) ? validateRanges() : null);
     if (err) { toast.error(err); return; }
+    const scored = isScored(responseType);
     const body: CreateFormBody = {
       name: name.trim(),
       short_name: shortName.trim() || undefined,
@@ -182,12 +217,18 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
         questions: questions.map((q, i) => ({
           id: q.id || `q${i + 1}`,
           text: q.text.trim(),
-          ...(q.reverse ? { reverse: true } : {}),
+          // El flag "invertido" sólo tiene sentido en tests con suma — en
+          // cualitativos lo descartamos para no confundir al engine.
+          ...(scored && q.reverse ? { reverse: true } : {}),
         })),
-        scoring: { type: questions.some((q) => q.reverse) ? "sum_reversed" : "sum" },
-        ranges: ranges
-          .sort((a, b) => a.min - b.min)
-          .map<PsychTestRange>((r) => ({ min: r.min, max: r.max, label: r.label.trim(), level: r.level })),
+        scoring: scored
+          ? { type: questions.some((q) => q.reverse) ? "sum_reversed" : "sum" }
+          : { type: "none" as const },
+        ranges: scored
+          ? ranges
+              .sort((a, b) => a.min - b.min)
+              .map<PsychTestRange>((r) => ({ min: r.min, max: r.max, label: r.label.trim(), level: r.level }))
+          : [],
       },
     };
     createMu.mutate(body);
@@ -212,9 +253,9 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        {/* Stepper */}
+        {/* Stepper — sólo muestra los pasos visibles para el tipo elegido. */}
         <div className="px-5 py-3 border-b border-line-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
-          {STEPS.map((s, i) => {
+          {visibleSteps.map((s, i) => {
             const active = s.id === step;
             const done = i < stepIdx;
             return (
@@ -224,7 +265,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
                   active ? "bg-brand-700 text-white" : done ? "bg-brand-50 text-brand-800" : "bg-bg-100 text-ink-500"
                 )}>{i + 1}</div>
                 <span className={cn("text-xs", active ? "text-ink-900 font-medium" : "text-ink-500")}>{s.label}</span>
-                {i < STEPS.length - 1 && <div className="h-px w-6 bg-line-200" />}
+                {i < visibleSteps.length - 1 && <div className="h-px w-6 bg-line-200" />}
               </div>
             );
           })}
@@ -247,6 +288,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
               responseType={responseType} setResponseType={setResponseType}
               likertPoints={likertPoints} setLikertPoints={setLikertPoints}
               likertLabels={likertLabels} setLikertLabels={setLikertLabels}
+              customLabels={customLabels} setCustomLabels={setCustomLabels}
             />
           )}
           {step === "questions" && (
@@ -255,7 +297,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
               responseType={responseType}
             />
           )}
-          {step === "ranges" && (
+          {step === "ranges" && isScored(responseType) && (
             <RangesStep
               ranges={ranges} setRanges={setRanges}
               maxScore={maxScore}
@@ -267,6 +309,8 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
               minutes={minutes} ageRange={ageRange}
               questions={questions} ranges={ranges} scale={scale} maxScore={maxScore}
               hasReversed={questions.some((q) => q.reverse)}
+              scored={isScored(responseType)}
+              responseType={responseType}
             />
           )}
         </div>
@@ -330,7 +374,7 @@ function MetaStep(props: {
         />
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Etiqueta corta (code)">
+        <Field label="Acrónimo">
           <input
             type="text"
             value={props.shortName}
@@ -397,16 +441,30 @@ function ScaleStep(props: {
   responseType: ResponseType; setResponseType: (v: ResponseType) => void;
   likertPoints: number; setLikertPoints: (v: number) => void;
   likertLabels: string[]; setLikertLabels: (v: string[]) => void;
+  customLabels: string[]; setCustomLabels: (v: string[]) => void;
 }) {
-  function setLabel(idx: number, value: string) {
+  function setLikertLabel(idx: number, value: string) {
     const next = [...props.likertLabels];
     next[idx] = value;
     props.setLikertLabels(next);
   }
+  function setCustomLabel(idx: number, value: string) {
+    const next = [...props.customLabels];
+    next[idx] = value;
+    props.setCustomLabels(next);
+  }
+  function addCustomOption() {
+    if (props.customLabels.length >= 10) return;
+    props.setCustomLabels([...props.customLabels, ""]);
+  }
+  function removeCustomOption(idx: number) {
+    if (props.customLabels.length <= 2) return;
+    props.setCustomLabels(props.customLabels.filter((_, i) => i !== idx));
+  }
   return (
     <div className="space-y-4">
-      <p className="text-xs text-ink-500">¿Cómo van a responder los pacientes? Aplica a todas las preguntas del formulario.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <p className="text-xs text-ink-500">¿Cómo van a responder los pacientes? Aplica a todas las preguntas del test.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           type="button"
           onClick={() => props.setResponseType("vf")}
@@ -433,7 +491,21 @@ function ScaleStep(props: {
             <Sliders className="h-4 w-4 text-brand-700" />
             <span className="text-sm font-medium text-ink-900">Likert</span>
           </div>
-          <p className="text-xs text-ink-500">3-7 niveles entre dos extremos (ej. nunca → siempre).</p>
+          <p className="text-xs text-ink-500">3-7 niveles entre dos extremos (ej. nunca → siempre). Suma puntaje.</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => props.setResponseType("custom")}
+          className={cn(
+            "rounded-lg border p-4 text-left transition-colors",
+            props.responseType === "custom" ? "border-brand-700 bg-brand-50/40" : "border-line-200 hover:border-brand-400"
+          )}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <ListChecks className="h-4 w-4 text-brand-700" />
+            <span className="text-sm font-medium text-ink-900">Selección personalizada</span>
+          </div>
+          <p className="text-xs text-ink-500">Define opciones propias para el test. Sin puntaje — el psicólogo lee e interpreta las respuestas.</p>
         </button>
       </div>
 
@@ -457,7 +529,7 @@ function ScaleStep(props: {
                   <input
                     type="text"
                     value={props.likertLabels[i] ?? ""}
-                    onChange={(e) => setLabel(i, e.target.value)}
+                    onChange={(e) => setLikertLabel(i, e.target.value)}
                     placeholder={`Opción ${i + 1}`}
                     className="flex-1 h-9 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 focus:outline-none focus:border-brand-400"
                   />
@@ -465,6 +537,54 @@ function ScaleStep(props: {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {props.responseType === "custom" && (
+        <div className="space-y-3 rounded-lg border border-line-200 bg-bg-100/30 p-4">
+          <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
+            <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
+            <div>
+              <strong>Sin puntaje automático.</strong> Las respuestas se guardan tal cual y vos las interpretás
+              clínicamente al revisar el test. Útil para anamnesis, cuestionarios cualitativos o tamizajes
+              donde no aplica una suma directa.
+            </div>
+          </div>
+          <p className="text-xs font-medium text-ink-700">Opciones que verán los pacientes</p>
+          <div className="space-y-2">
+            {props.customLabels.map((label, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-[11px] tabular text-ink-500 w-6 shrink-0">{i + 1}.</span>
+                <input
+                  type="text"
+                  value={label}
+                  onChange={(e) => setCustomLabel(i, e.target.value)}
+                  placeholder="Ej. Nunca / A veces / Siempre / Totalmente de acuerdo…"
+                  className="flex-1 h-9 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCustomOption(i)}
+                  disabled={props.customLabels.length <= 2}
+                  className="h-8 w-8 rounded-md text-ink-400 hover:text-rose-700 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center"
+                  title="Eliminar opción"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addCustomOption}
+            disabled={props.customLabels.length >= 10}
+            className="w-full h-9 rounded-md border border-dashed border-line-200 text-xs text-ink-500 hover:border-brand-400 hover:text-brand-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" /> Agregar opción
+          </button>
+          <p className="text-[11px] text-ink-500">
+            Mínimo 2, máximo 10. Si tu test tiene secciones distintas (ej. "Sí/No" vs. "Frecuencia"), por ahora hay que crear un test por cada formato.
+          </p>
         </div>
       )}
     </div>
@@ -476,6 +596,7 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
   setQuestions: (q: QuestionDraft[]) => void;
   responseType: ResponseType;
 }) {
+  const showReverseFlag = isScored(responseType);
   function addQuestion() {
     const id = `q${questions.length + 1}`;
     setQuestions([...questions, { id, text: "", reverse: false }]);
@@ -496,18 +617,20 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
   }
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
-        <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
-        <div>
-          <strong>¿Qué es "ítem invertido"?</strong> Marca esta casilla solo si una pregunta está formulada al
-          revés del resto. Ejemplo en un test de ansiedad:
-          <ul className="mt-1.5 space-y-0.5 list-disc list-inside marker:text-brand-700">
-            <li><span className="text-ink-900">"Me siento ansioso"</span> → "Siempre" suma alto. <em>Normal.</em></li>
-            <li><span className="text-ink-900">"Me siento tranquilo"</span> → "Siempre" debería <em>restar</em>. <em>Invertido.</em></li>
-          </ul>
-          <p className="mt-1.5">El sistema voltea la respuesta automáticamente al sumar el total. Si todas tus preguntas miden lo mismo en la misma dirección, no necesitas marcar ninguna.</p>
+      {showReverseFlag && (
+        <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
+          <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
+          <div>
+            <strong>¿Qué es "ítem invertido"?</strong> Marca esta casilla solo si una pregunta está formulada al
+            revés del resto. Ejemplo en un test de ansiedad:
+            <ul className="mt-1.5 space-y-0.5 list-disc list-inside marker:text-brand-700">
+              <li><span className="text-ink-900">"Me siento ansioso"</span> → "Siempre" suma alto. <em>Normal.</em></li>
+              <li><span className="text-ink-900">"Me siento tranquilo"</span> → "Siempre" debería <em>restar</em>. <em>Invertido.</em></li>
+            </ul>
+            <p className="mt-1.5">El sistema voltea la respuesta automáticamente al sumar el total. Si todas tus preguntas miden lo mismo en la misma dirección, no necesitas marcar ninguna.</p>
+          </div>
         </div>
-      </div>
+      )}
       <ul className="space-y-2">
         {questions.map((q, i) => (
           <li key={q.id} className="rounded-lg border border-line-200 bg-surface p-3">
@@ -527,15 +650,17 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
                   placeholder={responseType === "vf" ? 'Ej. "Me he sentido tenso o nervioso"' : 'Ej. "Me he sentido nervioso"'}
                   className="w-full px-3 py-2 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
                 />
-                <label className="inline-flex items-center gap-2 text-xs text-ink-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={q.reverse}
-                    onChange={(e) => update(i, { reverse: e.target.checked })}
-                    className="h-3.5 w-3.5 accent-brand-700"
-                  />
-                  Ítem invertido
-                </label>
+                {showReverseFlag && (
+                  <label className="inline-flex items-center gap-2 text-xs text-ink-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={q.reverse}
+                      onChange={(e) => update(i, { reverse: e.target.checked })}
+                      className="h-3.5 w-3.5 accent-brand-700"
+                    />
+                    Ítem invertido
+                  </label>
+                )}
               </div>
               <button type="button" onClick={() => remove(i)} disabled={questions.length <= 1}
                 className="h-8 w-8 rounded-md text-ink-400 hover:text-rose-700 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
@@ -643,13 +768,18 @@ function RangesStep({ ranges, setRanges, maxScore }: {
 
 function ReviewStep({
   name, description, category, minutes, ageRange, questions, ranges, scale, maxScore, hasReversed,
+  scored, responseType,
 }: {
   name: string; description: string; category: string; minutes: number; ageRange: string;
   questions: QuestionDraft[]; ranges: RangeDraft[];
   scale: Array<{ value: number; label: string }>;
   maxScore: number; hasReversed: boolean;
+  scored: boolean; responseType: ResponseType;
 }) {
   const sortedRanges = [...ranges].sort((a, b) => a.min - b.min);
+  const responseLabel = responseType === "vf" ? "Verdadero / Falso"
+    : responseType === "likert" ? "Likert"
+    : "Selección personalizada";
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-line-200 bg-bg-100/30 p-4">
@@ -661,39 +791,52 @@ function ReviewStep({
       </div>
 
       <div>
-        <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">Tipo de respuesta</p>
+        <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">
+          Tipo de respuesta — {responseLabel}
+        </p>
         <div className="flex flex-wrap gap-1.5">
           {scale.map((s) => (
-            <span key={s.value} className="text-xs px-2 py-1 rounded-md bg-bg-100 text-ink-700 tabular border border-line-200">
-              {s.value} · {s.label}
+            <span key={s.value} className="text-xs px-2 py-1 rounded-md bg-bg-100 text-ink-700 border border-line-200">
+              {scored && <span className="tabular text-ink-500 mr-1">{s.value}</span>}
+              {s.label}
             </span>
           ))}
         </div>
-        {hasReversed && (
-          <p className="text-[11px] text-ink-500 mt-2">El formulario incluye ítems invertidos — el scoring los compensa automáticamente.</p>
+        {hasReversed && scored && (
+          <p className="text-[11px] text-ink-500 mt-2">El test incluye ítems invertidos — el scoring los compensa automáticamente.</p>
         )}
       </div>
 
-      <div>
-        <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">Severidad</p>
-        <ul className="space-y-1.5">
-          {sortedRanges.map((r) => {
-            const sev = SEVERITY_OPTIONS.find((o) => o.value === r.level);
-            return (
-              <li key={r.id} className="flex items-center justify-between rounded-md border border-line-100 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider", sev?.class)}>
-                    {sev?.label}
-                  </span>
-                  <span className="text-sm text-ink-900">{r.label || "—"}</span>
-                </div>
-                <span className="text-xs text-ink-500 tabular">{r.min} – {r.max}</span>
-              </li>
-            );
-          })}
-        </ul>
-        <p className="text-[11px] text-ink-500 mt-2">Puntaje máximo posible: <span className="tabular">{maxScore}</span></p>
-      </div>
+      {scored ? (
+        <div>
+          <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">Severidad</p>
+          <ul className="space-y-1.5">
+            {sortedRanges.map((r) => {
+              const sev = SEVERITY_OPTIONS.find((o) => o.value === r.level);
+              return (
+                <li key={r.id} className="flex items-center justify-between rounded-md border border-line-100 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wider", sev?.class)}>
+                      {sev?.label}
+                    </span>
+                    <span className="text-sm text-ink-900">{r.label || "—"}</span>
+                  </div>
+                  <span className="text-xs text-ink-500 tabular">{r.min} – {r.max}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[11px] text-ink-500 mt-2">Puntaje máximo posible: <span className="tabular">{maxScore}</span></p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-line-200 bg-bg-100/30 p-4">
+          <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-1">Resultados</p>
+          <p className="text-sm text-ink-900">Sin puntaje automático.</p>
+          <p className="text-xs text-ink-500 mt-1">
+            Al completar el test, vas a ver la lista de respuestas tal cual el paciente las marcó. La interpretación clínica queda en tus manos.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

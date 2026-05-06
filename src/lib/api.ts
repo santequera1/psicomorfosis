@@ -384,7 +384,7 @@ export interface PsychTestDefinition {
   instructions?: string;
   scale?: PsychTestScaleOption[] | null;
   questions: PsychTestQuestion[];
-  scoring?: { type: "sum" | "sum_reversed" | "eat26" };
+  scoring?: { type: "sum" | "sum_reversed" | "eat26" | "millon" | "none" };
   ranges: PsychTestRange[];
   alerts?: PsychTestAlerts | null;
 }
@@ -427,7 +427,9 @@ export interface CreateFormBody {
     instructions?: string;
     scale: PsychTestScaleOption[];
     questions: Array<{ id: string; text: string; reverse?: boolean }>;
-    scoring: { type: "sum" | "sum_reversed" };
+    /** "none" indica test cualitativo: no se calcula puntaje ni nivel,
+     *  el psicólogo lee las respuestas y las interpreta. */
+    scoring: { type: "sum" | "sum_reversed" | "none" };
     ranges: PsychTestRange[];
   };
 }
@@ -459,6 +461,14 @@ export interface TestApplication {
       type?: string;
       validity_warning?: string | null;
       requires_clinical_interpretation?: boolean;
+      /** Para tests cualitativos (scoring "none"): snapshot de las respuestas
+       *  con etiquetas legibles, listas para que el psicólogo las interprete. */
+      answers_snapshot?: Array<{
+        id: string;
+        text: string;
+        value: number | null;
+        label: string | null;
+      }>;
     };
   } | null;
   total_items?: number | null;

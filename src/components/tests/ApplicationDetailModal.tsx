@@ -199,17 +199,81 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
 }
 
 /**
- * Modal de detalle al abrir una aplicación completada desde una lista. Para
- * tests Millon usa MillonResultView; para los demás muestra el resumen
- * estándar (score + interpretación + alerta crítica si aplica).
+ * Vista de resultados para tests cualitativos (formularios "Selección
+ * personalizada"). Muestra cada pregunta junto con la respuesta del
+ * paciente — sin puntaje, sin nivel. La interpretación queda al psicólogo.
+ *
+ * Lee del snapshot guardado en alerts_json.meta.answers_snapshot, que es
+ * estable aunque después se edite el test (las preguntas/etiquetas
+ * originales se conservan para esa aplicación específica).
+ */
+export function QualitativeResultView({ result, onClose }: { result: TestApplication; onClose: () => void }) {
+  const snap = result.alerts_json?.meta?.answers_snapshot ?? [];
+  return (
+    <div className="p-5 sm:p-6">
+      <div className="mb-5">
+        <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code} · {result.patient_name}</p>
+        <h3 className="font-serif text-2xl text-ink-900 mt-1">Respuestas del paciente</h3>
+        <p className="text-xs text-ink-500 mt-1.5">
+          Test cualitativo — sin puntaje automático. Las respuestas se muestran tal cual fueron marcadas para tu interpretación clínica.
+        </p>
+      </div>
+
+      {snap.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-line-200 p-8 text-center text-sm text-ink-500">
+          No hay respuestas registradas.
+        </div>
+      ) : (
+        <ol className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          {snap.map((s, i) => (
+            <li key={s.id} className="rounded-lg border border-line-200 bg-surface p-3">
+              <div className="flex items-start gap-3">
+                <span className="text-[11px] tabular text-ink-500 shrink-0 mt-0.5 w-6">{i + 1}.</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-ink-900 leading-snug">{s.text}</p>
+                  <div className="mt-2">
+                    {s.label != null ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-50 text-brand-800 border border-brand-100">
+                        {s.label}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-400 italic">Sin respuesta</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="mt-5 flex justify-end">
+        <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de detalle al abrir una aplicación completada desde una lista.
+ * Tres vistas según el tipo:
+ *   - Millon (multi-escala con badges).
+ *   - Cualitativo (lista de respuestas sin puntaje).
+ *   - Estándar (score + interpretación + alerta crítica si aplica).
  */
 export function ApplicationDetailModal({ app, onClose }: { app: TestApplication; onClose: () => void }) {
-  const isMillon = app.alerts_json?.meta?.type === "millon";
+  const metaType = app.alerts_json?.meta?.type;
+  const isMillon = metaType === "millon";
+  const isQualitative = metaType === "qualitative";
   const lvl = app.level && LEVEL_STYLE[app.level];
   return (
-    <Modal onClose={onClose} title={`${app.test_code} · ${app.patient_name ?? ""}`} wide={isMillon}>
+    <Modal onClose={onClose} title={`${app.test_code} · ${app.patient_name ?? ""}`} wide={isMillon || isQualitative}>
       {isMillon ? (
         <MillonResultView result={app} onClose={onClose} />
+      ) : isQualitative ? (
+        <QualitativeResultView result={app} onClose={onClose} />
       ) : (
         <div className="p-6 text-center">
           <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{app.test_code}</p>

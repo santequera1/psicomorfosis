@@ -117,13 +117,15 @@ router.post("/forms", (req, res) => {
   if (scale.length < 2) {
     return res.status(400).json({ error: "La escala debe tener al menos 2 opciones" });
   }
-  const ranges = Array.isArray(definition.ranges) ? definition.ranges : [];
-  if (ranges.length === 0) {
-    return res.status(400).json({ error: "Define al menos un rango de severidad" });
-  }
   const scoringType = definition.scoring?.type;
-  if (scoringType !== "sum" && scoringType !== "sum_reversed") {
+  if (scoringType !== "sum" && scoringType !== "sum_reversed" && scoringType !== "none") {
     return res.status(400).json({ error: "Tipo de scoring no soportado para formularios" });
+  }
+  // Los tests cualitativos (scoring="none") no tienen rangos de severidad.
+  // Para los demás (suma normal o invertida) seguimos exigiendo al menos uno.
+  const ranges = Array.isArray(definition.ranges) ? definition.ranges : [];
+  if (scoringType !== "none" && ranges.length === 0) {
+    return res.status(400).json({ error: "Define al menos un rango de severidad" });
   }
 
   // ID único: form-<workspace>-<timestamp>-<random>. El code lo usa la UI

@@ -842,7 +842,9 @@ function TabTests({ rows }: { rows: any[] }) {
         ) : (
           <ul className="divide-y divide-line-100">
             {rows.map((r) => {
-              const isMillon = r.alerts_json?.meta?.type === "millon";
+              const metaType = r.alerts_json?.meta?.type;
+              const isMillon = metaType === "millon";
+              const isQualitative = metaType === "qualitative";
               const isCompleted = r.status === "completado";
               const clickable = isCompleted;
               const RowTag: any = clickable ? "button" : "div";
@@ -883,6 +885,11 @@ function TabTests({ rows }: { rows: any[] }) {
                         isMillon ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors">
                             Ver detalle por escala
+                            <ChevronRight className="h-3 w-3" />
+                          </span>
+                        ) : isQualitative ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-brand-50 text-brand-800 hover:bg-brand-100 transition-colors">
+                            Ver respuestas
                             <ChevronRight className="h-3 w-3" />
                           </span>
                         ) : r.score != null ? (
