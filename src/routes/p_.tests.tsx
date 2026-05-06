@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Brain, CheckCircle2, Clock, Loader2, ChevronLeft, AlertCircle } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { TestRunner } from "@/components/tests/TestRunner";
-import { api, type TestApplication, type PsychTestDefinition } from "@/lib/api";
+import { api, type TestApplication, type PsychTestDefinition, type AnswersMap } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/p_/tests")({
@@ -18,7 +18,7 @@ type AppWithDef = TestApplication & { definition: PsychTestDefinition | null };
 function PortalTestsPage() {
   const qc = useQueryClient();
   const [active, setActive] = useState<AppWithDef | null>(null);
-  const [result, setResult] = useState<{ score: number; level: string; label: string; has_critical_response: boolean; testCode: string } | null>(null);
+  const [result, setResult] = useState<{ score: number | null; level: string; label: string; has_critical_response: boolean; testCode: string } | null>(null);
 
   const { data: tests = [], isLoading } = useQuery({
     queryKey: ["portal-tests"],
@@ -26,7 +26,7 @@ function PortalTestsPage() {
   });
 
   const submitMu = useMutation({
-    mutationFn: (params: { id: string; answers: Record<string, number> }) =>
+    mutationFn: (params: { id: string; answers: AnswersMap }) =>
       api.portalSubmitTest(params.id, params.answers),
     onSuccess: (res, params) => {
       qc.invalidateQueries({ queryKey: ["portal-tests"] });

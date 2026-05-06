@@ -474,7 +474,7 @@ export const PSYCH_TEST_DEFINITIONS = [
     category: "personalidad",
     description: "Cuestionario de 175 ítems (Verdadero/Falso) para evaluación de patrones de personalidad y síndromes clínicos. Devuelve puntuaciones brutas (PD) por escala — la conversión a Tasa Base (BR) e interpretación clínica las realiza el profesional con su Excel oficial.",
     age_range: "≥ 18",
-    instructions: "Lee cada afirmación y marca Verdadero si la describe tu forma habitual de ser, sentir o actuar; Falso si no lo hace. No hay respuestas correctas o incorrectas. Si tenés dudas, marca lo que mejor te describe la mayoría del tiempo. Podés pausar y retomar en otro momento — el progreso se guarda automáticamente.",
+    instructions: "Lee cada afirmación y marca Verdadero si la describe tu forma habitual de ser, sentir o actuar; Falso si no lo hace. No hay respuestas correctas o incorrectas. Si tienes dudas, marca lo que mejor te describe la mayoría del tiempo. Puedes pausar y retomar en otro momento — el progreso se guarda automáticamente.",
     scale: SCALE_VF,
     questions: MCMI2_QUESTIONS,
     scoring: {
@@ -573,12 +573,10 @@ export function calculateScore(testDef, answers) {
   let score = 0;
   const alerts = {};
 
-  // Tests cualitativos (formularios "Selección personalizada" sin scoring):
-  // no se calcula puntaje ni nivel. Solo se guarda un snapshot de las
-  // respuestas con la etiqueta de la opción elegida, para que el psicólogo
-  // pueda leerlas e interpretarlas a su criterio. La etiqueta se guarda
-  // junto al valor para que aplicaciones viejas sigan siendo legibles si
-  // el formulario se edita después.
+  // Tests cualitativos legacy (v1.1 "Selección personalizada", scoring="none"):
+  // todas las preguntas comparten una escala global y el resultado es el
+  // listado de respuestas con etiqueta. Se mantiene la rama por compat con
+  // tests creados antes de v1.2.
   if (testDef.scoring?.type === "none") {
     const scaleByValue = new Map();
     for (const opt of testDef.scale ?? []) scaleByValue.set(Number(opt.value), opt.label);
@@ -597,6 +595,60 @@ export function calculateScore(testDef, answers) {
       level: "none",
       label: "Ver respuestas",
       alerts: { meta: { type: "qualitative", answers_snapshot } },
+    };
+  }
+
+  // Tests "Actividad" (v1.2): cada pregunta tiene su propio widget
+  // (single_choice / yes_no / numeric / text). Sin score. El snapshot
+  // resuelve la etiqueta por tipo para que la vista de resultados no
+  // tenga que recalcular nada del lado del cliente.
+  if (testDef.scoring?.type === "activity") {
+    const answers_snapshot = (testDef.questions ?? []).map((q) => {
+      const raw = answers[q.id];
+      const present = raw !== undefined && raw !== null && raw !== "";
+      let value = null;
+      let label = null;
+      if (q.type === "single_choice") {
+        if (present) {
+          const numV = Number(raw);
+          value = Number.isFinite(numV) ? numV : null;
+          const opt = (q.options ?? []).find((o) => Number(o.value) === value);
+          label = opt?.label ?? (value != null ? String(value) : null);
+        }
+      } else if (q.type === "yes_no") {
+        if (present) {
+          const numV = Number(raw);
+          value = numV === 1 ? 1 : numV === 0 ? 0 : null;
+          label = value === 1 ? "Sí" : value === 0 ? "No" : null;
+        }
+      } else if (q.type === "numeric") {
+        if (present) {
+          const numV = Number(raw);
+          value = Number.isFinite(numV) ? numV : null;
+          label = value != null ? String(value) : null;
+        }
+      } else if (q.type === "text") {
+        if (present) {
+          value = String(raw);
+          label = null; // el valor mismo ES la respuesta
+        }
+      } else {
+        // Tipo desconocido — guardamos el raw tal cual.
+        if (present) value = raw;
+      }
+      return {
+        id: q.id,
+        text: q.text,
+        q_type: q.type ?? null,
+        value,
+        label,
+      };
+    });
+    return {
+      score: null,
+      level: "none",
+      label: "Ver respuestas",
+      alerts: { meta: { type: "activity", answers_snapshot } },
     };
   }
 

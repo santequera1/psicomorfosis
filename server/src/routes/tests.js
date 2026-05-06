@@ -111,20 +111,51 @@ router.post("/forms", (req, res) => {
   }
   const questions = Array.isArray(definition.questions) ? definition.questions : [];
   if (questions.length === 0) {
-    return res.status(400).json({ error: "El formulario debe tener al menos una pregunta" });
-  }
-  const scale = Array.isArray(definition.scale) ? definition.scale : [];
-  if (scale.length < 2) {
-    return res.status(400).json({ error: "La escala debe tener al menos 2 opciones" });
+    return res.status(400).json({ error: "El test debe tener al menos una pregunta" });
   }
   const scoringType = definition.scoring?.type;
-  if (scoringType !== "sum" && scoringType !== "sum_reversed" && scoringType !== "none") {
-    return res.status(400).json({ error: "Tipo de scoring no soportado para formularios" });
+  if (!["sum", "sum_reversed", "none", "activity"].includes(scoringType)) {
+    return res.status(400).json({ error: "Tipo de scoring no soportado" });
   }
-  // Los tests cualitativos (scoring="none") no tienen rangos de severidad.
-  // Para los demás (suma normal o invertida) seguimos exigiendo al menos uno.
+
+  // Validación específica por tipo de scoring:
+  //  - sum / sum_reversed / none: escala global (Likert/V-F) compartida.
+  //  - activity: cada pregunta lleva su propio widget. La escala global
+  //    NO se usa pero se conserva como [] por compat.
+  const scale = Array.isArray(definition.scale) ? definition.scale : [];
+  if (scoringType !== "activity" && scale.length < 2) {
+    return res.status(400).json({ error: "La escala debe tener al menos 2 opciones" });
+  }
+
+  if (scoringType === "activity") {
+    const allowedTypes = new Set(["single_choice", "yes_no", "numeric", "text"]);
+    for (const q of questions) {
+      if (!allowedTypes.has(q.type)) {
+        return res.status(400).json({ error: `Pregunta "${q.text || q.id}": tipo "${q.type}" no soportado` });
+      }
+      if (q.type === "single_choice") {
+        const opts = Array.isArray(q.options) ? q.options : [];
+        if (opts.length < 2) {
+          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": opción múltiple necesita al menos 2 opciones` });
+        }
+        if (opts.some((o) => !o || typeof o.label !== "string" || !o.label.trim())) {
+          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": todas las opciones necesitan etiqueta` });
+        }
+      }
+      if (q.type === "numeric") {
+        const lo = q.numeric_min;
+        const hi = q.numeric_max;
+        if (lo != null && hi != null && Number(lo) > Number(hi)) {
+          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": el mínimo no puede ser mayor que el máximo` });
+        }
+      }
+    }
+  }
+
+  // Sólo los tipos puntuables (sum/sum_reversed) requieren rangos.
   const ranges = Array.isArray(definition.ranges) ? definition.ranges : [];
-  if (scoringType !== "none" && ranges.length === 0) {
+  const isScored = scoringType === "sum" || scoringType === "sum_reversed";
+  if (isScored && ranges.length === 0) {
     return res.status(400).json({ error: "Define al menos un rango de severidad" });
   }
 
@@ -135,12 +166,33 @@ router.post("/forms", (req, res) => {
   const id = `form-${req.user.workspace_id}-${ts}-${rand}`;
   const code = (short_name && short_name.trim()) || `FORM-${rand}`;
 
-  // Normalizamos las preguntas: id estable, texto limpio, flag reverse.
-  const normQuestions = questions.map((q, i) => ({
-    id: typeof q.id === "string" && q.id.trim() ? q.id : `q${i + 1}`,
-    text: String(q.text ?? "").trim(),
-    ...(q.reverse ? { reverse: true } : {}),
-  }));
+  // Normalizamos las preguntas: id estable, texto limpio. Para Actividad
+  // (scoring="activity") preservamos type/options/numeric_min/numeric_max/
+  // placeholder por pregunta. El flag `reverse` solo se usa en tipos
+  // puntuables y se descarta en cualquier otro caso para no confundir al
+  // motor de scoring.
+  const normQuestions = questions.map((q, i) => {
+    const base = {
+      id: typeof q.id === "string" && q.id.trim() ? q.id : `q${i + 1}`,
+      text: String(q.text ?? "").trim(),
+    };
+    if (scoringType === "activity") {
+      const out = { ...base, type: q.type };
+      if (q.type === "single_choice") {
+        out.options = (q.options ?? []).map((o) => ({
+          value: Number(o.value),
+          label: String(o.label ?? "").trim(),
+        }));
+      } else if (q.type === "numeric") {
+        if (q.numeric_min != null) out.numeric_min = Number(q.numeric_min);
+        if (q.numeric_max != null) out.numeric_max = Number(q.numeric_max);
+      } else if (q.type === "text") {
+        if (q.placeholder) out.placeholder = String(q.placeholder).trim();
+      }
+      return out;
+    }
+    return { ...base, ...(q.reverse ? { reverse: true } : {}) };
+  });
   const normRanges = ranges.map((r) => ({
     min: Number(r.min),
     max: Number(r.max),

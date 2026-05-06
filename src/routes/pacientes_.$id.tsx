@@ -844,7 +844,7 @@ function TabTests({ rows }: { rows: any[] }) {
             {rows.map((r) => {
               const metaType = r.alerts_json?.meta?.type;
               const isMillon = metaType === "millon";
-              const isQualitative = metaType === "qualitative";
+              const isQualitative = metaType === "qualitative" || metaType === "activity";
               const isCompleted = r.status === "completado";
               const clickable = isCompleted;
               const RowTag: any = clickable ? "button" : "div";

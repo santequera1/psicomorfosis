@@ -3,34 +3,32 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   X, Plus, Trash2, ArrowLeft, ArrowRight, GripVertical, Loader2,
-  CheckSquare, Sliders, Info, ListChecks,
+  CheckSquare, Sliders, Info, ListChecks, Hash, Type as TypeIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type CreateFormBody, type PsychTestRange } from "@/lib/api";
+import {
+  api,
+  type CreateFormBody, type PsychTestRange, type PsychTestQuestion,
+  type ActivityQuestionType,
+} from "@/lib/api";
 
 /**
- * Builder simple para que el psicólogo cree formularios tipo cuestionario
- * (autoevaluaciones / tamizajes). Soporta dos formatos:
- *   - V/F: 2 opciones fijas con valores 1/0
- *   - Likert: 3-7 opciones con etiquetas configurables
+ * Builder de tests del consultorio. Tres tipos:
+ *   - V/F: 2 opciones fijas (1/0). Score = suma de Verdaderos.
+ *   - Likert: 3-7 niveles entre dos extremos. Score = suma.
+ *   - Actividad: cada pregunta lleva su propio widget (single_choice,
+ *     yes_no, numeric, text). Sin score automático — la interpretación
+ *     queda al psicólogo.
  *
- * Scoring exclusivo por suma. La estructura de `definition` es idéntica
- * a la de los instrumentos clínicos para que el TestRunner los renderice
- * sin código condicional. La extensibilidad a múltiples escalas/pesos
- * queda diferida — la API ya acepta el shape, pero la UI solo expone
- * scoring por suma en este v1.
+ * El TestRunner detecta `question.type` en runtime y renderiza el widget
+ * correspondiente. Para Likert/V-F las preguntas no llevan `type` y caen
+ * por la rama legacy basada en `definition.scale`.
  */
 
-type ResponseType = "vf" | "likert" | "custom";
+type ResponseType = "vf" | "likert" | "activity";
 type Severity = "none" | "low" | "moderate" | "high" | "critical";
-
 type Step = "meta" | "scale" | "questions" | "ranges" | "review";
 
-/**
- * Indica si un tipo de respuesta produce puntaje cuantitativo o no.
- * Los tests cualitativos (custom) no calculan score ni rango — el psicólogo
- * lee las respuestas y las interpreta clínicamente.
- */
 const SCORED_TYPES: ResponseType[] = ["vf", "likert"];
 function isScored(t: ResponseType) { return SCORED_TYPES.includes(t); }
 
@@ -50,8 +48,25 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: "review",    label: "Revisión" },
 ];
 
-interface QuestionDraft { id: string; text: string; reverse: boolean }
-interface RangeDraft   { id: string; min: number; max: number; label: string; level: Severity }
+const ACTIVITY_TYPE_LABELS: Record<ActivityQuestionType, string> = {
+  single_choice: "Opción múltiple",
+  yes_no: "Sí / No",
+  numeric: "Escala numérica",
+  text: "Texto abierto",
+};
+
+interface QuestionDraft {
+  id: string;
+  text: string;
+  reverse: boolean;
+  // Sólo para "activity":
+  type?: ActivityQuestionType;
+  options?: Array<{ value: number; label: string }>;
+  numericMin?: number;
+  numericMax?: number;
+  placeholder?: string;
+}
+interface RangeDraft { id: string; min: number; max: number; label: string; level: Severity }
 
 export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
@@ -65,29 +80,44 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   const [minutes, setMinutes] = useState(5);
   const [instructions, setInstructions] = useState("");
 
-  // Step 2: scale
+  // Step 2: tipo de respuesta
   const [responseType, setResponseType] = useState<ResponseType>("likert");
   const [likertPoints, setLikertPoints] = useState(5);
   const [likertLabels, setLikertLabels] = useState<string[]>([
     "Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre",
   ]);
-  // Selección personalizada: el psicólogo define el set global de opciones
-  // (todas las preguntas comparten el mismo set, ej. "Nunca / A veces /
-  // Siempre"). Sin scoring — solo se guardan las respuestas tal cual.
-  const [customLabels, setCustomLabels] = useState<string[]>([
-    "Nunca", "A veces", "Siempre",
-  ]);
 
-  // Step 3: questions
+  // Step 3: preguntas
   const [questions, setQuestions] = useState<QuestionDraft[]>([
-    { id: "q1", text: "", reverse: false },
+    { id: "q1", text: "", reverse: false, type: "single_choice", options: [{ value: 0, label: "" }, { value: 1, label: "" }] },
   ]);
 
-  // Step 4: ranges
+  // Step 4: rangos (solo aplica a tipos puntuables)
   const [ranges, setRanges] = useState<RangeDraft[]>([]);
 
-  // Step navigation. Para tests cualitativos saltamos el paso "ranges"
-  // — no hay severidad que definir cuando no se calcula puntaje.
+  // Cuando el psicólogo cambia entre tipos, ajustamos el shape de las
+  // preguntas para no quedar con campos huérfanos. Activity → cada pregunta
+  // arranca como single_choice. Scored ← se quitan los campos de activity.
+  function switchResponseType(next: ResponseType) {
+    setResponseType(next);
+    if (next === "activity") {
+      setQuestions((prev) => prev.map((q) => ({
+        ...q,
+        reverse: false,
+        type: q.type ?? "single_choice",
+        options: q.type === "single_choice" || q.type == null
+          ? (q.options && q.options.length >= 2 ? q.options : [{ value: 0, label: "" }, { value: 1, label: "" }])
+          : q.options,
+      })));
+    } else {
+      setQuestions((prev) => prev.map((q) => {
+        const { type, options, numericMin, numericMax, placeholder, ...rest } = q;
+        void type; void options; void numericMin; void numericMax; void placeholder;
+        return { ...rest, reverse: rest.reverse ?? false };
+      }));
+    }
+  }
+
   const [step, setStep] = useState<Step>("meta");
   const visibleSteps = useMemo<Array<{ id: Step; label: string }>>(
     () => isScored(responseType) ? STEPS : STEPS.filter((s) => s.id !== "ranges"),
@@ -95,9 +125,8 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
   );
   const stepIdx = visibleSteps.findIndex((s) => s.id === step);
 
-  // Escala efectiva según el tipo. Para "custom" usamos los labels del
-  // psicólogo y asignamos values 0..N-1 sólo para satisfacer el shape del
-  // engine; esos valores no se suman porque scoring={type:"none"}.
+  // Escala efectiva: sólo aplica a tipos puntuables. Activity la deja vacía
+  // porque cada pregunta tiene sus propias opciones.
   const scale = useMemo(() => {
     if (responseType === "vf") {
       return [
@@ -105,34 +134,29 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
         { value: 0, label: "Falso" },
       ];
     }
-    if (responseType === "custom") {
-      return customLabels.map((label, i) => ({
+    if (responseType === "likert") {
+      return likertLabels.slice(0, likertPoints).map((label, i) => ({
         value: i,
         label: label.trim() || `Opción ${i + 1}`,
       }));
     }
-    return likertLabels.slice(0, likertPoints).map((label, i) => ({
-      value: i,
-      label: label.trim() || `Opción ${i + 1}`,
-    }));
-  }, [responseType, likertPoints, likertLabels, customLabels]);
+    return [];
+  }, [responseType, likertPoints, likertLabels]);
 
-  // Score máximo posible (sólo para tipos puntuables — Likert/V/F).
   const maxScore = useMemo(() => {
     if (!isScored(responseType)) return 0;
     const high = scale.reduce((m, o) => Math.max(m, o.value), 0);
     return high * questions.length;
   }, [scale, questions.length, responseType]);
 
-  // Auto-genera 3 rangos al pasar al step "ranges" si está vacío.
   function ensureRanges() {
     if (ranges.length > 0) return;
     const third = Math.floor(maxScore / 3);
     const twoThird = Math.floor((maxScore * 2) / 3);
     setRanges([
-      { id: "r1", min: 0,            max: Math.max(0, third - 1),       label: "Bajo",      level: "low" },
-      { id: "r2", min: third,        max: Math.max(third, twoThird - 1), label: "Moderado", level: "moderate" },
-      { id: "r3", min: twoThird,     max: maxScore,                     label: "Alto",      level: "high" },
+      { id: "r1", min: 0,        max: Math.max(0, third - 1),       label: "Bajo",     level: "low" },
+      { id: "r2", min: third,    max: Math.max(third, twoThird - 1), label: "Moderado", level: "moderate" },
+      { id: "r3", min: twoThird, max: maxScore,                     label: "Alto",     level: "high" },
     ]);
   }
 
@@ -156,16 +180,26 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
       const labels = likertLabels.slice(0, likertPoints);
       if (labels.some((l) => !l.trim())) return "Todas las opciones de Likert necesitan etiqueta";
     }
-    if (responseType === "custom") {
-      if (customLabels.length < 2) return "Selección personalizada necesita al menos 2 opciones";
-      if (customLabels.length > 10) return "Máximo 10 opciones por test";
-      if (customLabels.some((l) => !l.trim())) return "Todas las opciones necesitan etiqueta";
-    }
     return null;
   }
   function validateQuestions(): string | null {
     if (questions.length === 0) return "Agrega al menos una pregunta";
-    if (questions.some((q) => !q.text.trim())) return "Hay preguntas sin texto";
+    for (const q of questions) {
+      if (!q.text.trim()) return "Hay preguntas sin texto";
+      if (responseType === "activity") {
+        if (!q.type) return `Pregunta "${q.text}": elige un tipo de respuesta`;
+        if (q.type === "single_choice") {
+          const opts = q.options ?? [];
+          if (opts.length < 2) return `Pregunta "${q.text}": opción múltiple necesita al menos 2 opciones`;
+          if (opts.some((o) => !o.label.trim())) return `Pregunta "${q.text}": hay opciones sin etiqueta`;
+        }
+        if (q.type === "numeric") {
+          if (q.numericMin != null && q.numericMax != null && q.numericMin > q.numericMax) {
+            return `Pregunta "${q.text}": el mínimo no puede ser mayor que el máximo`;
+          }
+        }
+      }
+    }
     return null;
   }
   function validateRanges(): string | null {
@@ -203,7 +237,34 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
     const err = validateMeta() ?? validateScale() ?? validateQuestions()
       ?? (isScored(responseType) ? validateRanges() : null);
     if (err) { toast.error(err); return; }
+    const isActivity = responseType === "activity";
     const scored = isScored(responseType);
+
+    const builtQuestions: PsychTestQuestion[] = questions.map((q, i) => {
+      const baseId = q.id || `q${i + 1}`;
+      const text = q.text.trim();
+      if (isActivity) {
+        const out: PsychTestQuestion = { id: baseId, text, type: q.type! };
+        if (q.type === "single_choice") {
+          out.options = (q.options ?? []).map((o, j) => ({
+            value: j, // siempre 0..N-1, ignoramos el value editado
+            label: o.label.trim(),
+          }));
+        }
+        if (q.type === "numeric") {
+          if (q.numericMin != null) out.numeric_min = q.numericMin;
+          if (q.numericMax != null) out.numeric_max = q.numericMax;
+        }
+        if (q.type === "text" && q.placeholder) out.placeholder = q.placeholder.trim();
+        return out;
+      }
+      return {
+        id: baseId,
+        text,
+        ...(scored && q.reverse ? { reverse: true } : {}),
+      };
+    });
+
     const body: CreateFormBody = {
       name: name.trim(),
       short_name: shortName.trim() || undefined,
@@ -214,16 +275,10 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
       definition: {
         instructions: instructions.trim() || undefined,
         scale,
-        questions: questions.map((q, i) => ({
-          id: q.id || `q${i + 1}`,
-          text: q.text.trim(),
-          // El flag "invertido" sólo tiene sentido en tests con suma — en
-          // cualitativos lo descartamos para no confundir al engine.
-          ...(scored && q.reverse ? { reverse: true } : {}),
-        })),
+        questions: builtQuestions,
         scoring: scored
           ? { type: questions.some((q) => q.reverse) ? "sum_reversed" : "sum" }
-          : { type: "none" as const },
+          : { type: "activity" as const },
         ranges: scored
           ? ranges
               .sort((a, b) => a.min - b.min)
@@ -245,7 +300,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Test personalizado</p>
             <h3 className="font-serif text-xl text-ink-900 mt-0.5">Crear test</h3>
             <p className="text-xs text-ink-500 mt-1">
-              Cuestionarios cortos para tamizaje o autoevaluación. No reemplaza un instrumento clínico validado.
+              Cuestionarios cortos para tamizaje, autoevaluación o anamnesis. No reemplaza un instrumento clínico validado.
             </p>
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400 shrink-0">
@@ -253,7 +308,6 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        {/* Stepper — sólo muestra los pasos visibles para el tipo elegido. */}
         <div className="px-5 py-3 border-b border-line-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
           {visibleSteps.map((s, i) => {
             const active = s.id === step;
@@ -285,10 +339,9 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
           )}
           {step === "scale" && (
             <ScaleStep
-              responseType={responseType} setResponseType={setResponseType}
+              responseType={responseType} setResponseType={switchResponseType}
               likertPoints={likertPoints} setLikertPoints={setLikertPoints}
               likertLabels={likertLabels} setLikertLabels={setLikertLabels}
-              customLabels={customLabels} setCustomLabels={setCustomLabels}
             />
           )}
           {step === "questions" && (
@@ -298,10 +351,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
             />
           )}
           {step === "ranges" && isScored(responseType) && (
-            <RangesStep
-              ranges={ranges} setRanges={setRanges}
-              maxScore={maxScore}
-            />
+            <RangesStep ranges={ranges} setRanges={setRanges} maxScore={maxScore} />
           )}
           {step === "review" && (
             <ReviewStep
@@ -392,6 +442,7 @@ function MetaStep(props: {
           >
             <option value="Tamizaje">Tamizaje</option>
             <option value="Autoevaluación">Autoevaluación</option>
+            <option value="Anamnesis">Anamnesis</option>
             <option value="Seguimiento">Seguimiento</option>
             <option value="Personalizado">Personalizado</option>
           </select>
@@ -420,7 +471,7 @@ function MetaStep(props: {
           value={props.description}
           onChange={(e) => props.setDescription(e.target.value)}
           rows={2}
-          placeholder="Para qué sirve este formulario y cómo se interpreta."
+          placeholder="Para qué sirve este test y cómo se interpreta."
           className="w-full px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
         />
       </Field>
@@ -441,29 +492,15 @@ function ScaleStep(props: {
   responseType: ResponseType; setResponseType: (v: ResponseType) => void;
   likertPoints: number; setLikertPoints: (v: number) => void;
   likertLabels: string[]; setLikertLabels: (v: string[]) => void;
-  customLabels: string[]; setCustomLabels: (v: string[]) => void;
 }) {
   function setLikertLabel(idx: number, value: string) {
     const next = [...props.likertLabels];
     next[idx] = value;
     props.setLikertLabels(next);
   }
-  function setCustomLabel(idx: number, value: string) {
-    const next = [...props.customLabels];
-    next[idx] = value;
-    props.setCustomLabels(next);
-  }
-  function addCustomOption() {
-    if (props.customLabels.length >= 10) return;
-    props.setCustomLabels([...props.customLabels, ""]);
-  }
-  function removeCustomOption(idx: number) {
-    if (props.customLabels.length <= 2) return;
-    props.setCustomLabels(props.customLabels.filter((_, i) => i !== idx));
-  }
   return (
     <div className="space-y-4">
-      <p className="text-xs text-ink-500">¿Cómo van a responder los pacientes? Aplica a todas las preguntas del test.</p>
+      <p className="text-xs text-ink-500">¿Cómo va a responder el paciente? Aplica a todas las preguntas del test (excepto en Actividad, donde cada pregunta lleva su propio formato).</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           type="button"
@@ -495,17 +532,17 @@ function ScaleStep(props: {
         </button>
         <button
           type="button"
-          onClick={() => props.setResponseType("custom")}
+          onClick={() => props.setResponseType("activity")}
           className={cn(
             "rounded-lg border p-4 text-left transition-colors",
-            props.responseType === "custom" ? "border-brand-700 bg-brand-50/40" : "border-line-200 hover:border-brand-400"
+            props.responseType === "activity" ? "border-brand-700 bg-brand-50/40" : "border-line-200 hover:border-brand-400"
           )}
         >
           <div className="flex items-center gap-2 mb-1">
             <ListChecks className="h-4 w-4 text-brand-700" />
-            <span className="text-sm font-medium text-ink-900">Selección personalizada</span>
+            <span className="text-sm font-medium text-ink-900">Actividad</span>
           </div>
-          <p className="text-xs text-ink-500">Define opciones propias para el test. Sin puntaje — el psicólogo lee e interpreta las respuestas.</p>
+          <p className="text-xs text-ink-500">Define tus propias opciones para el test. Sin puntaje — el psicólogo lee e interpreta las respuestas.</p>
         </button>
       </div>
 
@@ -540,51 +577,12 @@ function ScaleStep(props: {
         </div>
       )}
 
-      {props.responseType === "custom" && (
-        <div className="space-y-3 rounded-lg border border-line-200 bg-bg-100/30 p-4">
-          <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
-            <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
-            <div>
-              <strong>Sin puntaje automático.</strong> Las respuestas se guardan tal cual y vos las interpretás
-              clínicamente al revisar el test. Útil para anamnesis, cuestionarios cualitativos o tamizajes
-              donde no aplica una suma directa.
-            </div>
+      {props.responseType === "activity" && (
+        <div className="rounded-lg border border-line-200 bg-bg-100/30 p-4 text-xs text-ink-700 leading-relaxed flex items-start gap-2">
+          <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
+          <div>
+            <strong>Sin puntaje automático.</strong> En el siguiente paso vas a poder elegir, por cada pregunta, si quieres una opción múltiple, sí/no, una escala numérica o una caja de texto abierto. Las respuestas se guardan tal cual y tú las interpretas clínicamente al revisar el test.
           </div>
-          <p className="text-xs font-medium text-ink-700">Opciones que verán los pacientes</p>
-          <div className="space-y-2">
-            {props.customLabels.map((label, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-[11px] tabular text-ink-500 w-6 shrink-0">{i + 1}.</span>
-                <input
-                  type="text"
-                  value={label}
-                  onChange={(e) => setCustomLabel(i, e.target.value)}
-                  placeholder="Ej. Nunca / A veces / Siempre / Totalmente de acuerdo…"
-                  className="flex-1 h-9 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 focus:outline-none focus:border-brand-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeCustomOption(i)}
-                  disabled={props.customLabels.length <= 2}
-                  className="h-8 w-8 rounded-md text-ink-400 hover:text-rose-700 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center"
-                  title="Eliminar opción"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={addCustomOption}
-            disabled={props.customLabels.length >= 10}
-            className="w-full h-9 rounded-md border border-dashed border-line-200 text-xs text-ink-500 hover:border-brand-400 hover:text-brand-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" /> Agregar opción
-          </button>
-          <p className="text-[11px] text-ink-500">
-            Mínimo 2, máximo 10. Si tu test tiene secciones distintas (ej. "Sí/No" vs. "Frecuencia"), por ahora hay que crear un test por cada formato.
-          </p>
         </div>
       )}
     </div>
@@ -597,12 +595,35 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
   responseType: ResponseType;
 }) {
   const showReverseFlag = isScored(responseType);
+  const isActivity = responseType === "activity";
+
   function addQuestion() {
     const id = `q${questions.length + 1}`;
-    setQuestions([...questions, { id, text: "", reverse: false }]);
+    if (isActivity) {
+      setQuestions([...questions, {
+        id, text: "", reverse: false,
+        type: "single_choice",
+        options: [{ value: 0, label: "" }, { value: 1, label: "" }],
+      }]);
+    } else {
+      setQuestions([...questions, { id, text: "", reverse: false }]);
+    }
   }
   function update(idx: number, patch: Partial<QuestionDraft>) {
     setQuestions(questions.map((q, i) => i === idx ? { ...q, ...patch } : q));
+  }
+  function setQuestionType(idx: number, type: ActivityQuestionType) {
+    const q = questions[idx];
+    const patch: Partial<QuestionDraft> = { type };
+    // Re-inicializar campos del nuevo tipo
+    if (type === "single_choice" && (!q.options || q.options.length < 2)) {
+      patch.options = [{ value: 0, label: "" }, { value: 1, label: "" }];
+    }
+    if (type === "numeric" && q.numericMin == null && q.numericMax == null) {
+      patch.numericMin = 0;
+      patch.numericMax = 10;
+    }
+    update(idx, patch);
   }
   function remove(idx: number) {
     if (questions.length <= 1) return;
@@ -631,6 +652,14 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
           </div>
         </div>
       )}
+      {isActivity && (
+        <div className="flex items-start gap-2 rounded-md bg-brand-50/50 border border-brand-100 p-3 text-xs text-ink-700 leading-relaxed">
+          <Info className="h-3.5 w-3.5 text-brand-700 shrink-0 mt-0.5" />
+          <div>
+            <strong>Por cada pregunta</strong> elige el tipo de respuesta — opción múltiple, sí/no, escala numérica o caja de texto abierto. No hay puntaje: tú lees las respuestas y las interpretas clínicamente.
+          </div>
+        </div>
+      )}
       <ul className="space-y-2">
         {questions.map((q, i) => (
           <li key={q.id} className="rounded-lg border border-line-200 bg-surface p-3">
@@ -647,7 +676,7 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
                   value={q.text}
                   onChange={(e) => update(i, { text: e.target.value })}
                   rows={2}
-                  placeholder={responseType === "vf" ? 'Ej. "Me he sentido tenso o nervioso"' : 'Ej. "Me he sentido nervioso"'}
+                  placeholder='Ej. "Me he sentido nervioso"'
                   className="w-full px-3 py-2 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
                 />
                 {showReverseFlag && (
@@ -660,6 +689,13 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
                     />
                     Ítem invertido
                   </label>
+                )}
+                {isActivity && (
+                  <ActivityQuestionEditor
+                    q={q}
+                    setType={(t) => setQuestionType(i, t)}
+                    update={(patch) => update(i, patch)}
+                  />
                 )}
               </div>
               <button type="button" onClick={() => remove(i)} disabled={questions.length <= 1}
@@ -678,6 +714,145 @@ function QuestionsStep({ questions, setQuestions, responseType }: {
         className="w-full h-10 rounded-lg border border-dashed border-line-200 text-sm text-ink-500 hover:border-brand-400 hover:text-brand-700 inline-flex items-center justify-center gap-2"
       >
         <Plus className="h-4 w-4" /> Agregar pregunta
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Editor del tipo de respuesta para una pregunta de Actividad. Muestra los
+ * 4 chips (opción múltiple / sí-no / numérico / texto) y debajo el editor
+ * específico del tipo elegido.
+ */
+function ActivityQuestionEditor({ q, setType, update }: {
+  q: QuestionDraft;
+  setType: (t: ActivityQuestionType) => void;
+  update: (patch: Partial<QuestionDraft>) => void;
+}) {
+  const TYPES: Array<{ value: ActivityQuestionType; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { value: "single_choice", label: "Opción múltiple", icon: ListChecks },
+    { value: "yes_no",        label: "Sí / No",         icon: CheckSquare },
+    { value: "numeric",       label: "Numérico",        icon: Hash },
+    { value: "text",          label: "Texto abierto",   icon: TypeIcon },
+  ];
+  return (
+    <div className="rounded-md border border-line-100 bg-bg-100/30 p-3 space-y-2">
+      <p className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Tipo de respuesta</p>
+      <div className="flex flex-wrap gap-1.5">
+        {TYPES.map((t) => {
+          const Icon = t.icon;
+          const active = q.type === t.value;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setType(t.value)}
+              className={cn(
+                "h-8 px-3 rounded-full text-xs font-medium inline-flex items-center gap-1.5 border transition-colors",
+                active
+                  ? "border-brand-700 bg-brand-50 text-brand-800"
+                  : "border-line-200 bg-surface text-ink-700 hover:border-brand-400"
+              )}
+            >
+              <Icon className="h-3 w-3" /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {q.type === "single_choice" && (
+        <SingleChoiceEditor
+          options={q.options ?? []}
+          setOptions={(opts) => update({ options: opts })}
+        />
+      )}
+      {q.type === "yes_no" && (
+        <p className="text-[11px] text-ink-500">El paciente verá dos botones fijos: <strong>Sí</strong> y <strong>No</strong>.</p>
+      )}
+      {q.type === "numeric" && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="block text-[11px] text-ink-500 mb-1">Mínimo</span>
+            <input
+              type="number"
+              value={q.numericMin ?? ""}
+              onChange={(e) => update({ numericMin: e.target.value === "" ? undefined : Number(e.target.value) })}
+              className="w-full h-9 px-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 tabular focus:outline-none focus:border-brand-400"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-[11px] text-ink-500 mb-1">Máximo</span>
+            <input
+              type="number"
+              value={q.numericMax ?? ""}
+              onChange={(e) => update({ numericMax: e.target.value === "" ? undefined : Number(e.target.value) })}
+              className="w-full h-9 px-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 tabular focus:outline-none focus:border-brand-400"
+            />
+          </label>
+        </div>
+      )}
+      {q.type === "text" && (
+        <label className="block">
+          <span className="block text-[11px] text-ink-500 mb-1">Placeholder (opcional)</span>
+          <input
+            type="text"
+            value={q.placeholder ?? ""}
+            onChange={(e) => update({ placeholder: e.target.value })}
+            placeholder='Ej. "Cuéntame en tus palabras…"'
+            className="w-full h-9 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+function SingleChoiceEditor({ options, setOptions }: {
+  options: Array<{ value: number; label: string }>;
+  setOptions: (opts: Array<{ value: number; label: string }>) => void;
+}) {
+  function update(idx: number, label: string) {
+    setOptions(options.map((o, i) => i === idx ? { ...o, label } : o));
+  }
+  function add() {
+    if (options.length >= 10) return;
+    setOptions([...options, { value: options.length, label: "" }]);
+  }
+  function remove(idx: number) {
+    if (options.length <= 2) return;
+    // Re-indexar values 0..N-1 después de eliminar
+    setOptions(options.filter((_, i) => i !== idx).map((o, i) => ({ ...o, value: i })));
+  }
+  return (
+    <div className="space-y-1.5">
+      {options.map((o, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="text-[11px] tabular text-ink-500 w-5 shrink-0">{i + 1}.</span>
+          <input
+            type="text"
+            value={o.label}
+            onChange={(e) => update(i, e.target.value)}
+            placeholder={`Opción ${i + 1}`}
+            className="flex-1 h-9 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+          />
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            disabled={options.length <= 2}
+            className="h-7 w-7 rounded-md text-ink-400 hover:text-rose-700 hover:bg-rose-500/10 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center"
+            title="Eliminar opción"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        disabled={options.length >= 10}
+        className="w-full h-8 rounded-md border border-dashed border-line-200 text-[11px] text-ink-500 hover:border-brand-400 hover:text-brand-700 disabled:opacity-40 inline-flex items-center justify-center gap-1.5"
+      >
+        <Plus className="h-3 w-3" /> Agregar opción
       </button>
     </div>
   );
@@ -779,7 +954,7 @@ function ReviewStep({
   const sortedRanges = [...ranges].sort((a, b) => a.min - b.min);
   const responseLabel = responseType === "vf" ? "Verdadero / Falso"
     : responseType === "likert" ? "Likert"
-    : "Selección personalizada";
+    : "Actividad";
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-line-200 bg-bg-100/30 p-4">
@@ -794,14 +969,28 @@ function ReviewStep({
         <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">
           Tipo de respuesta — {responseLabel}
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {scale.map((s) => (
-            <span key={s.value} className="text-xs px-2 py-1 rounded-md bg-bg-100 text-ink-700 border border-line-200">
-              {scored && <span className="tabular text-ink-500 mr-1">{s.value}</span>}
-              {s.label}
-            </span>
-          ))}
-        </div>
+        {scored ? (
+          <div className="flex flex-wrap gap-1.5">
+            {scale.map((s) => (
+              <span key={s.value} className="text-xs px-2 py-1 rounded-md bg-bg-100 text-ink-700 border border-line-200">
+                <span className="tabular text-ink-500 mr-1">{s.value}</span>
+                {s.label}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {questions.map((q, i) => (
+              <li key={q.id} className="text-xs text-ink-700">
+                <span className="tabular text-ink-500 mr-1">{i + 1}.</span>
+                {q.text || "—"}
+                <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-bg-100 text-[10px] text-ink-500 border border-line-200">
+                  {q.type ? ACTIVITY_TYPE_LABELS[q.type] : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         {hasReversed && scored && (
           <p className="text-[11px] text-ink-500 mt-2">El test incluye ítems invertidos — el scoring los compensa automáticamente.</p>
         )}

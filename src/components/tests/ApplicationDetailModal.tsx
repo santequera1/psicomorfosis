@@ -199,13 +199,14 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
 }
 
 /**
- * Vista de resultados para tests cualitativos (formularios "Selección
- * personalizada"). Muestra cada pregunta junto con la respuesta del
- * paciente — sin puntaje, sin nivel. La interpretación queda al psicólogo.
+ * Vista de resultados para tests sin score automático: tanto los antiguos
+ * "qualitative" (v1.1, escala global) como los nuevos "activity" (v1.2,
+ * tipos por pregunta). Muestra cada pregunta + respuesta del paciente,
+ * adaptando el render al tipo de widget original (texto / numérico /
+ * opción / sí-no). La interpretación queda al psicólogo.
  *
  * Lee del snapshot guardado en alerts_json.meta.answers_snapshot, que es
- * estable aunque después se edite el test (las preguntas/etiquetas
- * originales se conservan para esa aplicación específica).
+ * estable aunque después se edite el test.
  */
 export function QualitativeResultView({ result, onClose }: { result: TestApplication; onClose: () => void }) {
   const snap = result.alerts_json?.meta?.answers_snapshot ?? [];
@@ -215,7 +216,7 @@ export function QualitativeResultView({ result, onClose }: { result: TestApplica
         <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code} · {result.patient_name}</p>
         <h3 className="font-serif text-2xl text-ink-900 mt-1">Respuestas del paciente</h3>
         <p className="text-xs text-ink-500 mt-1.5">
-          Test cualitativo — sin puntaje automático. Las respuestas se muestran tal cual fueron marcadas para tu interpretación clínica.
+          Sin puntaje automático. Las respuestas se muestran tal cual fueron marcadas para tu interpretación clínica.
         </p>
       </div>
 
@@ -232,13 +233,7 @@ export function QualitativeResultView({ result, onClose }: { result: TestApplica
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-ink-900 leading-snug">{s.text}</p>
                   <div className="mt-2">
-                    {s.label != null ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-50 text-brand-800 border border-brand-100">
-                        {s.label}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-ink-400 italic">Sin respuesta</span>
-                    )}
+                    <AnswerRender snap={s} />
                   </div>
                 </div>
               </div>
@@ -257,6 +252,41 @@ export function QualitativeResultView({ result, onClose }: { result: TestApplica
 }
 
 /**
+ * Render de una respuesta según el tipo original de la pregunta.
+ *  - text: párrafo con whitespace preservado.
+ *  - numeric: número grande tabular.
+ *  - single_choice / yes_no: pill con la etiqueta.
+ *  - sin q_type (legacy "qualitative"): pill con label.
+ */
+function AnswerRender({ snap }: {
+  snap: NonNullable<NonNullable<TestApplication["alerts_json"]>["meta"]>["answers_snapshot"] extends (infer U)[] | undefined ? U : never;
+}) {
+  if (snap.value == null && snap.label == null) {
+    return <span className="text-xs text-ink-400 italic">Sin respuesta</span>;
+  }
+  if (snap.q_type === "text" && typeof snap.value === "string") {
+    return (
+      <div className="rounded-md bg-bg-100/50 border border-line-100 p-2.5 whitespace-pre-wrap text-sm text-ink-900 leading-relaxed">
+        {snap.value}
+      </div>
+    );
+  }
+  if (snap.q_type === "numeric" && typeof snap.value === "number") {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-brand-50 text-brand-800 border border-brand-100 tabular">
+        {snap.value}
+      </span>
+    );
+  }
+  // single_choice, yes_no o legacy qualitative
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-50 text-brand-800 border border-brand-100">
+      {snap.label ?? (snap.value != null ? String(snap.value) : "Sin respuesta")}
+    </span>
+  );
+}
+
+/**
  * Modal de detalle al abrir una aplicación completada desde una lista.
  * Tres vistas según el tipo:
  *   - Millon (multi-escala con badges).
@@ -266,13 +296,13 @@ export function QualitativeResultView({ result, onClose }: { result: TestApplica
 export function ApplicationDetailModal({ app, onClose }: { app: TestApplication; onClose: () => void }) {
   const metaType = app.alerts_json?.meta?.type;
   const isMillon = metaType === "millon";
-  const isQualitative = metaType === "qualitative";
+  const isUnscored = metaType === "qualitative" || metaType === "activity";
   const lvl = app.level && LEVEL_STYLE[app.level];
   return (
-    <Modal onClose={onClose} title={`${app.test_code} · ${app.patient_name ?? ""}`} wide={isMillon || isQualitative}>
+    <Modal onClose={onClose} title={`${app.test_code} · ${app.patient_name ?? ""}`} wide={isMillon || isUnscored}>
       {isMillon ? (
         <MillonResultView result={app} onClose={onClose} />
-      ) : isQualitative ? (
+      ) : isUnscored ? (
         <QualitativeResultView result={app} onClose={onClose} />
       ) : (
         <div className="p-6 text-center">

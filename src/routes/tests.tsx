@@ -8,7 +8,7 @@ import { TestRunner } from "@/components/tests/TestRunner";
 import { ApplicationDetailModal, MillonResultView, QualitativeResultView } from "@/components/tests/ApplicationDetailModal";
 import { FormBuilderModal } from "@/components/tests/FormBuilderModal";
 import { RequestTestModal } from "@/components/tests/RequestTestModal";
-import { api, type ApiPatient, type PsychTest, type TestApplication } from "@/lib/api";
+import { api, type ApiPatient, type PsychTest, type TestApplication, type AnswersMap } from "@/lib/api";
 import {
   Brain, CheckCircle2, Clock, Send, Search, X, ChevronRight,
   Loader2, AlertOctagon, ShieldAlert, UserPlus, Plus, FileText,
@@ -359,7 +359,7 @@ function ApplicationRow({ app, onOpen }: { app: TestApplication; onOpen: () => v
       : app.date ?? "";
   const metaType = app.alerts_json?.meta?.type;
   const isMillon = metaType === "millon";
-  const isQualitative = metaType === "qualitative";
+  const isQualitative = metaType === "qualitative" || metaType === "activity";
   return (
     <li>
       <button
@@ -480,7 +480,7 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
   const [result, setResult] = useState<TestApplication | null>(null);
 
   const submitMu = useMutation({
-    mutationFn: async (answers: Record<string, number>) => {
+    mutationFn: async (answers: AnswersMap) => {
       const p = patients.find((x) => x.id === patientId);
       const created = await api.createTestApplication({
         test_id: test.id,
@@ -546,12 +546,12 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
     const lvl = result.level && LEVEL_STYLE[result.level];
     const metaType = result.alerts_json?.meta?.type;
     const isMillon = metaType === "millon";
-    const isQualitative = metaType === "qualitative";
+    const isUnscored = metaType === "qualitative" || metaType === "activity";
     return (
-      <Modal onClose={onClose} title="Resultado" wide={isMillon || isQualitative}>
+      <Modal onClose={onClose} title="Resultado" wide={isMillon || isUnscored}>
         {isMillon ? (
           <MillonResultView result={result} onClose={onClose} />
-        ) : isQualitative ? (
+        ) : isUnscored ? (
           <QualitativeResultView result={result} onClose={onClose} />
         ) : (
           <div className="p-6 text-center">

@@ -376,7 +376,23 @@ export interface TareaFolder {
 
 // ─── Tests psicométricos ────────────────────────────────────────────────────
 export interface PsychTestScaleOption { value: number; label: string }
-export interface PsychTestQuestion { id: string; text: string; reverse?: boolean; scale?: PsychTestScaleOption[] }
+/** Tipo de widget para preguntas de tests "Actividad" (heterogéneos). */
+export type ActivityQuestionType = "single_choice" | "yes_no" | "numeric" | "text";
+export interface PsychTestQuestion {
+  id: string;
+  text: string;
+  reverse?: boolean;
+  scale?: PsychTestScaleOption[];
+  /** Para tests "Actividad": tipo de widget que renderiza esta pregunta. */
+  type?: ActivityQuestionType;
+  /** single_choice: opciones específicas de esta pregunta. */
+  options?: PsychTestScaleOption[];
+  /** numeric: rango permitido (inclusive). */
+  numeric_min?: number;
+  numeric_max?: number;
+  /** text: placeholder opcional. */
+  placeholder?: string;
+}
 export interface PsychTestRange { min: number; max: number; label: string; level: "none" | "low" | "moderate" | "high" | "critical" }
 export interface PsychTestAlerts { critical_question_id?: string; critical_threshold?: number }
 export interface PsychTestDefinition {
@@ -384,10 +400,15 @@ export interface PsychTestDefinition {
   instructions?: string;
   scale?: PsychTestScaleOption[] | null;
   questions: PsychTestQuestion[];
-  scoring?: { type: "sum" | "sum_reversed" | "eat26" | "millon" | "none" };
+  /** "activity": cada pregunta tiene su widget propio, sin score automático. */
+  scoring?: { type: "sum" | "sum_reversed" | "eat26" | "millon" | "none" | "activity" };
   ranges: PsychTestRange[];
   alerts?: PsychTestAlerts | null;
 }
+
+/** Las respuestas pueden ser numéricas (Likert/V-F/numeric) o texto (text). */
+export type AnswerValue = number | string;
+export type AnswersMap = Record<string, AnswerValue>;
 export interface PsychTest {
   id: string;
   code: string;
@@ -425,11 +446,13 @@ export interface CreateFormBody {
   minutes?: number;
   definition: {
     instructions?: string;
+    /** Para Likert/V-F: escala global. Para Actividad: opcional/vacía
+     *  porque cada pregunta lleva sus propias opciones. */
     scale: PsychTestScaleOption[];
-    questions: Array<{ id: string; text: string; reverse?: boolean }>;
-    /** "none" indica test cualitativo: no se calcula puntaje ni nivel,
-     *  el psicólogo lee las respuestas y las interpreta. */
-    scoring: { type: "sum" | "sum_reversed" | "none" };
+    questions: PsychTestQuestion[];
+    /** "activity": tipos heterogéneos por pregunta, sin score automático.
+     *  "none": legacy de v1.1 (escala global única, sin score). */
+    scoring: { type: "sum" | "sum_reversed" | "none" | "activity" };
     ranges: PsychTestRange[];
   };
 }
@@ -449,7 +472,7 @@ export interface TestApplication {
   applied_by: "profesional" | "paciente" | null;
   assigned_at: string | null;
   completed_at: string | null;
-  answers_json: Record<string, number> | null;
+  answers_json: AnswersMap | null;
   alerts_json: {
     critical_response?: boolean;
     critical_question_id?: string;
@@ -466,7 +489,9 @@ export interface TestApplication {
       answers_snapshot?: Array<{
         id: string;
         text: string;
-        value: number | null;
+        /** Tipo de widget original de la pregunta (sólo en tests "activity"). */
+        q_type?: ActivityQuestionType | null;
+        value: AnswerValue | null;
         label: string | null;
       }>;
     };
@@ -736,15 +761,15 @@ export const api = {
     request<TestApplication[]>(`/api/tests/applications${qs(params)}`),
   getTestApplication: (id: string) => request<TestApplication>(`/api/tests/applications/${id}`),
   /** Crear aplicación con respuestas (staff aplicó test en sesión). */
-  createTestApplication: (body: { test_id: string; patient_id?: string; patient_name?: string; answers?: Record<string, number>; applied_by?: "profesional" | "paciente" }) =>
+  createTestApplication: (body: { test_id: string; patient_id?: string; patient_name?: string; answers?: AnswersMap; applied_by?: "profesional" | "paciente" }) =>
     request<TestApplication>("/api/tests/applications", { method: "POST", body: JSON.stringify(body) }),
   /** Asignar test al paciente para autoaplicación (sin respuestas, queda pendiente). */
   assignTestToPatient: (body: { test_id: string; patient_id: string }) =>
     request<TestApplication>("/api/tests/applications", { method: "POST", body: JSON.stringify({ ...body, assign_to_patient: true }) }),
-  submitTestApplication: (id: string, answers: Record<string, number>) =>
+  submitTestApplication: (id: string, answers: AnswersMap) =>
     request<TestApplication>(`/api/tests/applications/${id}/submit`, { method: "POST", body: JSON.stringify({ answers }) }),
   /** Guardar respuestas parciales (pausa) — staff. Cambia status a 'en_curso'. */
-  saveTestApplicationProgress: (id: string, answers: Record<string, number>) =>
+  saveTestApplicationProgress: (id: string, answers: AnswersMap) =>
     request<TestApplication>(`/api/tests/applications/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
   /** Descarga las respuestas como CSV listo para pegar en Excel oficial (MCMI-II). */
   exportTestApplicationCsv: async (id: string): Promise<Blob> => {
@@ -774,13 +799,13 @@ export const api = {
 
   // Portal del paciente — tests
   portalTests: () => request<Array<TestApplication & { definition: PsychTestDefinition | null }>>("/api/portal/tests"),
-  portalSubmitTest: (id: string, answers: Record<string, number>) =>
-    request<{ ok: true; score: number; level: string; label: string; has_critical_response: boolean }>(
+  portalSubmitTest: (id: string, answers: AnswersMap) =>
+    request<{ ok: true; score: number | null; level: string; label: string; has_critical_response: boolean }>(
       `/api/portal/tests/${id}/submit`,
       { method: "POST", body: JSON.stringify({ answers }) }
     ),
   /** Guardar respuestas parciales (pausa) — paciente. */
-  portalSaveTestProgress: (id: string, answers: Record<string, number>) =>
+  portalSaveTestProgress: (id: string, answers: AnswersMap) =>
     request<{ ok: true; answered_items: number }>(`/api/portal/tests/${id}/progress`, { method: "PATCH", body: JSON.stringify({ answers }) }),
 
   // Tasks
