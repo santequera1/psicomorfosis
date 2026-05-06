@@ -119,7 +119,12 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
         </div>
       </div>
       <div className="text-center w-full px-1">
-        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word">{displayName}</div>
+        {/* min-h reserva siempre 2 líneas para que las cards queden alineadas
+            entre sí: nombres cortos (apodos) y nombres largos producen la
+            misma altura, y la línea "X documentos" cae a la misma Y. */}
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-9 flex items-start justify-center">
+          <span>{displayName}</span>
+        </div>
         {typeof count === "number" && (
           <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
@@ -179,7 +184,10 @@ export function GenericFolder({
         </svg>
       </div>
       <div className="text-center w-full px-1">
-        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word">{name}</div>
+        {/* Misma reserva de 2 líneas que PatientFolder para alineación uniforme. */}
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-9 flex items-start justify-center">
+          <span>{name}</span>
+        </div>
         {typeof count === "number" && (
           <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
