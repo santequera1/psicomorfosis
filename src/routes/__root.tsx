@@ -35,17 +35,16 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "color-scheme", content: "light dark" },
       { title: "Psicomorfosis" },
-      { name: "description", content: "App para gestión de pacientes" },
-      { name: "author", content: "Lovable" },
+      { name: "description", content: "Plataforma de gestión clínica para psicólogos." },
       { property: "og:title", content: "Psicomorfosis" },
-      { property: "og:description", content: "App para gestión de pacientes" },
+      { property: "og:description", content: "Plataforma de gestión clínica para psicólogos." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Psicomorfosis" },
-      { name: "twitter:description", content: "App para gestión de pacientes" },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/oCUtea0FP6ZFARffyd2m1qWiCKF2/social-images/social-1776401942633-nathy-psicomorfos.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/oCUtea0FP6ZFARffyd2m1qWiCKF2/social-images/social-1776401942633-nathy-psicomorfos.webp" },
+      { name: "twitter:description", content: "Plataforma de gestión clínica para psicólogos." },
+      // Sin og:image / twitter:image: la imagen anterior era de un cliente
+      // específico y no debe representar el producto. Cuando tengamos un
+      // OG asset propio, lo agregamos aquí.
     ],
     links: [
       {

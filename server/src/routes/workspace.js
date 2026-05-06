@@ -386,8 +386,9 @@ function statsRetention(ws, months = 6) {
 
 /**
  * GET /api/workspace/dashboard-stats
- * Datos reales para los charts del Inicio (sesiones modalidad 30d,
- * motivos de consulta, ingresos 7d).
+ * Datos reales para los charts del Inicio + pendientes operativos
+ * (tests por revisar, pacientes sin seguimiento, etc.) que convierten
+ * el dashboard en un centro operativo y no solo descriptivo.
  */
 router.get("/dashboard-stats", (req, res) => {
   const ws = req.user.workspace_id;
@@ -395,8 +396,83 @@ router.get("/dashboard-stats", (req, res) => {
     sessionsByModality: statsModalityLast30d(ws),
     reasons: statsReasons(ws),
     revenue7d: statsRevenue7d(ws),
+    pendingItems: statsPendingItems(ws),
+    patientsWithoutFollowup: statsPatientsWithoutFollowup(ws, 14),
   });
 });
+
+/**
+ * Items operativos pendientes que el psicólogo debería atender hoy.
+ * Vienen agrupados para que el dashboard muestre badges con counts.
+ *  - testsToReview: aplicaciones completadas pero el psicólogo aún
+ *    no las abrió desde la lista (heuristic: completadas en últimos
+ *    7 días — proxy razonable de "nuevo por revisar").
+ *  - testsAssignedPending: tests asignados al paciente que aún no
+ *    completa (status=pendiente o en_curso).
+ *  - openTasks: tareas internas del kanban con paciente vinculado
+ *    en estado TODO o IN_PROGRESS, no archivadas.
+ *  - openSignRequests: solicitudes de firma de documento sin firmar
+ *    y no expiradas.
+ */
+function statsPendingItems(ws) {
+  const testsToReview = db.prepare(`
+    SELECT COUNT(*) AS n FROM test_applications
+    WHERE workspace_id = ? AND status = 'completado'
+      AND completed_at >= datetime('now', '-7 days')
+  `).get(ws)?.n ?? 0;
+  const testsAssignedPending = db.prepare(`
+    SELECT COUNT(*) AS n FROM test_applications
+    WHERE workspace_id = ? AND status IN ('pendiente', 'en_curso')
+  `).get(ws)?.n ?? 0;
+  const openTasks = db.prepare(`
+    SELECT COUNT(*) AS n FROM tareas
+    WHERE workspace_id = ? AND status IN ('TODO', 'IN_PROGRESS')
+      AND archived_at IS NULL AND deleted_at IS NULL
+  `).get(ws)?.n ?? 0;
+  const openSignRequests = db.prepare(`
+    SELECT COUNT(*) AS n FROM document_sign_requests
+    WHERE workspace_id = ? AND signed_at IS NULL AND expires_at > ?
+  `).get(ws, new Date().toISOString())?.n ?? 0;
+  return { testsToReview, testsAssignedPending, openTasks, openSignRequests };
+}
+
+/**
+ * Pacientes activos cuya última cita atendida fue hace más de N días
+ * (default 14). Caso clínicamente útil: quién se está despegando del
+ * tratamiento. No incluye pacientes sin ninguna cita atendida nunca
+ * (esos son distintos — son "pacientes nuevos sin sesión todavía").
+ */
+function statsPatientsWithoutFollowup(ws, days = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const rows = db.prepare(`
+    SELECT
+      p.id, p.name, p.preferred_name, p.risk, p.professional,
+      MAX(a.date) AS last_session_date
+    FROM patients p
+    LEFT JOIN appointments a
+      ON a.patient_id = p.id
+      AND a.workspace_id = p.workspace_id
+      AND a.status = 'atendida'
+    WHERE p.workspace_id = ?
+      AND p.archived_at IS NULL
+      AND p.status = 'activo'
+    GROUP BY p.id
+    HAVING last_session_date IS NOT NULL AND last_session_date < ?
+    ORDER BY last_session_date ASC
+    LIMIT 8
+  `).all(ws, cutoffIso);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    preferredName: r.preferred_name,
+    risk: r.risk,
+    professional: r.professional,
+    lastSessionDate: r.last_session_date,
+    daysSince: Math.floor((Date.now() - new Date(`${r.last_session_date}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)),
+  }));
+}
 
 /**
  * GET /api/workspace/reports-stats

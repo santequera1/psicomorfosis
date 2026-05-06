@@ -691,6 +691,21 @@ export const api = {
     sessionsByModality: Array<{ modality: string; value: number }>;
     reasons: Array<{ reason: string; value: number }>;
     revenue7d: Array<{ day: string; value: number }>;
+    pendingItems: {
+      testsToReview: number;
+      testsAssignedPending: number;
+      openTasks: number;
+      openSignRequests: number;
+    };
+    patientsWithoutFollowup: Array<{
+      id: string;
+      name: string;
+      preferredName: string | null;
+      risk: string | null;
+      professional: string | null;
+      lastSessionDate: string;
+      daysSince: number;
+    }>;
   }>("/api/workspace/dashboard-stats"),
   getReportsStats: () => request<{
     sessionsByModality: Array<{ modality: string; value: number }>;
@@ -1032,7 +1047,7 @@ export const api = {
     request<Invoice>(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteInvoice: (id: string) =>
     request<void>(`/api/invoices/${id}`, { method: "DELETE" }),
-  invoicesSummary: () => request<{ paid: number; pending: number; overdue: number; total: number }>("/api/invoices/summary"),
+  invoicesSummary: () => request<{ paid: number; pending: number; overdue: number; total: number; paid_count: number; avg_ticket: number }>("/api/invoices/summary"),
   /** Genera un PDF de muestra con los settings dados (sin persistir). Devuelve Blob. */
   previewReceiptPdf: async (params: {
     showLogo: boolean;

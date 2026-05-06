@@ -99,10 +99,15 @@ router.get("/summary", (req, res) => {
       COALESCE(SUM(CASE WHEN status = 'pagada'    THEN amount END), 0) AS paid,
       COALESCE(SUM(CASE WHEN status = 'pendiente' THEN amount END), 0) AS pending,
       COALESCE(SUM(CASE WHEN status = 'vencida'   THEN amount END), 0) AS overdue,
-      COUNT(*) AS total
+      COUNT(*) AS total,
+      SUM(CASE WHEN status = 'pagada' THEN 1 ELSE 0 END) AS paid_count
     FROM invoices WHERE workspace_id = ?
   `).get(ws);
-  res.json(row);
+  // Ticket promedio: total cobrado / cantidad de recibos pagados.
+  // Útil para que el psicólogo vea de un vistazo cuánto factura por
+  // sesión en promedio sin tener que sacar la calculadora.
+  const avg_ticket = row.paid_count > 0 ? Math.round(row.paid / row.paid_count) : 0;
+  res.json({ ...row, avg_ticket });
 });
 
 router.get("/:id", (req, res) => {

@@ -12,11 +12,10 @@ type Tab = "login" | "signup";
 
 function LoginPage() {
   const [tab, setTab] = useState<Tab>("login");
-  const [username, setUsername] = useState("nathaly");
-  const [password, setPassword] = useState("nathaly123");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [demoOpen, setDemoOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -50,13 +49,12 @@ function LoginPage() {
   return (
     <div className="min-h-screen w-full bg-bg-50 flex items-center justify-center px-4 py-6 md:py-10">
       <div className="relative w-full max-w-md rounded-[32px] overflow-hidden bg-surface shadow-modal">
-        {/* Logo panel (inside card, subtle brand tint) */}
-        <div className="relative bg-brand-50 py-12 px-6 flex items-center justify-center">
-          <img
-            src="/logo-psicomorfosis.png"
-            alt="Psicomorfosis · Psic. Nathaly Ferrer Pacheco"
-            className="w-[280px] max-w-full select-none"
-          />
+        {/* Header textual: en lugar del logo, dejamos el wordmark
+            tipográfico para no exponer marca específica de un cliente
+            (logos de fundadora). El tag debajo da contexto. */}
+        <div className="relative bg-brand-50 py-10 px-6 flex flex-col items-center justify-center text-center">
+          <h1 className="font-serif text-3xl text-brand-800 leading-tight">Psicomorfosis</h1>
+          <p className="text-xs text-ink-500 mt-1.5 tracking-wide">Plataforma para psicólogos</p>
 
           {tab === "signup" && (
             <button
@@ -88,7 +86,7 @@ function LoginPage() {
                 (tab === "login" ? "text-primary-foreground" : "text-ink-500")
               }
             >
-              Log In
+              Iniciar sesión
             </button>
             <button
               type="button"
@@ -98,7 +96,7 @@ function LoginPage() {
                 (tab === "signup" ? "text-primary-foreground" : "text-ink-500")
               }
             >
-              Sign Up
+              Registrarse
             </button>
           </div>
 
@@ -115,9 +113,6 @@ function LoginPage() {
               err={err}
               loading={loading}
               onSubmit={onSubmit}
-              demoOpen={demoOpen}
-              setDemoOpen={setDemoOpen}
-              onPickDemo={(u, p) => { setUsername(u); setPassword(p); setDemoOpen(false); }}
             />
           ) : (
             <SignUpBlocked />
@@ -131,7 +126,7 @@ function LoginPage() {
 function LoginForm({
   username, setUsername, password, setPassword,
   showPwd, setShowPwd, remember, setRemember,
-  err, loading, onSubmit, demoOpen, setDemoOpen, onPickDemo,
+  err, loading, onSubmit,
 }: {
   username: string; setUsername: (v: string) => void;
   password: string; setPassword: (v: string) => void;
@@ -139,8 +134,6 @@ function LoginForm({
   remember: boolean; setRemember: (v: boolean) => void;
   err: string | null; loading: boolean;
   onSubmit: (e: React.FormEvent) => void;
-  demoOpen: boolean; setDemoOpen: (v: boolean) => void;
-  onPickDemo: (u: string, p: string) => void;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -251,41 +244,6 @@ function LoginForm({
         </button>
       </div>
 
-      {/* Demo credentials collapsible */}
-      <div className="pt-2">
-        <button
-          type="button"
-          onClick={() => setDemoOpen(!demoOpen)}
-          className="w-full text-[11px] text-ink-500 hover:text-brand-700 inline-flex items-center justify-center gap-1.5 transition-colors"
-        >
-          <Info className="h-3 w-3" />
-          {demoOpen ? "Ocultar" : "Ver"} credenciales de demo
-        </button>
-        {demoOpen && (
-          <div className="mt-2 rounded-xl border border-line-200 bg-bg-50/60 p-3">
-            <p className="text-[10px] uppercase tracking-widest text-ink-500 font-medium mb-2">Demo</p>
-            <ul className="space-y-1">
-              {[
-                { u: "admin",   p: "admin123",   label: "Super admin" },
-                { u: "nathaly", p: "nathaly123", label: "Psicóloga (principal)" },
-                { u: "lucia",   p: "lucia123",   label: "Psicóloga" },
-                { u: "clara",   p: "clara123",   label: "Recepción" },
-              ].map((c) => (
-                <li key={c.u}>
-                  <button
-                    type="button"
-                    onClick={() => onPickDemo(c.u, c.p)}
-                    className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-left hover:bg-surface transition-colors"
-                  >
-                    <span className="text-xs text-ink-900 font-medium tabular">{c.u}</span>
-                    <span className="text-[10px] text-ink-500">{c.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
     </form>
   );
 }
