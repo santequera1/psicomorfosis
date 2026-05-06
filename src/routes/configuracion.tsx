@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
-  Check, X, Video, Calendar, MessageCircle, Plus, MapPin,
-  Circle, Home, Loader2, Trash2, Edit3, AlertCircle, CreditCard,
+  Check, X, Video, Calendar, CalendarClock, MessageCircle, Plus, MapPin,
+  Circle, Home, Loader2, Trash2, Edit3, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode } from "@/lib/api";
@@ -779,15 +779,14 @@ function ProfessionalFormModal({ professional, sedes, isOrg, onClose, onSaved }:
 
 function IntegracionesPanel() {
   // Catálogo de integraciones futuras. Todas marcadas como "Próximamente"
-  // hasta que cada una se implemente realmente. Google Calendar entra
-  // primero en el roadmap.
+  // hasta que cada una se implemente. El roadmap empieza por las de
+  // calendario y videollamada que son las que más demandan los psicólogos.
   const integrations = [
     { id: "gcal", name: "Google Calendar", Icon: Calendar, desc: "Sincroniza tu agenda con Google Calendar en dos sentidos." },
     { id: "zoom", name: "Zoom", Icon: Video, desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología." },
-    { id: "jitsi", name: "Jitsi Meet", Icon: Video, desc: "Alternativa open-source para telepsicología sin licencias." },
+    { id: "gmeet", name: "Google Meet", Icon: Video, desc: "Crea enlaces de Google Meet asociados a cada cita virtual." },
     { id: "wa", name: "WhatsApp Business", Icon: MessageCircle, desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp." },
-    { id: "dian", name: "DIAN · Factura electrónica", Icon: CreditCard, desc: "Emisión de factura electrónica con validación DIAN para Colombia." },
-    { id: "fhir", name: "HL7 / FHIR", Icon: Globe, desc: "Intercambio de información clínica estructurada con EPS y prestadores." },
+    { id: "calendly", name: "Calendly", Icon: CalendarClock, desc: "Recibe reservas de pacientes desde tu enlace público de Calendly." },
   ];
 
   return (
