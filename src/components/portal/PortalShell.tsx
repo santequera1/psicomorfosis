@@ -116,7 +116,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="animate-route flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10">
         {children}
       </main>
 

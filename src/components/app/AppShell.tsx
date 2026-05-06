@@ -54,12 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Topbar />
           {/* pb-24 reserva espacio para que el FAB (bottom-5 right-5, h-14)
               no tape los últimos elementos de la página al scrollear hasta abajo. */}
-          {/* `animate-route` corre fade-in + 6px de slide cada vez que el
-              <main> se monta. Como cada ruta envuelve su propio AppShell, el
-              re-mount al cambiar de página dispara la animación sola, sin
-              necesidad de `key={pathname}` ni librerías de animación.
-              Respeta prefers-reduced-motion. */}
-          <main className="animate-route flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24">
+          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24">
             {children}
           </main>
         </div>
