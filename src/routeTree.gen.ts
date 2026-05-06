@@ -26,6 +26,7 @@ import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as PTestsRouteImport } from './routes/p_.tests'
 import { Route as PTareasRouteImport } from './routes/p_.tareas'
@@ -125,6 +126,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlatformReportesRoute = PlatformReportesRouteImport.update({
+  id: '/platform_/reportes',
+  path: '/platform/reportes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacientesIdRoute = PacientesIdRouteImport.update({
   id: '/pacientes_/$id',
   path: '/pacientes/$id',
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/platform/reportes': typeof PlatformReportesRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/platform/reportes': typeof PlatformReportesRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/p_/tareas': typeof PTareasRoute
   '/p_/tests': typeof PTestsRoute
   '/pacientes_/$id': typeof PacientesIdRoute
+  '/platform_/reportes': typeof PlatformReportesRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
   '/p_/firmar/$docId': typeof PFirmarDocIdRoute
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/platform/reportes'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/firmar/$docId'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/platform/reportes'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/firmar/$docId'
@@ -382,6 +393,7 @@ export interface FileRouteTypes {
     | '/p_/tareas'
     | '/p_/tests'
     | '/pacientes_/$id'
+    | '/platform_/reportes'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
     | '/p_/firmar/$docId'
@@ -415,6 +427,7 @@ export interface RootRouteChildren {
   PTareasRoute: typeof PTareasRoute
   PTestsRoute: typeof PTestsRoute
   PacientesIdRoute: typeof PacientesIdRoute
+  PlatformReportesRoute: typeof PlatformReportesRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
   PActivarTokenRoute: typeof PActivarTokenRoute
   PFirmarDocIdRoute: typeof PFirmarDocIdRoute
@@ -541,6 +554,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/platform_/reportes': {
+      id: '/platform_/reportes'
+      path: '/platform/reportes'
+      fullPath: '/platform/reportes'
+      preLoaderRoute: typeof PlatformReportesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacientes_/$id': {
       id: '/pacientes_/$id'
       path: '/pacientes/$id'
@@ -663,6 +683,7 @@ const rootRouteChildren: RootRouteChildren = {
   PTareasRoute: PTareasRoute,
   PTestsRoute: PTestsRoute,
   PacientesIdRoute: PacientesIdRoute,
+  PlatformReportesRoute: PlatformReportesRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
   PActivarTokenRoute: PActivarTokenRoute,
   PFirmarDocIdRoute: PFirmarDocIdRoute,

@@ -307,4 +307,91 @@ router.get("/usage", (req, res) => {
   res.json(stats);
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Error reports
+// ─────────────────────────────────────────────────────────────────────
+// El POST público para crear reportes vive en routes/errorReports.js
+// (lo recibe cualquier usuario incluso sin sesión). Aquí solo expongo
+// los endpoints administrativos para revisarlos y resolverlos.
+
+/**
+ * GET /api/platform/error-reports
+ * Lista paginada de reportes con info del usuario y workspace.
+ * Filtros opcionales: ?status=open|resolved|all
+ */
+router.get("/error-reports", (req, res) => {
+  const status = req.query.status === "all" ? null : (req.query.status === "resolved" ? "resolved" : "open");
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  const where = status ? "WHERE er.status = ?" : "";
+  const params = status ? [status, limit, offset] : [limit, offset];
+
+  const rows = db.prepare(`
+    SELECT
+      er.id, er.kind, er.url, er.message, er.user_description, er.user_agent,
+      er.status, er.created_at, er.resolved_at,
+      er.user_role, er.user_name,
+      w.name AS workspace_name,
+      ru.name AS resolved_by_name
+    FROM error_reports er
+    LEFT JOIN workspaces w ON w.id = er.workspace_id
+    LEFT JOIN users ru ON ru.id = er.resolved_by
+    ${where}
+    ORDER BY er.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params);
+
+  const counts = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count,
+      SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) AS resolved_count,
+      COUNT(*) AS total_count
+    FROM error_reports
+  `).get();
+
+  res.json({ items: rows, counts });
+});
+
+/**
+ * GET /api/platform/error-reports/:id
+ * Detalle completo (incluye stack trace, que omitimos en el listado).
+ */
+router.get("/error-reports/:id", (req, res) => {
+  const row = db.prepare(`
+    SELECT
+      er.*,
+      w.name AS workspace_name,
+      ru.name AS resolved_by_name
+    FROM error_reports er
+    LEFT JOIN workspaces w ON w.id = er.workspace_id
+    LEFT JOIN users ru ON ru.id = er.resolved_by
+    WHERE er.id = ?
+  `).get(req.params.id);
+  if (!row) return res.status(404).json({ error: "Reporte no encontrado" });
+  res.json(row);
+});
+
+/**
+ * PATCH /api/platform/error-reports/:id
+ * Actualiza estado (open|resolved). Marca quién y cuándo resolvió.
+ */
+router.patch("/error-reports/:id", (req, res) => {
+  const { status } = req.body ?? {};
+  if (status !== "open" && status !== "resolved") {
+    return res.status(400).json({ error: "status debe ser 'open' o 'resolved'" });
+  }
+  const now = new Date().toISOString();
+  if (status === "resolved") {
+    db.prepare(
+      "UPDATE error_reports SET status = ?, resolved_at = ?, resolved_by = ? WHERE id = ?"
+    ).run(status, now, req.user?.id ?? null, req.params.id);
+  } else {
+    db.prepare(
+      "UPDATE error_reports SET status = ?, resolved_at = NULL, resolved_by = NULL WHERE id = ?"
+    ).run(status, req.params.id);
+  }
+  res.json({ ok: true });
+});
+
 export default router;

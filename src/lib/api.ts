@@ -1223,4 +1223,49 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     ),
   platformGetUsage: () => request<PlatformUsage>(`/api/platform/usage`),
+
+  // ─── Error reports (admin only) ──────────────────────────────────────
+  platformListErrorReports: (status: "open" | "resolved" | "all" = "open") =>
+    request<{
+      items: Array<{
+        id: number;
+        kind: "manual" | "auto";
+        url: string | null;
+        message: string | null;
+        user_description: string | null;
+        user_agent: string | null;
+        status: "open" | "resolved";
+        created_at: string;
+        resolved_at: string | null;
+        user_role: string | null;
+        user_name: string | null;
+        workspace_name: string | null;
+        resolved_by_name: string | null;
+      }>;
+      counts: { open_count: number; resolved_count: number; total_count: number };
+    }>(`/api/platform/error-reports?status=${status}`),
+
+  platformGetErrorReport: (id: number) =>
+    request<{
+      id: number;
+      kind: string;
+      url: string | null;
+      message: string | null;
+      stack: string | null;
+      user_description: string | null;
+      user_agent: string | null;
+      status: string;
+      created_at: string;
+      resolved_at: string | null;
+      user_role: string | null;
+      user_name: string | null;
+      workspace_name: string | null;
+      resolved_by_name: string | null;
+    }>(`/api/platform/error-reports/${id}`),
+
+  platformResolveErrorReport: (id: number, status: "open" | "resolved") =>
+    request<{ ok: boolean }>(`/api/platform/error-reports/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
 };

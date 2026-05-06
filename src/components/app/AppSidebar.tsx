@@ -2,13 +2,14 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
-  PanelLeftClose, PanelLeftOpen, X, Shield, LogOut,
+  PanelLeftClose, PanelLeftOpen, X, Shield, LogOut, Bug,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { api, getStoredUser, setSession, clearSession, type ApiUser, getToken } from "@/lib/api";
 import { useSidebar } from "./SidebarContext";
+import { ReportProblemModal } from "./ReportProblemModal";
 
 const groups: Array<{
   label: string;
@@ -49,6 +50,7 @@ export function AppSidebar() {
   const { location } = useRouterState();
   const path = location.pathname;
   const [user, setUser] = useState<ApiUser | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   useEffect(() => {
     const stored = getStoredUser();
     setUser(stored);
@@ -185,6 +187,19 @@ export function AppSidebar() {
               </div>
             </div>
           )}
+          {/* Reportar problema — visible para todos los usuarios staff;
+              ayuda a recolectar feedback durante la beta privada. */}
+          <button
+            onClick={() => setReportOpen(true)}
+            className={cn(
+              "w-full flex items-center gap-2 text-sidebar-foreground/75 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
+              collapsed && "md:justify-center md:px-0",
+            )}
+            title="Reportar problema"
+          >
+            <Bug className="h-4 w-4 shrink-0" />
+            <span className={cn(collapsed && "md:hidden")}>Reportar problema</span>
+          </button>
           {/* Cerrar sesión */}
           <button
             onClick={() => {
@@ -212,6 +227,8 @@ export function AppSidebar() {
           </button>
         </div>
       </aside>
+
+      {reportOpen && <ReportProblemModal onClose={() => setReportOpen(false)} />}
     </>
   );
 }

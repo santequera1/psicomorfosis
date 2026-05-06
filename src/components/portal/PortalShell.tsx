@@ -1,7 +1,8 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain } from "lucide-react";
+import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain, Bug } from "lucide-react";
+import { ReportProblemModal } from "@/components/app/ReportProblemModal";
 import { Logo } from "@/components/app/Logo";
 import { api, clearSession, getStoredUser, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   const { location } = useRouterState();
   const path = location.pathname;
   const [user, setUser] = useState<ApiUser | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Forzar light theme en el portal — la versión "cálida" es siempre clara
   useEffect(() => {
@@ -124,12 +126,21 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         <div>
           <span className="inline-flex items-center gap-1.5"><Heart className="h-3 w-3 text-brand-400" /> Tu espacio seguro · Psicomorfosis</span>
         </div>
-        <div>
+        <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link to="/privacidad" className="hover:text-brand-700 hover:underline">Aviso de privacidad</Link>
-          {" · "}
+          <span>·</span>
           <Link to="/terminos" className="hover:text-brand-700 hover:underline">Términos</Link>
+          <span>·</span>
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            className="inline-flex items-center gap-1 hover:text-brand-700 hover:underline"
+          >
+            <Bug className="h-3 w-3" /> Reportar problema
+          </button>
         </div>
       </footer>
+      {reportOpen && <ReportProblemModal onClose={() => setReportOpen(false)} />}
     </div>
   );
 }

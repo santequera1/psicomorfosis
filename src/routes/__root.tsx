@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { toggleTheme } from "@/lib/theme";
+import { installErrorReporter } from "@/lib/error-reporter";
 
 import appCss from "../styles.css?url";
 
@@ -136,6 +137,13 @@ function RootComponent() {
       },
     },
   }));
+
+  // Captador global de errores del frontend. Se instala una sola vez
+  // y mantiene un buffer en memoria de los últimos 5 errores para que
+  // el modal "Reportar problema" pueda mostrarlos al usuario.
+  useEffect(() => {
+    installErrorReporter();
+  }, []);
 
   // Atajo global: Ctrl/Cmd + Shift + L alterna entre claro y oscuro.
   useEffect(() => {

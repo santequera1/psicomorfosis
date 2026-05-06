@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
-  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound,
+  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Bug,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -101,12 +101,20 @@ function PlatformDashboard() {
             </h1>
             <p className="text-xs text-ink-500 mt-1">Visible solo para administradores de Psicomorfosis.</p>
           </div>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" /> Crear cuenta
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/platform/reportes"
+              className="h-10 px-3 rounded-lg border border-line-200 text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 text-sm"
+            >
+              <Bug className="h-4 w-4" /> Reportes
+            </Link>
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Crear cuenta
+            </button>
+          </div>
         </header>
 
         {/* KPIs globales */}

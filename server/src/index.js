@@ -25,6 +25,7 @@ import settingsRoutes from "./routes/settings.js";
 import notesRoutes from "./routes/notes.js";
 import portalRoutes from "./routes/portal.js";
 import platformRoutes from "./routes/platform.js";
+import errorReportsRoutes from "./routes/errorReports.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -68,6 +69,10 @@ app.use("/api/settings", settingsRoutes);
 // (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
 // requireAuth global, así que si va primero intercepta cualquier /api/*.
 app.use("/api", portalRoutes); // /patients/:id/invite, /patient-invite/*, /auth/patient/login, /portal/*
+// Reportes de errores: público (no exige token) — un usuario en pantalla
+// "Something went wrong" puede no tener sesión válida y aún así queremos
+// recibirlo. Mismo razonamiento que portalRoutes: ir antes que notesRoutes.
+app.use("/api", errorReportsRoutes); // /error-reports
 app.use("/api", notesRoutes);  // /patients/:id/notes y /notes/:id (require auth)
 
 app.use((err, _req, res, _next) => {

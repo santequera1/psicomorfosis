@@ -600,6 +600,30 @@ function runMigrations() {
     // al titular del dato sensible, no al login.
     "ALTER TABLE patients ADD COLUMN legal_accepted_at TEXT",
     "ALTER TABLE patients ADD COLUMN legal_accepted_version TEXT",
+    // Reportes de problemas / bugs enviados desde la plataforma. Los ven
+    // los platform admins en /platform/reportes. workspace_id puede ser
+    // NULL si la sesión expiró antes del reporte (raro, pero posible).
+    // kind: 'manual' (usuario llenó el modal) | 'auto' (capturado por
+    // window.onerror sin texto del usuario). Status: 'open' | 'resolved'.
+    `CREATE TABLE IF NOT EXISTS error_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER REFERENCES workspaces(id) ON DELETE SET NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      user_role TEXT,
+      user_name TEXT,
+      kind TEXT NOT NULL DEFAULT 'manual',
+      url TEXT,
+      message TEXT,
+      stack TEXT,
+      user_description TEXT,
+      user_agent TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TEXT,
+      resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_error_reports_status ON error_reports(status, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_error_reports_workspace ON error_reports(workspace_id)",
   ];
   for (const sql of migrations) {
     try {
