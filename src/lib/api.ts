@@ -697,6 +697,20 @@ export const api = {
     reasons: Array<{ reason: string; value: number }>;
     revenue7d: Array<{ day: string; value: number }>;
     retention: Array<{ mes: string; nuevos: number; retenidos: number; alta: number }>;
+    sessionsByDow: Array<{ day: string; value: number }>;
+    patientsByRisk: Array<{ level: string; key: string; value: number }>;
+    patientsByAge: Array<{ range: string; value: number }>;
+    patientsBySex: Array<{ sex: string; key: string; value: number }>;
+    testsByMonth: Array<{ mes: string; value: number }>;
+    topPatients: Array<{ id: string; name: string; sessions: number }>;
+    revenueByMethod: Array<{ method: string; value: number; count: number }>;
+    operational: {
+      attendance_rate: number;
+      cancel_rate: number;
+      no_show_rate: number;
+      avg_duration_min: number;
+      total_last_90d: number;
+    };
   }>("/api/workspace/reports-stats"),
   /** Firma del profesional vinculado al usuario actual. */
   getMySignature: () => request<{ professional_id: number; name: string; tarjeta_profesional: string | null; signature_url: string | null }>("/api/workspace/me/signature"),

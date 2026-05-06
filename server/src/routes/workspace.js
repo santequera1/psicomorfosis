@@ -400,8 +400,14 @@ router.get("/dashboard-stats", (req, res) => {
 
 /**
  * GET /api/workspace/reports-stats
- * Igual al dashboard + retención mensual de los últimos 6 meses.
- * Sirve la página /reportes.
+ * Stats avanzadas para la página /reportes.
+ *
+ * Incluye los datos del dashboard básico + retención + distribuciones
+ * demográficas y operativas que los psicólogos suelen pedir:
+ * sesiones por día de semana, distribución por riesgo/edad/sexo,
+ * tests aplicados por mes, top pacientes por engagement, ingresos por
+ * método de pago, y KPIs derivados (tasa de asistencia/cancelación,
+ * duración promedio de sesión).
  */
 router.get("/reports-stats", (req, res) => {
   const ws = req.user.workspace_id;
@@ -410,7 +416,156 @@ router.get("/reports-stats", (req, res) => {
     reasons: statsReasons(ws),
     revenue7d: statsRevenue7d(ws),
     retention: statsRetention(ws, 6),
+    sessionsByDow: statsSessionsByDayOfWeek(ws),
+    patientsByRisk: statsPatientsByRisk(ws),
+    patientsByAge: statsPatientsByAge(ws),
+    patientsBySex: statsPatientsBySex(ws),
+    testsByMonth: statsTestsByMonth(ws, 6),
+    topPatients: statsTopPatientsBySessions(ws),
+    revenueByMethod: statsRevenueByMethod(ws),
+    operational: statsOperationalKpis(ws),
   });
 });
+
+// ─── Helpers de stats avanzadas ───────────────────────────────────────────
+
+/** Cuántas sesiones atendidas hay por día de la semana (últimos 90 días). */
+function statsSessionsByDayOfWeek(ws) {
+  const rows = db.prepare(`
+    SELECT date FROM appointments
+    WHERE workspace_id = ? AND status = 'atendida'
+      AND date >= date('now', '-90 days')
+  `).all(ws);
+  const counts = [0, 0, 0, 0, 0, 0, 0]; // Dom..Sáb (JS getDay)
+  for (const r of rows) {
+    const d = new Date(`${r.date}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) counts[d.getDay()]++;
+  }
+  // Devolvemos en orden Lun-Dom para que el chart se lea naturalmente.
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  return order.map((idx) => ({ day: DAYS_LABEL[idx], value: counts[idx] }));
+}
+
+/** Distribución de pacientes activos por nivel de riesgo. */
+function statsPatientsByRisk(ws) {
+  const rows = db.prepare(`
+    SELECT risk, COUNT(*) AS value FROM patients
+    WHERE workspace_id = ? AND archived_at IS NULL
+    GROUP BY risk
+  `).all(ws);
+  const LEVELS = ["none", "low", "moderate", "high", "critical"];
+  const LABEL = { none: "Sin riesgo", low: "Bajo", moderate: "Moderado", high: "Alto", critical: "Crítico" };
+  const map = Object.fromEntries(rows.map((r) => [r.risk ?? "none", r.value]));
+  return LEVELS.map((k) => ({ level: LABEL[k], key: k, value: map[k] ?? 0 }));
+}
+
+/** Distribución de pacientes activos por rango etario. */
+function statsPatientsByAge(ws) {
+  const rows = db.prepare(`
+    SELECT age FROM patients WHERE workspace_id = ? AND archived_at IS NULL
+  `).all(ws);
+  const buckets = [
+    { range: "<18",   min: 0,  max: 17 },
+    { range: "18-25", min: 18, max: 25 },
+    { range: "26-35", min: 26, max: 35 },
+    { range: "36-50", min: 36, max: 50 },
+    { range: "50+",   min: 51, max: 200 },
+  ];
+  return buckets.map((b) => ({
+    range: b.range,
+    value: rows.filter((r) => r.age != null && r.age >= b.min && r.age <= b.max).length,
+  }));
+}
+
+/** Distribución por sexo asignado al nacer (M/F/Sin dato). */
+function statsPatientsBySex(ws) {
+  const rows = db.prepare(`
+    SELECT sex, COUNT(*) AS value FROM patients
+    WHERE workspace_id = ? AND archived_at IS NULL
+    GROUP BY sex
+  `).all(ws);
+  const map = Object.fromEntries(rows.map((r) => [r.sex ?? "_unk", r.value]));
+  return [
+    { sex: "Masculino",  key: "M", value: map["M"] ?? 0 },
+    { sex: "Femenino",   key: "F", value: map["F"] ?? 0 },
+    { sex: "Sin dato",   key: "_unk", value: map["_unk"] ?? 0 },
+  ].filter((s) => s.value > 0);
+}
+
+/** Tests psicométricos completados por mes (últimos N meses). */
+function statsTestsByMonth(ws, months = 6) {
+  const buckets = [];
+  const now = new Date();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    buckets.push({
+      mes: MONTHS_LABEL[d.getMonth()],
+      from: d.toISOString().slice(0, 10),
+      to: next.toISOString().slice(0, 10),
+      value: 0,
+    });
+  }
+  const rows = db.prepare(`
+    SELECT completed_at FROM test_applications
+    WHERE workspace_id = ? AND status = 'completado' AND completed_at IS NOT NULL
+  `).all(ws);
+  for (const r of rows) {
+    const d = new Date(r.completed_at);
+    if (Number.isNaN(d.getTime())) continue;
+    const iso = d.toISOString().slice(0, 10);
+    const b = buckets.find((x) => iso >= x.from && iso < x.to);
+    if (b) b.value++;
+  }
+  return buckets.map(({ mes, value }) => ({ mes, value }));
+}
+
+/** Top 5 pacientes por número de sesiones atendidas (últimos 90 días). */
+function statsTopPatientsBySessions(ws) {
+  return db.prepare(`
+    SELECT a.patient_id AS id, a.patient_name AS name, COUNT(*) AS sessions
+    FROM appointments a
+    WHERE a.workspace_id = ? AND a.status = 'atendida'
+      AND a.date >= date('now', '-90 days')
+      AND a.patient_id IS NOT NULL
+    GROUP BY a.patient_id, a.patient_name
+    ORDER BY sessions DESC
+    LIMIT 5
+  `).all(ws);
+}
+
+/** Ingresos por método de pago (últimos 30 días). */
+function statsRevenueByMethod(ws) {
+  return db.prepare(`
+    SELECT method, SUM(amount) AS value, COUNT(*) AS count FROM invoices
+    WHERE workspace_id = ? AND status = 'pagada'
+      AND date >= date('now', '-30 days')
+      AND method IS NOT NULL
+    GROUP BY method
+    ORDER BY value DESC
+  `).all(ws);
+}
+
+/** KPIs operativos derivados: tasa de asistencia/cancelación, duración promedio. */
+function statsOperationalKpis(ws) {
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN status = 'atendida'   THEN 1 ELSE 0 END) AS atendida,
+      SUM(CASE WHEN status = 'cancelada'  THEN 1 ELSE 0 END) AS cancelada,
+      SUM(CASE WHEN status = 'no_show'    THEN 1 ELSE 0 END) AS no_show,
+      AVG(duration_min) AS avg_duration
+    FROM appointments
+    WHERE workspace_id = ? AND date >= date('now', '-90 days')
+  `).get(ws);
+  const total = totals?.total ?? 0;
+  return {
+    attendance_rate: total > 0 ? Math.round(((totals?.atendida ?? 0) / total) * 100) : 0,
+    cancel_rate:     total > 0 ? Math.round(((totals?.cancelada ?? 0) / total) * 100) : 0,
+    no_show_rate:    total > 0 ? Math.round(((totals?.no_show ?? 0) / total) * 100) : 0,
+    avg_duration_min: Math.round(totals?.avg_duration ?? 50),
+    total_last_90d: total,
+  };
+}
 
 export default router;

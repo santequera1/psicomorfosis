@@ -327,18 +327,29 @@ function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => vo
 }
 
 // ─── Modal form (crear / editar) ──────────────────────────────────────────
-function ReceiptFormModal({
+/**
+ * Modal de creación/edición de recibo. Exportado para reutilizarse desde
+ * la agenda (al "Cobrar" una cita) — los `preset*` permiten prellenar
+ * paciente, monto, concepto, fecha. Solo aplican en `mode="create"`.
+ */
+export function ReceiptFormModal({
   mode, invoice, onClose,
+  presetPatientId, presetPatientName, presetConcept, presetAmount, presetDate,
 }: {
   mode: "create" | "edit";
   invoice?: Invoice;
   onClose: () => void;
+  presetPatientId?: string;
+  presetPatientName?: string;
+  presetConcept?: string;
+  presetAmount?: number;
+  presetDate?: string;
 }) {
   const qc = useQueryClient();
-  const [patientId, setPatientId] = useState<string | null>(invoice?.patient_id ?? null);
-  const [patientName, setPatientName] = useState<string>(invoice?.patient_name ?? "");
-  const [concept, setConcept] = useState(invoice?.concept ?? "Sesión individual");
-  const [amount, setAmount] = useState(invoice?.amount ?? 80000);
+  const [patientId, setPatientId] = useState<string | null>(invoice?.patient_id ?? presetPatientId ?? null);
+  const [patientName, setPatientName] = useState<string>(invoice?.patient_name ?? presetPatientName ?? "");
+  const [concept, setConcept] = useState(invoice?.concept ?? presetConcept ?? "Sesión individual");
+  const [amount, setAmount] = useState(invoice?.amount ?? presetAmount ?? 80000);
   const [method, setMethod] = useState<typeof PAYMENT_METHODS[number]>(
     (PAYMENT_METHODS as readonly string[]).includes(invoice?.method ?? "")
       ? (invoice!.method as typeof PAYMENT_METHODS[number])
@@ -349,7 +360,7 @@ function ReceiptFormModal({
   const [reference, setReference] = useState(invoice?.payment_reference ?? "");
   const [notes, setNotes] = useState(invoice?.payment_notes ?? "");
   const [status, setStatus] = useState<Estado>(invoice?.status ?? "pagada");
-  const [date, setDate] = useState(invoice?.date ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(invoice?.date ?? presetDate ?? new Date().toISOString().slice(0, 10));
   const [modality, setModality] = useState<typeof MODALITIES[number]>(
     (MODALITIES as readonly string[]).includes(invoice?.modality ?? "")
       ? (invoice!.modality as typeof MODALITIES[number])

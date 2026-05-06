@@ -5,7 +5,55 @@ import { requireAuth } from "../auth.js";
 const router = Router();
 router.use(requireAuth);
 
+/**
+ * Auto-marcado de citas pasadas como "atendida".
+ *
+ * Lazy: corre antes de cada GET de appointments del workspace. Si una cita
+ * tiene status "pendiente" o "confirmada" y su hora de fin (date + time +
+ * duration_min) ya pasó hace al menos `GRACE_MIN`, se marca como atendida.
+ *
+ * Usamos lazy en vez de cron para no necesitar un proceso separado y
+ * porque el efecto solo importa cuando alguien mira la agenda. La grace
+ * window de 30 min es para no marcar citas que JUSTO acaban de empezar
+ * (la psicóloga puede estar en sesión sin haber dado click a "Atender").
+ */
+const ATTEND_GRACE_MIN = 30;
+
+function autoMarkPastAppointmentsAttended(workspaceId) {
+  const now = new Date();
+  // Solo escaneamos las del día de hoy y hacia atrás (las futuras nunca
+  // están "pasadas"). Limitamos a últimas 14 días para mantener la
+  // query barata.
+  const todayIso = now.toISOString().slice(0, 10);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+  const candidates = db.prepare(`
+    SELECT id, date, time, duration_min FROM appointments
+    WHERE workspace_id = ?
+      AND status IN ('pendiente', 'confirmada')
+      AND date >= ? AND date <= ?
+  `).all(workspaceId, fourteenDaysAgo, todayIso);
+
+  if (candidates.length === 0) return;
+  const upd = db.prepare("UPDATE appointments SET status = 'atendida' WHERE id = ? AND workspace_id = ?");
+  for (const c of candidates) {
+    if (!c.date || !c.time) continue;
+    const startMs = Date.parse(`${c.date}T${c.time}:00`);
+    if (Number.isNaN(startMs)) continue;
+    const endMs = startMs + (c.duration_min ?? 50) * 60 * 1000;
+    const graceMs = endMs + ATTEND_GRACE_MIN * 60 * 1000;
+    if (now.getTime() >= graceMs) {
+      upd.run(c.id, workspaceId);
+    }
+  }
+}
+
 router.get("/", (req, res) => {
+  // Antes de devolver, hacemos una pasada para marcar citas pasadas como
+  // atendidas automáticamente. Idempotente — si ya están en otro estado
+  // (cancelada, atendida, no_show), no se tocan.
+  try { autoMarkPastAppointmentsAttended(req.user.workspace_id); } catch { /* no bloquear el GET */ }
+
   const { date, from, to, professional_id, sede_id } = req.query;
   let sql = "SELECT * FROM appointments WHERE workspace_id = ?";
   const args = [req.user.workspace_id];

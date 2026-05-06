@@ -9,9 +9,10 @@ import { api, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { ReceiptFormModal } from "./facturacion";
 import {
   Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X,
-  ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2,
+  ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2, Receipt,
 } from "lucide-react";
 
 export const Route = createFileRoute("/agenda")({
@@ -619,6 +620,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   const [newDate, setNewDate] = useState<string>(slot.date ?? new Date().toISOString().slice(0, 10));
   const [newTime, setNewTime] = useState<string>(slot.time ?? "09:00");
   const [busy, setBusy] = useState(false);
+  const [cobroOpen, setCobroOpen] = useState(false);
 
   async function startSession() {
     setBusy(true);
@@ -691,6 +693,14 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
           >
             <CalendarDays className="h-4 w-4" /> Atender ahora
           </button>
+          <button
+            type="button"
+            onClick={() => setCobroOpen(true)}
+            className="w-full h-10 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-2"
+            title="Generar el recibo de pago de esta sesión"
+          >
+            <Receipt className="h-4 w-4" /> Generar recibo
+          </button>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setReschedOpen((v) => !v)}
@@ -750,6 +760,17 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
           )}
         </div>
       </div>
+
+      {cobroOpen && (
+        <ReceiptFormModal
+          mode="create"
+          presetPatientId={patientId ?? undefined}
+          presetPatientName={patientName}
+          presetConcept={`Sesión ${slot.modality === "virtual" ? "virtual" : "individual"}${slot.date ? ` · ${slot.date}` : ""}`}
+          presetDate={slot.date ?? undefined}
+          onClose={() => setCobroOpen(false)}
+        />
+      )}
     </div>
   );
 }
