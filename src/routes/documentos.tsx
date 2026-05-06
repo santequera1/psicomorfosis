@@ -11,7 +11,7 @@ import {
   FileText, FileSignature, FilePlus, Upload, Download, Search,
   FileCheck2, FileClock, FileWarning, FileArchive, ArrowRight, ShieldCheck,
   MoreHorizontal, X, Eye, Loader2, Trash2, Archive, FilePen, Sparkles,
-  ScrollText, ClipboardList, ChevronRight, Pencil, Copy,
+  ScrollText, ClipboardList, ChevronRight, ChevronLeft, Pencil, Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
@@ -216,8 +216,12 @@ function DocumentosPage() {
               </div>
               {viewMode === "folders" && openFolderData && (
                 <div className="flex items-center gap-2 text-xs text-ink-500 pt-1">
-                  <button onClick={() => setOpenFolder(null)} className="text-brand-700 hover:underline inline-flex items-center gap-1">
-                    <ChevronRight className="h-3 w-3 rotate-180" /> Carpetas
+                  <button
+                    type="button"
+                    onClick={() => setOpenFolder(null)}
+                    className="text-brand-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3 w-3" /> Carpetas
                   </button>
                   <span className="text-ink-300">/</span>
                   <span className="text-ink-900 font-medium truncate">{openFolderData.name}</span>
@@ -391,6 +395,7 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
+  const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
@@ -410,39 +415,53 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
     return () => document.removeEventListener("click", close);
   }, [menuOpen, onCloseMenu]);
 
+  // Reemplazamos el wrapper <Link className="contents"> por onClick directo
+  // sobre la fila. `display: contents` en <a> no es confiable cross-browser
+  // y dejaba la fila sin responder al click en algunos casos. Las acciones
+  // del lado derecho hacen stopPropagation para no disparar la navegación.
+  function goToDoc() {
+    navigate({ to: "/documentos/$id", params: { id: doc.id } });
+  }
+
   return (
-    <li className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors group">
+    <li
+      className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors group cursor-pointer"
+      onClick={goToDoc}
+    >
       <div className="flex items-start gap-3 sm:gap-4">
-        <Link to="/documentos/$id" params={{ id: doc.id }} className="contents">
-          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-            <TIcon className="h-4 w-4" />
+        <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+          <TIcon className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start sm:items-center gap-1.5 flex-col sm:flex-row sm:flex-wrap">
+            <div className="text-sm font-medium text-ink-900 line-clamp-2 sm:truncate">{doc.name}</div>
+            <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0", s.bg, s.text)}>
+              <s.Icon className="h-3 w-3" /> {s.label}
+            </span>
+            <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500 shrink-0">
+              {isFile ? "📎 Archivo" : "✍ Editor"}
+            </span>
           </div>
-          <div className="flex-1 min-w-0 cursor-pointer">
-            <div className="flex items-start sm:items-center gap-1.5 flex-col sm:flex-row sm:flex-wrap">
-              <div className="text-sm font-medium text-ink-900 line-clamp-2 sm:truncate">{doc.name}</div>
-              <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0", s.bg, s.text)}>
-                <s.Icon className="h-3 w-3" /> {s.label}
-              </span>
-              <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500 shrink-0">
-                {isFile ? "📎 Archivo" : "✍ Editor"}
-              </span>
-            </div>
-            <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
-              <span>{TYPE_LABEL[doc.type] ?? doc.type}</span>
-              {doc.patient_name && <><span className="text-ink-300">·</span><span className="truncate max-w-40">{doc.patient_name}</span></>}
-              <span className="text-ink-300">·</span>
-              <span className="tabular">{formatRelative(doc.updated_at)}</span>
-              {doc.size_kb != null && <><span className="text-ink-300 hidden sm:inline">·</span><span className="tabular hidden sm:inline">{doc.size_kb} KB</span></>}
-              <span className="text-ink-300 hidden md:inline">·</span>
-              <span className="hidden md:inline truncate max-w-35">{doc.professional}</span>
-            </div>
+          <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
+            <span>{TYPE_LABEL[doc.type] ?? doc.type}</span>
+            {doc.patient_name && <><span className="text-ink-300">·</span><span className="truncate max-w-40">{doc.patient_name}</span></>}
+            <span className="text-ink-300">·</span>
+            <span className="tabular">{formatRelative(doc.updated_at)}</span>
+            {doc.size_kb != null && <><span className="text-ink-300 hidden sm:inline">·</span><span className="tabular hidden sm:inline">{doc.size_kb} KB</span></>}
+            <span className="text-ink-300 hidden md:inline">·</span>
+            <span className="hidden md:inline truncate max-w-35">{doc.professional}</span>
           </div>
-        </Link>
-        <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity">
-          <Link to="/documentos/$id" params={{ id: doc.id }}
-            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Ver">
+        </div>
+        <div
+          className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); goToDoc(); }}
+            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Abrir">
             <Eye className="h-3.5 w-3.5" />
-          </Link>
+          </button>
           <button
             onClick={handleDownload}
             disabled={downloading}
@@ -460,10 +479,12 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
                 onClick={(e) => e.stopPropagation()}>
-                <Link to="/documentos/$id" params={{ id: doc.id }}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onCloseMenu(); goToDoc(); }}
                   className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
                   <Pencil className="h-4 w-4" /> Abrir
-                </Link>
+                </button>
                 {!isFile && (
                   <button onClick={(e) => { e.stopPropagation(); onCloseMenu(); onDuplicate(); }}
                     className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
@@ -494,6 +515,7 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate }: {
   onDelete: () => void;
   onDuplicate: () => void;
 }) {
+  const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
@@ -514,32 +536,42 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate }: {
     try { await downloadDocument(doc); } finally { setDownloading(false); }
   }
 
+  // Misma fix que DocRow: la card es directamente clickeable vía onClick.
+  // Los botones absolutos del top-right hacen stopPropagation.
+  function goToDoc() {
+    navigate({ to: "/documentos/$id", params: { id: doc.id } });
+  }
+
   return (
-    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
-      <Link to="/documentos/$id" params={{ id: doc.id }} className="block">
-        <div className="flex items-start gap-3">
-          <div className="h-11 w-11 rounded-xl bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-            <TIcon className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-ink-900 line-clamp-2">{doc.name}</div>
-            <div className="text-[11px] text-ink-500 mt-0.5">{TYPE_LABEL[doc.type] ?? doc.type}</div>
-          </div>
+    <div
+      className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group cursor-pointer"
+      onClick={goToDoc}
+    >
+      <div className="flex items-start gap-3">
+        <div className="h-11 w-11 rounded-xl bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+          <TIcon className="h-5 w-5" />
         </div>
-        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-          <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
-            <s.Icon className="h-3 w-3" /> {s.label}
-          </span>
-          <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
-            {isFile ? "📎 Archivo" : "✍ Editor"}
-          </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-ink-900 line-clamp-2">{doc.name}</div>
+          <div className="text-[11px] text-ink-500 mt-0.5">{TYPE_LABEL[doc.type] ?? doc.type}</div>
         </div>
-        <div className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500 flex items-center justify-between gap-2">
-          <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
-          <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
-        </div>
-      </Link>
-      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      </div>
+      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+        <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
+          <s.Icon className="h-3 w-3" /> {s.label}
+        </span>
+        <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+          {isFile ? "📎 Archivo" : "✍ Editor"}
+        </span>
+      </div>
+      <div className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500 flex items-center justify-between gap-2">
+        <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
+        <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
+      </div>
+      <div
+        className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={handleDownload}
           disabled={downloading}

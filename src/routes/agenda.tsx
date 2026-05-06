@@ -201,13 +201,14 @@ function AgendaPage() {
                 {(["dia", "semana", "mes", "lista"] as View[]).map((v) => (
                   <button
                     key={v}
+                    type="button"
                     onClick={() => setView(v)}
                     className={
-                      "px-3 py-1.5 text-xs rounded transition-colors capitalize " +
+                      "px-3 py-1.5 text-xs rounded transition-colors capitalize cursor-pointer " +
                       (view === v ? "bg-surface text-ink-900 font-medium shadow-xs" : "text-ink-500 hover:text-ink-900")
                     }
                   >
-                    {v}
+                    {v === "dia" ? "Día" : v}
                   </button>
                 ))}
               </div>
@@ -325,6 +326,7 @@ function DayView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
             }
           />
           <button
+            type="button"
             onClick={() => onPick(s)}
             className={
               "flex-1 text-left rounded-lg border p-3.5 hover:border-brand-400 transition-colors cursor-pointer " +

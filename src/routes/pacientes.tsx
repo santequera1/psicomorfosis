@@ -303,7 +303,11 @@ function PatientsPage() {
                         {p.status}
                       </span>
                     </td>
-                    <td className="px-3 py-3.5"><RiskBadge risk={p.risk} types={p.riskTypes} compact /></td>
+                    {/* Bandera: en la tabla mostramos solo el nivel de riesgo
+                        (sin la lista de tipos) para que no se desborde. Los
+                        tipos completos aparecen en la vista de tarjetas y en
+                        la ficha del paciente, además del title del propio badge. */}
+                    <td className="px-3 py-3.5"><RiskBadge risk={p.risk} compact /></td>
                     <td className="px-3 py-3.5 text-ink-700 tabular">{p.nextSession ?? <span className="text-ink-400">—</span>}</td>
                     <td className="px-3 py-3.5 relative" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-0.5">

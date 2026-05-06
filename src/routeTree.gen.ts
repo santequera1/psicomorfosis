@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TestsRouteImport } from './routes/tests'
 import { Route as TareasRouteImport } from './routes/tareas'
 import { Route as ReportesRouteImport } from './routes/reportes'
+import { Route as RecibosRouteImport } from './routes/recibos'
 import { Route as PrescripcionRouteImport } from './routes/prescripcion'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HistoriaClinicaRouteImport } from './routes/historia-clinica'
 import { Route as HistoriaRouteImport } from './routes/historia'
 import { Route as FacturacionRouteImport } from './routes/facturacion'
 import { Route as DocumentosRouteImport } from './routes/documentos'
@@ -51,6 +53,11 @@ const ReportesRoute = ReportesRouteImport.update({
   path: '/reportes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecibosRoute = RecibosRouteImport.update({
+  id: '/recibos',
+  path: '/recibos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrescripcionRoute = PrescripcionRouteImport.update({
   id: '/prescripcion',
   path: '/prescripcion',
@@ -69,6 +76,11 @@ const PacientesRoute = PacientesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoriaClinicaRoute = HistoriaClinicaRouteImport.update({
+  id: '/historia-clinica',
+  path: '/historia-clinica',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoriaRoute = HistoriaRouteImport.update({
@@ -174,10 +186,12 @@ export interface FileRoutesByFullPath {
   '/documentos': typeof DocumentosRoute
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
+  '/historia-clinica': typeof HistoriaClinicaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
@@ -202,10 +216,12 @@ export interface FileRoutesByTo {
   '/documentos': typeof DocumentosRoute
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
+  '/historia-clinica': typeof HistoriaClinicaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
@@ -231,10 +247,12 @@ export interface FileRoutesById {
   '/documentos': typeof DocumentosRoute
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
+  '/historia-clinica': typeof HistoriaClinicaRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
+  '/recibos': typeof RecibosRoute
   '/reportes': typeof ReportesRoute
   '/tareas': typeof TareasRoute
   '/tests': typeof TestsRoute
@@ -261,10 +279,12 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/facturacion'
     | '/historia'
+    | '/historia-clinica'
     | '/login'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/recibos'
     | '/reportes'
     | '/tareas'
     | '/tests'
@@ -289,10 +309,12 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/facturacion'
     | '/historia'
+    | '/historia-clinica'
     | '/login'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/recibos'
     | '/reportes'
     | '/tareas'
     | '/tests'
@@ -317,10 +339,12 @@ export interface FileRouteTypes {
     | '/documentos'
     | '/facturacion'
     | '/historia'
+    | '/historia-clinica'
     | '/login'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
+    | '/recibos'
     | '/reportes'
     | '/tareas'
     | '/tests'
@@ -346,10 +370,12 @@ export interface RootRouteChildren {
   DocumentosRoute: typeof DocumentosRoute
   FacturacionRoute: typeof FacturacionRoute
   HistoriaRoute: typeof HistoriaRoute
+  HistoriaClinicaRoute: typeof HistoriaClinicaRoute
   LoginRoute: typeof LoginRoute
   PacientesRoute: typeof PacientesRoute
   PlatformRoute: typeof PlatformRoute
   PrescripcionRoute: typeof PrescripcionRoute
+  RecibosRoute: typeof RecibosRoute
   ReportesRoute: typeof ReportesRoute
   TareasRoute: typeof TareasRoute
   TestsRoute: typeof TestsRoute
@@ -391,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recibos': {
+      id: '/recibos'
+      path: '/recibos'
+      fullPath: '/recibos'
+      preLoaderRoute: typeof RecibosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/prescripcion': {
       id: '/prescripcion'
       path: '/prescripcion'
@@ -417,6 +450,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historia-clinica': {
+      id: '/historia-clinica'
+      path: '/historia-clinica'
+      fullPath: '/historia-clinica'
+      preLoaderRoute: typeof HistoriaClinicaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/historia': {
@@ -562,10 +602,12 @@ const rootRouteChildren: RootRouteChildren = {
   DocumentosRoute: DocumentosRoute,
   FacturacionRoute: FacturacionRoute,
   HistoriaRoute: HistoriaRoute,
+  HistoriaClinicaRoute: HistoriaClinicaRoute,
   LoginRoute: LoginRoute,
   PacientesRoute: PacientesRoute,
   PlatformRoute: PlatformRoute,
   PrescripcionRoute: PrescripcionRoute,
+  RecibosRoute: RecibosRoute,
   ReportesRoute: ReportesRoute,
   TareasRoute: TareasRoute,
   TestsRoute: TestsRoute,
