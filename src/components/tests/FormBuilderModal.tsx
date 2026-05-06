@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   api,
   type CreateFormBody, type PsychTestRange, type PsychTestQuestion,
-  type ActivityQuestionType,
+  type ActivityQuestionType, type PsychTest,
 } from "@/lib/api";
 
 /**
@@ -68,32 +68,35 @@ interface QuestionDraft {
 }
 interface RangeDraft { id: string; min: number; max: number; label: string; level: Severity }
 
-export function FormBuilderModal({ onClose }: { onClose: () => void }) {
+export function FormBuilderModal({ onClose, editing }: { onClose: () => void; editing?: PsychTest | null }) {
   const qc = useQueryClient();
+  const isEdit = !!editing;
+
+  // Hidratamos los estados desde el test existente cuando estamos en modo
+  // edición. La tabla guarda la definición serializada en `definition`
+  // (con scoring, scale, questions, ranges); detectamos el tipo a partir
+  // de `scoring.type` y reconstruimos el shape de drafts del builder.
+  const initial = useMemo(() => deriveInitialState(editing ?? null), [editing]);
 
   // Step 1: meta
-  const [name, setName] = useState("");
-  const [shortName, setShortName] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("Tamizaje");
-  const [ageRange, setAgeRange] = useState("18+");
-  const [minutes, setMinutes] = useState(5);
-  const [instructions, setInstructions] = useState("");
+  const [name, setName] = useState(initial.name);
+  const [shortName, setShortName] = useState(initial.shortName);
+  const [description, setDescription] = useState(initial.description);
+  const [category, setCategory] = useState(initial.category);
+  const [ageRange, setAgeRange] = useState(initial.ageRange);
+  const [minutes, setMinutes] = useState(initial.minutes);
+  const [instructions, setInstructions] = useState(initial.instructions);
 
   // Step 2: tipo de respuesta
-  const [responseType, setResponseType] = useState<ResponseType>("likert");
-  const [likertPoints, setLikertPoints] = useState(5);
-  const [likertLabels, setLikertLabels] = useState<string[]>([
-    "Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre",
-  ]);
+  const [responseType, setResponseType] = useState<ResponseType>(initial.responseType);
+  const [likertPoints, setLikertPoints] = useState(initial.likertPoints);
+  const [likertLabels, setLikertLabels] = useState<string[]>(initial.likertLabels);
 
   // Step 3: preguntas
-  const [questions, setQuestions] = useState<QuestionDraft[]>([
-    { id: "q1", text: "", reverse: false, type: "single_choice", options: [{ value: 0, label: "" }, { value: 1, label: "" }] },
-  ]);
+  const [questions, setQuestions] = useState<QuestionDraft[]>(initial.questions);
 
   // Step 4: rangos (solo aplica a tipos puntuables)
-  const [ranges, setRanges] = useState<RangeDraft[]>([]);
+  const [ranges, setRanges] = useState<RangeDraft[]>(initial.ranges);
 
   // Cuando el psicólogo cambia entre tipos, ajustamos el shape de las
   // preguntas para no quedar con campos huérfanos. Activity → cada pregunta
@@ -223,14 +226,17 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
     nextStep();
   }
 
-  const createMu = useMutation({
-    mutationFn: (body: CreateFormBody) => api.createTestForm(body),
+  const saveMu = useMutation({
+    mutationFn: (body: CreateFormBody) =>
+      isEdit && editing
+        ? api.updateTestForm(editing.id, body)
+        : api.createTestForm(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["test-catalog"] });
-      toast.success("Test creado");
+      toast.success(isEdit ? "Test actualizado" : "Test creado");
       onClose();
     },
-    onError: (e: Error) => toast.error(e.message ?? "Error al crear el test"),
+    onError: (e: Error) => toast.error(e.message ?? "Error al guardar el test"),
   });
 
   function handleSave() {
@@ -286,7 +292,7 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
           : [],
       },
     };
-    createMu.mutate(body);
+    saveMu.mutate(body);
   }
 
   return (
@@ -298,9 +304,11 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Test personalizado</p>
-            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Crear test</h3>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">{isEdit ? "Editar test" : "Crear test"}</h3>
             <p className="text-xs text-ink-500 mt-1">
-              Cuestionarios cortos para tamizaje, autoevaluación o anamnesis. No reemplaza un instrumento clínico validado.
+              {isEdit
+                ? "Las aplicaciones ya hechas conservan su snapshot original — editar el test no cambia los resultados históricos."
+                : "Cuestionarios cortos para tamizaje, autoevaluación o anamnesis. No reemplaza un instrumento clínico validado."}
             </p>
           </div>
           <button onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400 shrink-0">
@@ -378,11 +386,11 @@ export function FormBuilderModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={createMu.isPending}
+              disabled={saveMu.isPending}
               className="h-10 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2"
             >
-              {createMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />}
-              Crear test
+              {saveMu.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckSquare className="h-4 w-4" />}
+              {isEdit ? "Guardar cambios" : "Crear test"}
             </button>
           ) : (
             <button
@@ -1039,4 +1047,102 @@ function Field({ label, required, children }: { label: string; required?: boolea
       {children}
     </label>
   );
+}
+
+/**
+ * Reconstruye el estado inicial del builder a partir de un PsychTest
+ * existente (modo edición) o devuelve los defaults (modo creación).
+ *
+ * Se invierte el shape: la BD guarda `definition.questions[].type/options/...`
+ * y el builder usa `QuestionDraft` con `numericMin`/`numericMax`/`reverse`.
+ */
+function deriveInitialState(t: PsychTest | null): {
+  name: string;
+  shortName: string;
+  description: string;
+  category: string;
+  ageRange: string;
+  minutes: number;
+  instructions: string;
+  responseType: ResponseType;
+  likertPoints: number;
+  likertLabels: string[];
+  questions: QuestionDraft[];
+  ranges: RangeDraft[];
+} {
+  const DEFAULT_QUESTION: QuestionDraft = {
+    id: "q1", text: "", reverse: false,
+    type: "single_choice",
+    options: [{ value: 0, label: "" }, { value: 1, label: "" }],
+  };
+  const DEFAULTS = {
+    name: "", shortName: "", description: "", category: "Tamizaje",
+    ageRange: "18+", minutes: 5, instructions: "",
+    responseType: "likert" as ResponseType,
+    likertPoints: 5,
+    likertLabels: ["Nunca", "Casi nunca", "A veces", "Casi siempre", "Siempre"],
+    questions: [DEFAULT_QUESTION],
+    ranges: [] as RangeDraft[],
+  };
+
+  if (!t) return DEFAULTS;
+  const def = t.definition;
+  if (!def) return DEFAULTS;
+
+  // Detectar tipo
+  const scoringType = def.scoring?.type;
+  let responseType: ResponseType;
+  if (scoringType === "activity") responseType = "activity";
+  else {
+    // V/F si la escala tiene exactamente 2 opciones con valores 0/1
+    const sc = def.scale ?? [];
+    const isVF = sc.length === 2 && sc.some((o) => o.value === 1) && sc.some((o) => o.value === 0);
+    responseType = isVF ? "vf" : "likert";
+  }
+
+  // Likert config
+  const likertLabels = responseType === "likert" && Array.isArray(def.scale)
+    ? def.scale.slice().sort((a, b) => a.value - b.value).map((o) => o.label)
+    : DEFAULTS.likertLabels;
+  const likertPoints = responseType === "likert" ? Math.max(3, Math.min(7, likertLabels.length)) : DEFAULTS.likertPoints;
+
+  // Preguntas: invertir shape backend → draft
+  const questions: QuestionDraft[] = (def.questions ?? []).map((q, i) => {
+    const id = q.id || `q${i + 1}`;
+    const baseDraft: QuestionDraft = { id, text: q.text ?? "", reverse: !!q.reverse };
+    if (responseType === "activity") {
+      baseDraft.type = q.type ?? "single_choice";
+      if (baseDraft.type === "single_choice") {
+        baseDraft.options = (q.options ?? []).map((o) => ({ value: o.value, label: o.label }));
+        if (!baseDraft.options || baseDraft.options.length < 2) {
+          baseDraft.options = [{ value: 0, label: "" }, { value: 1, label: "" }];
+        }
+      }
+      if (baseDraft.type === "numeric") {
+        if (q.numeric_min != null) baseDraft.numericMin = q.numeric_min;
+        if (q.numeric_max != null) baseDraft.numericMax = q.numeric_max;
+      }
+      if (baseDraft.type === "text" && q.placeholder) baseDraft.placeholder = q.placeholder;
+    }
+    return baseDraft;
+  });
+
+  const ranges: RangeDraft[] = (def.ranges ?? []).map((r, i) => ({
+    id: `r${i + 1}`, min: r.min, max: r.max, label: r.label, level: (r.level as RangeDraft["level"]) ?? "moderate",
+  }));
+
+  return {
+    name: t.name ?? "",
+    shortName: t.shortName ?? "",
+    description: t.description ?? "",
+    category: t.category ?? "Personalizado",
+    ageRange: t.ageRange ?? "18+",
+    minutes: t.minutes ?? 5,
+    instructions: def.instructions ?? "",
+    responseType,
+    likertPoints,
+    likertLabels,
+    questions: questions.length > 0 ? questions : [DEFAULT_QUESTION],
+    ranges,
+  };
 }

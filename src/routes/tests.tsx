@@ -12,7 +12,7 @@ import { api, type ApiPatient, type PsychTest, type TestApplication, type Answer
 import {
   Brain, CheckCircle2, Clock, Send, Search, X, ChevronRight,
   Loader2, AlertOctagon, ShieldAlert, UserPlus, Plus, FileText,
-  Trash2, MessageSquarePlus, Sparkles,
+  Trash2, Pencil, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,7 @@ function TestsPage() {
   const [assignContext, setAssignContext] = useState<PsychTest | null>(null);
   const [detailApp, setDetailApp] = useState<TestApplication | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [editingTest, setEditingTest] = useState<PsychTest | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery({
@@ -191,6 +192,7 @@ function TestsPage() {
                         onApply={() => setApplyContext({ test: t })}
                         onAssign={() => setAssignContext(t)}
                         onView={() => setActiveTest(t)}
+                        onEdit={() => setEditingTest(t)}
                         onDelete={() => {
                           if (confirm(`¿Eliminar el test "${t.name}"? Las aplicaciones ya hechas se conservan.`)) {
                             deleteFormMu.mutate(t.id);
@@ -261,6 +263,7 @@ function TestsPage() {
 
       {/* Modal: crear formulario personalizado */}
       {builderOpen && <FormBuilderModal onClose={() => setBuilderOpen(false)} />}
+      {editingTest && <FormBuilderModal editing={editingTest} onClose={() => setEditingTest(null)} />}
 
       {/* Modal: solicitar test al equipo Psicomorfosis */}
       {requestOpen && <RequestTestModal onClose={() => setRequestOpen(false)} />}
@@ -286,11 +289,12 @@ function CatalogSectionHeader({ icon, title, subtitle }: {
 
 // ─── Componentes ───────────────────────────────────────────────────────────
 
-function CatalogRow({ test, onApply, onAssign, onView, onDelete }: {
+function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete }: {
   test: PsychTest;
   onApply: () => void;
   onAssign: () => void;
   onView: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
 }) {
   const ready = !!test.definition?.questions?.length;
@@ -327,6 +331,15 @@ function CatalogRow({ test, onApply, onAssign, onView, onDelete }: {
               <button onClick={onAssign} className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5">
                 <UserPlus className="h-3.5 w-3.5" /> Asignar
               </button>
+              {onEdit && (
+                <button
+                  onClick={onEdit}
+                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                  title="Editar test"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </button>
+              )}
               {onDelete && (
                 <button
                   onClick={onDelete}

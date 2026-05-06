@@ -4,7 +4,7 @@ import {
   Search, Bell, ChevronDown, Building2, MessageSquareWarning, X,
   Users, CalendarDays, FileText, Brain, Pill, MessagesSquare, LayoutDashboard,
   Phone, LifeBuoy, AlertOctagon, ChevronRight, BellDot, CheckCheck,
-  User as UserIcon, Settings, LogOut, HelpCircle, Menu,
+  User as UserIcon, Settings, LogOut, HelpCircle, Menu, Sun, Moon,
 } from "lucide-react";
 import { useSidebar } from "./SidebarContext";
 import {
@@ -14,6 +14,7 @@ import { api, clearSession, getStoredUser } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
+import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Inicio",
@@ -54,6 +55,11 @@ export function Topbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  // Tema: estado local solo para forzar re-render del icono al alternar.
+  // La persistencia y el toggle de la clase `.dark` los maneja `@/lib/theme`.
+  const [themePref, setThemePref] = useState<ThemePreference>(() => getTheme());
+  const isDark = themePref === "oscuro" ||
+    (themePref === "auto" && typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
 
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
 
@@ -168,13 +174,16 @@ export function Topbar() {
             </div>
           )}
 
+          {/* Toggle de tema claro/oscuro. El protocolo de crisis se movió al
+              footer del sidebar para liberar este slot — se sigue pudiendo
+              abrir programáticamente vía window.dispatchEvent("psm:open-crisis"). */}
           <button
-            onClick={() => setCrisisOpen(true)}
-            className="relative h-10 w-10 rounded-lg border border-risk-high/40 bg-error-soft/40 text-risk-high hover:bg-error-soft hover:border-risk-high transition-colors flex items-center justify-center"
-            aria-label="Protocolo de crisis"
-            title="Protocolo de crisis"
+            onClick={() => setThemePref(toggleTheme())}
+            className="relative h-10 w-10 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center justify-center"
+            aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            title={isDark ? "Modo claro" : "Modo oscuro"}
           >
-            <MessageSquareWarning className="h-4 w-4" />
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
           <div className="relative">
@@ -192,7 +201,7 @@ export function Topbar() {
           <div className="relative">
             <button
               onClick={() => setUserOpen((v) => !v)}
-              className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold border border-line-200 hover:border-brand-400 transition-colors"
+              className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 dark:text-white flex items-center justify-center text-sm font-semibold border border-line-200 hover:border-brand-400 transition-colors"
               title={currentUser?.name ?? "Menú de usuario"}
               aria-label="Menú de usuario"
             >
@@ -203,7 +212,7 @@ export function Topbar() {
                 <div className="fixed inset-0 z-40" onClick={() => setUserOpen(false)} />
                 <div className="absolute right-0 top-12 w-64 rounded-xl border border-line-200 bg-surface shadow-modal z-50 overflow-hidden">
                   <div className="p-4 border-b border-line-100 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold shrink-0">
+                    <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 dark:text-white flex items-center justify-center text-sm font-semibold shrink-0">
                       {currentUser?.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase() ?? "?"}
                     </div>
                     <div className="min-w-0">

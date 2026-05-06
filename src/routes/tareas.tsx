@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Plus, Search, Filter, Circle, Clock, AlertCircle, CheckCircle2,
+  Plus, Search, Filter, Circle, Clock, AlertCircle, CheckCircle2, Check,
   CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X, UserPlus, Users,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
@@ -213,6 +213,16 @@ function TareasPage() {
   const [filterPatient, setFilterPatient] = useState<string | "all">(searchParams.patient ?? "all");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(searchParams.patient ? "with_patient" : "all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  // Filtros plegables en mobile: por defecto solo se ve la barra de búsqueda
+  // y un botón "Filtros". En desktop (sm+) los filtros siempre están visibles.
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const activeFilterCount =
+    (dateFilter !== "all" ? 1 : 0) +
+    (scopeFilter !== "all" ? 1 : 0) +
+    (filterPriority !== "all" ? 1 : 0) +
+    (filterPatient !== "all" ? 1 : 0) +
+    (filterProject !== "all" ? 1 : 0) +
+    (filterAssignee !== "all" ? 1 : 0);
 
   const [editing, setEditing] = useState<Tarea | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -324,10 +334,11 @@ function TareasPage() {
           </button>
         </header>
 
-        {/* Filtros */}
+        {/* Filtros — colapsables en mobile detrás del botón "Filtros" para
+            reducir ruido visual. En desktop siempre visibles. */}
         <div className="rounded-xl bg-surface border border-line-200 shadow-soft p-3 mb-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-50">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />
               <input
                 type="text"
@@ -337,7 +348,32 @@ function TareasPage() {
                 className="w-full h-10 pl-9 pr-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none focus:border-brand-400"
               />
             </div>
-            <FilterScroll>
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+              className={cn(
+                "sm:hidden h-10 px-3 rounded-lg border text-sm inline-flex items-center gap-1.5 shrink-0",
+                activeFilterCount > 0 || mobileFiltersOpen
+                  ? "border-brand-700 bg-brand-50 text-brand-800"
+                  : "border-line-200 bg-bg text-ink-700"
+              )}
+              aria-expanded={mobileFiltersOpen}
+            >
+              <Filter className="h-4 w-4" />
+              <span>Filtros</span>
+              {activeFilterCount > 0 && (
+                <span className="h-5 min-w-5 px-1 rounded-full bg-brand-700 text-white text-[10px] font-semibold tabular flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className={cn(
+            "sm:flex sm:flex-col sm:gap-2 sm:mt-2",
+            mobileFiltersOpen ? "flex flex-col gap-2 mt-2" : "hidden"
+          )}>
+            <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={dateFilter === "all"} onClick={() => setDateFilter("all")}>
                 Todas
               </FilterChip>
@@ -350,10 +386,8 @@ function TareasPage() {
               <FilterChip active={dateFilter === "overdue"} onClick={() => setDateFilter("overdue")}>
                 <AlertCircle className="h-3.5 w-3.5" /> Vencidas
               </FilterChip>
-            </FilterScroll>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <FilterScroll>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={scopeFilter === "all"} onClick={() => setScopeFilter("all")}>
                 <Filter className="h-3.5 w-3.5" /> Todo
               </FilterChip>
@@ -363,54 +397,54 @@ function TareasPage() {
               <FilterChip active={scopeFilter === "internal"} onClick={() => setScopeFilter("internal")}>
                 <Users className="h-3.5 w-3.5" /> Internas
               </FilterChip>
-            </FilterScroll>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <Select
-              value={filterPriority}
-              onChange={(v) => setFilterPriority(v as TareaPriority | "all")}
-              icon={<Flag className="h-3.5 w-3.5" />}
-              options={[
-                { value: "all", label: "Toda prioridad" },
-                { value: "URGENT", label: "Urgente" },
-                { value: "HIGH", label: "Alta" },
-                { value: "MEDIUM", label: "Media" },
-                { value: "LOW", label: "Baja" },
-              ]}
-            />
-            {isOrg && (
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <Select
-                value={String(filterAssignee)}
-                onChange={(v) => setFilterAssignee(v === "all" ? "all" : Number(v))}
-                icon={<User className="h-3.5 w-3.5" />}
+                value={filterPriority}
+                onChange={(v) => setFilterPriority(v as TareaPriority | "all")}
+                icon={<Flag className="h-3.5 w-3.5" />}
                 options={[
-                  { value: "all", label: "Todo el equipo" },
-                  ...professionals.map((p) => ({ value: String(p.id), label: p.name })),
+                  { value: "all", label: "Toda prioridad" },
+                  { value: "URGENT", label: "Urgente" },
+                  { value: "HIGH", label: "Alta" },
+                  { value: "MEDIUM", label: "Media" },
+                  { value: "LOW", label: "Baja" },
                 ]}
               />
-            )}
-            {projects.length > 0 && (
-              <Select
-                value={String(filterProject)}
-                onChange={(v) => setFilterProject(v === "all" ? "all" : Number(v))}
-                icon={<Filter className="h-3.5 w-3.5" />}
-                options={[
-                  { value: "all", label: "Todos los proyectos" },
-                  ...projects.map((p) => ({ value: String(p.id), label: p.name })),
-                ]}
-              />
-            )}
-            {patients.length > 0 && (
-              <Select
-                value={filterPatient}
-                onChange={(v) => setFilterPatient(v)}
-                icon={<UserPlus className="h-3.5 w-3.5" />}
-                options={[
-                  { value: "all", label: "Todos los pacientes" },
-                  ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
-                ]}
-              />
-            )}
+              {isOrg && (
+                <Select
+                  value={String(filterAssignee)}
+                  onChange={(v) => setFilterAssignee(v === "all" ? "all" : Number(v))}
+                  icon={<User className="h-3.5 w-3.5" />}
+                  options={[
+                    { value: "all", label: "Todo el equipo" },
+                    ...professionals.map((p) => ({ value: String(p.id), label: p.name })),
+                  ]}
+                />
+              )}
+              {projects.length > 0 && (
+                <Select
+                  value={String(filterProject)}
+                  onChange={(v) => setFilterProject(v === "all" ? "all" : Number(v))}
+                  icon={<Filter className="h-3.5 w-3.5" />}
+                  options={[
+                    { value: "all", label: "Todos los proyectos" },
+                    ...projects.map((p) => ({ value: String(p.id), label: p.name })),
+                  ]}
+                />
+              )}
+              {patients.length > 0 && (
+                <Select
+                  value={filterPatient}
+                  onChange={(v) => setFilterPatient(v)}
+                  icon={<UserPlus className="h-3.5 w-3.5" />}
+                  options={[
+                    { value: "all", label: "Todos los pacientes" },
+                    ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
+                  ]}
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -433,6 +467,13 @@ function TareasPage() {
                 onTaskDelete={(id) => deleteMutation.mutate(id)}
                 onTaskArchive={(id) => archiveMutation.mutate(id)}
                 onTaskDuplicate={(id) => duplicateMutation.mutate(id)}
+                onTaskToggleDone={(t) => {
+                  // Toggle DONE ↔ TODO. Reusa la mutation de move (ya hace
+                  // optimistic update + invalidación). Posición 0 = arriba
+                  // de la columna destino.
+                  const nextStatus: TareaStatus = t.status === "DONE" ? "TODO" : "DONE";
+                  moveMutation.mutate({ id: t.id, status: nextStatus, position: 0 });
+                }}
               />
             ))}
           </div>
@@ -510,7 +551,7 @@ function Select({
 function KanbanColumn({
   column, tasks, projects, professionals, patients,
   onDragOver, onDrop, onTaskDragStart, draggedId,
-  onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate,
+  onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
 }: {
   column: TareaColumn;
   tasks: Tarea[];
@@ -525,6 +566,7 @@ function KanbanColumn({
   onTaskDelete: (id: number) => void;
   onTaskArchive: (id: number) => void;
   onTaskDuplicate: (id: number) => void;
+  onTaskToggleDone: (t: Tarea) => void;
 }) {
   const Icon = column.icon ? COLUMN_ICONS[column.icon] ?? Circle : Circle;
   return (
@@ -559,6 +601,7 @@ function KanbanColumn({
               onDelete={() => onTaskDelete(t.id)}
               onArchive={() => onTaskArchive(t.id)}
               onDuplicate={() => onTaskDuplicate(t.id)}
+              onToggleDone={() => onTaskToggleDone(t)}
             />
           ))
         )}
@@ -569,7 +612,7 @@ function KanbanColumn({
 
 function TareaCard({
   task, project, assignee, patient, dragging,
-  onDragStart, onClick, onDelete, onArchive, onDuplicate,
+  onDragStart, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
 }: {
   task: Tarea;
   project: TareaProject | null;
@@ -581,8 +624,10 @@ function TareaCard({
   onDelete: () => void;
   onArchive: () => void;
   onDuplicate: () => void;
+  onToggleDone: () => void;
 }) {
   const overdue = isOverdue(task.due_date) && task.status !== "DONE";
+  const isDone = task.status === "DONE";
   const initials = (assignee?.name ?? "")
     .split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
   const patientLabel = patient ? (patient.preferredName ?? patient.name) : null;
@@ -598,8 +643,27 @@ function TareaCard({
         dragging && "opacity-50 ring-2 ring-brand-400"
       )}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="text-sm font-medium text-ink-900 leading-snug line-clamp-2 flex-1">
+      <div className="flex items-start gap-2 mb-2">
+        {/* Checkbox redondo para marcar hecha desde la card sin abrir el modal.
+            Click stopPropagation para que no abra el detalle. */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleDone(); }}
+          aria-label={isDone ? "Desmarcar tarea" : "Marcar tarea como hecha"}
+          title={isDone ? "Desmarcar" : "Marcar como hecha"}
+          className={cn(
+            "h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors mt-0.5",
+            isDone
+              ? "border-success bg-success text-white"
+              : "border-line-200 hover:border-brand-700 hover:bg-brand-50"
+          )}
+        >
+          {isDone && <Check className="h-3 w-3" strokeWidth={3} />}
+        </button>
+        <h3 className={cn(
+          "text-sm font-medium leading-snug line-clamp-2 flex-1",
+          isDone ? "text-ink-500 line-through" : "text-ink-900"
+        )}>
           {task.title}
         </h3>
         <span

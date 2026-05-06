@@ -791,6 +791,9 @@ export const api = {
   // Formularios personalizados del consultorio (workspace-scoped)
   createTestForm: (body: CreateFormBody) =>
     request<PsychTest>("/api/tests/forms", { method: "POST", body: JSON.stringify(body) }),
+  /** Editar un formulario personalizado. Reusa el mismo body que createTestForm. */
+  updateTestForm: (id: string, body: CreateFormBody) =>
+    request<PsychTest>(`/api/tests/forms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteTestForm: (id: string) =>
     request<{ ok: true }>(`/api/tests/forms/${id}`, { method: "DELETE" }),
 

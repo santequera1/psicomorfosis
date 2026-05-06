@@ -107,7 +107,10 @@ export function AdminDashboard() {
           >
             <FilePen className="h-3.5 w-3.5" /> Nueva nota
           </button>
-          <div className="flex items-center gap-2 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible no-scrollbar">
+          {/* Chips de período: en mobile envuelven en varias líneas para evitar
+              overflow horizontal del viewport (que causaba que la página
+              entera se "rodara"). En desktop quedan en línea. */}
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
             {(["Hoy", "Semana", "Mes", "Trimestre", "Año"] as Period[]).map((r) => (
               <button
                 key={r}

@@ -98,8 +98,14 @@ function PatientsPage() {
       return;
     }
     const rows: string[][] = [["ID", "Nombre", "Edad", "Motivo", "Profesional", "Modalidad", "Estado", "Riesgo", "Próxima sesión"], ...filtered.map((p) => [p.id, p.name, String(p.age || ""), p.reason, p.professional, p.modality, p.status, p.risk, p.nextSession ?? ""])];
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    // Excel detecta UTF-8 s\u00F3lo si encuentra el BOM (0xEF 0xBB 0xBF) al inicio.
+    // Codificamos bytes expl\u00EDcitamente v\u00EDa TextEncoder y anteponemos los 3
+    // bytes del BOM, en lugar de concatenar "\uFEFF" como string. CRLF para
+    // compatibilidad con Excel en Windows.
+    const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+    const utf8 = new TextEncoder().encode(csv);
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, utf8], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `pacientes-${new Date().toISOString().slice(0, 10)}.csv`;

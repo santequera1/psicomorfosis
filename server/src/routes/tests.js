@@ -100,77 +100,62 @@ router.get("/catalog/:id", (req, res) => {
  * con prefijo `form-` para distinguirlos visualmente. Validamos lo mínimo
  * para no aceptar formularios que el aplicador no pueda renderizar.
  */
-router.post("/forms", (req, res) => {
-  const { name, short_name, description, category, age_range, minutes, definition } = req.body ?? {};
-
+/**
+ * Valida y normaliza el payload de un test personalizado. Devuelve
+ * `{ error, status }` si algo está mal, o `{ data: { ... } }` con los
+ * campos listos para INSERT/UPDATE. Compartido entre POST (crear) y
+ * PATCH (editar) para que las dos rutas tengan exactamente las mismas
+ * reglas y normalización.
+ */
+function buildFormPayload(body) {
+  const { name, short_name, description, category, age_range, minutes, definition } = body ?? {};
   if (typeof name !== "string" || !name.trim()) {
-    return res.status(400).json({ error: "El nombre es obligatorio" });
+    return { error: "El nombre es obligatorio", status: 400 };
   }
   if (!definition || typeof definition !== "object") {
-    return res.status(400).json({ error: "La definición es obligatoria" });
+    return { error: "La definición es obligatoria", status: 400 };
   }
   const questions = Array.isArray(definition.questions) ? definition.questions : [];
   if (questions.length === 0) {
-    return res.status(400).json({ error: "El test debe tener al menos una pregunta" });
+    return { error: "El test debe tener al menos una pregunta", status: 400 };
   }
   const scoringType = definition.scoring?.type;
   if (!["sum", "sum_reversed", "none", "activity"].includes(scoringType)) {
-    return res.status(400).json({ error: "Tipo de scoring no soportado" });
+    return { error: "Tipo de scoring no soportado", status: 400 };
   }
-
-  // Validación específica por tipo de scoring:
-  //  - sum / sum_reversed / none: escala global (Likert/V-F) compartida.
-  //  - activity: cada pregunta lleva su propio widget. La escala global
-  //    NO se usa pero se conserva como [] por compat.
   const scale = Array.isArray(definition.scale) ? definition.scale : [];
   if (scoringType !== "activity" && scale.length < 2) {
-    return res.status(400).json({ error: "La escala debe tener al menos 2 opciones" });
+    return { error: "La escala debe tener al menos 2 opciones", status: 400 };
   }
-
   if (scoringType === "activity") {
     const allowedTypes = new Set(["single_choice", "yes_no", "numeric", "text"]);
     for (const q of questions) {
       if (!allowedTypes.has(q.type)) {
-        return res.status(400).json({ error: `Pregunta "${q.text || q.id}": tipo "${q.type}" no soportado` });
+        return { error: `Pregunta "${q.text || q.id}": tipo "${q.type}" no soportado`, status: 400 };
       }
       if (q.type === "single_choice") {
         const opts = Array.isArray(q.options) ? q.options : [];
         if (opts.length < 2) {
-          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": opción múltiple necesita al menos 2 opciones` });
+          return { error: `Pregunta "${q.text || q.id}": opción múltiple necesita al menos 2 opciones`, status: 400 };
         }
         if (opts.some((o) => !o || typeof o.label !== "string" || !o.label.trim())) {
-          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": todas las opciones necesitan etiqueta` });
+          return { error: `Pregunta "${q.text || q.id}": todas las opciones necesitan etiqueta`, status: 400 };
         }
       }
       if (q.type === "numeric") {
         const lo = q.numeric_min;
         const hi = q.numeric_max;
         if (lo != null && hi != null && Number(lo) > Number(hi)) {
-          return res.status(400).json({ error: `Pregunta "${q.text || q.id}": el mínimo no puede ser mayor que el máximo` });
+          return { error: `Pregunta "${q.text || q.id}": el mínimo no puede ser mayor que el máximo`, status: 400 };
         }
       }
     }
   }
-
-  // Sólo los tipos puntuables (sum/sum_reversed) requieren rangos.
   const ranges = Array.isArray(definition.ranges) ? definition.ranges : [];
   const isScored = scoringType === "sum" || scoringType === "sum_reversed";
   if (isScored && ranges.length === 0) {
-    return res.status(400).json({ error: "Define al menos un rango de severidad" });
+    return { error: "Define al menos un rango de severidad", status: 400 };
   }
-
-  // ID único: form-<workspace>-<timestamp>-<random>. El code lo usa la UI
-  // como "etiqueta corta" — short_name si lo dan, si no derivamos algo.
-  const ts = Date.now();
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  const id = `form-${req.user.workspace_id}-${ts}-${rand}`;
-  const code = (short_name && short_name.trim()) || `FORM-${rand}`;
-
-  // Normalizamos las preguntas: id estable, texto limpio. Para Actividad
-  // (scoring="activity") preservamos type/options/numeric_min/numeric_max/
-  // placeholder por pregunta. El flag `reverse` solo se usa en tipos
-  // puntuables y se descarta en cualquier otro caso para no confundir al
-  // motor de scoring.
   const normQuestions = questions.map((q, i) => {
     const base = {
       id: typeof q.id === "string" && q.id.trim() ? q.id : `q${i + 1}`,
@@ -199,7 +184,6 @@ router.post("/forms", (req, res) => {
     label: String(r.label ?? "").trim(),
     level: r.level ?? "none",
   }));
-
   const questions_json = JSON.stringify({
     version: 1,
     instructions: typeof definition.instructions === "string" ? definition.instructions : "",
@@ -210,6 +194,32 @@ router.post("/forms", (req, res) => {
     alerts: null,
   });
   const scoringJson = JSON.stringify(normRanges);
+  return {
+    data: {
+      name: name.trim(),
+      short_name: (short_name && short_name.trim()) || null,
+      description: (description && description.trim()) || null,
+      category: (category && category.trim()) || "Personalizado",
+      age_range: (age_range && age_range.trim()) || null,
+      minutes: Number.isFinite(minutes) ? Math.max(1, Math.min(120, Number(minutes))) : 5,
+      items: normQuestions.length,
+      scoringJson,
+      questions_json,
+    },
+  };
+}
+
+router.post("/forms", (req, res) => {
+  const built = buildFormPayload(req.body);
+  if (built.error) return res.status(built.status).json({ error: built.error });
+  const d = built.data;
+
+  // ID único: form-<workspace>-<timestamp>-<random>. El code lo usa la UI
+  // como "etiqueta corta" — short_name si lo dan, si no derivamos algo.
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const id = `form-${req.user.workspace_id}-${ts}-${rand}`;
+  const code = d.short_name || `FORM-${rand}`;
   const created = now();
 
   db.prepare(`
@@ -218,25 +228,48 @@ router.post("/forms", (req, res) => {
        scoring, questions_json, is_custom, workspace_id, created_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
   `).run(
-    id,
-    code,
-    name.trim(),
-    (short_name && short_name.trim()) || null,
-    normQuestions.length,
-    Number.isFinite(minutes) ? Math.max(1, Math.min(120, Number(minutes))) : 5,
-    (category && category.trim()) || "Personalizado",
-    (description && description.trim()) || null,
-    (age_range && age_range.trim()) || null,
-    scoringJson,
-    questions_json,
-    req.user.workspace_id,
-    req.user.id,
-    created,
-    created,
+    id, code, d.name, d.short_name, d.items, d.minutes, d.category, d.description, d.age_range,
+    d.scoringJson, d.questions_json,
+    req.user.workspace_id, req.user.id, created, created,
   );
 
   const row = db.prepare("SELECT * FROM psych_tests WHERE id = ?").get(id);
   res.status(201).json(parseTest(row));
+});
+
+/**
+ * PATCH /api/tests/forms/:id — edita un formulario personalizado del
+ * workspace. Solo se permite editar tests con is_custom=1 que pertenezcan
+ * al workspace actual. Las aplicaciones ya hechas conservan su snapshot
+ * original en `alerts_json.meta.answers_snapshot`, así que editar el
+ * test no rompe los resultados históricos.
+ */
+router.patch("/forms/:id", (req, res) => {
+  const existing = db.prepare(`
+    SELECT id FROM psych_tests
+    WHERE id = ? AND is_custom = 1 AND workspace_id = ?
+  `).get(req.params.id, req.user.workspace_id);
+  if (!existing) return res.status(404).json({ error: "Formulario no encontrado o no editable" });
+
+  const built = buildFormPayload(req.body);
+  if (built.error) return res.status(built.status).json({ error: built.error });
+  const d = built.data;
+  const updated = now();
+
+  db.prepare(`
+    UPDATE psych_tests
+    SET name = ?, short_name = ?, items = ?, minutes = ?, category = ?,
+        description = ?, age_range = ?, scoring = ?, questions_json = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(
+    d.name, d.short_name, d.items, d.minutes, d.category,
+    d.description, d.age_range, d.scoringJson, d.questions_json,
+    updated, req.params.id,
+  );
+
+  const row = db.prepare("SELECT * FROM psych_tests WHERE id = ?").get(req.params.id);
+  res.json(parseTest(row));
 });
 
 /**
