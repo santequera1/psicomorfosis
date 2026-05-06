@@ -10,7 +10,7 @@ import { ReceiptFormModal } from "@/routes/facturacion";
 import {
   CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video,
   FilePen, Brain, ClipboardList, FileSignature, ListTodo,
-  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail,
+  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail, Receipt,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
