@@ -666,6 +666,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   }
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100">
@@ -761,16 +762,23 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
         </div>
       </div>
 
-      {cobroOpen && (
-        <ReceiptFormModal
-          mode="create"
-          presetPatientId={patientId ?? undefined}
-          presetPatientName={patientName}
-          presetConcept={`Sesión ${slot.modality === "virtual" ? "virtual" : "individual"}${slot.date ? ` · ${slot.date}` : ""}`}
-          presetDate={slot.date ?? undefined}
-          onClose={() => setCobroOpen(false)}
-        />
-      )}
     </div>
+
+    {/* ReceiptFormModal afuera del backdrop del appointment modal:
+        si lo dejamos adentro, cualquier click sobre sus inputs/selects
+        burbuja al onClick={onClose} del padre y cierra ambos modales,
+        impidiendo que el submit del recibo se registre. Con un Fragment
+        hermano, el cierre solo se dispara desde su propio botón X. */}
+    {cobroOpen && (
+      <ReceiptFormModal
+        mode="create"
+        presetPatientId={patientId ?? undefined}
+        presetPatientName={patientName}
+        presetConcept={`Sesión ${slot.modality === "virtual" ? "virtual" : "individual"}${slot.date ? ` · ${slot.date}` : ""}`}
+        presetDate={slot.date ?? undefined}
+        onClose={() => setCobroOpen(false)}
+      />
+    )}
+    </>
   );
 }
