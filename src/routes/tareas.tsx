@@ -369,10 +369,14 @@ function TareasPage() {
             </button>
           </div>
 
+          {/* En desktop, todos los filtros en UNA línea (chips + selects en
+              flex-wrap horizontal). En mobile siguen agrupados verticalmente
+              y plegables tras el botón "Filtros". */}
           <div className={cn(
-            "sm:flex sm:flex-col sm:gap-2 sm:mt-2",
+            "sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:mt-2",
             mobileFiltersOpen ? "flex flex-col gap-2 mt-2" : "hidden"
           )}>
+            {/* Grupo 1: chips de fecha */}
             <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={dateFilter === "all"} onClick={() => setDateFilter("all")}>
                 Todas
@@ -387,6 +391,9 @@ function TareasPage() {
                 <AlertCircle className="h-3.5 w-3.5" /> Vencidas
               </FilterChip>
             </div>
+            {/* Separador vertical sutil entre grupos en desktop */}
+            <span className="hidden sm:block h-5 w-px bg-line-200 mx-1" />
+            {/* Grupo 2: scope */}
             <div className="flex flex-wrap items-center gap-2">
               <FilterChip active={scopeFilter === "all"} onClick={() => setScopeFilter("all")}>
                 <Filter className="h-3.5 w-3.5" /> Todo
@@ -398,53 +405,53 @@ function TareasPage() {
                 <Users className="h-3.5 w-3.5" /> Internas
               </FilterChip>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <span className="hidden sm:block h-5 w-px bg-line-200 mx-1" />
+            {/* Grupo 3: dropdowns */}
+            <Select
+              value={filterPriority}
+              onChange={(v) => setFilterPriority(v as TareaPriority | "all")}
+              icon={<Flag className="h-3.5 w-3.5" />}
+              options={[
+                { value: "all", label: "Toda prioridad" },
+                { value: "URGENT", label: "Urgente" },
+                { value: "HIGH", label: "Alta" },
+                { value: "MEDIUM", label: "Media" },
+                { value: "LOW", label: "Baja" },
+              ]}
+            />
+            {isOrg && (
               <Select
-                value={filterPriority}
-                onChange={(v) => setFilterPriority(v as TareaPriority | "all")}
-                icon={<Flag className="h-3.5 w-3.5" />}
+                value={String(filterAssignee)}
+                onChange={(v) => setFilterAssignee(v === "all" ? "all" : Number(v))}
+                icon={<User className="h-3.5 w-3.5" />}
                 options={[
-                  { value: "all", label: "Toda prioridad" },
-                  { value: "URGENT", label: "Urgente" },
-                  { value: "HIGH", label: "Alta" },
-                  { value: "MEDIUM", label: "Media" },
-                  { value: "LOW", label: "Baja" },
+                  { value: "all", label: "Todo el equipo" },
+                  ...professionals.map((p) => ({ value: String(p.id), label: p.name })),
                 ]}
               />
-              {isOrg && (
-                <Select
-                  value={String(filterAssignee)}
-                  onChange={(v) => setFilterAssignee(v === "all" ? "all" : Number(v))}
-                  icon={<User className="h-3.5 w-3.5" />}
-                  options={[
-                    { value: "all", label: "Todo el equipo" },
-                    ...professionals.map((p) => ({ value: String(p.id), label: p.name })),
-                  ]}
-                />
-              )}
-              {projects.length > 0 && (
-                <Select
-                  value={String(filterProject)}
-                  onChange={(v) => setFilterProject(v === "all" ? "all" : Number(v))}
-                  icon={<Filter className="h-3.5 w-3.5" />}
-                  options={[
-                    { value: "all", label: "Todos los proyectos" },
-                    ...projects.map((p) => ({ value: String(p.id), label: p.name })),
-                  ]}
-                />
-              )}
-              {patients.length > 0 && (
-                <Select
-                  value={filterPatient}
-                  onChange={(v) => setFilterPatient(v)}
-                  icon={<UserPlus className="h-3.5 w-3.5" />}
-                  options={[
-                    { value: "all", label: "Todos los pacientes" },
-                    ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
-                  ]}
-                />
-              )}
-            </div>
+            )}
+            {projects.length > 0 && (
+              <Select
+                value={String(filterProject)}
+                onChange={(v) => setFilterProject(v === "all" ? "all" : Number(v))}
+                icon={<Filter className="h-3.5 w-3.5" />}
+                options={[
+                  { value: "all", label: "Todos los proyectos" },
+                  ...projects.map((p) => ({ value: String(p.id), label: p.name })),
+                ]}
+              />
+            )}
+            {patients.length > 0 && (
+              <Select
+                value={filterPatient}
+                onChange={(v) => setFilterPatient(v)}
+                icon={<UserPlus className="h-3.5 w-3.5" />}
+                options={[
+                  { value: "all", label: "Todos los pacientes" },
+                  ...patients.map((p) => ({ value: p.id, label: p.preferredName ?? p.name })),
+                ]}
+              />
+            )}
           </div>
         </div>
 

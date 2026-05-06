@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   FileText, Receipt, BarChart3, Settings, ListTodo,
-  ChevronsLeft, ChevronsRight, X, Shield, LogOut, LifeBuoy,
+  ChevronsLeft, ChevronsRight, X, Shield, LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -185,23 +185,6 @@ export function AppSidebar() {
               </div>
             </div>
           )}
-          {/* Protocolo de crisis: el icono salió del Topbar (lo reemplazó el
-              toggle de tema). Se mantiene accesible aquí, en el footer del
-              sidebar. El handler dispara el evento al que el Topbar escucha. */}
-          <button
-            onClick={() => {
-              setOpen(false);
-              window.dispatchEvent(new CustomEvent("psm:open-crisis"));
-            }}
-            className={cn(
-              "w-full flex items-center gap-2 text-risk-high hover:bg-error-soft/40 rounded-md px-3 py-2 text-xs transition-colors",
-              collapsed && "md:justify-center md:px-0",
-            )}
-            title="Protocolo de crisis"
-          >
-            <LifeBuoy className="h-4 w-4 shrink-0" />
-            <span className={cn(collapsed && "md:hidden")}>Protocolo de crisis</span>
-          </button>
           {/* Cerrar sesión */}
           <button
             onClick={() => {

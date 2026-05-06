@@ -6,6 +6,7 @@ import {
   ChevronLeft, Save, AlertCircle, Loader2, Trash2, Sparkles, Info, Eye, EyeOff, Plus,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { VARIABLES } from "@/components/documents/VariableSuggest";
 import type { VariableContextValue } from "@/components/documents/VariableNode";
@@ -33,6 +34,7 @@ function TemplateEditPage() {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   // Contexto de muestra para la vista previa: arma { paciente: { nombre: "Andrés…" }, ... }
   // a partir de los `example` de cada variable. El editor ya sabe resolver
@@ -128,7 +130,7 @@ function TemplateEditPage() {
               )}
               {!isSystem && (
                 <button
-                  onClick={() => { if (confirm(`¿Eliminar la plantilla "${tpl.name}"?`)) deleteMu.mutate(); }}
+                  onClick={() => setConfirmDel(true)}
                   className="h-9 w-9 rounded-md border border-line-200 hover:border-rose-400 text-ink-500 hover:text-rose-700 flex items-center justify-center"
                   title="Eliminar plantilla"
                 >
@@ -183,27 +185,40 @@ function TemplateEditPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
           <div className="min-w-0">
-            <DocumentEditor
-              initialDoc={body}
-              editable={!isSystem}
-              placeholder="Escribe la plantilla… usa / para bloques o {{ para insertar variables"
-              onChange={(d) => setBody(d)}
-              variableContext={previewMode ? previewContext : null}
-              onUploadImage={async (file) => {
-                const asset = await api.uploadDocumentAsset(file);
-                return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
-              }}
-              onUploadAttachment={async (file) => {
-                const asset = await api.uploadDocumentAsset(file);
-                const absoluteUrl = asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
-                return {
-                  url: absoluteUrl,
-                  name: file.name,
-                  mime: file.type || asset.mime,
-                  sizeBytes: file.size,
-                };
-              }}
-            />
+            {/* Solo montamos DocumentEditor cuando body ya tiene contenido.
+                TipTap usa `initialDoc` únicamente al primer mount; si body
+                arranca null y se setea después en useEffect, el editor
+                queda vacío. La key={tpl.id} además fuerza remount cuando
+                el psicólogo navega entre dos plantillas distintas sin
+                desmontar la página. */}
+            {body !== null ? (
+              <DocumentEditor
+                key={tpl.id}
+                initialDoc={body}
+                editable={!isSystem}
+                placeholder="Escribe la plantilla… usa / para bloques o {{ para insertar variables"
+                onChange={(d) => setBody(d)}
+                variableContext={previewMode ? previewContext : null}
+                onUploadImage={async (file) => {
+                  const asset = await api.uploadDocumentAsset(file);
+                  return asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
+                }}
+                onUploadAttachment={async (file) => {
+                  const asset = await api.uploadDocumentAsset(file);
+                  const absoluteUrl = asset.public_url.startsWith("http") ? asset.public_url : `${window.location.origin}${asset.public_url}`;
+                  return {
+                    url: absoluteUrl,
+                    name: file.name,
+                    mime: file.type || asset.mime,
+                    sizeBytes: file.size,
+                  };
+                }}
+              />
+            ) : (
+              <div className="rounded-xl border border-line-200 bg-surface p-10 text-center text-sm text-ink-500">
+                <Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando contenido de la plantilla…
+              </div>
+            )}
           </div>
 
           <VariablesPanel
@@ -213,6 +228,17 @@ function TemplateEditPage() {
           />
         </div>
       </div>
+
+      {confirmDel && (
+        <ConfirmDialog
+          title={`Eliminar plantilla "${tpl.name}"`}
+          message="Esta acción es definitiva. Los documentos creados a partir de esta plantilla no se ven afectados."
+          confirmLabel="Eliminar plantilla"
+          danger
+          onConfirm={() => { setConfirmDel(false); deleteMu.mutate(); }}
+          onCancel={() => setConfirmDel(false)}
+        />
+      )}
     </AppShell>
   );
 }

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
 import { PatientPicker } from "@/components/app/PatientPicker";
 import { useWorkspace } from "@/lib/workspace";
@@ -70,6 +71,14 @@ function DocumentosPage() {
   const [viewMode, setViewMode] = usePersistedViewMode("psm.docs.view", "folders");
   // Carpeta abierta (en modo carpetas): patient_id o "_general" para sin paciente
   const [openFolder, setOpenFolder] = useState<string | null>(null);
+  // Preview de imagen en modal (en lugar de navegar al editor): cuando un
+  // documento es una foto subida, abrir el editor no tiene sentido.
+  const [previewImage, setPreviewImage] = useState<PsmDocument | null>(null);
+  // Confirmación de eliminación de documento (modal custom en lugar del
+  // confirm() nativo del navegador).
+  const [confirmDelete, setConfirmDelete] = useState<PsmDocument | null>(null);
+  // Confirmación de eliminación de carpeta (con todos sus documentos).
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<{ id: string; name: string; count: number } | null>(null);
 
   const filterPatient = search.paciente ?? null;
 
@@ -240,18 +249,31 @@ function DocumentosPage() {
                 key="folders-grid"
                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4 animate-in fade-in slide-in-from-left-2 duration-200"
               >
-                {folders.map((f) => f.id === "_general" ? (
-                  <GenericFolder key={f.id} name={f.name} count={f.docs.length} onClick={() => setOpenFolder(f.id)} toneIdx={5} />
-                ) : (
-                  <PatientFolder
-                    key={f.id}
-                    name={f.name}
-                    preferredName={f.preferredName}
-                    photoUrl={f.photoUrl}
-                    count={f.docs.length}
-                    onClick={() => setOpenFolder(f.id)}
-                  />
-                ))}
+                {folders.map((f) => {
+                  // Click derecho → confirmar eliminación de la carpeta y
+                  // todos sus documentos. La carpeta "_general" agrupa
+                  // documentos sin paciente; eliminar todo desde ahí
+                  // también está permitido pero requiere confirmación.
+                  const onContextMenu = (e: React.MouseEvent) => {
+                    e.preventDefault();
+                    setConfirmDeleteFolder({ id: f.id, name: f.name, count: f.docs.length });
+                  };
+                  return f.id === "_general" ? (
+                    <div key={f.id} onContextMenu={onContextMenu}>
+                      <GenericFolder name={f.name} count={f.docs.length} onClick={() => setOpenFolder(f.id)} toneIdx={5} />
+                    </div>
+                  ) : (
+                    <div key={f.id} onContextMenu={onContextMenu}>
+                      <PatientFolder
+                        name={f.name}
+                        preferredName={f.preferredName}
+                        photoUrl={f.photoUrl}
+                        count={f.docs.length}
+                        onClick={() => setOpenFolder(f.id)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             ) : viewMode === "cards" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 sm:p-4">
@@ -260,8 +282,9 @@ function DocumentosPage() {
                     key={d.id}
                     doc={d}
                     onArchive={() => archiveMu.mutate(d.id)}
-                    onDelete={() => { if (confirm(`¿Eliminar "${d.name}" definitivamente?`)) deleteMu.mutate(d.id); }}
+                    onDelete={() => setConfirmDelete(d)}
                     onDuplicate={() => setDuplicating(d)}
+                    onPreviewImage={() => setPreviewImage(d)}
                   />
                 ))}
               </div>
@@ -283,8 +306,9 @@ function DocumentosPage() {
                     onMenuToggle={() => setMenuId(menuId === d.id ? null : d.id)}
                     onCloseMenu={() => setMenuId(null)}
                     onArchive={() => archiveMu.mutate(d.id)}
-                    onDelete={() => { if (confirm(`¿Eliminar "${d.name}" definitivamente?`)) deleteMu.mutate(d.id); }}
+                    onDelete={() => setConfirmDelete(d)}
                     onDuplicate={() => setDuplicating(d)}
+                    onPreviewImage={() => setPreviewImage(d)}
                   />
                 ))}
               </ul>
@@ -342,14 +366,26 @@ function DocumentosPage() {
         </section>
       </div>
 
-      {newOpen && (
-        <NewDocumentModal
-          onClose={() => setNewOpen(false)}
-          templates={templates}
-          presetPatientId={filterPatient ?? undefined}
-          presetPatient={patient ?? null}
-        />
-      )}
+      {newOpen && (() => {
+        // Pre-selección de paciente: si hay filtro por URL, lo usamos. Si no
+        // pero el usuario está dentro de una carpeta de paciente (no la
+        // "_general"), usamos ese. Así "Nuevo documento" desde una carpeta
+        // ya viene asociado al paciente correcto.
+        const folderPatientId = openFolder && openFolder !== "_general" ? openFolder : null;
+        const presetId = filterPatient ?? folderPatientId ?? undefined;
+        const folderPatient = folderPatientId
+          ? patientsAll.find((p) => p.id === folderPatientId) ?? null
+          : null;
+        const presetP = patient ?? folderPatient ?? null;
+        return (
+          <NewDocumentModal
+            onClose={() => setNewOpen(false)}
+            templates={templates}
+            presetPatientId={presetId}
+            presetPatient={presetP}
+          />
+        );
+      })()}
       {duplicating && (
         <DuplicateDocumentModal
           doc={duplicating}
@@ -358,9 +394,88 @@ function DocumentosPage() {
           onClose={() => setDuplicating(null)}
         />
       )}
+
+      {previewImage && (
+        <ImagePreviewModal doc={previewImage} onClose={() => setPreviewImage(null)} />
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Eliminar "${confirmDelete.name}"`}
+          message="Esta acción es definitiva y no se puede deshacer. ¿Confirmas que quieres eliminar este documento?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={() => {
+            deleteMu.mutate(confirmDelete.id);
+            setConfirmDelete(null);
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {confirmDeleteFolder && (
+        <ConfirmDialog
+          title={`Eliminar carpeta "${confirmDeleteFolder.name}"`}
+          message={`Se eliminarán los ${confirmDeleteFolder.count} documento${confirmDeleteFolder.count === 1 ? "" : "s"} dentro de la carpeta. Esta acción es definitiva.`}
+          confirmLabel={`Eliminar ${confirmDeleteFolder.count} documento${confirmDeleteFolder.count === 1 ? "" : "s"}`}
+          danger
+          onConfirm={() => {
+            const folder = folders.find((f) => f.id === confirmDeleteFolder.id);
+            if (folder) {
+              for (const d of folder.docs) deleteMu.mutate(d.id);
+            }
+            setOpenFolder(null);
+            setConfirmDeleteFolder(null);
+          }}
+          onCancel={() => setConfirmDeleteFolder(null)}
+        />
+      )}
     </AppShell>
   );
 }
+
+/** Lightbox simple para previsualizar imágenes subidas como documento. */
+function ImagePreviewModal({ doc, onClose }: { doc: PsmDocument; onClose: () => void }) {
+  const url = api.documentFileUrl(doc.id, { withToken: true });
+  const [downloading, setDownloading] = useState(false);
+  async function handleDownload() {
+    setDownloading(true);
+    try { await downloadDocument(doc); } finally { setDownloading(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 bg-ink-900/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+          disabled={downloading}
+          className="h-10 px-4 rounded-lg bg-surface text-ink-700 text-sm font-medium hover:bg-bg-100 inline-flex items-center gap-2 disabled:opacity-60"
+        >
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Descargar
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-10 w-10 rounded-lg bg-surface text-ink-700 hover:bg-bg-100 flex items-center justify-center"
+          aria-label="Cerrar"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <img
+        src={url}
+        alt={doc.name}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] max-w-[95vw] object-contain rounded-lg shadow-modal"
+      />
+      <div className="absolute bottom-4 left-4 right-4 text-center text-white/80 text-sm">
+        {doc.name}
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Fila de documento con menú "···" ──────────────────────────────────────
 /** Descarga el PDF generado server-side (kind=editor) o el archivo subido (kind=file). */
@@ -386,7 +501,7 @@ async function downloadDocument(doc: PsmDocument) {
   }
 }
 
-function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate }: {
+function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate, onPreviewImage }: {
   doc: PsmDocument;
   menuOpen: boolean;
   onMenuToggle: () => void;
@@ -394,11 +509,13 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   onArchive: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onPreviewImage: () => void;
 }) {
   const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
+  const isImage = isFile && (doc.mime?.startsWith("image/") ?? false);
   const [downloading, setDownloading] = useState(false);
 
   async function handleDownload(e: React.MouseEvent) {
@@ -419,8 +536,13 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   // sobre la fila. `display: contents` en <a> no es confiable cross-browser
   // y dejaba la fila sin responder al click en algunos casos. Las acciones
   // del lado derecho hacen stopPropagation para no disparar la navegación.
+  //
+  // Imágenes subidas: en lugar de abrir el editor (que muestra la imagen
+  // incrustada como si fuera un editor de texto, lo que es raro), abrimos
+  // un lightbox modal directamente.
   function goToDoc() {
-    navigate({ to: "/documentos/$id", params: { id: doc.id } });
+    if (isImage) onPreviewImage();
+    else navigate({ to: "/documentos/$id", params: { id: doc.id } });
   }
 
   return (
@@ -509,16 +631,18 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
 }
 
 // ─── Tarjeta de documento (vista cards) ────────────────────────────────────
-function DocCard({ doc, onArchive, onDelete, onDuplicate }: {
+function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage }: {
   doc: PsmDocument;
   onArchive: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onPreviewImage: () => void;
 }) {
   const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
+  const isImage = isFile && (doc.mime?.startsWith("image/") ?? false);
   const [downloading, setDownloading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -537,9 +661,11 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate }: {
   }
 
   // Misma fix que DocRow: la card es directamente clickeable vía onClick.
-  // Los botones absolutos del top-right hacen stopPropagation.
+  // Los botones absolutos del top-right hacen stopPropagation. Para imágenes,
+  // abrimos un modal lightbox en vez del editor.
   function goToDoc() {
-    navigate({ to: "/documentos/$id", params: { id: doc.id } });
+    if (isImage) onPreviewImage();
+    else navigate({ to: "/documentos/$id", params: { id: doc.id } });
   }
 
   return (

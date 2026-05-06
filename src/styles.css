@@ -283,6 +283,20 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  /* Tailwind v4 cambió el cursor default de <button> de pointer a default
+     (matching CSS spec). Lo restauramos a pointer para todos los buttons,
+     anchors con role=button y elementos con role="button" o cursor:pointer
+     implícito. Excluye los disabled. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
   /* Oculta el scrollbar de navegadores manteniendo la funcionalidad de scroll.
      Útil en filtros de scroll horizontal en mobile (segmentadores de período,
      pestañas que no caben, etc.) — evita que el scrollbar gris robe altura. */
