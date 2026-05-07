@@ -624,6 +624,20 @@ function runMigrations() {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_error_reports_status ON error_reports(status, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_error_reports_workspace ON error_reports(workspace_id)",
+    // Adjuntos del reporte (screenshots normalmente). url apunta al
+    // archivo servido por /api/uploads. Se borran en cascada con el
+    // reporte; si después necesitamos exportar/limpiar más fino,
+    // metemos un job de limpieza periódica.
+    `CREATE TABLE IF NOT EXISTS error_report_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_id INTEGER NOT NULL REFERENCES error_reports(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      mime TEXT,
+      size INTEGER,
+      original_name TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_err_attach_report ON error_report_attachments(report_id)",
   ];
   for (const sql of migrations) {
     try {

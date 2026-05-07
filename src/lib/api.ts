@@ -1241,6 +1241,7 @@ export const api = {
         user_name: string | null;
         workspace_name: string | null;
         resolved_by_name: string | null;
+        attachments_count: number;
       }>;
       counts: { open_count: number; resolved_count: number; total_count: number };
     }>(`/api/platform/error-reports?status=${status}`),
@@ -1261,6 +1262,14 @@ export const api = {
       user_name: string | null;
       workspace_name: string | null;
       resolved_by_name: string | null;
+      attachments: Array<{
+        id: number;
+        url: string;
+        mime: string | null;
+        size: number | null;
+        original_name: string | null;
+        created_at: string;
+      }>;
     }>(`/api/platform/error-reports/${id}`),
 
   platformResolveErrorReport: (id: number, status: "open" | "resolved") =>

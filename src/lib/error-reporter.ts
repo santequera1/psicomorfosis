@@ -85,29 +85,58 @@ export type ErrorReportPayload = {
   stack?: string;
   user_description?: string;
   user_agent?: string;
+  /** Adjuntos (capturas de pantalla normalmente). Máximo 5, máx 5 MB c/u. */
+  attachments?: File[];
 };
+
+export type SubmitResult = { id?: number; attachments?: string[] };
 
 /**
  * Envía un reporte al backend. Funciona sin token (anónimo); si hay
  * token activo lo mandamos para que el backend asocie al user.
+ *
+ * Si hay attachments usa multipart/form-data. Si no, JSON (más liviano
+ * y mantiene compatibilidad con clientes legacy).
  */
-export async function submitErrorReport(payload: ErrorReportPayload): Promise<{ id?: number }> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+export async function submitErrorReport(payload: ErrorReportPayload): Promise<SubmitResult> {
+  const headers: Record<string, string> = {};
   const tok = getToken();
   if (tok) headers["Authorization"] = `Bearer ${tok}`;
 
-  const enriched = {
-    ...payload,
-    url: payload.url ?? (typeof window !== "undefined" ? window.location.href : undefined),
-    user_agent: payload.user_agent ?? (typeof navigator !== "undefined" ? navigator.userAgent : undefined),
-  };
+  const url = payload.url ?? (typeof window !== "undefined" ? window.location.href : undefined);
+  const userAgent = payload.user_agent ?? (typeof navigator !== "undefined" ? navigator.userAgent : undefined);
+
+  let body: BodyInit;
+  if (payload.attachments && payload.attachments.length > 0) {
+    // Multipart: el browser pone Content-Type con boundary automáticamente,
+    // NO debemos setearlo manualmente.
+    const fd = new FormData();
+    if (payload.kind) fd.append("kind", payload.kind);
+    if (url) fd.append("url", url);
+    if (payload.message) fd.append("message", payload.message);
+    if (payload.stack) fd.append("stack", payload.stack);
+    if (payload.user_description) fd.append("user_description", payload.user_description);
+    if (userAgent) fd.append("user_agent", userAgent);
+    for (const file of payload.attachments) {
+      fd.append("attachments", file, file.name);
+    }
+    body = fd;
+  } else {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify({
+      kind: payload.kind,
+      url,
+      message: payload.message,
+      stack: payload.stack,
+      user_description: payload.user_description,
+      user_agent: userAgent,
+    });
+  }
 
   const res = await fetch("/api/error-reports", {
     method: "POST",
     headers,
-    body: JSON.stringify(enriched),
+    body,
   });
   if (!res.ok && res.status !== 202) {
     const data = await res.json().catch(() => ({}));

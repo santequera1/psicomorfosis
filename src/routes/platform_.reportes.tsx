@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Bug, CheckCircle2, Clock, Loader2, RotateCw, X,
+  ArrowLeft, Bug, CheckCircle2, Clock, Loader2, RotateCw, X, Paperclip,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { api, getStoredUser } from "@/lib/api";
@@ -158,6 +158,11 @@ function ReportsView() {
                         {r.kind === "auto" && (
                           <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">auto</span>
                         )}
+                        {r.attachments_count > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-ink-500" title={`${r.attachments_count} adjunto${r.attachments_count === 1 ? "" : "s"}`}>
+                            <Paperclip className="h-3 w-3" /> {r.attachments_count}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-ink-500 mt-0.5 flex items-center gap-2 flex-wrap">
                         <span className="inline-flex items-center gap-1">
@@ -172,7 +177,7 @@ function ReportsView() {
                         {r.workspace_name && (
                           <>
                             <span>·</span>
-                            <span className="truncate max-w-[180px]">{r.workspace_name}</span>
+                            <span className="truncate max-w-45">{r.workspace_name}</span>
                           </>
                         )}
                       </div>
@@ -243,6 +248,33 @@ function ReportDetail({
                   <span className="text-ink-400 italic">(sin descripción)</span>
                 )}
               </Field>
+
+              {data.attachments && data.attachments.length > 0 && (
+                <Field label={`Capturas adjuntas (${data.attachments.length})`}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {data.attachments.map((a) => (
+                      <a
+                        key={a.id}
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block group"
+                        title={a.original_name ?? `Adjunto #${a.id}`}
+                      >
+                        <img
+                          src={a.url}
+                          alt={a.original_name ?? `Adjunto #${a.id}`}
+                          className="w-full h-28 object-cover rounded-lg border border-line-200 group-hover:border-brand-400 transition-colors"
+                        />
+                        <div className="text-[10px] text-ink-500 mt-1 truncate">
+                          {a.original_name ?? `#${a.id}`}
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-ink-400 mt-1">Click para abrir en tamaño original.</p>
+                </Field>
+              )}
 
               {data.message && (
                 <Field label="Mensaje de error capturado">

@@ -333,7 +333,8 @@ router.get("/error-reports", (req, res) => {
       er.status, er.created_at, er.resolved_at,
       er.user_role, er.user_name,
       w.name AS workspace_name,
-      ru.name AS resolved_by_name
+      ru.name AS resolved_by_name,
+      (SELECT COUNT(*) FROM error_report_attachments era WHERE era.report_id = er.id) AS attachments_count
     FROM error_reports er
     LEFT JOIN workspaces w ON w.id = er.workspace_id
     LEFT JOIN users ru ON ru.id = er.resolved_by
@@ -355,7 +356,8 @@ router.get("/error-reports", (req, res) => {
 
 /**
  * GET /api/platform/error-reports/:id
- * Detalle completo (incluye stack trace, que omitimos en el listado).
+ * Detalle completo (incluye stack trace, que omitimos en el listado,
+ * y la lista de adjuntos asociados).
  */
 router.get("/error-reports/:id", (req, res) => {
   const row = db.prepare(`
@@ -369,7 +371,13 @@ router.get("/error-reports/:id", (req, res) => {
     WHERE er.id = ?
   `).get(req.params.id);
   if (!row) return res.status(404).json({ error: "Reporte no encontrado" });
-  res.json(row);
+  const attachments = db.prepare(`
+    SELECT id, url, mime, size, original_name, created_at
+    FROM error_report_attachments
+    WHERE report_id = ?
+    ORDER BY id ASC
+  `).all(req.params.id);
+  res.json({ ...row, attachments });
 });
 
 /**
