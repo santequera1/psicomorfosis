@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
-  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Bug,
+  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Bug, Edit3,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
