@@ -14,8 +14,25 @@
  *    "el FAB solo aparece si el usuario es staff".
  */
 import { useEffect } from "react";
-import { runTour, type TourStep } from "./tour";
+import { runTour, type TourStep, openSidebarIfMobile, closeSidebarIfMobile } from "./tour";
 import { toggleTheme } from "./theme";
+
+/**
+ * Helper: abre el drawer del sidebar en mobile y espera a que termine
+ * la animación de apertura (~250ms en CSS) antes de continuar. TourGuide
+ * await-ea Promises que devuelva beforeEnter, así que esto bloquea el
+ * cálculo de posición del highlight hasta que el sidebar esté en su
+ * posición final.
+ *
+ * En desktop/tablet (>= 640px) es no-op casi instantáneo — no hay
+ * animación porque el sidebar ya es sticky.
+ */
+async function openSidebarAndWait() {
+  openSidebarIfMobile();
+  if (typeof window !== "undefined" && window.innerWidth < 640) {
+    await new Promise((r) => setTimeout(r, 280));
+  }
+}
 
 /**
  * Botón "Saltar tour" inline para todos los pasos.
@@ -51,15 +68,25 @@ export const TOUR_NAMES = {
 // beforeLeave antes de exit). Diseño defensivo: guardamos un flag
 // closure-local para garantizar que solo restauremos UNA vez aunque el
 // callback se dispare múltiple.
+// SVG inline del icono de luna+sol (mismo set Lucide que usamos). Va en
+// el título del step para reforzar visualmente "claro/oscuro".
+const THEME_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: -3px; margin-right: 6px;"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`;
+
 function makeThemeDemoStep(): TourStep {
   let toggled = false;
   return {
     target: '[data-tour="theme-toggle"]',
-    title: "¿Claro u oscuro?",
+    // El icono inline en el title hace evidente de qué trata el paso
+    // antes de leer el contenido. TourGuide renderiza el title como
+    // HTML, así que el SVG funciona.
+    title: `${THEME_ICON}¿Claro u oscuro?`,
     content: withSkip(
       "Acá cambias entre tema claro y oscuro (también con <strong>Ctrl + Shift + L</strong>). " +
       "Mira cómo se ve el otro modo — vuelvo al tuyo en un momento."
     ),
+    // En mobile cerramos el drawer si quedó abierto del paso anterior
+    // (sidebar-nav). closeSidebarIfMobile es no-op en desktop/tablet.
+    beforeEnter: closeSidebarIfMobile,
     afterEnter: () => {
       // Toggle visible para que el usuario note el cambio.
       toggleTheme();
@@ -84,45 +111,48 @@ export const welcomeTour: TourStep[] = [
     content: withSkip("Te muestro lo más importante en menos de un minuto. Puedes saltar este tour cuando quieras — luego lo encuentras en Configuración → Tutoriales."),
   },
   {
-    // Opcional porque en mobile el sidebar es drawer cerrado (off-screen)
-    // y el highlight quedaría fuera del viewport. Mismo razonamiento
-    // para los demás steps del sidebar abajo.
+    // En mobile, el sidebar es drawer cerrado por default. beforeEnter
+    // lo abre y espera a que termine la animación (~280ms) antes de que
+    // TourGuide calcule la posición del highlight. En desktop/tablet
+    // es no-op casi instantáneo. Mismo patrón en los demás pasos del
+    // sidebar abajo.
     target: '[data-tour="sidebar-nav"]',
     title: "Tu menú principal",
     content: withSkip("Desde aquí llegas a todo: agenda, pacientes, tests, documentos y más. Puedes colapsarlo con el botón de abajo si necesitas más espacio."),
-    optional: true,
+    beforeEnter: openSidebarAndWait,
   },
   makeThemeDemoStep(),
   {
     target: '[data-tour="sidebar-link-agenda"]',
     title: "Tu agenda",
     content: withSkip("Citas del día, semana y mes. Marca asistencia, genera recibos y abre la historia clínica desde cada cita."),
-    optional: true,
+    beforeEnter: openSidebarAndWait,
   },
   {
     target: '[data-tour="sidebar-link-pacientes"]',
     title: "Tus pacientes",
     content: withSkip("Lista completa de pacientes activos, con búsqueda, filtros y etiquetas. Click en cualquiera para ver su ficha."),
-    optional: true,
+    beforeEnter: openSidebarAndWait,
   },
   {
     target: '[data-tour="fab-button"]',
     title: "Atajo flotante",
     content: withSkip("Este botón siempre está abajo a la derecha. Hace lo mismo que las acciones rápidas pero accesible desde cualquier página."),
     optional: true,
+    // Cierra el drawer en mobile para que el FAB no quede tapado.
+    beforeEnter: closeSidebarIfMobile,
   },
   {
     target: '[data-tour="report-problem"]',
     title: "¿Algo raro?",
     content: withSkip("Si encuentras un bug o tienes una idea, repórtalo aquí. Puedes adjuntar capturas (Ctrl+V también funciona). Revisamos los reportes diariamente."),
-    optional: true,
+    beforeEnter: openSidebarAndWait,
   },
   {
     // Step final motivacional con CTA. Sin target → dialog centrado.
     // Botón "Crear primer paciente" inline que cierra el tour y navega
     // a /pacientes (el tour de Pacientes arrancará automáticamente al
-    // llegar — primera vez). El botón Saltar también está pero en este
-    // contexto el "Listo" del footer cumple el mismo rol.
+    // llegar — primera vez).
     title: "¡Listo para empezar!",
     content: `
       Ya conoces lo básico. El siguiente paso es crear tu primer paciente — desde ahí puedes agendar citas, hacer notas, aplicar tests y todo lo demás.
@@ -130,12 +160,13 @@ export const welcomeTour: TourStep[] = [
         <button
           type="button"
           onclick="window.__psmTour && window.__psmTour.exit(); window.location.href='/pacientes';"
-          style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #0f4c81; color: white; font-size: 13px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer;"
+          style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: oklch(36% .025 200); color: white; font-size: 13px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer;"
         >
           Crear mi primer paciente →
         </button>
       </div>
     `,
+    beforeEnter: closeSidebarIfMobile,
   },
 ];
 

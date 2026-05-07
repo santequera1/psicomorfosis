@@ -82,6 +82,22 @@ export function AppSidebar() {
       }]
     : groups;
 
+  // Eventos custom para que código fuera de React (ej: el tour de
+  // TourGuideJS) pueda abrir/cerrar el drawer en mobile sin acoplarse
+  // al SidebarContext. Lo dispara lib/tour.ts en los pasos del tour
+  // que apuntan al sidebar — así en mobile el drawer aparece cuando
+  // hace falta y se cierra después.
+  useEffect(() => {
+    function onOpen() { setOpen(true); }
+    function onClose() { setOpen(false); }
+    window.addEventListener("psm:sidebar:open", onOpen);
+    window.addEventListener("psm:sidebar:close", onClose);
+    return () => {
+      window.removeEventListener("psm:sidebar:open", onOpen);
+      window.removeEventListener("psm:sidebar:close", onClose);
+    };
+  }, [setOpen]);
+
   return (
     <>
       {/* Overlay solo en mobile cuando el drawer está abierto */}

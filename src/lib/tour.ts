@@ -32,6 +32,11 @@ export type TourStep = {
   /** Si el target opcional aún no está montado, se salta el step en
    *  silencio en lugar de fallar. Útil para targets condicionales. */
   optional?: boolean;
+  /** Callback ANTES de entrar al step (TourGuide lo espera si devuelve
+   *  Promise). Útil para preparar el DOM — ej: abrir el drawer del
+   *  sidebar en mobile antes de que TourGuide intente posicionar el
+   *  highlight. */
+  beforeEnter?: () => void | Promise<void>;
   /** Callback al ENTRAR al step (después de animación). Útil para hacer
    *  demos visuales — ej: cambiar el tema momentáneamente. */
   afterEnter?: () => void | Promise<void>;
@@ -66,6 +71,36 @@ export function resetTour(name: string) {
   try {
     window.localStorage.removeItem(PREFIX + name);
   } catch { /* */ }
+}
+
+/**
+ * Abre/cierra el drawer del sidebar en mobile (< sm = < 640px).
+ *
+ * Útil para que el tour pueda destacar elementos del sidebar en mobile,
+ * donde por default el drawer está cerrado fuera del viewport.
+ * AppSidebar escucha estos eventos en un useEffect.
+ *
+ * En desktop/tablet (>= 640px) no hace nada: el sidebar es sticky y
+ * abrir/cerrar no aplica (ni siquiera respeta el state `open`).
+ *
+ * Defensivo: si llamamos open y ya está abierto, no rompe; React
+ * setState con el mismo valor es no-op.
+ */
+const SIDEBAR_OPEN_BREAKPOINT = 640;
+
+function isMobileViewport(): boolean {
+  if (!inBrowser()) return false;
+  return window.innerWidth < SIDEBAR_OPEN_BREAKPOINT;
+}
+
+export function openSidebarIfMobile() {
+  if (!inBrowser() || !isMobileViewport()) return;
+  window.dispatchEvent(new CustomEvent("psm:sidebar:open"));
+}
+
+export function closeSidebarIfMobile() {
+  if (!inBrowser() || !isMobileViewport()) return;
+  window.dispatchEvent(new CustomEvent("psm:sidebar:close"));
 }
 
 /** Limpia todos los flags `psm.tour.*`. Usado por el botón "Reiniciar
@@ -207,9 +242,10 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
       content: s.content,
       group: name,
       order: 999,
-      // Callbacks de TourGuide. afterEnter corre tras la animación de
-      // entrada al step; beforeLeave antes de salir hacia el siguiente
-      // (o al cerrar). Útil para demos visuales (ej: cambiar tema).
+      // Callbacks de TourGuide. TourGuide await-ea las Promises así que
+      // beforeEnter puede esperar (ej: animación de apertura del drawer
+      // del sidebar) antes de calcular la posición del dialog.
+      beforeEnter: s.beforeEnter ? () => Promise.resolve(s.beforeEnter!()) : undefined,
       afterEnter: s.afterEnter ? () => Promise.resolve(s.afterEnter!()) : undefined,
       beforeLeave: s.beforeLeave ? () => Promise.resolve(s.beforeLeave!()) : undefined,
     })),
@@ -218,9 +254,14 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
   // Marcamos completado tanto al terminar como al salir. Si el usuario
   // quiere repetirlo, hay botón "Reiniciar tutoriales" en /configuracion.
   const markDone = () => markTourCompleted(name);
-  client.onFinish(markDone);
+  client.onFinish(() => {
+    markDone();
+    // Si algún step abrió el drawer en mobile, lo cerramos al terminar.
+    closeSidebarIfMobile();
+  });
   client.onAfterExit(() => {
     markDone();
+    closeSidebarIfMobile();
     // Limpiar la referencia global del client al cerrar el tour.
     delete (window as any).__psmTour;
   });
