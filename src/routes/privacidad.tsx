@@ -16,10 +16,11 @@ import { PortalCanvas } from "./p_.activar.$token";
 
 const RESPONSABLE = {
   nombre: "Psicomorfosis (Wailus S.A.S.)",
-  // TODO: completar NIT cuando esté.
-  nit: "Por completar",
-  // TODO: completar dirección física cuando esté.
-  direccion: "Por completar",
+  // RUT con dígito de verificación. Si la operación pasa a S.A.S.
+  // constituida ante Cámara de Comercio, reemplazar por el NIT
+  // empresarial (formato típico 9XX.XXX.XXX-X).
+  rut: "1007418662-8",
+  direccion: "Calle 31A - 107, Barrio 13 de Junio, Cartagena de Indias, Colombia (cód. postal 130001)",
   email: "santequera@wailus.co",
   sitio: "https://psico.wailus.co",
 };
@@ -50,8 +51,8 @@ function PrivacidadPage() {
         <Section title="1. Quién trata tus datos">
           <p>
             El Responsable del tratamiento de tus datos personales es{" "}
-            <strong>{RESPONSABLE.nombre}</strong>, identificado con NIT{" "}
-            {RESPONSABLE.nit}, con domicilio en {RESPONSABLE.direccion}.
+            <strong>{RESPONSABLE.nombre}</strong>, identificado con RUT{" "}
+            {RESPONSABLE.rut}, con domicilio en {RESPONSABLE.direccion}.
             Para cualquier consulta, ejercicio de derechos o queja
             relacionada con tus datos puedes escribir a{" "}
             <a href={`mailto:${RESPONSABLE.email}`} className="text-brand-700 underline">
@@ -226,6 +227,10 @@ function PrivacidadPage() {
         <Section title="9. Contacto">
           <p>
             <strong>{RESPONSABLE.nombre}</strong>
+            <br />
+            RUT: {RESPONSABLE.rut}
+            <br />
+            Dirección: {RESPONSABLE.direccion}
             <br />
             Email:{" "}
             <a href={`mailto:${RESPONSABLE.email}`} className="text-brand-700 underline">

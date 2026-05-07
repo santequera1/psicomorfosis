@@ -12,6 +12,10 @@ import { PortalCanvas } from "./p_.activar.$token";
 
 const PROVEEDOR = {
   nombre: "Psicomorfosis (Wailus S.A.S.)",
+  // Igual que en /privacidad: hoy persona natural; si se constituye
+  // S.A.S. con NIT propio, reemplazar.
+  rut: "1007418662-8",
+  direccion: "Calle 31A - 107, Barrio 13 de Junio, Cartagena de Indias, Colombia (cód. postal 130001)",
   email: "santequera@wailus.co",
   sitio: "https://psico.wailus.co",
 };
@@ -205,6 +209,10 @@ function TerminosPage() {
         <Section title="11. Contacto">
           <p>
             <strong>{PROVEEDOR.nombre}</strong>
+            <br />
+            RUT: {PROVEEDOR.rut}
+            <br />
+            Dirección: {PROVEEDOR.direccion}
             <br />
             Email:{" "}
             <a href={`mailto:${PROVEEDOR.email}`} className="text-brand-700 underline">
