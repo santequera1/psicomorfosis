@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useSidebar } from "./SidebarContext";
 import {
-  NOTIFICATIONS, CRISIS_LINES, CRISIS_PROTOCOL_STEPS,
+  CRISIS_LINES, CRISIS_PROTOCOL_STEPS,
 } from "@/lib/mock-data";
 import { api, clearSession, getStoredUser } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
@@ -61,7 +61,18 @@ export function Topbar() {
   const isDark = themePref === "oscuro" ||
     (themePref === "auto" && typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
 
-  const unread = NOTIFICATIONS.filter((n) => !n.read).length;
+  // Notificaciones reales del workspace (calculadas dinámicamente en
+  // el backend desde citas, tests, tareas, documentos). Si el array
+  // está vacío significa que no hay nada urgente — empty state en el
+  // panel. refetchInterval cada 60s para no quedarse desactualizado
+  // sin tener que abrir/cerrar el panel.
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.listNotifications(),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const unread = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -197,7 +208,7 @@ export function Topbar() {
               {unread > 0 ? <BellDot className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
               {unread > 0 && <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-risk-high ring-2 ring-surface" />}
             </button>
-            {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} />}
+            {notifOpen && <NotificationsPanel onClose={() => setNotifOpen(false)} notifications={notifications} />}
           </div>
 
           <div className="relative">
@@ -275,8 +286,10 @@ function UserMenuItem({ to, href, icon: Icon, label, onClose }: { to?: string; h
 // Panel de notificaciones
 // ─────────────────────────────────────────────────────────────
 
-function NotificationsPanel({ onClose }: { onClose: () => void }) {
-  const iconFor = (t: typeof NOTIFICATIONS[number]["type"]) => {
+type Notification = NonNullable<Awaited<ReturnType<typeof api.listNotifications>>>[number];
+
+function NotificationsPanel({ onClose, notifications }: { onClose: () => void; notifications: Notification[] }) {
+  const iconFor = (t: Notification["type"]) => {
     switch (t) {
       case "cita": return <CalendarDays className="h-4 w-4" />;
       case "mensaje": return <MessagesSquare className="h-4 w-4" />;
@@ -286,6 +299,7 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
       case "documento": return <FileText className="h-4 w-4" />;
     }
   };
+  const unread = notifications.filter((n) => !n.read).length;
 
   return (
     <>
@@ -299,30 +313,45 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
         <header className="px-4 py-3 border-b border-line-100 flex items-center justify-between">
           <div>
             <h3 className="font-serif text-base text-ink-900">Notificaciones</h3>
-            <p className="text-[11px] text-ink-500">{NOTIFICATIONS.filter((n) => !n.read).length} sin leer</p>
+            <p className="text-[11px] text-ink-500">
+              {notifications.length === 0 ? "Sin pendientes" : `${unread} sin leer`}
+            </p>
           </div>
-          <button className="text-[11px] text-brand-700 hover:underline">Marcar todo como leído</button>
         </header>
-        <ul className="flex-1 overflow-y-auto divide-y divide-line-100">
-          {NOTIFICATIONS.map((n) => (
-            <li key={n.id} className={"px-4 py-3 flex items-start gap-3 hover:bg-bg-100/40 transition-colors " + (!n.read ? "bg-brand-50/30" : "")}>
-              <div className={
-                "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " +
-                (n.urgent ? "bg-error-soft text-risk-high" : n.read ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-800")
-              }>
-                {iconFor(n.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm text-ink-900 font-medium truncate">{n.title}</p>
-                  {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />}
+        {notifications.length === 0 ? (
+          // Empty state amigable cuando no hay nada que mostrar — evita
+          // que la cuenta nueva vea data ficticia ("Val. Soto…").
+          <div className="px-6 py-10 text-center">
+            <div className="h-12 w-12 mx-auto rounded-full bg-bg-100 text-ink-400 flex items-center justify-center mb-3">
+              <Bell className="h-5 w-5" />
+            </div>
+            <p className="text-sm text-ink-700 font-medium">Todo al día</p>
+            <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+              Aquí verás citas próximas, tests por revisar, tareas vencidas y documentos firmados por tus pacientes.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex-1 overflow-y-auto divide-y divide-line-100">
+            {notifications.map((n) => (
+              <li key={n.id} className={"px-4 py-3 flex items-start gap-3 hover:bg-bg-100/40 transition-colors " + (!n.read ? "bg-brand-50/30" : "")}>
+                <div className={
+                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " +
+                  (n.urgent ? "bg-error-soft text-risk-high" : n.read ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-800")
+                }>
+                  {iconFor(n.type)}
                 </div>
-                <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{n.description}</p>
-                <p className="text-[10px] text-ink-400 mt-1 tabular">{n.at}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm text-ink-900 font-medium truncate">{n.title}</p>
+                    {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />}
+                  </div>
+                  <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{n.description}</p>
+                  <p className="text-[10px] text-ink-400 mt-1 tabular">{n.at}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>
   );

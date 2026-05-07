@@ -1111,7 +1111,19 @@ export const api = {
   },
 
   // Notifications
-  listNotifications: () => request<Array<Record<string, unknown>>>("/api/notifications"),
+  // Las notificaciones se calculan dinámicamente en el backend desde
+  // la data real (citas próximas, tests, tareas vencidas, documentos
+  // firmados…). El campo `read` siempre es false con este modelo:
+  // si el evento ya no aplica, la notificación desaparece sola.
+  listNotifications: () => request<Array<{
+    id: string;
+    type: "cita" | "mensaje" | "tarea" | "test" | "alerta" | "documento";
+    title: string;
+    description: string;
+    at: string;
+    read: boolean;
+    urgent?: boolean;
+  }>>("/api/notifications"),
 
   // Settings
   getSettings: () => request<Record<string, string>>("/api/settings"),

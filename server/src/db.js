@@ -1064,11 +1064,11 @@ function seedClinicalDataFor(wsId, patients, singleProfessional) {
     noteIns.run(wsId, p.id, prof, "sesion", soap, recent, recent);
   });
 
-  // Notificaciones básicas
-  nIns.run(`N-${wsId}-1`, wsId, "cita", "Próxima cita en 30 min", "Revisa la sala asignada.", "hace 8 min", 0, 0);
-  if (patients.some((p) => p.risk === "critical")) {
-    nIns.run(`N-${wsId}-2`, wsId, "alerta", "Paciente con riesgo crítico", "Activa protocolo si es necesario.", "hoy", 0, 1);
-  }
+  // Notificaciones se calculan dinámicamente desde los datos reales
+  // (citas, tests, tareas, documentos) en routes/notifications.js. No
+  // sembramos filas en la tabla `notifications`: se mantiene por
+  // compatibilidad de schema pero el endpoint no la lee.
+  void nIns; // referencia retenida para no introducir variable no usada.
 }
 
 // ─── Plantillas de documentos del sistema (visibles en todos los workspaces) ─
