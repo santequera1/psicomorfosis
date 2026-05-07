@@ -15,10 +15,10 @@ import { PortalCanvas } from "./p_.activar.$token";
  */
 
 const RESPONSABLE = {
-  nombre: "Psicomorfosis (Wailus S.A.S.)",
-  // RUT con dígito de verificación. Si la operación pasa a S.A.S.
-  // constituida ante Cámara de Comercio, reemplazar por el NIT
-  // empresarial (formato típico 9XX.XXX.XXX-X).
+  // Operación bajo persona natural. "Psicomorfosis" es nombre comercial.
+  // Si más adelante se constituye S.A.S. ante Cámara de Comercio,
+  // cambiar `nombre` al razón social y `rut` al NIT empresarial.
+  nombre: "Douglas Stiven Antequera Ferrer (Psicomorfosis)",
   rut: "1007418662-8",
   direccion: "Calle 31A - 107, Barrio 13 de Junio, Cartagena de Indias, Colombia (cód. postal 130001)",
   email: "santequera@wailus.co",
@@ -51,8 +51,8 @@ function PrivacidadPage() {
         <Section title="1. Quién trata tus datos">
           <p>
             El Responsable del tratamiento de tus datos personales es{" "}
-            <strong>{RESPONSABLE.nombre}</strong>, identificado con RUT{" "}
-            {RESPONSABLE.rut}, con domicilio en {RESPONSABLE.direccion}.
+            <strong>{RESPONSABLE.nombre}</strong>, persona natural identificada
+            con RUT {RESPONSABLE.rut}, con domicilio en {RESPONSABLE.direccion}.
             Para cualquier consulta, ejercicio de derechos o queja
             relacionada con tus datos puedes escribir a{" "}
             <a href={`mailto:${RESPONSABLE.email}`} className="text-brand-700 underline">

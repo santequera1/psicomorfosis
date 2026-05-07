@@ -11,9 +11,9 @@ import { PortalCanvas } from "./p_.activar.$token";
  */
 
 const PROVEEDOR = {
-  nombre: "Psicomorfosis (Wailus S.A.S.)",
-  // Igual que en /privacidad: hoy persona natural; si se constituye
-  // S.A.S. con NIT propio, reemplazar.
+  // Operación bajo persona natural. "Psicomorfosis" es nombre comercial.
+  // Si se constituye S.A.S. con NIT propio, cambiar `nombre` y `rut`.
+  nombre: "Douglas Stiven Antequera Ferrer (Psicomorfosis)",
   rut: "1007418662-8",
   direccion: "Calle 31A - 107, Barrio 13 de Junio, Cartagena de Indias, Colombia (cód. postal 130001)",
   email: "santequera@wailus.co",
