@@ -76,6 +76,7 @@ export function Fab() {
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? "Cerrar acciones" : "Abrir acciones"}
           aria-expanded={menuOpen}
+          data-tour="fab-button"
           className="h-14 w-14 rounded-full bg-brand-700 text-white shadow-lg hover:bg-brand-800 hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center"
         >
           <Plus className={cn("h-5 w-5 transition-transform duration-200", menuOpen && "rotate-45")} />

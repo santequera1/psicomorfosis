@@ -6,11 +6,12 @@ import { toast } from "sonner";
 import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
-  Circle, Home, Loader2, Trash2, Edit3, AlertCircle,
+  Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { resetAllTours } from "@/lib/tour";
 
 export const Route = createFileRoute("/configuracion")({
   head: () => ({ meta: [{ title: "Configuración — Psicomorfosis" }] }),
@@ -18,14 +19,15 @@ export const Route = createFileRoute("/configuracion")({
 });
 
 const SECCIONES = [
-  { id: "perfil",       label: "Perfil profesional", icon: User,        desc: "Datos personales y credenciales" },
-  { id: "workspace",    label: "Workspace",          icon: Home,        desc: "Modo individual u organización" },
-  { id: "sedes",        label: "Sedes",              icon: Building2,   desc: "Consultorios y ubicaciones" },
-  { id: "equipo",       label: "Equipo",             icon: Users2,      desc: "Profesionales del workspace" },
-  { id: "notificaciones", label: "Notificaciones",   icon: Bell,        desc: "Canales y preferencias de aviso" },
-  { id: "seguridad",    label: "Seguridad",          icon: Shield,      desc: "Contraseña, 2FA, sesiones activas" },
-  { id: "apariencia",   label: "Apariencia",         icon: Palette,     desc: "Tema, densidad y tipografía" },
-  { id: "integraciones",label: "Integraciones",      icon: Globe,       desc: "Calendario, video y mensajería" },
+  { id: "perfil",       label: "Perfil profesional", icon: User,         desc: "Datos personales y credenciales" },
+  { id: "workspace",    label: "Workspace",          icon: Home,         desc: "Modo individual u organización" },
+  { id: "sedes",        label: "Sedes",              icon: Building2,    desc: "Consultorios y ubicaciones" },
+  { id: "equipo",       label: "Equipo",             icon: Users2,       desc: "Profesionales del workspace" },
+  { id: "notificaciones", label: "Notificaciones",   icon: Bell,         desc: "Canales y preferencias de aviso" },
+  { id: "seguridad",    label: "Seguridad",          icon: Shield,       desc: "Contraseña, 2FA, sesiones activas" },
+  { id: "apariencia",   label: "Apariencia",         icon: Palette,      desc: "Tema, densidad y tipografía" },
+  { id: "integraciones",label: "Integraciones",      icon: Globe,        desc: "Calendario, video y mensajería" },
+  { id: "tutoriales",   label: "Tutoriales",         icon: GraduationCap, desc: "Reiniciar los tours guiados" },
 ];
 
 function ConfiguracionPage() {
@@ -81,6 +83,7 @@ function ConfiguracionPage() {
             {active === "seguridad" && <SeguridadPanel />}
             {active === "apariencia" && <AparienciaPanel />}
             {active === "integraciones" && <IntegracionesPanel />}
+            {active === "tutoriales" && <TutorialesPanel />}
           </main>
         </div>
       </div>
@@ -1010,5 +1013,52 @@ function SectionHeader({ title, desc }: { title: string; desc: string }) {
       <h2 className="font-serif text-xl text-ink-900">{title}</h2>
       <p className="text-sm text-ink-500 mt-1">{desc}</p>
     </div>
+  );
+}
+
+/**
+ * Panel "Tutoriales" — escape hatch para volver a ver los tours guiados.
+ * Borra los flags `psm.tour.*.completed` de localStorage; al recargar
+ * cualquier página los tours se vuelven a disparar como si fuera la
+ * primera vez. Con un reload sugerido para que el dashboard reanude.
+ */
+function TutorialesPanel() {
+  function reset() {
+    const n = resetAllTours();
+    if (n === 0) {
+      toast.message("No hay tutoriales completados para reiniciar.");
+      return;
+    }
+    toast.success(
+      `Listo. ${n} ${n === 1 ? "tutorial reiniciado" : "tutoriales reiniciados"}. Vuelve a entrar a cada página para verlos.`,
+    );
+  }
+
+  return (
+    <>
+      <SectionHeader
+        title="Tutoriales"
+        desc="Los tours guiados aparecen una sola vez la primera vez que entras a cada sección. Si quieres volver a verlos, reinícialos aquí."
+      />
+      <div className="rounded-xl border border-line-200 bg-bg-50/50 p-5 sm:p-6 max-w-xl">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+            <GraduationCap className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-ink-900">Volver a ver los tours</h3>
+            <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+              Te recordamos lo importante de cada sección al entrar por primera vez (Inicio, Pacientes, Historia, Tests, Recibos). Si saliste sin querer o quieres repasar, reinicia desde aquí.
+            </p>
+            <button
+              onClick={reset}
+              className="mt-4 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
+            >
+              <RotateCcw className="h-4 w-4" /> Reiniciar tutoriales
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

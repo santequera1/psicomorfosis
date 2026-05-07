@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Invoice } from "@/lib/api";
+import { useAutoTour, invoicesTour, TOUR_NAMES } from "@/lib/tours";
 
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
@@ -50,6 +51,8 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 
 function FacturacionPage() {
+  // Tour de recibos — auto la primera vez en /facturacion.
+  useAutoTour(TOUR_NAMES.invoices, invoicesTour);
   const [filter, setFilter] = useState<Filter>("Todos");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -101,6 +104,7 @@ function FacturacionPage() {
               <Settings className="h-4 w-4" /> <span className="hidden sm:inline">Personalizar</span>
             </button>
             <button
+              data-tour="invoices-new"
               onClick={() => setCreateOpen(true)}
               className="flex-1 sm:flex-none h-10 px-3 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm hover:bg-brand-800 flex items-center justify-center gap-2"
             >
@@ -109,14 +113,14 @@ function FacturacionPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div data-tour="invoices-summary" className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado" value={fmt(recaudado)} hint="pagados" delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} recibos`} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidos" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} recibo(s)`} emphasis={vencidas > 0 ? "risk" : "default"} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<Receipt className="h-4 w-4" />} label="Total" value={String(summary?.total ?? invoices.length)} hint="emitidos" delta={{ neutral: true, value: "" }} />
         </div>
 
-        <section className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
+        <section data-tour="invoices-list" className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
           <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-line-100 space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
             <h2 className="font-serif text-base sm:text-lg text-ink-900 sm:mr-auto">Movimientos recientes</h2>
             <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-line-200 bg-bg-100/40 sm:w-64">

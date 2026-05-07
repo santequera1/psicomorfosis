@@ -97,7 +97,7 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-tour="welcome-anchor">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-ink-500">
@@ -151,7 +151,7 @@ export function AdminDashboard() {
       {/* Quick actions: accesos rápidos a las acciones más comunes. Reduce
           fricción cuando el psicólogo abre el dashboard sabiendo qué quiere
           hacer. Convive con el FAB para usuarios mobile. */}
-      <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4">
+      <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4" data-tour="quick-actions">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Agendar cita" onClick={() => setNewApptOpen(true)} />
           <QuickAction icon={<UserPlus className="h-4 w-4" />} label="Nuevo paciente" onClick={() => setNewPatientOpen(true)} />

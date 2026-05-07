@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { displayPatientName } from "@/lib/utils";
+import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { ApplicationDetailModal } from "@/components/tests/ApplicationDetailModal";
@@ -42,6 +43,8 @@ const TABS: { id: Tab; label: string; icon: React.ComponentType<{ className?: st
 ];
 
 function PatientDetailPage() {
+  // Tour de la ficha clínica — primera vez que se abre cualquier paciente.
+  useAutoTour(TOUR_NAMES.history, historyTour);
   const { id } = useParams({ from: "/pacientes_/$id" });
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -119,7 +122,7 @@ function PatientDetailPage() {
           <ArrowLeft className="h-4 w-4" /> Volver a pacientes
         </Link>
 
-        <header className="rounded-xl border border-line-200 bg-surface p-4 sm:p-6">
+        <header data-tour="patient-header" className="rounded-xl border border-line-200 bg-surface p-4 sm:p-6">
           <div className="flex items-start gap-3 sm:gap-5">
             <div className="h-14 w-14 sm:h-20 sm:w-20 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center font-serif text-base sm:text-2xl shrink-0">
               {displayPatientName(patient).split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
@@ -158,7 +161,7 @@ function PatientDetailPage() {
 
           {/* Acciones: full-width grid en mobile, fila normal en desktop */}
           <div className="mt-4 grid grid-cols-2 sm:flex sm:justify-end gap-2 flex-wrap">
-            <Link to="/historia" search={{ id: patient.id }} className="h-10 px-2 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
+            <Link data-tour="patient-new-note" to="/historia" search={{ id: patient.id }} className="h-10 px-2 sm:px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
               <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">Nueva nota</span>
               <span className="sm:hidden">Nota</span>
@@ -204,7 +207,7 @@ function PatientDetailPage() {
           </div>
         </header>
 
-        <div className="border-b border-line-200 overflow-x-auto no-scrollbar">
+        <div data-tour="patient-tabs" className="border-b border-line-200 overflow-x-auto no-scrollbar">
           <nav className="flex items-center gap-1 min-w-max">
             {TABS.map((t) => {
               const Icon = t.icon;

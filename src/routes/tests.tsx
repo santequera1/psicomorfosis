@@ -15,6 +15,7 @@ import {
   Trash2, Pencil, MessageSquarePlus, Sparkles,
 } from "lucide-react";
 import { cn, displayPatientName } from "@/lib/utils";
+import { useAutoTour, testsTour, TOUR_NAMES } from "@/lib/tours";
 
 export const Route = createFileRoute("/tests")({
   head: () => ({ meta: [{ title: "Tests psicométricos · Psicomorfosis" }] }),
@@ -36,6 +37,8 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string; ic
 };
 
 function TestsPage() {
+  // Tour de tests — auto la primera vez en /tests.
+  useAutoTour(TOUR_NAMES.tests, testsTour);
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
   const [activeTest, setActiveTest] = useState<PsychTest | null>(null);
@@ -108,6 +111,7 @@ function TestsPage() {
               <MessageSquarePlus className="h-4 w-4" /> Solicitar test
             </button>
             <button
+              data-tour="tests-create"
               onClick={() => setBuilderOpen(true)}
               className="h-10 px-3 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
             >
@@ -125,7 +129,7 @@ function TestsPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Catálogo */}
-          <div className="lg:col-span-2 rounded-xl border border-line-200 bg-surface">
+          <div data-tour="tests-catalog" className="lg:col-span-2 rounded-xl border border-line-200 bg-surface">
             <div className="p-4 border-b border-line-100">
               <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40">
                 <Search className="h-4 w-4 text-ink-400 shrink-0" />
@@ -151,13 +155,16 @@ function TestsPage() {
                   <div className="px-5 py-6 text-center text-xs text-ink-500">Sin coincidencias.</div>
                 ) : (
                   <ul className="divide-y divide-line-100">
-                    {officialTests.map((t) => (
+                    {officialTests.map((t, i) => (
                       <CatalogRow
                         key={t.id}
                         test={t}
                         onApply={() => setApplyContext({ test: t })}
                         onAssign={() => setAssignContext(t)}
                         onView={() => setActiveTest(t)}
+                        // Anclamos el tour al primer item del catálogo —
+                        // si está vacío el step queda opcional y se salta.
+                        dataTour={i === 0 ? "tests-apply" : undefined}
                       />
                     ))}
                   </ul>
@@ -289,18 +296,19 @@ function CatalogSectionHeader({ icon, title, subtitle }: {
 
 // ─── Componentes ───────────────────────────────────────────────────────────
 
-function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete }: {
+function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTour }: {
   test: PsychTest;
   onApply: () => void;
   onAssign: () => void;
   onView: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  dataTour?: string;
 }) {
   const ready = !!test.definition?.questions?.length;
   const isCustom = !!test.isCustom;
   return (
-    <li className="px-5 py-4 hover:bg-brand-50/40 transition-colors group">
+    <li data-tour={dataTour} className="px-5 py-4 hover:bg-brand-50/40 transition-colors group">
       <div className="flex items-start gap-3">
         <div className={cn(
           "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",

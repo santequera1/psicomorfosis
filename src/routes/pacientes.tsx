@@ -12,6 +12,7 @@ import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCir
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 import { displayPatientName } from "@/lib/utils";
+import { useAutoTour, patientsTour, TOUR_NAMES } from "@/lib/tours";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
 import { TagEditor } from "@/components/app/TagEditor";
@@ -53,6 +54,8 @@ function avatarTone(name: string) {
 }
 
 function PatientsPage() {
+  // Tour auto-arranca primera vez que el usuario entra acá.
+  useAutoTour(TOUR_NAMES.patients, patientsTour);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: workspace } = useWorkspace();
@@ -130,16 +133,16 @@ function PatientsPage() {
             <button onClick={exportCSV} className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2">
               <Download className="h-4 w-4" /> Exportar
             </button>
-            <button onClick={() => setCreateOpen(true)} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2">
+            <button data-tour="pacientes-new" onClick={() => setCreateOpen(true)} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2">
               <Plus className="h-4 w-4" /> Nuevo paciente
             </button>
           </div>
         </header>
 
-        <div className="rounded-xl border border-line-200 bg-surface">
+        <div className="rounded-xl border border-line-200 bg-surface" data-tour="pacientes-list">
           {/* Buscador siempre full width en mobile, filtros agrupados debajo */}
           <div className="p-3 sm:p-4 space-y-2 border-b border-line-100">
-            <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/50">
+            <div data-tour="pacientes-search" className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/50">
               <Search className="h-4 w-4 text-ink-400 shrink-0" />
               <input
                 value={query}
@@ -148,7 +151,7 @@ function PatientsPage() {
                 className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div data-tour="pacientes-filters" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
                 <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
                 <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">

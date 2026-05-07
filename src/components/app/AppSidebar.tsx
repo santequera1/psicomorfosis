@@ -130,7 +130,7 @@ export function AppSidebar() {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4">
+        <nav className="flex-1 overflow-y-auto py-4" data-tour="sidebar-nav">
           {visibleGroups.map((g) => (
             <div key={g.label} className="mb-5">
               <div className={cn(
@@ -143,10 +143,14 @@ export function AppSidebar() {
                 {g.items.map((it) => {
                   const active = it.to === "/" ? path === "/" : path.startsWith(it.to);
                   const Icon = it.icon;
+                  // data-tour para que los tours puedan apuntar a links
+                  // específicos del sidebar. Convertimos "/agenda" → "agenda".
+                  const tourKey = it.to === "/" ? "inicio" : it.to.replace(/^\//, "").replace(/\//g, "-");
                   return (
                     <li key={it.to}>
                       <Link
                         to={it.to}
+                        data-tour={`sidebar-link-${tourKey}`}
                         onClick={() => setOpen(false)}
                         className={cn(
                           "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
@@ -191,6 +195,7 @@ export function AppSidebar() {
               ayuda a recolectar feedback durante la beta privada. */}
           <button
             onClick={() => setReportOpen(true)}
+            data-tour="report-problem"
             className={cn(
               "w-full flex items-center gap-2 text-sidebar-foreground/75 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
               collapsed && "md:justify-center md:px-0",
