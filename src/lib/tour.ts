@@ -20,11 +20,16 @@ const PREFIX = "psm.tour.";
 
 export type TourStep = {
   /** Selector CSS del elemento a destacar. Usar `[data-tour="..."]`
-   *  por defecto para no acoplar a clases Tailwind volátiles. */
-  target: string;
+   *  por defecto para no acoplar a clases Tailwind volátiles.
+   *  OMITIR el target en steps introductorios o de cierre — el dialog
+   *  se mostrará centrado en pantalla en lugar de anclado a un elemento.
+   *  Anclar a un elemento muy grande (como el contenedor de toda la
+   *  página) hace que TourGuide posicione mal el dialog. */
+  target?: string;
   title?: string;
   content: string;
-  /** Si el target todavía no está montado, qué hacer. Default: skip step. */
+  /** Si el target opcional aún no está montado, se salta el step en
+   *  silencio en lugar de fallar. Útil para targets condicionales. */
   optional?: boolean;
 };
 
@@ -130,16 +135,20 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
   if (!opts.force && hasCompletedTour(name)) return;
   if (steps.length === 0) return;
 
-  const ok = await waitForTarget(steps[0].target);
-  if (!ok) {
-    // Si ni el primer target está, abortamos en silencio (el usuario
-    // probablemente no está viendo la página esperada).
-    return;
+  // Esperamos a que aparezca el primer target REAL (no necesariamente
+  // del primer step, porque el step intro puede no tener target).
+  // Si no hay ningún step con target, asumimos que la página ya está
+  // lista y no hace falta poll.
+  const firstWithTarget = steps.find((s) => s.target);
+  if (firstWithTarget?.target) {
+    const ok = await waitForTarget(firstWithTarget.target);
+    if (!ok) return;  // Aborta en silencio: el usuario probablemente no está en la página esperada.
   }
 
-  // Filtramos steps cuyos targets opcionales no existen, para no
-  // saltar a un step que apunta a algo que ya no está.
+  // Filtramos steps cuyos targets opcionales no existen. Steps sin
+  // target se muestran centrados — siempre válidos.
   const validSteps = steps.filter((s) => {
+    if (!s.target) return true;
     if (!s.optional) return true;
     return document.querySelector(s.target) !== null;
   });
@@ -166,7 +175,9 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     rememberStep: false,
     debug: false,
     steps: validSteps.map((s) => ({
-      target: s.target,
+      // null hace que TourGuide muestre el dialog centrado en pantalla
+      // (sin highlight). Útil para steps introductorios o de cierre.
+      target: s.target ?? null,
       title: s.title,
       content: s.content,
       group: name,

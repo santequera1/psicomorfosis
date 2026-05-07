@@ -27,7 +27,9 @@ export const TOUR_NAMES = {
 // ─── Tour 1: Bienvenida (auto en /) ────────────────────────────────
 export const welcomeTour: TourStep[] = [
   {
-    target: '[data-tour="welcome-anchor"]',
+    // Sin target — dialog centrado en pantalla. Anclarlo al contenedor
+    // del dashboard hacía que TourGuide calculara la posición respecto
+    // a un elemento gigante y el modal salía mal ubicado a la izquierda.
     title: "¡Bienvenido a Psicomorfosis!",
     content: "Te muestro lo más importante en menos de un minuto. Puedes saltar este tour cuando quieras — luego lo encuentras en Configuración → Tutoriales.",
   },
