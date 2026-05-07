@@ -636,15 +636,40 @@ export const api = {
   base: API_BASE,
 
   // Auth
-  login: (username: string, password: string) =>
+  /** Login flexible: identifier puede ser username O email. */
+  login: (identifier: string, password: string) =>
     request<{ token: string; user: ApiUser }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ identifier, password }),
     }),
   me: () => request<{ user: ApiUser }>("/api/auth/me"),
   /** Cambia la contraseña del usuario autenticado. Requiere la actual. */
   changePassword: (body: { current_password: string; new_password: string }) =>
     request<{ ok: true }>("/api/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
+
+  /**
+   * Verifica si un username o email están disponibles. Endpoint público
+   * (sin token). Para "editar mis credenciales" pasa excludeId con el
+   * id propio para que el username/email actual del user no aparezca
+   * como "ya en uso por mí mismo".
+   */
+  checkAvailability: (params: { username?: string; email?: string; excludeId?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.username) qs.set("username", params.username);
+    if (params.email) qs.set("email", params.email);
+    if (typeof params.excludeId === "number") qs.set("excludeId", String(params.excludeId));
+    return request<{
+      usernameAvailable?: boolean; usernameError?: string;
+      emailAvailable?: boolean; emailError?: string;
+    }>(`/api/auth/check-availability?${qs.toString()}`);
+  },
+
+  /** El user autenticado actualiza su propio username y/o email. */
+  updateCredentials: (body: { current_password: string; username?: string; email?: string }) =>
+    request<{ ok: true; token?: string; user?: ApiUser }>("/api/auth/update-credentials", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // Portal del paciente — invitación + activación + login (públicos)
   invitePatient: (patientId: string) =>
@@ -1218,6 +1243,12 @@ export const api = {
     request<{ ok: boolean; username: string; name: string }>(
       `/api/platform/users/${userId}/reset-password`,
       { method: "POST", body: JSON.stringify({ new_password: newPassword }) },
+    ),
+  /** Platform admin actualiza username, email y/o nombre de un staff user. */
+  platformUpdateUser: (userId: number, body: { username?: string; email?: string; name?: string }) =>
+    request<{ ok: boolean; user?: { id: number; username: string; email: string | null; name: string; role: string } }>(
+      `/api/platform/users/${userId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
     ),
   platformCreateWorkspace: (body: {
     workspaceName: string;

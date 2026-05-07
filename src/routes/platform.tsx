@@ -633,6 +633,7 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
     queryFn: () => api.platformGetWorkspace(wsId),
   });
   const [resetting, setResetting] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
+  const [editing, setEditing] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
 
   return (
     <AppShell>
@@ -699,14 +700,24 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
                         : <span className="text-ink-400">Sin registro reciente</span>}
                     </div>
                     {!u.isPlatformAdmin && u.role !== "paciente" && (
-                      <button
-                        onClick={() => setResetting(u)}
-                        className="h-8 px-2.5 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 shrink-0"
-                        title="Restablecer contraseña"
-                      >
-                        <KeyRound className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Reset</span>
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditing(u)}
+                          className="h-8 px-2.5 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                          title="Editar usuario y correo"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Editar</span>
+                        </button>
+                        <button
+                          onClick={() => setResetting(u)}
+                          className="h-8 px-2.5 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                          title="Restablecer contraseña"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Reset</span>
+                        </button>
+                      </div>
                     )}
                   </li>
                 ))}
@@ -722,7 +733,185 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
           onClose={() => setResetting(null)}
         />
       )}
+      {editing && (
+        <EditUserModal
+          user={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </AppShell>
+  );
+}
+
+/**
+ * Modal admin para editar username, email y nombre de un user del
+ * workspace. Sin password — el admin actúa con su propia autoridad.
+ * Disponibilidad inline (debounced) contra /api/auth/check-availability
+ * con excludeId para no marcar el username actual como "ya usado".
+ */
+function EditUserModal({
+  user, onClose,
+}: {
+  user: PlatformWorkspaceDetail["users"][number];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [username, setUsername] = useState(user.username);
+  const [email, setEmail] = useState(user.email ?? "");
+  const [name, setName] = useState(user.name);
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [emailStatus, setEmailStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+
+  useEffect(() => {
+    const trimmed = username.trim();
+    if (!trimmed || trimmed.toLowerCase() === user.username.toLowerCase()) {
+      setUsernameStatus("idle"); return;
+    }
+    setUsernameStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.checkAvailability({ username: trimmed, excludeId: user.id });
+        if (r.usernameError) setUsernameStatus("invalid");
+        else setUsernameStatus(r.usernameAvailable ? "available" : "taken");
+      } catch { setUsernameStatus("idle"); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [username, user.id, user.username]);
+
+  useEffect(() => {
+    const trimmed = email.trim();
+    if (!trimmed || trimmed.toLowerCase() === (user.email ?? "").toLowerCase()) {
+      setEmailStatus("idle"); return;
+    }
+    setEmailStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.checkAvailability({ email: trimmed, excludeId: user.id });
+        if (r.emailError) setEmailStatus("invalid");
+        else setEmailStatus(r.emailAvailable ? "available" : "taken");
+      } catch { setEmailStatus("idle"); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [email, user.id, user.email]);
+
+  const usernameChanged = username.trim() !== user.username;
+  const emailChanged = email.trim() !== (user.email ?? "");
+  const nameChanged = name.trim() !== user.name;
+  const hasChanges = usernameChanged || emailChanged || nameChanged;
+  const usernameOk = !usernameChanged || usernameStatus === "available" || usernameStatus === "idle";
+  const emailOk = !emailChanged || emailStatus === "available" || emailStatus === "idle";
+
+  const mu = useMutation({
+    mutationFn: () => api.platformUpdateUser(user.id, {
+      username: usernameChanged ? username.trim() : undefined,
+      email: emailChanged ? email.trim() : undefined,
+      name: nameChanged ? name.trim() : undefined,
+    }),
+    onSuccess: () => {
+      toast.success("Usuario actualizado");
+      qc.invalidateQueries({ queryKey: ["platform-workspace"] });
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canSubmit = hasChanges && usernameOk && emailOk && !mu.isPending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (canSubmit) mu.mutate(); }}
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="p-5 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Editar usuario</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5 truncate">{user.name}</h3>
+            <p className="text-xs text-ink-500 mt-1 font-mono break-all">@{user.username}</p>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" disabled={mu.isPending}>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="p-5 space-y-4">
+          <label className="block">
+            <span className="text-xs font-medium text-ink-700">Nombre</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+            />
+          </label>
+          <PlatformCredField
+            label="Usuario"
+            hint="3-50 caracteres. Letras, números, punto, guion bajo y guion."
+            value={username}
+            onChange={setUsername}
+            status={usernameStatus}
+            takenMessage="Ese usuario ya está en uso."
+            invalidMessage="Formato no válido."
+          />
+          <PlatformCredField
+            label="Correo"
+            type="email"
+            hint="Se usa para login y para enviar notificaciones."
+            value={email}
+            onChange={setEmail}
+            status={emailStatus}
+            takenMessage="Ese correo ya está en uso por otra cuenta."
+            invalidMessage="Correo no válido."
+          />
+        </div>
+
+        <footer className="p-5 border-t border-line-100 flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={mu.isPending} className="h-10 px-4 rounded-lg border border-line-200 text-ink-700 text-sm hover:border-brand-400">
+            Cancelar
+          </button>
+          <button type="submit" disabled={!canSubmit} className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2">
+            {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function PlatformCredField({
+  label, hint, type = "text", value, onChange, status, takenMessage, invalidMessage,
+}: {
+  label: string;
+  hint?: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  status: "idle" | "checking" | "available" | "taken" | "invalid";
+  takenMessage: string;
+  invalidMessage: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-ink-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "mt-1 w-full h-10 px-3 rounded-md border bg-surface text-sm outline-none focus:border-brand-700",
+          status === "taken" || status === "invalid" ? "border-rose-400" : "border-line-200",
+        )}
+      />
+      <div className="mt-1 text-[11px] flex items-center gap-1.5 min-h-4">
+        {status === "checking" && <span className="text-ink-400">Verificando…</span>}
+        {status === "available" && <span className="text-success inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Disponible</span>}
+        {status === "taken" && <span className="text-risk-high">{takenMessage}</span>}
+        {status === "invalid" && <span className="text-risk-high">{invalidMessage}</span>}
+        {status === "idle" && hint && <span className="text-ink-400">{hint}</span>}
+      </div>
+    </label>
   );
 }
 

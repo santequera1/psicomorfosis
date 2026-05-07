@@ -9,7 +9,7 @@ import {
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type Sede, type Professional, type WorkspaceMode } from "@/lib/api";
+import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
 
@@ -284,9 +284,41 @@ function NotifPanel() {
 
 function SeguridadPanel() {
   const [pwOpen, setPwOpen] = useState(false);
+  const [credsOpen, setCredsOpen] = useState(false);
+  const me = getStoredUser();
   return (
     <>
       <SectionHeader title="Seguridad" desc="Cuida el acceso a información clínica protegida." />
+
+      {/* Datos de acceso: username + email del login */}
+      <div className="rounded-xl border border-line-200 bg-surface p-5 mb-6">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-medium text-ink-900">Datos de acceso</h3>
+            <p className="text-xs text-ink-500 mt-1">
+              Tu usuario y correo de inicio de sesión. Puedes ingresar con cualquiera de los dos.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCredsOpen(true)}
+            className="h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3.5 w-3.5" /> Cambiar
+          </button>
+        </div>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-0.5">Usuario</div>
+            <div className="text-ink-900 font-mono text-xs">{me?.username ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-ink-500 font-medium mb-0.5">Correo</div>
+            <div className="text-ink-900 break-all">{me?.email ?? "—"}</div>
+          </div>
+        </div>
+      </div>
+
       <Toggle label="Autenticación de dos factores (2FA)" desc="Recomendado para roles clínicos y administrativos." comingSoon />
       <Toggle label="Cierre automático de sesión" desc="Tras 30 min de inactividad." comingSoon />
       <Toggle label="Notificar nuevos inicios de sesión" desc="Recibe correo si se accede desde un dispositivo nuevo." comingSoon />
@@ -300,7 +332,217 @@ function SeguridadPanel() {
         </button>
       </div>
       {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
+      {credsOpen && <ChangeCredentialsModal onClose={() => setCredsOpen(false)} />}
     </>
+  );
+}
+
+/**
+ * Modal para que el psicólogo cambie su username y/o correo de login.
+ * Diseño en dos pasos visuales (no separados, solo organizados):
+ *  1) Edita los campos. Disponibilidad se valida con debounce (350ms)
+ *     contra GET /api/auth/check-availability — feedback en línea.
+ *  2) Confirma con su contraseña actual antes de guardar (mismo
+ *     razonamiento de seguridad que change-password).
+ *
+ * Tras guardar, refresca el localStorage con el user nuevo Y el token
+ * (porque el JWT carga username); las próximas requests usan el JWT
+ * actualizado sin re-login.
+ */
+function ChangeCredentialsModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const me = getStoredUser();
+  const [username, setUsername] = useState(me?.username ?? "");
+  const [email, setEmail] = useState(me?.email ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Disponibilidad con debounce. Solo verificamos si el valor cambió
+  // respecto al que ya tiene el user — evita marcar su propio username
+  // como "ya en uso".
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [emailStatus, setEmailStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+
+  useEffect(() => {
+    const trimmed = username.trim();
+    if (!trimmed || trimmed.toLowerCase() === (me?.username ?? "").toLowerCase()) {
+      setUsernameStatus("idle"); return;
+    }
+    setUsernameStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.checkAvailability({ username: trimmed, excludeId: me?.id });
+        if (r.usernameError) setUsernameStatus("invalid");
+        else setUsernameStatus(r.usernameAvailable ? "available" : "taken");
+      } catch { setUsernameStatus("idle"); }
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
+
+  useEffect(() => {
+    const trimmed = email.trim();
+    if (!trimmed || trimmed.toLowerCase() === (me?.email ?? "").toLowerCase()) {
+      setEmailStatus("idle"); return;
+    }
+    setEmailStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.checkAvailability({ email: trimmed, excludeId: me?.id });
+        if (r.emailError) setEmailStatus("invalid");
+        else setEmailStatus(r.emailAvailable ? "available" : "taken");
+      } catch { setEmailStatus("idle"); }
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email]);
+
+  const usernameChanged = username.trim() !== (me?.username ?? "");
+  const emailChanged = email.trim() !== (me?.email ?? "");
+  const hasChanges = usernameChanged || emailChanged;
+  const usernameOk = !usernameChanged || usernameStatus === "available" || usernameStatus === "idle";
+  const emailOk = !emailChanged || emailStatus === "available" || emailStatus === "idle";
+  const canSubmit = hasChanges && usernameOk && emailOk && currentPassword.length > 0 && !submitting;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await api.updateCredentials({
+        current_password: currentPassword,
+        username: usernameChanged ? username.trim() : undefined,
+        email: emailChanged ? email.trim() : undefined,
+      });
+      if (res.token && res.user) {
+        // Refrescar token + user en localStorage. El JWT viejo
+        // contenía el username anterior; el backend acaba de emitir
+        // uno nuevo con el username actualizado.
+        setSession(res.token, res.user);
+      } else {
+        // Sin cambios efectivos en BD pero la respuesta es OK —
+        // refresca /me por si cambió algo ortogonal.
+        const tok = getToken();
+        if (tok) {
+          const fresh = await api.me().catch(() => null);
+          if (fresh?.user) setSession(tok, fresh.user);
+        }
+      }
+      qc.invalidateQueries();
+      toast.success("Datos de acceso actualizados");
+      onClose();
+    } catch (err: any) {
+      setError(err?.message ?? "No se pudo actualizar");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <form
+        onSubmit={submit}
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="p-5 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Datos de acceso</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Cambiar usuario o correo</h3>
+            <p className="text-xs text-ink-500 mt-1">Confirma con tu contraseña actual al final.</p>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" disabled={submitting}>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="p-5 space-y-4">
+          <CredentialField
+            label="Usuario"
+            hint="3-50 caracteres. Letras, números, punto, guion bajo y guion. Empieza con letra."
+            value={username}
+            onChange={setUsername}
+            status={usernameStatus}
+            takenMessage="Ese usuario ya está en uso."
+            invalidMessage="Formato no válido."
+          />
+          <CredentialField
+            label="Correo"
+            hint="Lo puedes usar también para iniciar sesión."
+            type="email"
+            value={email}
+            onChange={setEmail}
+            status={emailStatus}
+            takenMessage="Ese correo ya está en uso por otra cuenta."
+            invalidMessage="Correo no válido."
+          />
+          <div className="pt-2 border-t border-line-100">
+            <label className="block">
+              <span className="text-xs font-medium text-ink-700">Tu contraseña actual</span>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+              />
+            </label>
+          </div>
+          {error && (
+            <div className="rounded-md bg-error-soft text-risk-high text-xs p-2.5 inline-flex items-start gap-2">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        <footer className="p-5 border-t border-line-100 flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={submitting} className="h-10 px-4 rounded-lg border border-line-200 text-ink-700 text-sm hover:border-brand-400">
+            Cancelar
+          </button>
+          <button type="submit" disabled={!canSubmit} className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2">
+            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar cambios
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+/** Campo con feedback en vivo de disponibilidad. */
+function CredentialField({
+  label, hint, type = "text", value, onChange, status, takenMessage, invalidMessage,
+}: {
+  label: string;
+  hint?: string;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  status: "idle" | "checking" | "available" | "taken" | "invalid";
+  takenMessage: string;
+  invalidMessage: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-ink-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "mt-1 w-full h-10 px-3 rounded-md border bg-surface text-sm outline-none focus:border-brand-700",
+          status === "taken" || status === "invalid" ? "border-rose-400" : "border-line-200",
+        )}
+      />
+      <div className="mt-1 text-[11px] flex items-center gap-1.5 min-h-4">
+        {status === "checking" && <span className="text-ink-400">Verificando…</span>}
+        {status === "available" && <span className="text-success inline-flex items-center gap-1"><Check className="h-3 w-3" /> Disponible</span>}
+        {status === "taken" && <span className="text-risk-high">{takenMessage}</span>}
+        {status === "invalid" && <span className="text-risk-high">{invalidMessage}</span>}
+        {status === "idle" && hint && <span className="text-ink-400">{hint}</span>}
+      </div>
+    </label>
   );
 }
 

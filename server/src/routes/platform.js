@@ -12,6 +12,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
 import { requirePlatformAdmin } from "../auth.js";
+import { validateUsername, validateEmail } from "../lib/validators.js";
 
 const router = Router();
 router.use(requirePlatformAdmin);
@@ -200,6 +201,71 @@ router.post("/users/:id/reset-password", (req, res) => {
   db.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
     .run(bcrypt.hashSync(new_password, 10), userId);
   res.json({ ok: true, username: u.username, name: u.name });
+});
+
+/**
+ * PATCH /api/platform/users/:id
+ * Body: { username?, email?, name? }
+ *
+ * El platform admin actualiza username, email y/o nombre de un usuario
+ * staff de cualquier workspace. NO requiere password actual del user
+ * (el admin actúa con su propia autoridad). Para pacientes, el username
+ * es el email y se gestiona desde otro flujo — este endpoint NO los
+ * acepta para evitar accidentes.
+ *
+ * Validaciones: formato + unicidad (case-insensitive). Errores 4xx
+ * específicos para que el cliente pueda mostrar el motivo exacto.
+ */
+router.patch("/users/:id", (req, res) => {
+  const userId = Number(req.params.id);
+  const u = db.prepare("SELECT id, username, email, name, role FROM users WHERE id = ?").get(userId);
+  if (!u) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (u.role === "paciente") {
+    return res.status(400).json({ error: "Las cuentas de paciente se gestionan desde otro flujo" });
+  }
+
+  const { username, email, name } = req.body ?? {};
+  const updates = [];
+  const params = [];
+
+  if (typeof username === "string" && username.trim()) {
+    const v = validateUsername(username);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    if (v.value !== u.username.toLowerCase()) {
+      const taken = db.prepare("SELECT id FROM users WHERE LOWER(username) = ? AND id != ?")
+        .get(v.value, u.id);
+      if (taken) return res.status(409).json({ error: "Ese nombre de usuario ya está en uso" });
+      updates.push("username = ?");
+      params.push(v.value);
+    }
+  }
+
+  if (typeof email === "string" && email.trim()) {
+    const v = validateEmail(email);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    if (v.value !== (u.email ?? "").toLowerCase()) {
+      const taken = db.prepare(
+        "SELECT id FROM users WHERE LOWER(email) = ? AND role != 'paciente' AND id != ?"
+      ).get(v.value, u.id);
+      if (taken) return res.status(409).json({ error: "Ese correo ya está en uso por otra cuenta" });
+      updates.push("email = ?");
+      params.push(v.value);
+    }
+  }
+
+  if (typeof name === "string" && name.trim().length > 0 && name.trim() !== u.name) {
+    updates.push("name = ?");
+    params.push(name.trim());
+  }
+
+  if (updates.length === 0) {
+    return res.json({ ok: true, noop: true });
+  }
+  params.push(u.id);
+  db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...params);
+
+  const fresh = db.prepare("SELECT id, username, email, name, role FROM users WHERE id = ?").get(u.id);
+  res.json({ ok: true, user: fresh });
 });
 
 /**
