@@ -27,10 +27,17 @@ export type TourStep = {
    *  página) hace que TourGuide posicione mal el dialog. */
   target?: string;
   title?: string;
+  /** Puede contener HTML — útil para botones inline (ej: "Saltar tour"). */
   content: string;
   /** Si el target opcional aún no está montado, se salta el step en
    *  silencio en lugar de fallar. Útil para targets condicionales. */
   optional?: boolean;
+  /** Callback al ENTRAR al step (después de animación). Útil para hacer
+   *  demos visuales — ej: cambiar el tema momentáneamente. */
+  afterEnter?: () => void | Promise<void>;
+  /** Callback al SALIR del step (antes de animación). Usar para
+   *  restaurar lo que afterEnter cambió. */
+  beforeLeave?: () => void | Promise<void>;
 };
 
 /** ¿Estamos en cliente? (TourGuideJS toca window/document.) */
@@ -107,6 +114,20 @@ type RunOpts = {
 };
 
 /**
+ * Heurística para saber si un elemento está realmente visible en
+ * pantalla — no solo "existe en el DOM". Útil para mobile donde el
+ * sidebar es un drawer fuera del viewport (translate-x-full).
+ */
+function isElementVisible(el: Element): boolean {
+  if (!inBrowser()) return true;
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+  // Fuera del viewport horizontal (drawer cerrado).
+  if (rect.right < 0 || rect.left > window.innerWidth) return false;
+  return true;
+}
+
+/**
  * Espera (con poll) a que el target del PRIMER paso aparezca en el DOM
  * antes de iniciar — necesario porque las páginas de TanStack Router
  * pueden estar montándose cuando se llama runTour().
@@ -145,12 +166,16 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     if (!ok) return;  // Aborta en silencio: el usuario probablemente no está en la página esperada.
   }
 
-  // Filtramos steps cuyos targets opcionales no existen. Steps sin
-  // target se muestran centrados — siempre válidos.
+  // Filtramos steps cuyos targets opcionales no existen O no están
+  // visibles (ej: sidebar como drawer cerrado en mobile — el target
+  // existe en DOM pero está fuera del viewport con translate-x-full).
+  // Steps sin target se muestran centrados — siempre válidos.
   const validSteps = steps.filter((s) => {
     if (!s.target) return true;
-    if (!s.optional) return true;
-    return document.querySelector(s.target) !== null;
+    const el = document.querySelector(s.target);
+    if (!el) return false;
+    if (s.optional && !isElementVisible(el)) return false;
+    return true;
   });
 
   const { TourGuideClient } = await loadTourModule();
@@ -182,6 +207,11 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
       content: s.content,
       group: name,
       order: 999,
+      // Callbacks de TourGuide. afterEnter corre tras la animación de
+      // entrada al step; beforeLeave antes de salir hacia el siguiente
+      // (o al cerrar). Útil para demos visuales (ej: cambiar tema).
+      afterEnter: s.afterEnter ? () => Promise.resolve(s.afterEnter!()) : undefined,
+      beforeLeave: s.beforeLeave ? () => Promise.resolve(s.beforeLeave!()) : undefined,
     })),
   });
 
@@ -189,7 +219,16 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
   // quiere repetirlo, hay botón "Reiniciar tutoriales" en /configuracion.
   const markDone = () => markTourCompleted(name);
   client.onFinish(markDone);
-  client.onAfterExit(markDone);
+  client.onAfterExit(() => {
+    markDone();
+    // Limpiar la referencia global del client al cerrar el tour.
+    delete (window as any).__psmTour;
+  });
+
+  // Exponemos el client en window para que el HTML inline del content
+  // pueda llamar __psmTour.exit() (botón "Saltar tour"). Es feo pero
+  // funciona y no requiere un parser de eventos custom.
+  (window as any).__psmTour = client;
 
   await client.start(name);
 }

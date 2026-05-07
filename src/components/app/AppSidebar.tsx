@@ -88,7 +88,7 @@ export function AppSidebar() {
       {open && (
         <div
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-40 bg-ink-900/50 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-ink-900/50 backdrop-blur-sm sm:hidden"
           aria-hidden
         />
       )}
@@ -96,25 +96,25 @@ export function AppSidebar() {
       <aside
         className={cn(
           // Mobile: fixed drawer con transform
-          "fixed md:sticky top-0 z-50 h-screen bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border",
-          "transition-transform duration-250 ease-out md:transition-[width] md:transform-none",
+          "fixed sm:sticky top-0 z-50 h-screen bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border",
+          "transition-transform duration-250 ease-out sm:transition-[width] sm:transform-none",
           // Desktop: shrink-0 para que no se achique en flex
           "shrink-0",
           // Ancho mobile (drawer): 280px fijo
           "w-[280px]",
           // Ancho desktop: 268px o 72px según collapsed
-          collapsed ? "md:w-[72px]" : "md:w-[268px]",
+          collapsed ? "sm:w-18" : "sm:w-67",
           // Mobile: visible con translate-x
-          open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
         )}
         aria-label="Navegación principal"
       >
-        <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed && "md:justify-center md:px-0")}>
+        <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed && "sm:justify-center sm:px-0")}>
           <Logo className="h-7 w-7 shrink-0 text-brand-400" />
           {/* Texto del brand: visible siempre en mobile, depende de collapsed en desktop.
               Subtítulo viene del workspace activo del user (fallback al nombre del user
               o al texto de marca si aún no cargó). */}
-          <div className={cn("flex flex-col leading-tight min-w-0", collapsed && "md:hidden")}>
+          <div className={cn("flex flex-col leading-tight min-w-0", collapsed && "sm:hidden")}>
             <span className="font-serif text-[17px] font-medium text-sidebar-accent-foreground">Psicomorfosis</span>
             <span className="text-[11px] text-sidebar-foreground/70 tracking-wide truncate">
               {user?.workspaceName ?? "Cargando…"}
@@ -123,7 +123,7 @@ export function AppSidebar() {
           {/* Cerrar drawer en mobile */}
           <button
             onClick={() => setOpen(false)}
-            className="ml-auto md:hidden h-9 w-9 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center"
+            className="ml-auto sm:hidden h-9 w-9 rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-center"
             aria-label="Cerrar menú"
           >
             <X className="h-5 w-5" />
@@ -135,7 +135,7 @@ export function AppSidebar() {
             <div key={g.label} className="mb-5">
               <div className={cn(
                 "px-5 mb-2 text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/55 font-medium",
-                collapsed && "md:hidden"
+                collapsed && "sm:hidden"
               )}>
                 {g.label}
               </div>
@@ -155,18 +155,18 @@ export function AppSidebar() {
                         className={cn(
                           "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
                           // Touch target ≥44px en mobile, 40px en desktop
-                          "min-h-[44px] md:min-h-[40px] py-2.5",
+                          "min-h-11 sm:min-h-10 py-2.5",
                           // Hover: bg-accent + leve translate del ícono para feedback claro.
                           "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
                           active
                             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400"
                             : "text-sidebar-foreground/85",
-                          collapsed && "md:justify-center md:px-0 md:hover:pl-0"
+                          collapsed && "sm:justify-center sm:px-0 sm:hover:pl-0"
                         )}
                         title={collapsed ? it.label : undefined}
                       >
                         <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200" />
-                        <span className={cn(collapsed && "md:hidden")}>{it.label}</span>
+                        <span className={cn(collapsed && "sm:hidden")}>{it.label}</span>
                       </Link>
                     </li>
                   );
@@ -180,7 +180,7 @@ export function AppSidebar() {
           {user && (
             <div className={cn(
               "flex items-center gap-3 rounded-md px-2 py-2",
-              collapsed && "md:hidden"
+              collapsed && "sm:hidden"
             )}>
               <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold shrink-0">
                 {initials}
@@ -198,12 +198,12 @@ export function AppSidebar() {
             data-tour="report-problem"
             className={cn(
               "w-full flex items-center gap-2 text-sidebar-foreground/75 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
-              collapsed && "md:justify-center md:px-0",
+              collapsed && "sm:justify-center sm:px-0",
             )}
             title="Reportar problema"
           >
             <Bug className="h-4 w-4 shrink-0" />
-            <span className={cn(collapsed && "md:hidden")}>Reportar problema</span>
+            <span className={cn(collapsed && "sm:hidden")}>Reportar problema</span>
           </button>
           {/* Cerrar sesión */}
           <button
@@ -213,18 +213,18 @@ export function AppSidebar() {
             }}
             className={cn(
               "w-full flex items-center gap-2 text-sidebar-foreground/85 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
-              collapsed && "md:justify-center md:px-0",
+              collapsed && "sm:justify-center sm:px-0",
             )}
             title="Cerrar sesión"
           >
             <LogOut className="h-4 w-4 shrink-0" />
-            <span className={cn(collapsed && "md:hidden")}>Cerrar sesión</span>
+            <span className={cn(collapsed && "sm:hidden")}>Cerrar sesión</span>
           </button>
           {/* Botón colapsar solo en desktop */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
-              "hidden md:flex w-full items-center gap-2 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
+              "hidden sm:flex w-full items-center gap-2 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
               collapsed && "justify-center"
             )}
           >

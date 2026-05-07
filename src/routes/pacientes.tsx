@@ -411,7 +411,29 @@ function PatientsPage() {
               <p className="text-xs text-ink-500 mt-1">¿Está corriendo el servidor en <code className="font-mono">{api.base}</code>?</p>
             </div>
           )}
-          {!isLoading && !error && filtered.length === 0 && (
+          {!isLoading && !error && filtered.length === 0 && patients.length === 0 && (
+            // Empty state grande para cuentas nuevas — primer onboarding.
+            // Distinto del "sin coincidencias por filtros" porque para una
+            // cuenta sin nada el mensaje "filtros" confunde.
+            <div className="px-6 py-12 sm:py-16 text-center">
+              <div className="h-16 w-16 mx-auto rounded-full bg-brand-50 flex items-center justify-center mb-5 border-2 border-brand-100">
+                <Plus className="h-7 w-7 text-brand-700" />
+              </div>
+              <h3 className="font-serif text-xl text-ink-900 mb-2">
+                Aún no tienes pacientes registrados
+              </h3>
+              <p className="text-sm text-ink-500 max-w-md mx-auto mb-6 leading-relaxed">
+                Crea tu primer paciente para empezar a agendar citas, registrar sesiones, aplicar tests y enviar documentos para firma. Toma menos de un minuto.
+              </p>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="h-11 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" /> Crear mi primer paciente
+              </button>
+            </div>
+          )}
+          {!isLoading && !error && filtered.length === 0 && patients.length > 0 && (
             <div className="p-10 text-center text-sm text-ink-500">Sin pacientes que coincidan con los filtros aplicados.</div>
           )}
 

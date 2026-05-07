@@ -93,24 +93,25 @@ export function Topbar() {
     <>
       <header className="sticky top-0 z-30 h-16 bg-surface/85 backdrop-blur border-b border-line-100">
         <div className="h-full px-3 sm:px-4 md:px-6 flex items-center gap-2 md:gap-4">
-          {/* Hamburguesa visible solo en mobile */}
+          {/* Hamburguesa visible solo en mobile (< sm = < 640px). El sidebar
+              ahora es sticky desde sm+ — incluye tablets verticales. */}
           <button
             onClick={toggleSidebar}
-            className="md:hidden h-10 w-10 rounded-md border border-line-200 bg-surface text-ink-700 hover:border-brand-400 flex items-center justify-center shrink-0"
+            className="sm:hidden h-10 w-10 rounded-md border border-line-200 bg-surface text-ink-700 hover:border-brand-400 flex items-center justify-center shrink-0"
             aria-label="Abrir menú"
           >
             <Menu className="h-5 w-5" />
           </button>
 
           {/* Breadcrumb: en mobile solo muestra la ruta actual, sin workspace name */}
-          <nav className="flex items-center gap-2 text-sm text-ink-500 min-w-0 flex-1 md:flex-initial">
-            <Link to="/" className="hidden md:inline hover:text-ink-900 truncate max-w-[180px]">{workspace?.name ?? "Psicomorfosis"}</Link>
-            <span className="hidden md:inline text-ink-300">/</span>
+          <nav className="flex items-center gap-2 text-sm text-ink-500 min-w-0 flex-1 sm:flex-initial">
+            <Link to="/" className="hidden sm:inline hover:text-ink-900 truncate max-w-[180px]">{workspace?.name ?? "Psicomorfosis"}</Link>
+            <span className="hidden sm:inline text-ink-300">/</span>
             <span className="text-ink-900 font-medium truncate">{label}</span>
           </nav>
 
           {/* Buscador: full en desktop, solo icono en mobile */}
-          <div className="hidden md:block flex-1 max-w-xl mx-auto">
+          <div className="hidden sm:block flex-1 max-w-xl mx-auto">
             <button
               onClick={() => setCmdkOpen(true)}
               className="w-full h-10 flex items-center gap-2 px-3.5 rounded-lg border border-line-200 bg-bg-100/60 text-ink-400 text-sm hover:border-brand-400 hover:text-ink-700 transition-colors"
@@ -122,14 +123,14 @@ export function Topbar() {
           </div>
           <button
             onClick={() => setCmdkOpen(true)}
-            className="md:hidden h-10 w-10 rounded-md border border-line-200 bg-surface text-ink-700 hover:border-brand-400 flex items-center justify-center shrink-0"
+            className="sm:hidden h-10 w-10 rounded-md border border-line-200 bg-surface text-ink-700 hover:border-brand-400 flex items-center justify-center shrink-0"
             aria-label="Buscar"
           >
             <Search className="h-4 w-4" />
           </button>
 
           {isOrg && sedes.length > 0 && (
-            <div className="relative hidden md:block">
+            <div className="relative hidden sm:block">
               <button
                 onClick={() => setSedeOpen((v) => !v)}
                 className="flex items-center gap-2 h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400"
@@ -179,6 +180,7 @@ export function Topbar() {
               abrir programáticamente vía window.dispatchEvent("psm:open-crisis"). */}
           <button
             onClick={() => setThemePref(toggleTheme())}
+            data-tour="theme-toggle"
             className="relative h-10 w-10 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center justify-center"
             aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
             title={isDark ? "Modo claro" : "Modo oscuro"}
