@@ -73,11 +73,19 @@ export const Route = createRootRoute({
 const BOOTSTRAP_SCRIPT = `
 (function(){
   try {
-    var pref = localStorage.getItem('psm.theme') || 'claro';
-    var dark = pref === 'oscuro' ||
-      (pref === 'auto' && window.matchMedia &&
+    var mode = localStorage.getItem('psm.theme') || 'claro';
+    var family = localStorage.getItem('psm.theme.family') || 'clinico';
+    var font = localStorage.getItem('psm.theme.font') || 'editorial';
+    // Aurora es dark-only; cualquier otro respeta el modo elegido.
+    var darkOnly = family === 'aurora';
+    var dark = darkOnly || mode === 'oscuro' ||
+      (mode === 'auto' && window.matchMedia &&
         window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.classList.toggle('dark', dark);
+    var html = document.documentElement;
+    html.classList.toggle('dark', dark);
+    html.setAttribute('data-mode', dark ? 'dark' : 'light');
+    html.setAttribute('data-theme', family);
+    html.setAttribute('data-font', font);
   } catch(e) {}
   try {
     var token = localStorage.getItem('psm.token');

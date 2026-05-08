@@ -263,6 +263,197 @@
   --info-soft: oklch(0.4 0.07 230 / 0.25);
 }
 
+/* ================================================================
+ * TEMAS ALTERNATIVOS
+ *
+ * Cada tema sobreescribe SOLO los tokens críticos (brand, bg, surface,
+ * accents). El resto se hereda de :root o .dark — así un tema nuevo
+ * son ~30 líneas, no una paleta completa duplicada.
+ *
+ * Selector: [data-theme="X"] aplica los tokens light, y
+ * [data-theme="X"][data-mode="dark"] aplica los del modo oscuro.
+ * El tema "clinico" no necesita declaración propia: es el default
+ * de :root y .dark que ya existían.
+ * ================================================================ */
+
+/* ─── BRIDGERY: light vibrante con acento púrpura ─────────────────── */
+[data-theme="bridgery"] {
+  /* Brand: púrpura del estilo Bridgery (botón "Start a search"). */
+  --brand-900: oklch(0.30 0.18 295);
+  --brand-800: oklch(0.40 0.20 295);
+  --brand-700: oklch(0.55 0.20 295);  /* PRIMARY */
+  --brand-600: oklch(0.62 0.18 295);
+  --brand-400: oklch(0.78 0.13 295);
+  --brand-100: oklch(0.94 0.04 295);
+  --brand-50: oklch(0.975 0.018 295);
+
+  /* Fondos más fríos/neutros (gris perla) que el clínico cálido. */
+  --bg-50: oklch(0.985 0.003 270);
+  --bg-100: oklch(0.965 0.004 270);
+  --line-200: oklch(0.92 0.005 270);
+  --line-100: oklch(0.95 0.004 270);
+  --surface: oklch(1 0 0);
+
+  /* shadcn map respeta el override automáticamente porque referencian
+     las variables de arriba (--bg-50, --surface, --brand-700, etc.). */
+  --background: var(--bg-50);
+  --primary: var(--brand-700);
+  --ring: var(--brand-400);
+
+  /* Sidebar: el "Bridgery" tiene sidebar blanco con texto oscuro,
+     no oscuro como el clínico. Override explícito. */
+  --sidebar: oklch(0.99 0.002 270);
+  --sidebar-foreground: oklch(0.30 0.018 270);
+  --sidebar-accent: oklch(0.96 0.018 295);
+  --sidebar-accent-foreground: oklch(0.40 0.20 295);
+  --sidebar-border: oklch(0.92 0.005 270);
+  --sidebar-primary: var(--brand-700);
+  --sidebar-primary-foreground: oklch(0.985 0.005 110);
+  --sidebar-ring: var(--brand-400);
+}
+[data-theme="bridgery"][data-mode="dark"] {
+  --brand-700: oklch(0.65 0.22 295);
+  --brand-600: oklch(0.72 0.18 295);
+  --brand-400: oklch(0.80 0.14 295);
+  --brand-100: oklch(0.30 0.10 295);
+  --brand-50: oklch(0.22 0.08 295);
+
+  --background: oklch(0.16 0.02 270);
+  --foreground: oklch(0.94 0.01 270);
+  --card: oklch(0.22 0.025 270);
+  --card-foreground: oklch(0.94 0.01 270);
+  --popover: oklch(0.22 0.025 270);
+  --popover-foreground: oklch(0.94 0.01 270);
+  --bg-50: oklch(0.16 0.02 270);
+  --bg-100: oklch(0.20 0.022 270);
+  --surface: oklch(0.22 0.025 270);
+  --line-200: oklch(0.30 0.018 270);
+  --line-100: oklch(0.25 0.015 270);
+
+  --sidebar: oklch(0.13 0.018 270);
+  --sidebar-foreground: oklch(0.85 0.012 270);
+  --sidebar-accent: oklch(0.22 0.06 295);
+  --sidebar-accent-foreground: oklch(0.92 0.04 295);
+  --sidebar-border: oklch(0.25 0.018 270);
+}
+
+/* ─── MÍNIMO: ultra clean con acento mint ────────────────────────── */
+[data-theme="minimo"] {
+  /* Brand: mint sobrio. */
+  --brand-900: oklch(0.40 0.10 165);
+  --brand-800: oklch(0.50 0.10 165);
+  --brand-700: oklch(0.60 0.10 165);  /* PRIMARY */
+  --brand-600: oklch(0.68 0.09 165);
+  --brand-400: oklch(0.80 0.07 165);
+  --brand-100: oklch(0.94 0.025 165);
+  --brand-50: oklch(0.975 0.012 165);
+
+  /* Fondos extremadamente neutros — casi blanco puro, sin tinte. */
+  --bg-50: oklch(0.99 0 0);
+  --bg-100: oklch(0.97 0 0);
+  --line-200: oklch(0.94 0 0);
+  --line-100: oklch(0.97 0 0);
+  --surface: oklch(1 0 0);
+
+  --background: var(--bg-50);
+  --primary: var(--brand-700);
+  --ring: var(--brand-400);
+
+  /* Sidebar minimal: blanco con bordes invisibles. */
+  --sidebar: oklch(0.99 0 0);
+  --sidebar-foreground: oklch(0.30 0.005 250);
+  --sidebar-accent: oklch(0.96 0.012 165);
+  --sidebar-accent-foreground: oklch(0.40 0.10 165);
+  --sidebar-border: oklch(0.96 0 0);
+  --sidebar-primary: var(--brand-700);
+  --sidebar-primary-foreground: oklch(0.985 0.005 110);
+  --sidebar-ring: var(--brand-400);
+}
+[data-theme="minimo"][data-mode="dark"] {
+  --brand-700: oklch(0.70 0.13 165);
+  --brand-600: oklch(0.75 0.10 165);
+  --brand-400: oklch(0.82 0.08 165);
+  --brand-100: oklch(0.28 0.05 165);
+  --brand-50: oklch(0.20 0.04 165);
+
+  --background: oklch(0.13 0.005 250);
+  --foreground: oklch(0.95 0.005 250);
+  --card: oklch(0.18 0.006 250);
+  --card-foreground: oklch(0.95 0.005 250);
+  --popover: oklch(0.18 0.006 250);
+  --popover-foreground: oklch(0.95 0.005 250);
+  --bg-50: oklch(0.13 0.005 250);
+  --bg-100: oklch(0.16 0.005 250);
+  --surface: oklch(0.18 0.006 250);
+  --line-200: oklch(0.24 0.005 250);
+  --line-100: oklch(0.20 0.004 250);
+
+  --sidebar: oklch(0.11 0.005 250);
+  --sidebar-foreground: oklch(0.85 0.008 250);
+  --sidebar-accent: oklch(0.20 0.04 165);
+  --sidebar-accent-foreground: oklch(0.85 0.10 165);
+  --sidebar-border: oklch(0.20 0.005 250);
+}
+
+/* ─── AURORA: dark premium con gradients de fondo (solo dark) ─────── */
+[data-theme="aurora"] {
+  /* Brand: púrpura/magenta vibrante. */
+  --brand-900: oklch(0.40 0.20 295);
+  --brand-800: oklch(0.50 0.22 295);
+  --brand-700: oklch(0.65 0.22 295);  /* PRIMARY */
+  --brand-600: oklch(0.72 0.20 295);
+  --brand-400: oklch(0.80 0.16 295);
+  --brand-100: oklch(0.30 0.12 295);
+  --brand-50: oklch(0.22 0.08 295);
+
+  /* Aurora siempre es dark — no hace falta selector [data-mode="dark"]
+     porque el bootstrap force dark mode cuando este tema está activo. */
+  --background: oklch(0.10 0.025 285);
+  --foreground: oklch(0.96 0.015 280);
+  --card: oklch(0.15 0.03 285 / 0.6);  /* semitranslúcido — deja ver auroras */
+  --card-foreground: oklch(0.96 0.015 280);
+  --popover: oklch(0.18 0.03 285);
+  --popover-foreground: oklch(0.96 0.015 280);
+  --bg-50: oklch(0.10 0.025 285);
+  --bg-100: oklch(0.14 0.028 285);
+  --surface: oklch(0.16 0.03 285 / 0.65);
+  --line-200: oklch(0.30 0.04 285 / 0.5);
+  --line-100: oklch(0.24 0.035 285 / 0.4);
+
+  --primary: var(--brand-700);
+  --ring: var(--brand-400);
+
+  --sidebar: oklch(0.09 0.03 285 / 0.85);
+  --sidebar-foreground: oklch(0.88 0.015 280);
+  --sidebar-accent: oklch(0.25 0.10 295 / 0.55);
+  --sidebar-accent-foreground: oklch(0.95 0.05 295);
+  --sidebar-border: oklch(0.30 0.04 285 / 0.4);
+  --sidebar-primary: var(--brand-700);
+  --sidebar-primary-foreground: oklch(0.985 0.005 110);
+  --sidebar-ring: var(--brand-400);
+
+  /* Tinta más clara para mejor contraste sobre el fondo translúcido. */
+  --ink-900: oklch(0.96 0.015 280);
+  --ink-700: oklch(0.86 0.015 280);
+  --ink-500: oklch(0.72 0.012 280);
+  --ink-400: oklch(0.62 0.010 280);
+  --ink-300: oklch(0.50 0.008 280);
+}
+
+/* Las auroras: gradients radiales fijos al body, detrás de todo. Se
+   ven a través de las superficies semitranslúcidas (.tg-dialog, cards,
+   modals). Se aplica solo al body cuando data-theme="aurora", no en
+   :root para no afectar otros temas. */
+html[data-theme="aurora"] body {
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 0%, oklch(0.55 0.20 295 / 0.35), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 30%, oklch(0.60 0.22 145 / 0.25), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, oklch(0.55 0.22 25 / 0.20), transparent 60%),
+    oklch(0.08 0.025 285);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

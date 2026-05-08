@@ -12,6 +12,20 @@ import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
+import {
+  applyTheme,
+  getTheme as getThemeMode,
+  setTheme as setThemeMode,
+  getThemeFamily,
+  setThemeFamily,
+  getFontFamily,
+  setFontFamily,
+  THEME_FAMILIES,
+  FONT_FAMILIES,
+  type ThemePreference,
+  type ThemeFamily,
+  type FontFamily,
+} from "@/lib/theme";
 
 export const Route = createFileRoute("/configuracion")({
   head: () => ({ meta: [{ title: "Configuración — Psicomorfosis" }] }),
@@ -681,59 +695,137 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-type ThemePreference = "claro" | "oscuro" | "auto";
-
-function applyTheme(pref: ThemePreference) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  const shouldDark =
-    pref === "oscuro" ||
-    (pref === "auto" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
-  root.classList.toggle("dark", shouldDark);
-}
-
 function AparienciaPanel() {
-  const [tema, setTema] = useState<ThemePreference>(() => {
-    if (typeof window === "undefined") return "claro";
-    return (window.localStorage.getItem("psm.theme") as ThemePreference) ?? "claro";
-  });
+  const [mode, setMode] = useState<ThemePreference>(() => getThemeMode());
+  const [family, setFamily] = useState<ThemeFamily>(() => getThemeFamily());
+  const [font, setFont] = useState<FontFamily>(() => getFontFamily());
 
+  // Aplicar al cambiar cualquiera de los 3. lib/theme.ts persiste en
+  // localStorage y aplica los atributos data-* al <html>.
   useEffect(() => {
-    applyTheme(tema);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("psm.theme", tema);
+    setThemeMode(mode);
+  }, [mode]);
+  useEffect(() => {
+    setThemeFamily(family);
+    // Aurora es dark-only — si lo eligen, fuerzo el mode a oscuro en
+    // el state local también para que el toggle de modo refleje la
+    // realidad. setThemeMode lo aplica.
+    if (family === "aurora" && mode !== "oscuro") {
+      setMode("oscuro");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family]);
+  useEffect(() => {
+    setFontFamily(font);
+  }, [font]);
 
-    // En modo auto, reaccionar a cambios del SO
-    if (tema === "auto" && typeof window !== "undefined" && window.matchMedia) {
-      const mq = window.matchMedia("(prefers-color-scheme: dark)");
-      const handler = () => applyTheme("auto");
-      mq.addEventListener?.("change", handler);
-      return () => mq.removeEventListener?.("change", handler);
-    }
-  }, [tema]);
+  // En modo auto, reaccionar a cambios del SO.
+  useEffect(() => {
+    if (mode !== "auto") return;
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyTheme();
+    mq.addEventListener?.("change", handler);
+    return () => mq.removeEventListener?.("change", handler);
+  }, [mode]);
+
+  const familyEntries = Object.entries(THEME_FAMILIES) as Array<[ThemeFamily, typeof THEME_FAMILIES[ThemeFamily]]>;
+  const fontEntries = Object.entries(FONT_FAMILIES) as Array<[FontFamily, typeof FONT_FAMILIES[FontFamily]]>;
 
   return (
     <>
-      <SectionHeader title="Apariencia" desc="Adapta la interfaz a tu manera de trabajar." />
-      <div className="grid grid-cols-3 gap-3">
-        {(["claro", "oscuro", "auto"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTema(t)}
-            className={cn(
-              "rounded-xl border-2 p-4 text-left capitalize transition-all",
-              tema === t ? "border-brand-700 bg-brand-50" : "border-line-200 bg-surface hover:border-brand-400"
-            )}
-          >
-            <div className={cn("h-16 rounded-lg mb-3", t === "claro" ? "bg-bg-50 border border-line-200" : t === "oscuro" ? "bg-ink-900" : "bg-gradient-to-r from-bg-50 to-ink-900")} />
-            <div className="text-sm font-medium text-ink-900">{t}</div>
-          </button>
-        ))}
+      <SectionHeader title="Apariencia" desc="Adapta la interfaz a tu manera de trabajar. Los cambios son inmediatos y se guardan localmente." />
+
+      {/* ─── Modo: claro/oscuro/auto ─── */}
+      <div className="mb-6">
+        <h4 className="text-sm font-medium text-ink-900 mb-2">Modo</h4>
+        <p className="text-xs text-ink-500 mb-3">Claridad general de la paleta. "Auto" sigue tu sistema operativo.</p>
+        <div className="grid grid-cols-3 gap-3">
+          {(["claro", "oscuro", "auto"] as const).map((t) => {
+            const disabled = family === "aurora" && t !== "oscuro";
+            return (
+              <button
+                key={t}
+                disabled={disabled}
+                onClick={() => setMode(t)}
+                className={cn(
+                  "rounded-xl border-2 p-4 text-left capitalize transition-all",
+                  mode === t ? "border-brand-700 bg-brand-50" : "border-line-200 bg-surface hover:border-brand-400",
+                  disabled && "opacity-40 cursor-not-allowed",
+                )}
+                title={disabled ? "Aurora solo soporta modo oscuro" : undefined}
+              >
+                <div className={cn(
+                  "h-12 rounded-lg mb-2",
+                  t === "claro" ? "bg-bg-50 border border-line-200"
+                    : t === "oscuro" ? "bg-ink-900"
+                    : "bg-gradient-to-r from-bg-50 to-ink-900"
+                )} />
+                <div className="text-sm font-medium text-ink-900">{t}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <p className="text-xs text-ink-500 mt-4">
-        El tema se aplica inmediatamente y se guarda para la próxima sesión. "Auto" sigue la preferencia de tu sistema operativo.
-      </p>
+
+      {/* ─── Tema: familia de color ─── */}
+      <div className="mb-6">
+        <h4 className="text-sm font-medium text-ink-900 mb-2">Tema</h4>
+        <p className="text-xs text-ink-500 mb-3">Familia de color. El "Clínico" es el original; los demás se agregaron como alternativa.</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {familyEntries.map(([id, desc]) => (
+            <button
+              key={id}
+              onClick={() => setFamily(id)}
+              className={cn(
+                "rounded-xl border-2 p-3 text-left transition-all",
+                family === id ? "border-brand-700 bg-brand-50" : "border-line-200 bg-surface hover:border-brand-400",
+              )}
+            >
+              <div
+                className="h-10 rounded-lg mb-2 ring-1 ring-line-100"
+                style={{ background: desc.swatch }}
+              />
+              <div className="text-sm font-medium text-ink-900">{desc.label}</div>
+              <div className="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{desc.description}</div>
+              {desc.darkOnly && (
+                <div className="text-[10px] uppercase tracking-wider text-ink-400 mt-1">Solo oscuro</div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── Tipografía ─── */}
+      <div>
+        <h4 className="text-sm font-medium text-ink-900 mb-2">Tipografía</h4>
+        <p className="text-xs text-ink-500 mb-3">Familia tipográfica para títulos (serif) y texto (sans). Se descarga la primera vez que la eliges.</p>
+        <div className="space-y-2">
+          {fontEntries.map(([id, desc]) => (
+            <button
+              key={id}
+              onClick={() => setFont(id)}
+              className={cn(
+                "w-full rounded-xl border-2 p-3 text-left transition-all flex items-center gap-3",
+                font === id ? "border-brand-700 bg-brand-50" : "border-line-200 bg-surface hover:border-brand-400",
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-ink-900 flex items-center gap-2">
+                  {desc.label}
+                  {font === id && <Check className="h-3.5 w-3.5 text-brand-700" />}
+                </div>
+                <div className="text-xs text-ink-500 mt-0.5">{desc.description}</div>
+              </div>
+              {/* Mini-preview del nombre con la fuente del set */}
+              <div className="text-right shrink-0">
+                <div className="text-base font-semibold text-ink-900" style={{ fontFamily: desc.serif }}>Aa</div>
+                <div className="text-xs text-ink-500" style={{ fontFamily: desc.sans }}>Texto</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
     </>
   );
 }
