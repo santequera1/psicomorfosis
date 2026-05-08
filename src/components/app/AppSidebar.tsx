@@ -5,7 +5,7 @@ import {
   PanelLeftClose, PanelLeftOpen, X, Shield, LogOut, Bug,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, roleLabel } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { api, getStoredUser, setSession, clearSession, type ApiUser, getToken } from "@/lib/api";
 import { useSidebar } from "./SidebarContext";
@@ -72,6 +72,7 @@ export function AppSidebar() {
   }, []);
 
   const initials = (user?.name ?? "?").split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+
 
   // Sidebar exclusivo para platform admin. Su trabajo es administrar
   // cuentas y monitorear uso, NO atender pacientes — entonces ocultamos
@@ -231,7 +232,7 @@ export function AppSidebar() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-sidebar-accent-foreground truncate">{user.name}</div>
-                <div className="text-[11px] text-sidebar-foreground/65 truncate capitalize">{user.role.replace("_", " ")}</div>
+                <div className="text-[11px] text-sidebar-foreground/65 truncate">{roleLabel(user)}</div>
               </div>
             </div>
           )}

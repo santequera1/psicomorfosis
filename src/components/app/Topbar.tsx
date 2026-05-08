@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
+import { roleLabel } from "@/lib/utils";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Inicio",
@@ -233,7 +234,7 @@ export function Topbar() {
                       <div className="text-[11px] text-ink-500 truncate">{currentUser?.email ?? ""}</div>
                       {currentUser?.role && (
                         <span className="mt-0.5 inline-block text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-brand-100 text-brand-800 font-medium">
-                          {currentUser.role.replace("_", " ")}
+                          {roleLabel(currentUser)}
                         </span>
                       )}
                     </div>
