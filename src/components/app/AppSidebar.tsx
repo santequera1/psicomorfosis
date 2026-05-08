@@ -78,7 +78,15 @@ export function AppSidebar() {
   const visibleGroups = user?.isPlatformAdmin
     ? [...groups, {
         label: "Plataforma",
-        items: [{ to: "/platform", label: "Cuentas y uso", icon: Shield }],
+        items: [
+          { to: "/platform", label: "Cuentas y uso", icon: Shield },
+          // Reportes de problemas como entrada propia. Antes vivía como
+          // botón en el header de /platform, pero el platform admin lo
+          // consulta seguido — merece un link directo en el sidebar
+          // para ver de un vistazo si hay reportes pendientes sin tener
+          // que abrir Platform primero.
+          { to: "/platform/reportes", label: "Reportes", icon: Bug },
+        ],
       }]
     : groups;
 

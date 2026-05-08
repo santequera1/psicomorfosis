@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
-  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Bug, Edit3,
+  CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -88,6 +88,58 @@ function PlatformDashboard() {
     deshabilitado: workspaces.filter((w) => !!w.disabledAt).length,
   }), [workspaces]);
 
+  /**
+   * Exporta la lista de cuentas (filtrada por los filtros aplicados)
+   * a CSV. Útil para reportes externos, contabilidad, recordatorios de
+   * onboarding, etc.
+   *
+   * Detalles del CSV: BOM UTF-8 para que Excel lo abra con tildes,
+   * separador coma con comillas en campos para escapar comas internas,
+   * CRLF como nueva línea (estándar CSV) en lugar de \n.
+   */
+  function exportWorkspacesCSV() {
+    if (filtered.length === 0) {
+      toast.message("No hay cuentas para exportar con los filtros actuales");
+      return;
+    }
+    const headers = [
+      "ID", "Nombre", "Modo", "Estado", "Razón deshabilitada",
+      "Creada", "Último login",
+      "Usuarios staff", "Pacientes activos", "Documentos totales",
+      "Docs últimos 7 días", "Citas últimos 30 días",
+      "Owner nombre", "Owner email", "Owner usuario",
+    ];
+    const escape = (v: unknown): string => {
+      const s = v == null ? "" : String(v);
+      // Escapar comillas duplicándolas + envolver en comillas si contiene
+      // coma, comillas o salto de línea.
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const rows = filtered.map((w) => [
+      w.id, w.name, w.mode,
+      w.disabledAt ? "deshabilitada" : "activa",
+      w.disabledReason ?? "",
+      w.createdAt?.slice(0, 10) ?? "",
+      w.lastLoginAt?.slice(0, 19).replace("T", " ") ?? "",
+      w.usersCount, w.patientsCount, w.documentsCount,
+      w.documents7d, w.appointments30d,
+      w.ownerName ?? "", w.ownerEmail ?? "", w.ownerUsername ?? "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map(escape).join(","))
+      .join("\r\n");
+    // BOM ﻿ para que Excel detecte UTF-8 y muestre tildes correctas.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `psicomorfosis-cuentas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exportadas ${filtered.length} cuenta${filtered.length === 1 ? "" : "s"}`);
+  }
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -102,12 +154,15 @@ function PlatformDashboard() {
             <p className="text-xs text-ink-500 mt-1">Visible solo para administradores de Psicomorfosis.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              to="/platform/reportes"
+            {/* "Reportes" se movió al sidebar como entrada propia del
+                grupo Plataforma — el botón aquí era duplicado. */}
+            <button
+              onClick={exportWorkspacesCSV}
               className="h-10 px-3 rounded-lg border border-line-200 text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 text-sm"
+              title="Exportar lista de cuentas a CSV"
             >
-              <Bug className="h-4 w-4" /> Reportes
-            </Link>
+              <Download className="h-4 w-4" /> Exportar CSV
+            </button>
             <button
               onClick={() => setCreateOpen(true)}
               className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
