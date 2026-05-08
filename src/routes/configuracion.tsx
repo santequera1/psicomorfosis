@@ -7,9 +7,10 @@ import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken } from "@/lib/api";
+import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
 import {
@@ -42,6 +43,7 @@ const SECCIONES = [
   { id: "apariencia",   label: "Apariencia",         icon: Palette,      desc: "Tema, densidad y tipografía" },
   { id: "integraciones",label: "Integraciones",      icon: Globe,        desc: "Calendario, video y mensajería" },
   { id: "tutoriales",   label: "Tutoriales",         icon: GraduationCap, desc: "Reiniciar los tours guiados" },
+  { id: "cuenta",       label: "Mi cuenta",          icon: ShieldAlert,  desc: "Eliminar cuenta y exportar datos" },
 ];
 
 function ConfiguracionPage() {
@@ -98,6 +100,7 @@ function ConfiguracionPage() {
             {active === "apariencia" && <AparienciaPanel />}
             {active === "integraciones" && <IntegracionesPanel />}
             {active === "tutoriales" && <TutorialesPanel />}
+            {active === "cuenta" && <CuentaPanel />}
           </main>
         </div>
       </div>
@@ -1401,5 +1404,298 @@ function TutorialesPanel() {
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Mi cuenta panel: zona peligrosa (eliminar cuenta + sus datos) ────────
+//
+// Este panel implementa el **derecho de supresión** del art. 8 lit. e) de
+// la Ley 1581/2012 colombiana (Habeas Data) y la cláusula octava del
+// Acuerdo de Beta. La eliminación es total: workspace + pacientes +
+// historia clínica + tests + recibos + documentos. No reversible.
+//
+// Flujo de doble confirmación:
+//   1. Click en "Eliminar mi cuenta" → abre modal.
+//   2. Modal pide escribir literalmente "ELIMINAR" + reingresar contraseña.
+//   3. Backend valida ambos antes de ejecutar el DELETE FROM workspaces.
+//   4. Tras éxito, se cierra sesión y se redirige a /login con un toast.
+//
+// Solo lo ve el super_admin del workspace; los miembros normales del
+// equipo no pueden borrar la cuenta entera y verán un mensaje informativo.
+
+function CuentaPanel() {
+  const [user] = useState(() => getStoredUser());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const isOwner = user?.role === "super_admin";
+  const isPlatformAdmin = !!user?.isPlatformAdmin;
+
+  return (
+    <>
+      <SectionHeader
+        title="Mi cuenta"
+        desc="Datos sobre tu cuenta y herramientas para ejercer tus derechos de protección de datos personales (Ley 1581/2012)."
+      />
+
+      {/* Información de la cuenta */}
+      <div className="rounded-xl border border-line-200 bg-bg-50 p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+            <User className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="text-ink-900 font-medium">{user?.name ?? "—"}</div>
+            <div className="text-ink-500 mt-0.5 text-xs">
+              {user?.email ?? "—"} · Rol: {user?.role ?? "—"}
+              {isPlatformAdmin && " · Administrador de plataforma"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sección informativa: tus derechos */}
+      <div className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 mb-4">
+        <h3 className="text-sm font-medium text-ink-900 mb-2">Tus derechos sobre tus datos</h3>
+        <p className="text-xs text-ink-500 leading-relaxed mb-3">
+          Como titular de tus datos personales, en cualquier momento puedes
+          ejercer los derechos del artículo 8 de la Ley 1581 de 2012:
+        </p>
+        <ul className="text-xs text-ink-700 space-y-1.5 list-disc pl-5">
+          <li>Conocer, actualizar o rectificar tus datos.</li>
+          <li>Solicitar prueba de la autorización otorgada para el tratamiento.</li>
+          <li>Ser informado sobre el uso que se da a tus datos.</li>
+          <li>
+            Revocar la autorización y solicitar la <strong>supresión total</strong> de tus datos.
+          </li>
+          <li>Presentar quejas ante la Superintendencia de Industria y Comercio (SIC).</li>
+        </ul>
+        <p className="text-xs text-ink-500 leading-relaxed mt-3">
+          Para consultas o reclamos sobre tu información, escríbenos a{" "}
+          <a href="mailto:santequera@wailus.co" className="text-brand-700 underline">santequera@wailus.co</a>.
+        </p>
+      </div>
+
+      {/* Zona peligrosa */}
+      <div className="rounded-xl border-2 border-error/30 bg-error-soft p-4 sm:p-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="h-10 w-10 rounded-lg bg-error/15 text-error flex items-center justify-center shrink-0">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-ink-900">Zona peligrosa</h3>
+            <p className="text-xs text-ink-700 mt-0.5">Acciones irreversibles. Léelas con calma antes de actuar.</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-surface border border-line-200 p-4">
+          <h4 className="text-sm font-medium text-ink-900">Eliminar mi cuenta y todos mis datos</h4>
+          <p className="text-xs text-ink-700 mt-1.5 leading-relaxed">
+            Borra <strong>de forma permanente</strong> tu workspace y toda su
+            información asociada: pacientes, historia clínica, evoluciones,
+            tests aplicados, recibos, documentos, tareas y cualquier archivo
+            adjunto. Los respaldos que aún contengan información se
+            sobrescribirán en máximo 14 días.
+          </p>
+          <p className="text-xs text-ink-700 mt-2 leading-relaxed">
+            <strong className="text-ink-900">Antes de eliminar</strong>: si estás obligado a conservar
+            la historia clínica por la Resolución 1995 de 1999, exporta tu
+            información primero. La función de exportación estará disponible
+            próximamente; si la necesitas ahora, escríbenos.
+          </p>
+
+          {!isOwner && (
+            <p className="mt-4 text-xs text-warning bg-warning-soft border border-warning/30 rounded-md px-3 py-2">
+              Solo el propietario de la cuenta (super admin) puede eliminar el
+              workspace completo.
+            </p>
+          )}
+          {isPlatformAdmin && (
+            <p className="mt-4 text-xs text-warning bg-warning-soft border border-warning/30 rounded-md px-3 py-2">
+              Las cuentas de administración de plataforma no se eliminan por
+              esta vía. Contacta al equipo técnico.
+            </p>
+          )}
+
+          <button
+            onClick={() => setConfirmOpen(true)}
+            disabled={!isOwner || isPlatformAdmin}
+            className="mt-4 h-10 px-4 rounded-lg bg-error text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" /> Eliminar mi cuenta
+          </button>
+        </div>
+      </div>
+
+      {confirmOpen && <DeleteAccountModal onClose={() => setConfirmOpen(false)} />}
+    </>
+  );
+}
+
+/**
+ * Modal de doble confirmación para eliminar la cuenta.
+ *
+ * Exige dos pruebas independientes:
+ *   - Tipear literal "ELIMINAR" (evita clicks accidentales / muscle memory).
+ *   - Reingresar la contraseña actual (evita que un atacante con sesión
+ *     viva pero sin password destruya el workspace).
+ *
+ * Tras éxito muestra un comprobante con timestamp; al cerrar se hace
+ * logout y redirect a /login.
+ */
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<{
+    workspaceName: string;
+    deletedAt: string;
+    message: string;
+  } | null>(null);
+
+  const canSubmit = confirmText === "ELIMINAR" && password.length > 0 && !submitting;
+
+  async function handleDelete() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api.deleteAccount({ confirmText, currentPassword: password });
+      setDone({
+        workspaceName: result.workspaceName,
+        deletedAt: result.deletedAt,
+        message: result.message,
+      });
+    } catch (e: any) {
+      setError(e?.message ?? "No fue posible eliminar la cuenta.");
+      setSubmitting(false);
+    }
+  }
+
+  function handleFinish() {
+    clearSession();
+    // Hard redirect: garantiza limpieza completa de estado en memoria
+    // (router cache, queries, contexts) que podrían referenciar el
+    // workspace eliminado y romper la pantalla siguiente.
+    window.location.replace("/login");
+  }
+
+  // Una vez eliminada, el modal se transforma en comprobante.
+  if (done) {
+    return (
+      <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-surface rounded-xl border border-line-200 shadow-modal p-6">
+          <div className="h-12 w-12 rounded-full bg-success-soft text-success flex items-center justify-center mx-auto mb-4">
+            <Check className="h-6 w-6" />
+          </div>
+          <h3 className="font-serif text-xl text-ink-900 text-center mb-2">
+            Cuenta eliminada
+          </h3>
+          <p className="text-sm text-ink-700 text-center leading-relaxed mb-4">
+            Workspace <strong>{done.workspaceName}</strong> eliminado el{" "}
+            {new Date(done.deletedAt).toLocaleString("es-CO", {
+              dateStyle: "long",
+              timeStyle: "short",
+            })}.
+          </p>
+          <p className="text-xs text-ink-500 leading-relaxed bg-bg-100 rounded-md p-3 mb-4">
+            {done.message}
+          </p>
+          <p className="text-xs text-ink-500 text-center mb-4">
+            Guarda este comprobante (captura de pantalla) si lo necesitas
+            como soporte de la solicitud.
+          </p>
+          <button
+            onClick={handleFinish}
+            className="w-full h-11 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-surface rounded-xl border border-line-200 shadow-modal">
+        <header className="px-5 py-4 border-b border-line-200 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg bg-error/15 text-error flex items-center justify-center shrink-0">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-serif text-lg text-ink-900">Eliminar cuenta</h3>
+            <p className="text-xs text-ink-500">Esta acción es irreversible</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 flex items-center justify-center"
+            aria-label="Cerrar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="px-5 py-4 space-y-4">
+          <div className="rounded-md bg-error-soft border border-error/30 p-3 text-xs text-ink-900 leading-relaxed">
+            <strong className="block text-error mb-1">¿Estás seguro?</strong>
+            Se eliminarán de forma <strong>permanente</strong>: tu workspace,
+            todos los pacientes, su historia clínica, tests aplicados,
+            recibos, documentos y archivos. Esta acción no puede deshacerse.
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Para confirmar, escribe <code className="px-1 py-0.5 bg-bg-100 rounded text-error font-mono">ELIMINAR</code>
+            </label>
+            <input
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoFocus
+              placeholder="ELIMINAR"
+              className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-error focus:border-error"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Reingresa tu contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-error focus:border-error"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-md bg-error-soft border border-error/30 px-3 py-2 text-xs text-error flex items-start gap-2">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        <footer className="px-5 py-4 border-t border-line-200 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="h-10 px-4 rounded-lg text-sm font-medium text-ink-700 hover:bg-bg-100 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={!canSubmit}
+            className="h-10 px-4 rounded-lg bg-error text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            Eliminar permanentemente
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }

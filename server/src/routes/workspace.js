@@ -1,5 +1,6 @@
 import { Router } from "express";
 import express from "express";
+import bcrypt from "bcryptjs";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 
@@ -46,6 +47,84 @@ router.patch("/", (req, res) => {
   if (sql.length === 0) return res.status(400).json({ error: "Nada que actualizar" });
   db.prepare(`UPDATE workspaces SET ${sql.join(", ")} WHERE id = ?`).run(...args, wsId);
   res.json(db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(wsId));
+});
+
+/**
+ * DELETE /api/workspace/me/all-data
+ *
+ * Elimina por completo el workspace del usuario autenticado y todos los
+ * datos asociados (pacientes, sesiones, historia clínica, tests, recibos,
+ * documentos, tareas, etc.). Operación irreversible — implementa el
+ * derecho de supresión del art. 8 lit. e) Ley 1581/2012 (Habeas Data) y
+ * la cláusula octava del Acuerdo de Beta.
+ *
+ * Doble validación:
+ *   1. Confirmación literal: el cliente debe enviar `confirmText: "ELIMINAR"`.
+ *   2. Reingreso de contraseña actual (compare bcrypt) — evita que un
+ *      atacante con sesión activa pero sin password elimine la cuenta.
+ *
+ * Solo el `super_admin` del workspace puede ejecutarla. Un platform admin
+ * nunca puede borrar SU workspace por aquí porque su cuenta no maneja
+ * datos clínicos; si quisiera borrarse, debería hacerlo desde /platform.
+ *
+ * Como todas las tablas hijas tienen `FOREIGN KEY ... ON DELETE CASCADE`
+ * desde `workspaces`, basta con `DELETE FROM workspaces` para limpiar
+ * todo en una sola transacción atómica.
+ */
+router.delete("/me/all-data", (req, res) => {
+  const userId = req.user.id;
+  const wsId = req.user.workspace_id;
+  const { confirmText, currentPassword } = req.body ?? {};
+
+  if (req.user.role !== "super_admin") {
+    return res.status(403).json({
+      error: "Solo el propietario de la cuenta puede eliminar todos los datos.",
+    });
+  }
+  if (req.user.is_platform_admin) {
+    return res.status(403).json({
+      error: "Las cuentas de administración de plataforma no se eliminan por esta vía.",
+    });
+  }
+  if (confirmText !== "ELIMINAR") {
+    return res.status(400).json({
+      error: 'Confirmación incorrecta. Debes escribir exactamente "ELIMINAR".',
+    });
+  }
+  if (!currentPassword || typeof currentPassword !== "string") {
+    return res.status(400).json({ error: "Debes reingresar tu contraseña." });
+  }
+
+  const user = db.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(userId);
+  if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) {
+    return res.status(401).json({ error: "Contraseña incorrecta." });
+  }
+
+  // Snapshot mínimo para devolver constancia al cliente.
+  const wsName = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(wsId)?.name;
+
+  // FK CASCADE limpia todas las tablas hijas en una sola transacción.
+  const tx = db.transaction(() => {
+    db.prepare("DELETE FROM workspaces WHERE id = ?").run(wsId);
+  });
+  try {
+    tx();
+  } catch (err) {
+    console.error("[delete-account] error eliminando workspace", wsId, err);
+    return res.status(500).json({ error: "No fue posible eliminar la cuenta. Intenta de nuevo." });
+  }
+
+  // Constancia auditable; el cliente puede mostrarla / descargarla como PDF.
+  const deletedAt = new Date().toISOString();
+  console.log(`[delete-account] workspace ${wsId} ("${wsName}") eliminado por user ${userId} a ${deletedAt}`);
+
+  res.json({
+    deleted: true,
+    workspaceId: wsId,
+    workspaceName: wsName,
+    deletedAt,
+    message: "Tu cuenta y todos tus datos fueron eliminados de la base de datos. Los respaldos que aún contengan información se sobrescribirán en el siguiente ciclo de rotación (máx. 14 días).",
+  });
 });
 
 // ─── Sedes ────────────────────────────────────────────────────────────────

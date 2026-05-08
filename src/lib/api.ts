@@ -720,6 +720,25 @@ export const api = {
 
   // Workspace
   getWorkspace: () => request<Workspace>("/api/workspace"),
+
+  /**
+   * Eliminar permanentemente la cuenta del usuario y todos sus datos
+   * (workspace, pacientes, historia clínica, recibos, documentos…).
+   * Operación irreversible — implementa el derecho de supresión del
+   * art. 8 lit. e) Ley 1581/2012. Requiere doble confirmación: el texto
+   * literal "ELIMINAR" + reingreso de la contraseña actual.
+   */
+  deleteAccount: (input: { confirmText: string; currentPassword: string }) =>
+    request<{
+      deleted: true;
+      workspaceId: number;
+      workspaceName: string;
+      deletedAt: string;
+      message: string;
+    }>("/api/workspace/me/all-data", {
+      method: "DELETE",
+      body: JSON.stringify(input),
+    }),
   getDashboardStats: () => request<{
     sessionsByModality: Array<{ modality: string; value: number }>;
     reasons: Array<{ reason: string; value: number }>;
