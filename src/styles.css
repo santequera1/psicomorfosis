@@ -300,13 +300,14 @@
   --primary: var(--brand-700);
   --ring: var(--brand-400);
 
-  /* Sidebar: el "Bridgery" tiene sidebar blanco con texto oscuro,
-     no oscuro como el clínico. Override explícito. */
-  --sidebar: oklch(0.99 0.002 270);
-  --sidebar-foreground: oklch(0.30 0.018 270);
-  --sidebar-accent: oklch(0.96 0.018 295);
-  --sidebar-accent-foreground: oklch(0.40 0.20 295);
-  --sidebar-border: oklch(0.92 0.005 270);
+  /* Sidebar: el "Bridgery" tiene sidebar blanco con leve tinte púrpura
+     (no oscuro como el clínico). El active lleva fondo púrpura claro y
+     texto púrpura saturado para que el acento del tema se sienta. */
+  --sidebar: oklch(0.985 0.008 295);
+  --sidebar-foreground: oklch(0.32 0.025 285);
+  --sidebar-accent: oklch(0.92 0.055 295);
+  --sidebar-accent-foreground: oklch(0.32 0.20 295);
+  --sidebar-border: oklch(0.91 0.012 285);
   --sidebar-primary: var(--brand-700);
   --sidebar-primary-foreground: oklch(0.985 0.005 110);
   --sidebar-ring: var(--brand-400);
@@ -359,12 +360,13 @@
   --primary: var(--brand-700);
   --ring: var(--brand-400);
 
-  /* Sidebar minimal: blanco con bordes invisibles. */
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.30 0.005 250);
-  --sidebar-accent: oklch(0.96 0.012 165);
-  --sidebar-accent-foreground: oklch(0.40 0.10 165);
-  --sidebar-border: oklch(0.96 0 0);
+  /* Sidebar minimal: blanco con leve tinte mint para diferenciarse
+     del fondo, y active con fondo mint suave. */
+  --sidebar: oklch(0.985 0.005 165);
+  --sidebar-foreground: oklch(0.30 0.012 165);
+  --sidebar-accent: oklch(0.93 0.04 165);
+  --sidebar-accent-foreground: oklch(0.36 0.12 165);
+  --sidebar-border: oklch(0.94 0.008 165);
   --sidebar-primary: var(--brand-700);
   --sidebar-primary-foreground: oklch(0.985 0.005 110);
   --sidebar-ring: var(--brand-400);
@@ -400,58 +402,89 @@
   /* Brand: púrpura/magenta vibrante. */
   --brand-900: oklch(0.40 0.20 295);
   --brand-800: oklch(0.50 0.22 295);
-  --brand-700: oklch(0.65 0.22 295);  /* PRIMARY */
-  --brand-600: oklch(0.72 0.20 295);
-  --brand-400: oklch(0.80 0.16 295);
-  --brand-100: oklch(0.30 0.12 295);
-  --brand-50: oklch(0.22 0.08 295);
+  --brand-700: oklch(0.70 0.24 295);  /* PRIMARY — más saturado */
+  --brand-600: oklch(0.75 0.22 295);
+  --brand-400: oklch(0.82 0.18 295);
+  --brand-100: oklch(0.30 0.14 295);
+  --brand-50: oklch(0.22 0.10 295);
 
-  /* Aurora siempre es dark — no hace falta selector [data-mode="dark"]
-     porque el bootstrap force dark mode cuando este tema está activo. */
-  --background: oklch(0.10 0.025 285);
-  --foreground: oklch(0.96 0.015 280);
-  --card: oklch(0.15 0.03 285 / 0.6);  /* semitranslúcido — deja ver auroras */
-  --card-foreground: oklch(0.96 0.015 280);
-  --popover: oklch(0.18 0.03 285);
-  --popover-foreground: oklch(0.96 0.015 280);
-  --bg-50: oklch(0.10 0.025 285);
-  --bg-100: oklch(0.14 0.028 285);
-  --surface: oklch(0.16 0.03 285 / 0.65);
-  --line-200: oklch(0.30 0.04 285 / 0.5);
-  --line-100: oklch(0.24 0.035 285 / 0.4);
+  /* Fondos semi-transparentes para que se vean las auroras detrás.
+     Aurora siempre es dark — el bootstrap fuerza dark mode con este tema. */
+  --background: oklch(0.08 0.025 285);
+  --foreground: oklch(0.97 0.015 280);
+  --card: oklch(0.15 0.04 285 / 0.55);
+  --card-foreground: oklch(0.97 0.015 280);
+  --popover: oklch(0.16 0.04 285 / 0.92);
+  --popover-foreground: oklch(0.97 0.015 280);
+  --bg-50: oklch(0.10 0.025 285 / 0);   /* transparente para ver auroras */
+  --bg-100: oklch(0.14 0.03 285 / 0.5);
+  --surface: oklch(0.15 0.04 285 / 0.55);
+  --line-200: oklch(0.45 0.10 295 / 0.30);
+  --line-100: oklch(0.40 0.08 285 / 0.20);
 
   --primary: var(--brand-700);
   --ring: var(--brand-400);
 
-  --sidebar: oklch(0.09 0.03 285 / 0.85);
-  --sidebar-foreground: oklch(0.88 0.015 280);
-  --sidebar-accent: oklch(0.25 0.10 295 / 0.55);
-  --sidebar-accent-foreground: oklch(0.95 0.05 295);
-  --sidebar-border: oklch(0.30 0.04 285 / 0.4);
+  --sidebar: oklch(0.10 0.04 285 / 0.55);
+  --sidebar-foreground: oklch(0.92 0.018 280);
+  --sidebar-accent: oklch(0.45 0.18 295 / 0.30);
+  --sidebar-accent-foreground: oklch(0.98 0.04 295);
+  --sidebar-border: oklch(0.40 0.10 295 / 0.25);
   --sidebar-primary: var(--brand-700);
-  --sidebar-primary-foreground: oklch(0.985 0.005 110);
+  --sidebar-primary-foreground: oklch(0.10 0.025 285);
   --sidebar-ring: var(--brand-400);
 
   /* Tinta más clara para mejor contraste sobre el fondo translúcido. */
-  --ink-900: oklch(0.96 0.015 280);
+  --ink-900: oklch(0.97 0.015 280);
   --ink-700: oklch(0.86 0.015 280);
-  --ink-500: oklch(0.72 0.012 280);
-  --ink-400: oklch(0.62 0.010 280);
-  --ink-300: oklch(0.50 0.008 280);
+  --ink-500: oklch(0.74 0.022 290);
+  --ink-400: oklch(0.65 0.025 290);
+  --ink-300: oklch(0.55 0.025 290);
+
+  --success: oklch(0.78 0.18 145);
+  --success-soft: oklch(0.45 0.12 145 / 0.30);
+  --warning: oklch(0.80 0.18 70);
+  --warning-soft: oklch(0.50 0.14 70 / 0.30);
+  --error: oklch(0.75 0.20 25);
+  --error-soft: oklch(0.45 0.16 25 / 0.30);
 }
 
-/* Las auroras: gradients radiales fijos al body, detrás de todo. Se
-   ven a través de las superficies semitranslúcidas (.tg-dialog, cards,
-   modals). Se aplica solo al body cuando data-theme="aurora", no en
-   :root para no afectar otros temas. */
+/* Las auroras: gradients radiales fijos al body, MUY visibles. Se ven
+   a través de las superficies semitranslúcidas (cards, sidebar, modals).
+   Solo aplica cuando data-theme="aurora". */
 html[data-theme="aurora"] body {
   background:
-    radial-gradient(ellipse 70% 50% at 15% 0%, oklch(0.55 0.20 295 / 0.35), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 85% 30%, oklch(0.60 0.22 145 / 0.25), transparent 55%),
-    radial-gradient(ellipse 80% 60% at 50% 100%, oklch(0.55 0.22 25 / 0.20), transparent 60%),
-    oklch(0.08 0.025 285);
+    /* Aurora 1: púrpura/violeta arriba a la izquierda */
+    radial-gradient(ellipse 60% 45% at 10% -5%, oklch(0.60 0.30 295 / 0.70), transparent 65%),
+    /* Aurora 2: verde lima/cyan derecha media */
+    radial-gradient(ellipse 50% 55% at 95% 35%, oklch(0.75 0.25 155 / 0.45), transparent 65%),
+    /* Aurora 3: magenta/rosa abajo izquierda */
+    radial-gradient(ellipse 55% 45% at 5% 90%, oklch(0.62 0.28 350 / 0.50), transparent 60%),
+    /* Aurora 4: azul eléctrico abajo derecha */
+    radial-gradient(ellipse 60% 50% at 90% 100%, oklch(0.55 0.27 260 / 0.55), transparent 60%),
+    /* Aurora 5: naranja cálido centro — toque cálido sutil */
+    radial-gradient(ellipse 40% 30% at 50% 50%, oklch(0.65 0.22 35 / 0.20), transparent 70%),
+    /* Base oscura */
+    oklch(0.07 0.03 285);
   background-attachment: fixed;
   min-height: 100vh;
+}
+
+/* En Aurora la sidebar también lleva un mini-gradient sutil para que
+   se sienta parte del ecosistema y no un panel aplanado. */
+html[data-theme="aurora"] aside {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 0%, oklch(0.40 0.18 295 / 0.18), transparent 70%),
+    var(--sidebar);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Cards y modales con backdrop-blur ligero para reforzar el "vidrio" */
+html[data-theme="aurora"] .bg-surface,
+html[data-theme="aurora"] .bg-card {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 @layer base {
@@ -713,23 +746,50 @@ html[data-theme="aurora"] body {
   }
   .psm-print-only { display: none; }
 
-  /* Scrollbar adaptado a tema oscuro (Firefox + WebKit) */
-  .dark {
-    scrollbar-color: oklch(0.35 0.02 200) transparent;
+  /* ─────────────────────────────────────────────────────────────────
+   * Scrollbar adaptado al tema activo (Firefox + WebKit)
+   *
+   * Usamos `color-mix` con `--brand-700` del tema activo para que cada
+   * paleta tenga su propio matiz de scroll (teal en clínico, púrpura
+   * en bridgery, mint en mínimo, vibrante en aurora). En modo oscuro
+   * subimos la opacidad del thumb para que destaque sobre el fondo.
+   * ───────────────────────────────────────────────────────────────── */
+  html {
+    scrollbar-color: color-mix(in oklch, var(--brand-700), transparent 65%) transparent;
   }
-  .dark ::-webkit-scrollbar {
+  ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
-  .dark ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
-  .dark ::-webkit-scrollbar-thumb {
-    background: oklch(0.35 0.02 200);
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--brand-700), transparent 70%);
     border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--brand-700), transparent 40%);
+    background-clip: padding-box;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--brand-400), transparent 60%);
+    background-clip: padding-box;
   }
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.42 0.025 200);
+    background: color-mix(in oklch, var(--brand-400), transparent 30%);
+    background-clip: padding-box;
+  }
+  /* Aurora: scrollbar más translúcido para no romper el efecto vidrio. */
+  html[data-theme="aurora"] ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--brand-400), transparent 50%);
+    background-clip: padding-box;
+  }
+  html[data-theme="aurora"] ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--brand-400), transparent 20%);
+    background-clip: padding-box;
   }
 
   /* ─────────────────────────────────────────────────────────────────

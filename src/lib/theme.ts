@@ -23,7 +23,7 @@
 
 export type ThemePreference = "claro" | "oscuro" | "auto";
 export type ThemeFamily = "clinico" | "bridgery" | "minimo" | "aurora";
-export type FontFamily = "editorial" | "clasica" | "academica" | "limpia" | "humanista";
+export type FontFamily = "editorial" | "clasica" | "academica" | "limpia" | "humanista" | "inter" | "manrope";
 
 // ─── Keys de localStorage ───────────────────────────────────────────
 
@@ -89,6 +89,20 @@ export const FONT_FAMILIES: Record<FontFamily, FontDescriptor> = {
     href: "https://fonts.googleapis.com/css2?family=Bitter:wght@400;500;600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap",
     sans: '"Nunito Sans", system-ui, sans-serif',
     serif: '"Bitter", Georgia, serif',
+  },
+  inter: {
+    label: "Inter",
+    description: "Inter para títulos y texto — sans-only, pantallas modernas.",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+    sans: '"Inter", system-ui, sans-serif',
+    serif: '"Inter", system-ui, sans-serif',
+  },
+  manrope: {
+    label: "Manrope",
+    description: "Manrope para todo — geométrica cálida, redondeada.",
+    href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap",
+    sans: '"Manrope", system-ui, sans-serif',
+    serif: '"Manrope", system-ui, sans-serif',
   },
 };
 
