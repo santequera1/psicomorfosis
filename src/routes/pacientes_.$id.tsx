@@ -129,7 +129,7 @@ function PatientDetailPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-serif text-lg sm:text-[28px] leading-tight text-ink-900">{patient.name}</h1>
+                <h1 data-tour="page-title" className="font-serif text-lg sm:text-[28px] leading-tight text-ink-900">{patient.name}</h1>
                 <RiskBadge risk={patient.risk} types={patient.riskTypes} compact />
               </div>
               {patient.preferredName && <p className="text-xs sm:text-sm text-ink-500 mt-0.5">({patient.preferredName} · {patient.pronouns})</p>}

@@ -127,7 +127,7 @@ function PatientsPage() {
               {isOrg ? workspace?.name : "Mi consulta"} · {filtered.length} de {patients.length} pacientes
               {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-700" />}
             </p>
-            <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Pacientes</h1>
+            <h1 data-tour="page-title" className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Pacientes</h1>
           </div>
           <div className="flex gap-2">
             <button onClick={exportCSV} className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2">

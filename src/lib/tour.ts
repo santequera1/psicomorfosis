@@ -249,23 +249,16 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     rememberStep: false,
     debug: false,
     steps: validSteps.map((s, idx) => ({
-      // Steps sin target apuntan EXPLÍCITAMENTE a body (en lugar de
-      // null). Esto fuerza la rama de "centrado en pantalla" en
-      // backdrop.ts y dialog.ts (que checan `targetElem === document.body`
-      // estrictamente). Antes pasaba `null` y TourGuide hacía un
-      // reasign a body internamente, pero en algunas combinaciones
-      // — sobre todo cuando hay otros steps con target en el mismo
-      // tour — el dialog quedaba sin contenido renderizado.
+      // Si el step no tiene target (caso legacy del welcomeTour intro),
+      // pasamos 'body' explícito para forzar el centrado. Los tours de
+      // página ahora siempre tienen target real ([data-tour="page-title"])
+      // así que casi nunca entra esta rama.
       target: s.target ?? "body",
-      // fixed: true backup por si target=body no garantiza el centrado.
-      fixed: !s.target,
       title: s.title,
       content: s.content,
       group: name,
       // order distinto por step para que TourGuide preserve el orden
-      // del array (cuando dos tienen el mismo order, ordena por
-      // _index — ahora cada uno tiene order propio para evitar
-      // sorpresas).
+      // del array.
       order: idx,
       // Callbacks de TourGuide. TourGuide await-ea las Promises así que
       // beforeEnter puede esperar (ej: animación de apertura del drawer

@@ -172,18 +172,17 @@ export const welcomeTour: TourStep[] = [
 
 // ─── Tour 2: Pacientes (auto en /pacientes) ────────────────────────
 //
-// Los tours de página arrancan con un step INTRODUCTORIO sin target
-// (centrado en pantalla). Razones:
-//   1. Anclar el primer paso a un panel grande hace que TourGuide
-//      calcule mal la posición del dialog y se salga del viewport.
-//   2. El target podría no estar montado todavía (queries hidratando)
-//      cuando arranca el tour — un step centrado siempre se ve bien.
-// Los pasos siguientes apuntan a anchors concretos y son `optional`
-// para que se filtren con gracia si el DOM no terminó de hidratar.
+// Cada tour de página arranca con un paso anclado al H1 de la página
+// (data-tour="page-title"). Es un elemento que ya existe en el primer
+// render (no depende de queries) y es lo bastante pequeño para que
+// TourGuide calcule la posición correctamente. Los pasos siguientes
+// apuntan a anchors concretos y son `optional` — si el DOM aún no
+// terminó de hidratar, se filtran con gracia.
 export const patientsTour: TourStep[] = [
   {
+    target: '[data-tour="page-title"]',
     title: "Tus pacientes",
-    content: withSkip("Aquí viven todos los pacientes que estás atendiendo. Los archivados quedan ocultos pero no se borran. Te muestro cómo está organizada esta vista."),
+    content: withSkip("Aquí viven todos los pacientes que estás atendiendo. Los archivados quedan ocultos pero no se borran."),
   },
   {
     target: '[data-tour="pacientes-search"]',
@@ -208,6 +207,7 @@ export const patientsTour: TourStep[] = [
 // ─── Tour 3: Historia clínica (auto en /pacientes/:id) ─────────────
 export const historyTour: TourStep[] = [
   {
+    target: '[data-tour="page-title"]',
     title: "Ficha del paciente",
     content: withSkip("Toda la información clínica y administrativa del paciente en un solo lugar. Te muestro las partes principales."),
   },
@@ -228,6 +228,7 @@ export const historyTour: TourStep[] = [
 // ─── Tour 4: Tests (auto en /tests) ────────────────────────────────
 export const testsTour: TourStep[] = [
   {
+    target: '[data-tour="page-title"]',
     title: "Tests psicométricos",
     content: withSkip("Instrumentos disponibles: MCMI-II, escalas de ansiedad, depresión, y los que crees tú mismo. Te muestro cómo se usan."),
   },
@@ -248,6 +249,7 @@ export const testsTour: TourStep[] = [
 // ─── Tour 5: Recibos (auto en /facturacion) ────────────────────────
 export const invoicesTour: TourStep[] = [
   {
+    target: '[data-tour="page-title"]',
     title: "Recibos",
     content: withSkip("Aquí ves todos los recibos que has generado. También se crean automáticamente desde la agenda al cobrar una cita."),
   },

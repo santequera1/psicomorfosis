@@ -97,7 +97,7 @@ function TestsPage() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Evaluación clínica</p>
-            <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Tests psicométricos</h1>
+            <h1 data-tour="page-title" className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">Tests psicométricos</h1>
             <p className="text-sm text-ink-500 mt-1">
               Instrumentos clínicos oficiales + tus formularios personalizados.
             </p>

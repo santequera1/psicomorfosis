@@ -92,7 +92,7 @@ function FacturacionPage() {
         <header className="flex items-end justify-between mb-5 sm:mb-6 flex-wrap gap-3">
           <div>
             <div className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Gestión financiera</div>
-            <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Recibos</h1>
+            <h1 data-tour="page-title" className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Recibos</h1>
             <p className="text-sm text-ink-500 mt-1">Comprobantes de pago de las sesiones</p>
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
