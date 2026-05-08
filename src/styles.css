@@ -541,3 +541,60 @@
     background: oklch(0.42 0.025 200);
   }
 }
+
+/* ================================================================
+ * TOUR GUIDE — overrides para mobile
+ *
+ * En mobile (< 640px) el dialog default de TourGuideJS:
+ *   - se calcula respecto al target con position:absolute,
+ *   - tiene max-width 340px y width:max-content,
+ *   - usa padding 25px en cada borde.
+ * Resultado: en pantallas chicas se sale del viewport, queda detrás
+ * del backdrop, o no cabe lateralmente al elemento destacado.
+ *
+ * Estrategia: en mobile lo anclamos FIJO al fondo de la pantalla
+ * con margen pequeño, ocupando todo el ancho disponible. El highlight
+ * del elemento sigue funcionando (lo hace el backdrop, no el dialog).
+ * Los `!important` son necesarios porque TourGuide asigna `top`/`left`
+ * inline desde JS al posicionar.
+ * ================================================================ */
+@media (max-width: 639px) {
+  .tg-dialog {
+    position: fixed !important;
+    /* Cancelamos los top/left calculados — anclamos abajo a ambos lados. */
+    top: auto !important;
+    bottom: 12px !important;
+    left: 12px !important;
+    right: 12px !important;
+    /* Liberamos el width: el dialog ocupa el ancho disponible. */
+    max-width: none !important;
+    width: auto !important;
+    min-height: 0 !important;
+    max-height: 70vh;
+    overflow-y: auto;
+    /* Padding interno más compacto (vs 25px default). */
+    font-size: 0.875rem;
+  }
+  /* Reducimos padding del header / body / footer para que el contenido
+     respire bien en pantallas chicas. */
+  .tg-dialog .tg-dialog-header {
+    padding: 16px 16px 0 16px !important;
+  }
+  .tg-dialog .tg-dialog-body {
+    padding: 12px 16px !important;
+  }
+  .tg-dialog .tg-dialog-footer {
+    padding: 12px 16px 16px 16px !important;
+  }
+  /* La flecha apuntando al target no tiene sentido cuando el dialog
+     está fijo abajo — la ocultamos. El highlight sigue marcando el
+     elemento. */
+  .tg-arrow {
+    display: none !important;
+  }
+  /* Botones más compactos en pantalla chica. */
+  .tg-dialog .tg-dialog-btn {
+    padding: 8px 14px !important;
+    font-size: 0.8125rem !important;
+  }
+}
