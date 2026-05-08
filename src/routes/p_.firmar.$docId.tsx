@@ -202,7 +202,15 @@ function PortalSignPage() {
 
         <section className="mb-6">
           <p className="text-xs uppercase tracking-widest text-ink-500 font-medium mb-2">Lee el documento completo</p>
-          <DocumentEditor initialDoc={doc.body_json ?? null} editable={false} />
+          <DocumentEditor
+            initialDoc={doc.body_json ?? null}
+            editable={false}
+            // El contexto de variables se resuelve en el backend con los
+            // datos reales del paciente, profesional y clínica. Sin esto,
+            // el paciente veía placeholders literales {{paciente.nombre}}
+            // mientras el psicólogo sí veía los valores resueltos.
+            variableContext={data.variable_context ?? null}
+          />
         </section>
 
         {stage === "reading" && (

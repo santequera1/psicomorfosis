@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
-import { applyPatientSignature } from "./documents.js";
+import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
 
 const router = Router();
 
@@ -622,6 +622,16 @@ router.get("/portal/documents/:id/signing", requirePatient, (req, res) => {
   );
   const userRow = db.prepare("SELECT signature_url FROM users WHERE id = ?").get(req.user.id);
 
+  // Contexto de variables resuelto: igual que el endpoint del psicólogo
+  // /api/documents/:id/variables, pero accesible desde el portal del
+  // paciente. Sin esto, el DocumentEditor del portal mostraba placeholders
+  // literales {{paciente.nombre}} en lugar de los valores reales.
+  const variableContext = buildInterpolationContext(
+    req.user.workspace_id,
+    doc.patient_id,
+    doc.professional,
+  );
+
   res.json({
     valid: true,
     document: {
@@ -638,6 +648,7 @@ router.get("/portal/documents/:id/signing", requirePatient, (req, res) => {
     clinic: { name: ws?.name, city: settings.city, address: settings.address },
     expires_at: sr.expires_at,
     saved_signature_url: userRow?.signature_url ?? null,
+    variable_context: variableContext,
   });
 });
 

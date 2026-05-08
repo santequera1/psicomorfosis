@@ -171,11 +171,19 @@ export const welcomeTour: TourStep[] = [
 ];
 
 // ─── Tour 2: Pacientes (auto en /pacientes) ────────────────────────
+//
+// Los tours de página arrancan con un step INTRODUCTORIO sin target
+// (centrado en pantalla). Razones:
+//   1. Anclar el primer paso a un panel grande hace que TourGuide
+//      calcule mal la posición del dialog y se salga del viewport.
+//   2. El target podría no estar montado todavía (queries hidratando)
+//      cuando arranca el tour — un step centrado siempre se ve bien.
+// Los pasos siguientes apuntan a anchors concretos y son `optional`
+// para que se filtren con gracia si el DOM no terminó de hidratar.
 export const patientsTour: TourStep[] = [
   {
-    target: '[data-tour="pacientes-list"]',
-    title: "Tus pacientes activos",
-    content: withSkip("Aquí viven todos los pacientes que estás atendiendo. Los archivados quedan ocultos pero no se borran."),
+    title: "Tus pacientes",
+    content: withSkip("Aquí viven todos los pacientes que estás atendiendo. Los archivados quedan ocultos pero no se borran. Te muestro cómo está organizada esta vista."),
   },
   {
     target: '[data-tour="pacientes-search"]',
@@ -193,15 +201,15 @@ export const patientsTour: TourStep[] = [
     target: '[data-tour="pacientes-new"]',
     title: "Nuevo paciente",
     content: withSkip("Crea un paciente desde aquí. Después puedes invitarlo al portal para que firme consentimientos y vea sus tareas."),
+    optional: true,
   },
 ];
 
 // ─── Tour 3: Historia clínica (auto en /pacientes/:id) ─────────────
 export const historyTour: TourStep[] = [
   {
-    target: '[data-tour="patient-header"]',
     title: "Ficha del paciente",
-    content: withSkip("Toda la info clínica y administrativa del paciente en un solo lugar."),
+    content: withSkip("Toda la información clínica y administrativa del paciente en un solo lugar. Te muestro las partes principales."),
   },
   {
     target: '[data-tour="patient-tabs"]',
@@ -220,9 +228,8 @@ export const historyTour: TourStep[] = [
 // ─── Tour 4: Tests (auto en /tests) ────────────────────────────────
 export const testsTour: TourStep[] = [
   {
-    target: '[data-tour="tests-catalog"]',
-    title: "Catálogo de tests",
-    content: withSkip("Instrumentos psicométricos disponibles: MCMI-II, escalas de ansiedad, depresión, y los que crees tú mismo."),
+    title: "Tests psicométricos",
+    content: withSkip("Instrumentos disponibles: MCMI-II, escalas de ansiedad, depresión, y los que crees tú mismo. Te muestro cómo se usan."),
   },
   {
     target: '[data-tour="tests-apply"]',
@@ -241,7 +248,6 @@ export const testsTour: TourStep[] = [
 // ─── Tour 5: Recibos (auto en /facturacion) ────────────────────────
 export const invoicesTour: TourStep[] = [
   {
-    target: '[data-tour="invoices-list"]',
     title: "Recibos",
     content: withSkip("Aquí ves todos los recibos que has generado. También se crean automáticamente desde la agenda al cobrar una cita."),
   },
@@ -276,14 +282,16 @@ export const invoicesTour: TourStep[] = [
  */
 export function useAutoTour(name: string, steps: TourStep[]) {
   useEffect(() => {
-    // setTimeout para dejar que React termine de renderizar y los
-    // queries hidraten el contenido. 250ms es un buen compromiso
-    // entre "no demorar" y "no dispararse antes de que el DOM esté".
+    // 600ms le da tiempo de hidratar a páginas con varias queries
+    // (ej: /pacientes/:id que carga paciente + tests + tareas en
+    // paralelo). Antes era 250ms y los anchors data-tour podían no
+    // estar montados todavía cuando se evaluaba el filtro de
+    // visibilidad — resultado: tour vacío.
     const t = setTimeout(() => {
       runTour(name, steps).catch((err) => {
         if (typeof console !== "undefined") console.warn("[tour]", name, err);
       });
-    }, 250);
+    }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);

@@ -327,7 +327,24 @@ function DocumentosPage() {
                   <li key={t.id}>
                     <TemplateRow
                       template={t}
-                      onUse={() => createFromTemplate(navigate, qc, t, filterPatient, patient ?? null)}
+                      onUse={() => {
+                        // Resuelve el paciente efectivo. Prioridad:
+                        //   1) Filtro por URL (?paciente=...)
+                        //   2) Carpeta abierta (excepto la "_general")
+                        //   3) Ninguno → abre el modal NewDocument para
+                        //      que el usuario elija paciente sin tener
+                        //      que volver atrás (antes era un toast).
+                        const folderPatientId = openFolder && openFolder !== "_general" ? openFolder : null;
+                        const effId = filterPatient ?? folderPatientId;
+                        if (!effId) {
+                          setNewOpen(true);
+                          return;
+                        }
+                        const effPatient = patient ?? (folderPatientId
+                          ? patientsAll.find((p) => p.id === folderPatientId) ?? null
+                          : null);
+                        createFromTemplate(navigate, qc, t, effId, effPatient);
+                      }}
                       onEdit={async () => {
                         // Si es del sistema, clonar primero al workspace y abrir el clon en editor
                         if (t.scope === "system") {

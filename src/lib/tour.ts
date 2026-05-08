@@ -213,6 +213,15 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     return true;
   });
 
+  // Defensa: si después del filtro no queda ningún step válido,
+  // abortamos en silencio en lugar de iniciar un cliente con array
+  // vacío (que renderiza un dialog raro). También marcamos el tour
+  // como completado para no reintentarlo en cada navegación.
+  if (validSteps.length === 0) {
+    markTourCompleted(name);
+    return;
+  }
+
   const { TourGuideClient } = await loadTourModule();
 
   const client = new TourGuideClient({
@@ -231,6 +240,11 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     targetPadding: 6,
     backdropAnimate: true,
     dialogAnimate: true,
+    // dialogMaxWidth limita el ancho del dialog independiente del
+    // tamaño del target. Sin esto, TourGuide ajusta el width al
+    // max-content y con targets grandes el dialog crece y se sale
+    // del viewport en pantallas medianas.
+    dialogMaxWidth: 360,
     completeOnFinish: false,          // gestionamos el flag nosotros
     rememberStep: false,
     debug: false,

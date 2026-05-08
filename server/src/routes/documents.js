@@ -299,7 +299,7 @@ function rowToDoc(r) {
  * Soporta {{paciente.*}}, {{profesional.*}}, {{clinica.*}}, {{fecha.*}},
  * {{sesion.*}} (cuando se pasa noteId, jala datos reales de esa nota clínica).
  */
-function buildInterpolationContext(workspaceId, patientId, professionalName, noteId = null) {
+export function buildInterpolationContext(workspaceId, patientId, professionalName, noteId = null) {
   const ws = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(workspaceId);
   const settingsRows = db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(workspaceId);
   const settings = Object.fromEntries(settingsRows.map((s) => [s.key, s.value]));

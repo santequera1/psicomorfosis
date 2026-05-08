@@ -882,7 +882,8 @@ export const api = {
     request<{ signature_url: string | null }>("/api/portal/me/signature"),
   portalDeleteMySignature: () =>
     request<{ ok: true }>("/api/portal/me/signature", { method: "DELETE" }),
-  /** Info para firmar un documento desde el portal: body, clínica, firma guardada. */
+  /** Info para firmar un documento desde el portal: body, clínica, firma guardada,
+   *  contexto de variables ya resuelto (paciente.nombre, clinica.razon_social, etc). */
   portalGetDocumentForSigning: (id: string) =>
     request<{
       valid: true;
@@ -891,6 +892,7 @@ export const api = {
       clinic: { name?: string; city?: string; address?: string };
       expires_at: string;
       saved_signature_url: string | null;
+      variable_context: Record<string, Record<string, string>> | null;
     }>(`/api/portal/documents/${id}/signing`),
   /** Aplica la firma del paciente desde el portal. */
   portalSignDocument: (id: string, body: { signature_data_url: string; geolocation?: { lat: number; lng: number; accuracy?: number }; save_signature?: boolean }) =>
