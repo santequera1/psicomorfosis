@@ -73,22 +73,36 @@ export function AppSidebar() {
 
   const initials = (user?.name ?? "?").split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 
-  // El grupo "Plataforma" solo se inserta si el user es admin de plataforma.
-  // No tocar el array `groups` global para no afectar otros renders.
-  const visibleGroups = user?.isPlatformAdmin
-    ? [...groups, {
-        label: "Plataforma",
-        items: [
-          { to: "/platform", label: "Cuentas y uso", icon: Shield },
-          // Reportes de problemas como entrada propia. Antes vivía como
-          // botón en el header de /platform, pero el platform admin lo
-          // consulta seguido — merece un link directo en el sidebar
-          // para ver de un vistazo si hay reportes pendientes sin tener
-          // que abrir Platform primero.
-          { to: "/platform/reportes", label: "Reportes", icon: Bug },
-        ],
-      }]
-    : groups;
+  // Sidebar exclusivo para platform admin. Su trabajo es administrar
+  // cuentas y monitorear uso, NO atender pacientes — entonces ocultamos
+  // las vistas clínicas (Inicio dashboard, Agenda, Pacientes, Historia
+  // clínica, Tests psicométricos, Documentos, Reportes clínicos) y solo
+  // mostramos lo que necesita: cuentas, reportes de bugs, tareas
+  // administrativas, recibos del SaaS y configuración.
+  const platformAdminGroups: typeof groups = [
+    {
+      label: "Plataforma",
+      items: [
+        { to: "/platform", label: "Cuentas y uso", icon: Shield },
+        { to: "/platform/reportes", label: "Reportes", icon: Bug },
+      ],
+    },
+    {
+      label: "Operación",
+      items: [
+        { to: "/tareas", label: "Tareas", icon: ListTodo },
+      ],
+    },
+    {
+      label: "Gestión",
+      items: [
+        { to: "/facturacion", label: "Recibos", icon: Receipt },
+        { to: "/configuracion", label: "Configuración", icon: Settings },
+      ],
+    },
+  ];
+
+  const visibleGroups = user?.isPlatformAdmin ? platformAdminGroups : groups;
 
   // Eventos custom para que código fuera de React (ej: el tour de
   // TourGuideJS) pueda abrir/cerrar el drawer en mobile sin acoplarse
