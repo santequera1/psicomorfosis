@@ -367,6 +367,18 @@ export function buildInterpolationContext(workspaceId, patientId, professionalNa
     }
   }
 
+  // Contacto de emergencia: tomamos el de mayor prioridad (priority asc) — la
+  // tabla emergency_contacts permite varios por paciente, pero las plantillas
+  // muestran solo uno. Sin contactos cargados retornamos string vacío para
+  // que `resolveVariable` lo trate como "sin valor" y muestre el chip
+  // amarillo {{paciente.contacto_emergencia}} hasta que el usuario lo llene.
+  let emergency = null;
+  if (patientId) {
+    emergency = db.prepare(
+      "SELECT name, relation, phone FROM emergency_contacts WHERE patient_id = ? AND workspace_id = ? ORDER BY priority ASC, id ASC LIMIT 1"
+    ).get(patientId, workspaceId);
+  }
+
   return {
     paciente: {
       nombre: patient?.name ?? "________________",
@@ -375,6 +387,11 @@ export function buildInterpolationContext(workspaceId, patientId, professionalNa
       telefono: patient?.phone ?? "________________",
       email: patient?.email ?? "________________",
       modalidad: patient?.modality ?? "individual",
+      // Contacto de emergencia: nombre + relación si existe, vacío si no.
+      contacto_emergencia: emergency
+        ? (emergency.relation ? `${emergency.name} (${emergency.relation})` : emergency.name)
+        : "",
+      contacto_emergencia_telefono: emergency?.phone ?? "",
     },
     profesional: {
       nombre: prof?.name ?? "________________",
@@ -389,6 +406,10 @@ export function buildInterpolationContext(workspaceId, patientId, professionalNa
       telefono: settings.phone ?? "",
       ciudad: settings.city ?? "",
       consultorio: settings.consultorio_name ?? "",
+      // Tarifa por sesión configurable desde /configuracion → Mi consultorio.
+      // Si no está seteada, queda vacía y la plantilla muestra el chip
+      // amarillo {{clinica.tarifa}} hasta que el psicólogo la complete.
+      tarifa: settings.tarifa_sesion ?? "",
     },
     fecha: {
       hoy: today.toISOString().slice(0, 10),

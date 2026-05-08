@@ -105,8 +105,8 @@ function PerfilPanel() {
   const [profForm, setProfForm] = useState<{ name: string; title: string; email: string; phone: string; approach: string }>({
     name: "", title: "", email: "", phone: "", approach: "",
   });
-  const [consultorio, setConsultorio] = useState<{ consultorio_name: string; address: string; phone: string; city: string }>({
-    consultorio_name: "", address: "", phone: "", city: "",
+  const [consultorio, setConsultorio] = useState<{ consultorio_name: string; address: string; phone: string; city: string; tarifa_sesion: string }>({
+    consultorio_name: "", address: "", phone: "", city: "", tarifa_sesion: "",
   });
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -128,6 +128,7 @@ function PerfilPanel() {
         address: settings.address ?? "",
         phone: settings.phone ?? "",
         city: settings.city ?? "Bogotá",
+        tarifa_sesion: settings.tarifa_sesion ?? "",
       });
       setLoaded(true);
     }
@@ -198,7 +199,13 @@ function PerfilPanel() {
                 <LabeledInput label="Dirección" placeholder="Cra 15 # 93-10, Oficina 402" value={consultorio.address} onChange={(v) => setConsultorio((p) => ({ ...p, address: v }))} />
                 <LabeledInput label="Ciudad" placeholder="Bogotá" value={consultorio.city} onChange={(v) => setConsultorio((p) => ({ ...p, city: v }))} />
               </div>
-              <LabeledInput label="Teléfono del consultorio" placeholder="+57 1 555 1200" value={consultorio.phone} onChange={(v) => setConsultorio((p) => ({ ...p, phone: v }))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                <LabeledInput label="Teléfono del consultorio" placeholder="+57 1 555 1200" value={consultorio.phone} onChange={(v) => setConsultorio((p) => ({ ...p, phone: v }))} />
+                {/* Tarifa por sesión: la usan las plantillas de "Contrato terapéutico"
+                    como {{clinica.tarifa}}. Si queda vacía, las plantillas muestran
+                    el chip amarillo (variable sin valor). */}
+                <LabeledInput label="Tarifa por sesión (COP)" placeholder="120000" value={consultorio.tarifa_sesion} onChange={(v) => setConsultorio((p) => ({ ...p, tarifa_sesion: v }))} />
+              </div>
               <div className="flex justify-end">
                 <button type="submit" disabled={consMu.isPending} className="h-10 px-5 rounded-lg bg-brand-700 text-primary-foreground text-sm hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
                   {consMu.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

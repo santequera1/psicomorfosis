@@ -1146,7 +1146,7 @@ function getSystemTemplates() {
           p("Tomo conocimiento de los riesgos asociados a la transmisión de datos por internet. El profesional se compromete a usar herramientas con cifrado de extremo a extremo en la medida de lo posible. Me comprometo a no grabar las sesiones sin autorización escrita."),
           h2("Protocolo en caso de crisis"),
           p("En caso de emergencia psicológica durante una sesión virtual, autorizo al profesional a contactar a las personas o servicios indicados a continuación, así como a las líneas oficiales (Línea 106 Bogotá, 123 emergencias, 192 MinSalud)."),
-          p("Contacto de emergencia: ____________________________________________"),
+          p("Contacto de emergencia: {{paciente.contacto_emergencia}} · {{paciente.contacto_emergencia_telefono}}"),
           hr(),
           p("Firma del consultante: ____________________________  Fecha: {{fecha.hoy}}"),
           p("Firma del profesional: ____________________________"),
@@ -1221,7 +1221,7 @@ function getSystemTemplates() {
           h2("2. Frecuencia y duración"),
           p("Las sesiones tendrán una duración de 50 minutos y se realizarán con frecuencia semanal, salvo acuerdo distinto. La duración total del proceso se estima entre 12 y 24 sesiones, sujeto a evolución clínica."),
           h2("3. Honorarios"),
-          p("El valor por sesión es de $____________ COP. El pago se realiza el día de la sesión por los medios autorizados por {{clinica.razon_social}}."),
+          p("El valor por sesión es de ${{clinica.tarifa}} COP. El pago se realiza el día de la sesión por los medios autorizados por {{clinica.razon_social}}."),
           h2("4. Política de cancelación"),
           p("Las cancelaciones con menos de 24 horas de anticipación generan el cobro del 50% del valor de la sesión. La inasistencia sin aviso genera el cobro del 100%."),
           h2("5. Confidencialidad"),
@@ -1493,22 +1493,46 @@ function seedSystemDocumentTemplates() {
  */
 function ensureSystemDocumentTemplatesExist() {
   const templates = getSystemTemplates();
-  const existing = new Set(
-    db.prepare("SELECT name FROM document_templates WHERE scope = 'system' AND workspace_id IS NULL")
-      .all().map((r) => r.name)
+
+  // Las plantillas DEL SISTEMA (scope='system', workspace_id NULL) son del
+  // catálogo oficial. Cuando cambia el body en el código, queremos que la
+  // versión nueva llegue a producción automáticamente. Los UPDATE aquí solo
+  // tocan plantillas con esos dos filtros — las clonadas por el psicólogo
+  // (scope='workspace' o 'personal') NO se modifican porque tienen scope
+  // distinto y/o workspace_id.
+  const existing = new Map(
+    db.prepare("SELECT id, name, body_json FROM document_templates WHERE scope = 'system' AND workspace_id IS NULL")
+      .all().map((r) => [r.name, r])
   );
-  const missing = templates.filter((t) => !existing.has(t.name));
-  if (missing.length === 0) return;
 
   const ins = db.prepare(`
     INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_at, updated_at)
     VALUES (NULL, ?, ?, ?, 'system', ?, ?, ?, datetime('now'), datetime('now'))
   `);
-  for (const t of missing) {
+  const upd = db.prepare(`
+    UPDATE document_templates
+    SET description = ?, category = ?, body_json = ?, body_text = ?, legal_disclaimer = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `);
+
+  let added = 0;
+  let updated = 0;
+  for (const t of templates) {
     const text = extractTextFromTipTap(t.body);
-    ins.run(t.name, t.description, t.category, JSON.stringify(t.body), text, t.legal_disclaimer ?? null);
+    const bodyJson = JSON.stringify(t.body);
+    const prev = existing.get(t.name);
+    if (!prev) {
+      ins.run(t.name, t.description, t.category, bodyJson, text, t.legal_disclaimer ?? null);
+      added++;
+    } else if (prev.body_json !== bodyJson) {
+      // Solo update cuando el body cambió — evita ruido de timestamps.
+      upd.run(t.description, t.category, bodyJson, text, t.legal_disclaimer ?? null, prev.id);
+      updated++;
+    }
   }
-  console.log(`[db] ensured ${missing.length} new system templates: ${missing.map((t) => t.name).join(", ")}`);
+  if (added || updated) {
+    console.log(`[db] system templates: +${added} added, ~${updated} updated`);
+  }
 }
 
 /**
