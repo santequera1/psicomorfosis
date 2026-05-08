@@ -302,7 +302,18 @@ export function useAutoTour(name: string, steps: TourStep[]) {
         if (typeof console !== "undefined") console.warn("[tour]", name, err);
       });
     }, 1500);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      // Si el usuario navega antes de que arranque el tour, o entre
+      // páginas con el tour activo, limpiamos el dialog residual del
+      // DOM (TourGuide monta fuera de React, así que el desmonte del
+      // componente no lo borra automáticamente). El próximo tour
+      // arranca limpio sin colisión de IDs (#tg-dialog-title, etc).
+      if (typeof document !== "undefined") {
+        document.querySelectorAll(".tg-backdrop, .tg-dialog").forEach((el) => el.remove());
+        document.body.classList.remove("tg-no-interaction");
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 }

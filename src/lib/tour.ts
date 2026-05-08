@@ -178,6 +178,25 @@ async function waitForTarget(selector: string, maxMs = 3000): Promise<boolean> {
 }
 
 /**
+ * Limpia residuos de tours anteriores que pudieran haber quedado en el
+ * DOM. Pasa cuando el usuario navega entre páginas sin cerrar el tour
+ * activo: el componente React (useAutoTour) se desmonta, pero el dialog
+ * de TourGuide vive fuera de React (lo monta directamente sobre body)
+ * y persiste. El siguiente tour se monta encima y los IDs colisionan
+ * (#tg-dialog-title, #tg-dialog-body) — getElementById devuelve el del
+ * tour viejo, el nuevo queda vacío visualmente.
+ *
+ * Esta función borra cualquier dialog/backdrop residual antes de
+ * iniciar un tour nuevo. Idempotente.
+ */
+function cleanupResidualTour() {
+  if (!inBrowser()) return;
+  document.querySelectorAll(".tg-backdrop, .tg-dialog").forEach((el) => el.remove());
+  // TourGuide agrega esta clase al body cuando exitOnClickOutside es false.
+  document.body.classList.remove("tg-no-interaction");
+}
+
+/**
  * Corre un tour si:
  *  - estamos en cliente
  *  - aún no se completó (a menos que opts.force)
@@ -190,6 +209,10 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
   if (!inBrowser()) return;
   if (!opts.force && hasCompletedTour(name)) return;
   if (steps.length === 0) return;
+
+  // Limpia residuos antes de empezar — fundamental cuando el usuario
+  // navega entre páginas sin cerrar el tour anterior.
+  cleanupResidualTour();
 
   // Esperamos a que aparezca el primer target REAL (no necesariamente
   // del primer step, porque el step intro puede no tener target).
