@@ -248,14 +248,24 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     completeOnFinish: false,          // gestionamos el flag nosotros
     rememberStep: false,
     debug: false,
-    steps: validSteps.map((s) => ({
+    steps: validSteps.map((s, idx) => ({
       // null hace que TourGuide muestre el dialog centrado en pantalla
       // (sin highlight). Útil para steps introductorios o de cierre.
       target: s.target ?? null,
+      // fixed: true fuerza al dialog a quedar centrado y sin arrow,
+      // independiente del cálculo de floating-ui. Lo habilitamos para
+      // los steps sin target (introductorios) — sin este flag, en
+      // algunas combinaciones el dialog se posicionaba mal o quedaba
+      // vacío al apuntar a document.body.
+      fixed: !s.target,
       title: s.title,
       content: s.content,
       group: name,
-      order: 999,
+      // order distinto por step para que TourGuide preserve el orden
+      // del array (cuando dos tienen el mismo order, ordena por
+      // _index — ahora cada uno tiene order propio para evitar
+      // sorpresas).
+      order: idx,
       // Callbacks de TourGuide. TourGuide await-ea las Promises así que
       // beforeEnter puede esperar (ej: animación de apertura del drawer
       // del sidebar) antes de calcular la posición del dialog.
