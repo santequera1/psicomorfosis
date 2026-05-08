@@ -5,7 +5,7 @@ import { api, type ApiPatient } from "@/lib/api";
 import { displayPatientName } from "@/lib/utils";
 import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { Search, X, Loader2 } from "lucide-react";
+import { Search, X, Loader2, Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 type Props = {
@@ -138,13 +138,36 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
           )}
 
           <div className="grid grid-cols-2 gap-3">
+            {/* Date/time pickers con icono visible y click area completa.
+                showPicker() abre el picker nativo en cualquier click —
+                soluciona el bug en mobile donde solo se abría tocando
+                el icono pequeño del browser que a veces ni se ve.
+                Soportado en Chrome 99+, Firefox 101+, Safari 16+. */}
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
+              <div className="mt-1 relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  className="w-full h-10 pl-9 pr-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 cursor-pointer"
+                />
+              </div>
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400" />
+              <div className="mt-1 relative">
+                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
+                  className="w-full h-10 pl-9 pr-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 cursor-pointer"
+                />
+              </div>
             </label>
           </div>
 

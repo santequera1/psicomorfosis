@@ -126,8 +126,8 @@ export function ReportProblemModal({ onClose }: { onClose: () => void }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (description.trim().length < 5) {
-      toast.error("Cuéntanos un poco más sobre el problema (mínimo 5 caracteres).");
+    if (description.trim().length < 3) {
+      toast.error("Cuéntanos brevemente qué pasó (mínimo 3 caracteres).");
       return;
     }
     setSubmitting(true);
@@ -309,7 +309,7 @@ export function ReportProblemModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="submit"
-            disabled={submitting || description.trim().length < 5}
+            disabled={submitting || description.trim().length < 3}
             className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}

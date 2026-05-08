@@ -90,11 +90,17 @@ export function AppSidebar() {
   useEffect(() => {
     function onOpen() { setOpen(true); }
     function onClose() { setOpen(false); }
+    // psm:open-report lo dispara el menú de usuario del topbar
+    // ("Reportar problema") para abrir el ReportProblemModal sin
+    // duplicar el componente en cada lugar que lo necesite.
+    function onReport() { setReportOpen(true); }
     window.addEventListener("psm:sidebar:open", onOpen);
     window.addEventListener("psm:sidebar:close", onClose);
+    window.addEventListener("psm:open-report", onReport);
     return () => {
       window.removeEventListener("psm:sidebar:open", onOpen);
       window.removeEventListener("psm:sidebar:close", onClose);
+      window.removeEventListener("psm:open-report", onReport);
     };
   }, [setOpen]);
 

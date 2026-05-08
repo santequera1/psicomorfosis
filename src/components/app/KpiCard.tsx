@@ -15,16 +15,19 @@ export function KpiCard({ label, value, delta, hint, emphasis = "default", icon 
   return (
     <div
       className={cn(
-        "rounded-xl border bg-surface px-3 py-3 sm:px-5 sm:py-4 shadow-xs hover:shadow-soft transition-shadow min-w-0",
+        // Padding más compacto en mobile (px-2.5 py-2 vs px-3 py-3 antes)
+        // — 4 cards en 2x2 ocupaban demasiado vertical. En desktop
+        // mantengo el padding generoso original.
+        "rounded-xl border bg-surface px-2.5 py-2 sm:px-5 sm:py-4 shadow-xs hover:shadow-soft transition-shadow min-w-0",
         isRisk ? "border-risk-high/30 bg-error-soft/40" : "border-line-200"
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-[10px] sm:text-[12px] uppercase tracking-[0.08em] text-ink-500 font-medium leading-tight">{label}</div>
-        {icon && <div className={cn("h-7 w-7 rounded-md flex items-center justify-center shrink-0", isRisk ? "bg-risk-high/10 text-risk-high" : "bg-brand-50 text-brand-700")}>{icon}</div>}
+        {icon && <div className={cn("h-6 w-6 sm:h-7 sm:w-7 rounded-md flex items-center justify-center shrink-0", isRisk ? "bg-risk-high/10 text-risk-high" : "bg-brand-50 text-brand-700")}>{icon}</div>}
       </div>
       <div className={cn(
-        "mt-2 font-serif leading-none tabular truncate",
+        "mt-1 sm:mt-2 font-serif leading-none tabular truncate",
         // Texto del valor escalado: en mobile más pequeño para que números como
         // "$ 900.000" o "$ 1.234.567" no rompan la card.
         "text-xl sm:text-2xl md:text-[28px]",
@@ -32,7 +35,7 @@ export function KpiCard({ label, value, delta, hint, emphasis = "default", icon 
       )} title={value}>
         {value}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[11px] sm:text-xs flex-wrap">
+      <div className="mt-1 sm:mt-2 flex items-center gap-2 text-[11px] sm:text-xs flex-wrap">
         {delta && !delta.neutral && (
           <span className={cn(
             "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-medium tabular",

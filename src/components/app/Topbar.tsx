@@ -241,7 +241,19 @@ export function Topbar() {
                   <nav className="p-1">
                     <UserMenuItem to="/configuracion" icon={UserIcon} label="Mi perfil" onClose={() => setUserOpen(false)} />
                     <UserMenuItem to="/configuracion" icon={Settings} label="Configuración" onClose={() => setUserOpen(false)} />
-                    <UserMenuItem href="mailto:soporte@psicomorfosis.co?subject=Soporte%20Psicomorfosis" icon={HelpCircle} label="Centro de ayuda" onClose={() => setUserOpen(false)} />
+                    {/* "Reportar problema" abre el ReportProblemModal del
+                        sidebar via evento custom — mismo flujo que el botón
+                        del footer del sidebar. Antes era un mailto a un
+                        soporte que ya no existe (legacy). */}
+                    <UserMenuItem
+                      onClick={() => {
+                        setUserOpen(false);
+                        window.dispatchEvent(new CustomEvent("psm:open-report"));
+                      }}
+                      icon={HelpCircle}
+                      label="Reportar problema"
+                      onClose={() => setUserOpen(false)}
+                    />
                   </nav>
                   <div className="p-1 border-t border-line-100">
                     <button
@@ -265,7 +277,7 @@ export function Topbar() {
   );
 }
 
-function UserMenuItem({ to, href, icon: Icon, label, onClose }: { to?: string; href?: string; icon: React.ComponentType<{ className?: string }>; label: string; onClose: () => void }) {
+function UserMenuItem({ to, href, onClick, icon: Icon, label, onClose }: { to?: string; href?: string; onClick?: () => void; icon: React.ComponentType<{ className?: string }>; label: string; onClose: () => void }) {
   const inner = (
     <>
       <Icon className="h-4 w-4 text-ink-500" />
@@ -279,7 +291,8 @@ function UserMenuItem({ to, href, icon: Icon, label, onClose }: { to?: string; h
   if (href) {
     return <a href={href} onClick={onClose} className={cls}>{inner}</a>;
   }
-  return <button onClick={onClose} className={cls}>{inner}</button>;
+  // Si hay onClick lo usamos como acción primaria; si no, solo cerramos el menú.
+  return <button onClick={onClick ?? onClose} className={cls}>{inner}</button>;
 }
 
 // ─────────────────────────────────────────────────────────────

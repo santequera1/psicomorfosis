@@ -11,7 +11,7 @@ import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, Calendar } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
-import { displayPatientName } from "@/lib/utils";
+import { cn, displayPatientName } from "@/lib/utils";
 import { useAutoTour, patientsTour, TOUR_NAMES } from "@/lib/tours";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
@@ -71,6 +71,10 @@ function PatientsPage() {
   const [removing, setRemoving] = useState<Patient | null>(null);
   const [apptFor, setApptFor] = useState<Patient | null>(null);
   const [viewMode, setViewMode] = usePersistedViewMode("psm.patients.view", "list");
+  // En mobile los filtros viven detrás de un botón colapsable para no
+  // ocupar tanto espacio. El contador de filtros activos en el botón
+  // hace evidente que hay algo aplicado.
+  const [filtersOpenMobile, setFiltersOpenMobile] = useState(false);
 
   const { data: patients = [], isLoading, error } = useQuery({
     queryKey: ["patients"],
@@ -151,7 +155,34 @@ function PatientsPage() {
                 className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
               />
             </div>
-            <div data-tour="pacientes-filters" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* Botón colapsable solo en mobile. En sm+ los filtros
+                se muestran siempre como antes. */}
+            {(() => {
+              const activeCount = [
+                status !== "todos",
+                modality !== "todas",
+                riskFilter !== "todos",
+                tagFilter !== "todos",
+              ].filter(Boolean).length;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpenMobile((v) => !v)}
+                  className="sm:hidden w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-between gap-2"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Filter className="h-3.5 w-3.5 text-ink-400" /> Filtros
+                    {activeCount > 0 && (
+                      <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 text-[10px] rounded-full bg-brand-700 text-white font-medium">
+                        {activeCount}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-ink-400">{filtersOpenMobile ? "▲" : "▼"}</span>
+                </button>
+              );
+            })()}
+            <div data-tour="pacientes-filters" className={cn("grid grid-cols-2 sm:grid-cols-4 gap-2", !filtersOpenMobile && "hidden sm:grid")}>
               <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
                 <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
                 <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">

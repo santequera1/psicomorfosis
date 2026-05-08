@@ -24,7 +24,9 @@ import { displayPatientName } from "@/lib/utils";
 const fmtCOP = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 
-type Period = "Hoy" | "Semana" | "Mes" | "Trimestre" | "Año";
+// Period eliminado: el filtro era decorativo, no filtraba data real.
+// Los KPIs ya tienen rango fijo en su título (Sesiones hoy, Pacientes
+// activos, etc.) y el chart de ingresos hardcodea últimos 7 días.
 
 function getGreeting(d: Date) {
   const h = d.getHours();
@@ -38,7 +40,6 @@ function formatDate(d: Date) {
 }
 
 export function AdminDashboard() {
-  const [period, setPeriod] = useState<Period>("Semana");
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [newApptOpen, setNewApptOpen] = useState(false);
   const [newPatientOpen, setNewPatientOpen] = useState(false);
@@ -126,33 +127,15 @@ export function AdminDashboard() {
           >
             <FilePen className="h-3.5 w-3.5" /> Nueva nota
           </button>
-          {/* Chips de período: en mobile envuelven en varias líneas para evitar
-              overflow horizontal del viewport (que causaba que la página
-              entera se "rodara"). En desktop quedan en línea. */}
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            {(["Hoy", "Semana", "Mes", "Trimestre", "Año"] as Period[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setPeriod(r)}
-                className={
-                  "h-9 px-3.5 rounded-md text-sm font-medium shrink-0 transition-colors " +
-                  (period === r
-                    ? "bg-brand-700 text-primary-foreground"
-                    : "border border-line-200 bg-surface text-ink-700 hover:border-brand-400")
-                }
-              >
-                {r}
-              </button>
-            ))}
-          </div>
         </div>
       </header>
 
-      {/* Quick actions: accesos rápidos a las acciones más comunes. Reduce
-          fricción cuando el psicólogo abre el dashboard sabiendo qué quiere
-          hacer. Convive con el FAB para usuarios mobile. */}
+      {/* Quick actions: accesos rápidos a las acciones más comunes. En mobile
+          se compactan a solo iconos en 3 columnas (2 filas) para no ocupar
+          tanto vertical entre el saludo y los KPIs. En desktop se ven los
+          6 con icon + label en una sola fila. */}
       <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4" data-tour="quick-actions">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Agendar cita" onClick={() => setNewApptOpen(true)} />
           <QuickAction icon={<UserPlus className="h-4 w-4" />} label="Nuevo paciente" onClick={() => setNewPatientOpen(true)} />
           <QuickAction icon={<FilePen className="h-4 w-4" />} label="Nueva nota" onClick={() => setNewNoteOpen(true)} />
@@ -346,7 +329,7 @@ export function AdminDashboard() {
         <div className="rounded-xl border border-line-200 bg-surface p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-serif text-lg text-ink-900">Ingresos · {period.toLowerCase() === "hoy" ? "24 h" : "últimos 7 días"}</h3>
+              <h3 className="font-serif text-lg text-ink-900">Ingresos · últimos 7 días</h3>
               <p className="text-xs text-ink-500 mt-0.5">Total {fmtCOP(revenueData.reduce((a, b) => a + b.value, 0))}</p>
             </div>
             <span className="text-xs text-ink-500">COP</span>
@@ -438,13 +421,22 @@ function QuickAction({ icon, label, onClick, to }: {
   onClick?: () => void;
   to?: string;
 }) {
+  // En mobile (< sm) solo icono — el label se oculta para liberar espacio.
+  // El title sirve para tooltip al hover (no aplica en mobile pero queda
+  // accesible para screen readers). En desktop label visible.
   const cls = "h-12 px-3 rounded-lg border border-line-200 bg-surface text-sm text-ink-900 hover:border-brand-400 hover:bg-brand-50/30 inline-flex items-center justify-center gap-2 transition-colors";
+  const inner = (
+    <>
+      {icon}
+      <span className="truncate hidden sm:inline">{label}</span>
+    </>
+  );
   if (to) {
-    return <Link to={to as any} className={cls}>{icon} <span className="truncate">{label}</span></Link>;
+    return <Link to={to as any} className={cls} title={label} aria-label={label}>{inner}</Link>;
   }
   return (
-    <button type="button" onClick={onClick} className={cls}>
-      {icon} <span className="truncate">{label}</span>
+    <button type="button" onClick={onClick} className={cls} title={label} aria-label={label}>
+      {inner}
     </button>
   );
 }
