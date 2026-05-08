@@ -35,20 +35,24 @@ async function openSidebarAndWait() {
 }
 
 /**
- * Botón "Saltar tour" inline para todos los pasos.
+ * Wrapper neutral para el content del step.
  *
- * TourGuideJS no tiene una opción nativa de "skip" como botón con texto,
- * solo el `closeButton` (X). Para hacerlo más obvio inyectamos un link
- * en el content del step que llama __psmTour.exit() — el client se
- * expone en window al iniciar el tour (ver lib/tour.ts).
+ * En versiones anteriores este helper inyectaba un botón "Saltar tour"
+ * con onclick inline. Resultó que algunos navegadores con escudos de
+ * seguridad activos (Brave por defecto, Firefox con NoScript) sanitizan
+ * el HTML cuando detectan inline event handlers, y al hacerlo borran
+ * TODO el contenido del bloque — produciendo dialogs vacíos.
  *
- * Style inline porque TourGuide renderiza el contenido en un Shadow DOM
- * sin acceso a las clases Tailwind del documento principal.
+ * El cierre del tour ya está disponible vía:
+ *   - X arriba a la derecha del dialog (closeButton: true)
+ *   - Tecla Escape (exitOnEscape: true)
+ *   - Botón "Reiniciar tutoriales" en /configuración (escape hatch)
+ *
+ * Mantengo la firma de la función para no tener que tocar todos los
+ * tours; ahora simplemente devuelve el HTML sin modificación.
  */
-const SKIP_LINK = `<div style="margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.08); text-align: right;"><button type="button" onclick="window.__psmTour && window.__psmTour.exit()" style="font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 4px 8px; text-decoration: underline;">Saltar tour</button></div>`;
-
 function withSkip(html: string): string {
-  return html + SKIP_LINK;
+  return html;
 }
 
 export const TOUR_NAMES = {
@@ -149,21 +153,23 @@ export const welcomeTour: TourStep[] = [
     beforeEnter: openSidebarAndWait,
   },
   {
-    // Step final motivacional con CTA. Sin target → dialog centrado.
-    // Botón "Crear primer paciente" inline que cierra el tour y navega
-    // a /pacientes (el tour de Pacientes arrancará automáticamente al
-    // llegar — primera vez).
+    // Step final motivacional. Sin target → dialog centrado.
+    //
+    // ANTES tenía un <button onclick="...">Crear mi primer paciente</button>
+    // pero los navegadores con escudos de seguridad (Brave, Firefox con
+    // NoScript) sanitizan inline event handlers y borran el contenido
+    // entero del dialog → quedaba vacío. Ahora usamos solo texto y un
+    // <a href="/pacientes"> simple que el browser maneja sin JS.
     title: "¡Listo para empezar!",
     content: `
       Ya conoces lo básico. El siguiente paso es crear tu primer paciente — desde ahí puedes agendar citas, hacer notas, aplicar tests y todo lo demás.
       <div style="margin-top: 16px;">
-        <button
-          type="button"
-          onclick="window.__psmTour && window.__psmTour.exit(); window.location.href='/pacientes';"
-          style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: oklch(36% .025 200); color: white; font-size: 13px; font-weight: 500; border: none; border-radius: 8px; cursor: pointer;"
+        <a
+          href="/pacientes"
+          style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: oklch(36% .025 200); color: white; font-size: 13px; font-weight: 500; border-radius: 8px; text-decoration: none;"
         >
           Crear mi primer paciente →
-        </button>
+        </a>
       </div>
     `,
     beforeEnter: closeSidebarIfMobile,
