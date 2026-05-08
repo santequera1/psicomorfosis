@@ -32,6 +32,11 @@ export type TourStep = {
   /** Si el target opcional aún no está montado, se salta el step en
    *  silencio en lugar de fallar. Útil para targets condicionales. */
   optional?: boolean;
+  /** Si true, el step se filtra en mobile (< 640px). Útil para pasos
+   *  cuyo target queda tapado por el dialog flotante del tour mobile
+   *  (que está fijo abajo) o cuyo anchor no se ve bien en pantalla
+   *  chica. Ej: el FAB y el botón "Reportar problema" del sidebar. */
+  desktopOnly?: boolean;
   /** Callback ANTES de entrar al step (TourGuide lo espera si devuelve
    *  Promise). Útil para preparar el DOM — ej: abrir el drawer del
    *  sidebar en mobile antes de que TourGuide intente posicionar el
@@ -228,7 +233,10 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
   // visibles (ej: sidebar como drawer cerrado en mobile — el target
   // existe en DOM pero está fuera del viewport con translate-x-full).
   // Steps sin target se muestran centrados — siempre válidos.
+  const isMobile = isMobileViewport();
   const validSteps = steps.filter((s) => {
+    // Filtrar steps marcados para desktop si estamos en mobile.
+    if (s.desktopOnly && isMobile) return false;
     if (!s.target) return true;
     const el = document.querySelector(s.target);
     if (!el) return false;

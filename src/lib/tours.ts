@@ -61,6 +61,7 @@ export const TOUR_NAMES = {
   history: "history",
   tests: "tests",
   invoices: "invoices",
+  documents: "documents",
 } as const;
 
 // ─── Tour 1: Bienvenida (auto en /) ────────────────────────────────
@@ -143,6 +144,9 @@ export const welcomeTour: TourStep[] = [
     title: "Atajo flotante",
     content: withSkip("Este botón siempre está abajo a la derecha. Hace lo mismo que las acciones rápidas pero accesible desde cualquier página."),
     optional: true,
+    // En mobile el dialog está fijo abajo y tapa el FAB; mejor saltar
+    // este paso en pantalla chica. El FAB sigue siendo visible y obvio.
+    desktopOnly: true,
     // Cierra el drawer en mobile para que el FAB no quede tapado.
     beforeEnter: closeSidebarIfMobile,
   },
@@ -150,6 +154,10 @@ export const welcomeTour: TourStep[] = [
     target: '[data-tour="report-problem"]',
     title: "¿Algo raro?",
     content: withSkip("Si encuentras un bug o tienes una idea, repórtalo aquí. Puedes adjuntar capturas (Ctrl+V también funciona). Revisamos los reportes diariamente."),
+    // El botón vive en el footer del sidebar; en mobile el drawer es
+    // overlay y el dialog del tour fijo abajo lo solapa. Saltamos en
+    // mobile — el botón se descubre de manera natural en el sidebar.
+    desktopOnly: true,
     beforeEnter: openSidebarAndWait,
   },
   {
@@ -252,6 +260,45 @@ export const testsTour: TourStep[] = [
   },
 ];
 
+// ─── Tour 6: Documentos (auto en /documentos) ──────────────────────
+//
+// Documentos es una de las vistas más usadas, por eso el tour es más
+// detallado: explica los dos modos de organización (carpetas vs lista),
+// las plantillas con variables auto-rellenadas, y la opción de subir
+// los propios documentos del psicólogo (Word editable, otros formatos
+// para guardar).
+export const documentsTour: TourStep[] = [
+  {
+    target: '[data-tour="page-title"]',
+    title: "Documentos clínicos",
+    content: withSkip("Aquí guardas todos los documentos: consentimientos, contratos, certificados, informes, remisiones. Te muestro las opciones."),
+  },
+  {
+    target: '[data-tour="docs-view-toggle"]',
+    title: "Carpetas o lista",
+    content: withSkip("Cambia entre dos formas de ver tus documentos: <strong>Carpetas</strong> (una por paciente, como organizador físico) o <strong>Lista/Tarjetas</strong> (todos en una sola vista, ideal para buscar)."),
+    optional: true,
+  },
+  {
+    target: '[data-tour="docs-templates"]',
+    title: "Plantillas listas para usar",
+    content: withSkip("Plantillas oficiales del sistema (consentimientos, contratos, informes…) con <strong>variables que se rellenan solas</strong> con los datos del paciente al elegirlo: {{paciente.nombre}}, {{paciente.documento}}, etc."),
+    optional: true,
+  },
+  {
+    target: '[data-tour="docs-upload-template"]',
+    title: "Sube tus propios documentos",
+    content: withSkip("Sube un <strong>Word (.docx)</strong> y queda editable dentro de la app — útil para tus formatos propios. También puedes subir <strong>PDF, imágenes y otros archivos</strong> desde \"Nuevo documento → Subir archivo\" si solo los quieres guardar adjuntos al paciente."),
+    optional: true,
+  },
+  {
+    target: '[data-tour="docs-new"]',
+    title: "Crear un documento nuevo",
+    content: withSkip("Empieza desde una plantilla, en blanco, o sube un archivo existente. Al vincular un paciente, las variables del documento se rellenan automáticamente y puedes pedirle firma desde el portal."),
+    optional: true,
+  },
+];
+
 // ─── Tour 5: Recibos (auto en /facturacion) ────────────────────────
 export const invoicesTour: TourStep[] = [
   {
@@ -290,6 +337,17 @@ export const invoicesTour: TourStep[] = [
  */
 export function useAutoTour(name: string, steps: TourStep[]) {
   useEffect(() => {
+    // En mobile (< 640px) solo disparamos el tour principal de
+    // bienvenida. Los tours de página (pacientes, tests, recibos,
+    // historia, documentos) son más útiles en desktop, donde:
+    //   - el sidebar y los anchors están todos visibles a la vez,
+    //   - el dialog flotante no compite por espacio,
+    //   - el psicólogo típicamente arma su flujo de trabajo.
+    // En mobile el tour se vuelve más ruidoso que útil — el usuario
+    // ya conoce las páginas y solo necesita la introducción inicial.
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+    if (isMobile && name !== "welcome") return;
+
     // 1500ms le da tiempo de hidratar a páginas con varias queries
     // en paralelo (/pacientes/:id, /tests, /facturacion). Páginas
     // que tardan más en cargar producían tour con dialogs vacíos

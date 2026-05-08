@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
 import { PatientPicker } from "@/components/app/PatientPicker";
 import { useWorkspace } from "@/lib/workspace";
+import { useAutoTour, documentsTour, TOUR_NAMES } from "@/lib/tours";
 
 export const Route = createFileRoute("/documentos")({
   head: () => ({ meta: [{ title: "Documentos · Psicomorfosis" }] }),
@@ -58,6 +59,8 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string; Ic
 };
 
 function DocumentosPage() {
+  // Tour de documentos — auto la primera vez en /documentos.
+  useAutoTour(TOUR_NAMES.documents, documentsTour);
   const search = Route.useSearch();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -171,7 +174,7 @@ function DocumentosPage() {
                 {patient && <span className="text-ink-700"> · {displayPatientName(patient)}</span>}
               </> : "Biblioteca documental"}
             </p>
-            <h1 className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">
+            <h1 data-tour="page-title" className="font-serif text-2xl md:text-[32px] leading-tight text-ink-900 mt-1">
               {filterPatient ? "Documentos del paciente" : "Documentos clínicos"}
             </h1>
             {filterPatient && (
@@ -183,6 +186,7 @@ function DocumentosPage() {
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <button
+              data-tour="docs-new"
               onClick={() => setNewOpen(true)}
               className="flex-1 sm:flex-none h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2"
             >
@@ -221,7 +225,7 @@ function DocumentosPage() {
                   <option value="todos">Todos los estados</option>
                   {Object.keys(STATUS_STYLE).map((k) => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
                 </select>
-                <ViewToggle value={viewMode} onChange={(v) => { setViewMode(v); setOpenFolder(null); }} />
+                <span data-tour="docs-view-toggle"><ViewToggle value={viewMode} onChange={(v) => { setViewMode(v); setOpenFolder(null); }} /></span>
               </div>
               {viewMode === "folders" && openFolderData && (
                 <div className="flex items-center gap-2 text-xs text-ink-500 pt-1">
@@ -316,7 +320,7 @@ function DocumentosPage() {
           </div>
 
           <aside className="space-y-5">
-            <div className="rounded-xl border border-line-200 bg-surface p-5">
+            <div data-tour="docs-templates" className="rounded-xl border border-line-200 bg-surface p-5">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-serif text-lg text-ink-900">Plantillas</h3>
                 <Sparkles className="h-4 w-4 text-brand-700" />
@@ -368,7 +372,7 @@ function DocumentosPage() {
                 >
                   Ver todas las plantillas →
                 </button>
-                <UploadTemplateButton onUploaded={() => qc.invalidateQueries({ queryKey: ["document-templates"] })} />
+                <span data-tour="docs-upload-template"><UploadTemplateButton onUploaded={() => qc.invalidateQueries({ queryKey: ["document-templates"] })} /></span>
               </div>
             </div>
 
