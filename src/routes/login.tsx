@@ -216,7 +216,12 @@ function LoginForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full h-12 rounded-full text-primary-foreground text-sm font-semibold transition-all disabled:opacity-60 bg-brand-700 hover:bg-brand-800 shadow-[0_8px_20px_-8px_oklch(0.53_0.045_200/0.5)] hover:shadow-[0_12px_28px_-10px_oklch(0.53_0.045_200/0.6)] hover:-translate-y-0.5 active:translate-y-0 inline-flex items-center justify-center gap-2"
+        // En dark mode el botón pasa a fondo blanco con texto oscuro
+        // (mismo estilo del light, invertido) — más legible que el teal
+        // que casi se confundía con el fondo. dark:text-[oklch(...)]
+        // hardcodea el valor del ink-900 del light theme porque el
+        // token text-ink-900 se invierte en dark y daría blanco/blanco.
+        className="w-full h-12 rounded-full text-sm font-semibold transition-all disabled:opacity-60 bg-brand-700 text-primary-foreground hover:bg-brand-800 dark:bg-white dark:text-[oklch(0.27_0.018_250)] dark:hover:bg-[oklch(0.94_0.005_120)] shadow-[0_8px_20px_-8px_oklch(0.53_0.045_200/0.5)] hover:shadow-[0_12px_28px_-10px_oklch(0.53_0.045_200/0.6)] hover:-translate-y-0.5 active:translate-y-0 inline-flex items-center justify-center gap-2"
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}
         Ingresar

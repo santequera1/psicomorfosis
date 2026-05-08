@@ -540,6 +540,24 @@
   .dark ::-webkit-scrollbar-thumb:hover {
     background: oklch(0.42 0.025 200);
   }
+
+  /* ─────────────────────────────────────────────────────────────────
+   * <select> y <option> en dark mode
+   *
+   * Por defecto los <option> del browser usan colores nativos del SO
+   * (en macOS y algunos Linux tira blanco-sobre-blanco cuando la app
+   * está en dark). `color-scheme: dark` arriba ayuda en algunos
+   * browsers pero no es universal — forzamos los colores de la
+   * paleta para que el dropdown abierto sea legible siempre.
+   * ───────────────────────────────────────────────────────────────── */
+  .dark select option {
+    background-color: oklch(0.24 0.022 200); /* surface en dark */
+    color: oklch(0.94 0.01 180);              /* foreground en dark */
+  }
+  .dark select option:checked,
+  .dark select option:hover {
+    background-color: oklch(0.30 0.025 200);
+  }
 }
 
 /* ================================================================
