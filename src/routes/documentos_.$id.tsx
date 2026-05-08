@@ -14,6 +14,7 @@ import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { PatientPicker } from "@/components/app/PatientPicker";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 export const Route = createFileRoute("/documentos_/$id")({
   head: ({ params }) => ({ meta: [{ title: `Documento ${params.id} — Psicomorfosis` }] }),
@@ -46,6 +47,7 @@ function DocumentDetailPage() {
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Cargar body cuando llega la data
@@ -212,7 +214,7 @@ function DocumentDetailPage() {
                 locked={isLocked}
                 onDuplicate={() => duplicateMu.mutate()}
                 onArchive={() => archiveMu.mutate()}
-                onDelete={() => { if (confirm("¿Eliminar definitivamente?")) deleteMu.mutate(); }}
+                onDelete={() => setConfirmDelete(true)}
               />
             </div>
           </div>
@@ -260,6 +262,16 @@ function DocumentDetailPage() {
       </div>
       {signRequestOpen && (
         <SignRequestModal doc={doc} onClose={() => setSignRequestOpen(false)} />
+      )}
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Eliminar "${doc?.name ?? "documento"}"`}
+          message="Esta acción es definitiva y no se puede deshacer. ¿Confirmas que quieres eliminar este documento?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={() => { setConfirmDelete(false); deleteMu.mutate(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
     </AppShell>
   );
@@ -362,6 +374,10 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
   const ext = doc.original_name?.split(".").pop() ?? "bin";
   const safeName = (doc.name || "documento").replace(/[^\w\-. ]/g, "_");
 
+  // ConfirmDialog en lugar del confirm() nativo (UX consistente con el
+  // resto de la app — el window.confirm de Brave/Chrome rompe el tema).
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto">
@@ -380,7 +396,7 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
               className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700">
               <FileText className="h-4 w-4" /> Descargar
             </a>
-            <ActionsMenu onArchive={onArchive} onDelete={() => { if (confirm("¿Eliminar definitivamente el archivo?")) onDelete(); }} />
+            <ActionsMenu onArchive={onArchive} onDelete={() => setConfirmDelete(true)} />
           </div>
         </header>
         <div className="rounded-xl bg-surface border border-line-200 p-4 min-h-[60vh]">
@@ -410,6 +426,16 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
           )}
         </div>
       </div>
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Eliminar "${doc.name}"`}
+          message="Esta acción es definitiva y no se puede deshacer. ¿Confirmas que quieres eliminar este archivo?"
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={() => { setConfirmDelete(false); onDelete(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </AppShell>
   );
 }

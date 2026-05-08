@@ -282,16 +282,18 @@ export const invoicesTour: TourStep[] = [
  */
 export function useAutoTour(name: string, steps: TourStep[]) {
   useEffect(() => {
-    // 600ms le da tiempo de hidratar a páginas con varias queries
-    // (ej: /pacientes/:id que carga paciente + tests + tareas en
-    // paralelo). Antes era 250ms y los anchors data-tour podían no
-    // estar montados todavía cuando se evaluaba el filtro de
-    // visibilidad — resultado: tour vacío.
+    // 1500ms le da tiempo de hidratar a páginas con varias queries
+    // en paralelo (/pacientes/:id, /tests, /facturacion). Páginas
+    // que tardan más en cargar producían tour con dialogs vacíos
+    // porque los anchors data-tour aún no estaban montados al
+    // evaluar el filtro de visibilidad. 1500ms cubre la mayoría de
+    // conexiones; si igual no carga, el filtro descarta los steps
+    // con targets ausentes.
     const t = setTimeout(() => {
       runTour(name, steps).catch((err) => {
         if (typeof console !== "undefined") console.warn("[tour]", name, err);
       });
-    }, 600);
+    }, 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);

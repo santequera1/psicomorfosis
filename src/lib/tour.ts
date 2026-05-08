@@ -249,14 +249,15 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     rememberStep: false,
     debug: false,
     steps: validSteps.map((s, idx) => ({
-      // null hace que TourGuide muestre el dialog centrado en pantalla
-      // (sin highlight). Útil para steps introductorios o de cierre.
-      target: s.target ?? null,
-      // fixed: true fuerza al dialog a quedar centrado y sin arrow,
-      // independiente del cálculo de floating-ui. Lo habilitamos para
-      // los steps sin target (introductorios) — sin este flag, en
-      // algunas combinaciones el dialog se posicionaba mal o quedaba
-      // vacío al apuntar a document.body.
+      // Steps sin target apuntan EXPLÍCITAMENTE a body (en lugar de
+      // null). Esto fuerza la rama de "centrado en pantalla" en
+      // backdrop.ts y dialog.ts (que checan `targetElem === document.body`
+      // estrictamente). Antes pasaba `null` y TourGuide hacía un
+      // reasign a body internamente, pero en algunas combinaciones
+      // — sobre todo cuando hay otros steps con target en el mismo
+      // tour — el dialog quedaba sin contenido renderizado.
+      target: s.target ?? "body",
+      // fixed: true backup por si target=body no garantiza el centrado.
       fixed: !s.target,
       title: s.title,
       content: s.content,
