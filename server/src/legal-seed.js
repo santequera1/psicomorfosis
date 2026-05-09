@@ -371,8 +371,15 @@ export function seedLegalDocuments(db) {
     WHERE slug = ?
   `);
 
+  // Cuenta versiones por documento (para detectar documentos huérfanos
+  // que perdieron sus versiones por un reset/cleanup manual).
+  const countVersions = db.prepare(
+    "SELECT COUNT(*) AS n FROM legal_document_versions WHERE document_id = ?"
+  );
+
   let inserted = 0;
   let synced = 0;
+  let restored = 0;
   for (const d of LEGAL_DOCUMENTS_SEED) {
     const existing = get.get(d.slug);
     if (!existing) {
@@ -395,11 +402,27 @@ export function seedLegalDocuments(db) {
       updateFlags.run(d.requires_acceptance, d.acceptance_audience, d.slug);
       synced++;
     }
+    // Restauración: el documento existe en legal_documents pero perdió
+    // todas sus versiones (típicamente porque alguien hizo un reset
+    // manual con DELETE FROM legal_document_versions). Recreamos la
+    // primera versión draft con el body actual del seed para que la
+    // asesora pueda volver a empezar desde el documento base.
+    const versionsCount = countVersions.get(existing.id).n;
+    if (versionsCount === 0) {
+      insVer.run(
+        existing.id, "2026-v1", d.body_html, stripHtml(d.body_html),
+        "Importación inicial desde código fuente. Pendiente de revisión por la asesora legal.",
+      );
+      restored++;
+    }
   }
   if (inserted > 0) {
     console.log(`[db] seed legal docs: ${inserted} documento(s) creado(s) como draft`);
   }
   if (synced > 0) {
     console.log(`[db] seed legal docs: ${synced} documento(s) con flags de aceptación actualizados`);
+  }
+  if (restored > 0) {
+    console.log(`[db] seed legal docs: ${restored} documento(s) restaurados a draft v1`);
   }
 }

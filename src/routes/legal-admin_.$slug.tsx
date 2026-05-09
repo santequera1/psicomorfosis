@@ -92,14 +92,33 @@ function LegalDocumentEditPage() {
 
   // Cargamos el HTML del editingVersionId (puede ser un draft que se acaba
   // de crear, o uno que ya existía).
+  //
+  // staleTime: 0 + refetchOnMount: 'always' es CRÍTICO aquí. Sin esto,
+  // cuando la asesora salía del editor y volvía, React Query devolvía
+  // el body cacheado de la primera carga (sin sus ediciones recientes
+  // del auto-save), así que el editor mostraba "la plantilla inicial".
+  // Forzamos un refetch al montar para que siempre traiga el HTML más
+  // reciente persistido en DB.
   const { data: editingVersion, isLoading: loadingVersion } = useQuery({
     queryKey: ["legal-version", editingVersionId],
     queryFn: () => api.legalAdminGetVersion(editingVersionId!),
     enabled: editingVersionId != null,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
+  // Sincroniza el HTML del editor con la versión cargada solo cuando
+  // cambia el id de la versión (cargar otra) o cuando es la primera vez
+  // que cargamos el body (id no había sido sincronizado todavía). NO
+  // sincroniza en cada refetch porque el editor podría tener cambios más
+  // nuevos que aún no llegaron al servidor — sobrescribirlos perdería
+  // teclas del usuario.
+  const lastSyncedVersionRef = useRef<number | null>(null);
   useEffect(() => {
-    if (editingVersion?.bodyHtml != null) setEditingHtml(editingVersion.bodyHtml);
-  }, [editingVersion?.id]); // solo cuando cambia la versión, no en cada update
+    if (editingVersion?.bodyHtml == null || editingVersion.id == null) return;
+    if (lastSyncedVersionRef.current === editingVersion.id) return;
+    setEditingHtml(editingVersion.bodyHtml);
+    lastSyncedVersionRef.current = editingVersion.id;
+  }, [editingVersion?.id, editingVersion?.bodyHtml]);
 
   // Auto-guardado debounced.
   const saveMut = useMutation({
@@ -124,8 +143,18 @@ function LegalDocumentEditPage() {
       // Doble check al disparar — el bloqueo puede haberse activado
       // entre el setTimeout y su ejecución (publicación inmediata).
       if (blockAutosaveRef.current) return;
-      saveMut.mutate({ id: editingVersionId, bodyHtml: html }, {
-        onSuccess: () => { dirtyRef.current = false; },
+      const id = editingVersionId;
+      saveMut.mutate({ id, bodyHtml: html }, {
+        onSuccess: () => {
+          dirtyRef.current = false;
+          // Sincroniza el cache de la query con el HTML que acabamos de
+          // persistir, así si la asesora sale y vuelve a entrar el editor
+          // no carga datos viejos del cache. setQueryData es más barato
+          // que invalidate porque evita el round-trip extra.
+          qc.setQueryData(["legal-version", id], (prev: any) =>
+            prev ? { ...prev, bodyHtml: html } : prev
+          );
+        },
       });
     }, 1200);
   }
