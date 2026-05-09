@@ -114,15 +114,22 @@ export function BankAccountModal({ account, onClose }: Props) {
 
   const canSubmit = !!bankId && !saveMut.isPending;
 
+  // Cierre con Esc — único además del botón X. NO cerramos por click
+  // afuera porque el form tiene varios campos y un click accidental en
+  // el backdrop hacía perder lo escrito.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <>
       <div
         className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm flex items-center justify-center px-4"
-        onClick={onClose}
       >
         <div
           className="w-full max-w-3xl bg-surface rounded-xl border border-line-200 shadow-modal max-h-[92vh] flex flex-col"
-          onClick={(e) => e.stopPropagation()}
         >
           <header className="px-5 py-4 border-b border-line-200 flex items-center justify-between gap-3 shrink-0">
             <div>

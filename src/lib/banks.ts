@@ -61,16 +61,18 @@ export const BANK_CATALOG: Record<BankBrand, BankBrandStyle> = {
   bancolombia: {
     id: "bancolombia",
     name: "Bancolombia",
-    cardBg: "bg-[#FAE85B]",
+    // Gradiente sutil amarillo (top-left más claro, bottom-right más
+    // saturado). Antes tenía ondas multicolor estilo "Plata" pero el
+    // resultado se sentía recargado en formato compacto. Ahora es un
+    // gradient limpio que conserva el amarillo como signo de marca.
+    cardBg: "bg-gradient-to-br from-[#FFEE6E] via-[#FAE85B] to-[#E8C826]",
     textColor: "text-black",
-    accentColor: "text-[#1a1a1a]",
+    accentColor: "text-[#3a2a00]",
     logoFont: "sans",
     logoStyle: "word",
     logoText: "Bancolombia",
     logoSize: "text-2xl",
-    decorative: true,
-    // Ondas tipo "Plata": púrpura, verde, naranja, rosa.
-    decorativeStrokes: ["#A461D0", "#2EA098", "#F08A2E", "#F4A8B5"],
+    decorative: false,
   },
   nequi: {
     id: "nequi",

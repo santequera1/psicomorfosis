@@ -37,14 +37,15 @@ export interface BankCardProps {
   className?: string;
 }
 
-// Bordes y altos por tamaño. mini tiene rounded-xl (12px) en vez de
-// rounded-2xl (16px) — al ser compacta, los bordes muy redondeados la
-// hacían ver como botón pastilla. xl es más cercano a una tarjeta real.
+// Bordes y altos por tamaño. Las tarjetas físicas tienen radio de
+// ~3.18mm que en pantalla son ~8px (rounded-lg). Antes usábamos
+// rounded-xl/2xl (12-16px) y se sentía como botón pastilla más que
+// tarjeta de débito real.
 const SIZE_CLASS = {
-  xs: "h-10 px-3 py-1.5 rounded-lg text-[11px]",
-  mini: "h-20 px-3 py-2.5 rounded-xl",
-  sm: "h-28 p-3 rounded-xl",
-  md: "h-40 sm:h-44 p-5 rounded-xl",
+  xs: "h-10 px-3 py-1.5 rounded-md text-[11px]",
+  mini: "h-20 px-3 py-2.5 rounded-lg",
+  sm: "h-28 p-3 rounded-lg",
+  md: "h-40 sm:h-44 p-5 rounded-lg",
 };
 
 export function BankCard({

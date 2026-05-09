@@ -136,7 +136,13 @@ function FacturacionPage() {
           <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} recibos`} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidos" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} recibo(s)`} emphasis={vencidas > 0 ? "risk" : "default"} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<Receipt className="h-4 w-4" />} label="Total" value={String(summary?.total ?? invoices.length)} hint="emitidos" delta={{ neutral: true, value: "" }} />
-          <WalletKpiCard />
+          {/* Mis cuentas ocupa todo el ancho disponible cuando NO está
+              en la fila de 5 desktop: en mobile (grid-cols-2) hace
+              col-span-2 → fila propia debajo de los KPIs; en tablet
+              (md:grid-cols-3) hace md:col-span-3 → fila completa.
+              En desktop (lg:grid-cols-5) vuelve a 1 col junto a los
+              demás KPIs y muestra el stack apilado. */}
+          <WalletKpiCard className="col-span-2 md:col-span-3 lg:col-span-1" />
         </div>
 
 
