@@ -27,7 +27,7 @@ export interface BankCardProps {
   holderName?: string | null;
   accountType?: string | null;
   brand?: CardBrand | null;
-  size?: "xs" | "sm" | "md";
+  size?: "xs" | "mini" | "sm" | "md";
   /** Click sobre la tarjeta entera. */
   onClick?: () => void;
   /** Slot superior derecho — para acciones (editar/eliminar) sobre la tarjeta. */
@@ -37,10 +37,14 @@ export interface BankCardProps {
   className?: string;
 }
 
+// Bordes y altos por tamaño. mini tiene rounded-xl (12px) en vez de
+// rounded-2xl (16px) — al ser compacta, los bordes muy redondeados la
+// hacían ver como botón pastilla. xl es más cercano a una tarjeta real.
 const SIZE_CLASS = {
   xs: "h-10 px-3 py-1.5 rounded-lg text-[11px]",
-  sm: "h-32 p-4 rounded-xl",
-  md: "h-44 sm:h-48 p-5 rounded-2xl",
+  mini: "h-20 px-3 py-2.5 rounded-xl",
+  sm: "h-28 p-3 rounded-xl",
+  md: "h-40 sm:h-44 p-5 rounded-xl",
 };
 
 export function BankCard({
@@ -70,6 +74,56 @@ export function BankCard({
         <span className="truncate opacity-90">{label}</span>
         {last4 && <span className="opacity-70 tabular ml-1">··{last4}</span>}
       </span>
+    );
+  }
+
+  // Variante mini: compacta para listas / KPI cards. Layout simple
+  // sin chip ni NFC (no caben bien). Banco arriba, holder o label en
+  // medio, last4 abajo izquierda, brand abajo derecha.
+  if (size === "mini") {
+    const Comp = (onClick ? "button" : "div") as "button" | "div";
+    return (
+      <Comp
+        type={onClick ? "button" : undefined}
+        onClick={onClick}
+        className={cn(
+          "relative w-full text-left overflow-hidden flex flex-col justify-between",
+          SIZE_CLASS.mini,
+          s.cardBg, s.textColor,
+          onClick && "hover:shadow-card cursor-pointer transition-shadow",
+          selected && "ring-2 ring-offset-1 ring-brand-700",
+          className,
+        )}
+      >
+        {s.decorative && s.decorativeStrokes && (
+          <DecoStrokes colors={s.decorativeStrokes} />
+        )}
+        <div className="relative flex items-start justify-between gap-2 leading-none">
+          <div className={cn("text-[10px] font-bold tracking-widest uppercase", s.accentColor)}>
+            {s.logoText.toUpperCase()}
+          </div>
+          {actionsSlot}
+        </div>
+        <div className="relative flex items-end justify-between gap-2">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            {holderName && (
+              <span className="text-[11px] font-medium truncate opacity-90">{holderName}</span>
+            )}
+            {last4 ? (
+              <span className="text-xs font-semibold tabular tracking-wider">
+                ●●●● {last4}
+              </span>
+            ) : (
+              <span className="text-[11px] truncate opacity-80">{label}</span>
+            )}
+          </div>
+          {brand && brand !== "none" && (
+            <div className="shrink-0 scale-75 origin-bottom-right">
+              <BrandMark brand={brand} />
+            </div>
+          )}
+        </div>
+      </Comp>
     );
   }
 

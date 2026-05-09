@@ -14,7 +14,7 @@ import { api, type Invoice, type BankAccount } from "@/lib/api";
 import { useAutoTour, invoicesTour, TOUR_NAMES } from "@/lib/tours";
 import { BankCard } from "@/components/wallet/BankCard";
 import { BankAccountModal } from "@/components/wallet/BankAccountModal";
-import { WalletStack, WalletEmpty } from "@/components/wallet/WalletStack";
+import { WalletKpiCard } from "@/components/wallet/WalletKpiCard";
 
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
@@ -127,17 +127,17 @@ function FacturacionPage() {
           </div>
         </header>
 
-        <div data-tour="invoices-summary" className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        {/* Grid de 5 columnas en lg+ para incluir "Mis cuentas" como
+            quinto KPI. items-start para que el card del wallet pueda
+            crecer verticalmente al expandirse sin estirar a sus
+            vecinos en la fila. */}
+        <div data-tour="invoices-summary" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8 items-start">
           <KpiCard icon={<Wallet className="h-4 w-4" />} label="Recaudado" value={fmt(recaudado)} hint="pagados" delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Por cobrar" value={fmt(porCobrar)} hint={`${invoices.filter((f) => f.status === "pendiente").length} recibos`} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<AlertCircle className="h-4 w-4" />} label="Vencidos" value={fmt(vencidas)} hint={`${invoices.filter((f) => f.status === "vencida").length} recibo(s)`} emphasis={vencidas > 0 ? "risk" : "default"} delta={{ neutral: true, value: "" }} />
           <KpiCard icon={<Receipt className="h-4 w-4" />} label="Total" value={String(summary?.total ?? invoices.length)} hint="emitidos" delta={{ neutral: true, value: "" }} />
+          <WalletKpiCard />
         </div>
-
-        {/* Wallet del psicólogo: cuentas bancarias registradas, con la
-            apariencia de tarjetas de débito reales. Las usadas al
-            registrar pagos aparecen como chips de la cuenta destino. */}
-        <WalletSection />
 
 
         <section data-tour="invoices-list" className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
@@ -1138,57 +1138,3 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/**
- * Sección "Mis cuentas" del wallet. Muestra las cuentas activas del
- * psicólogo como tarjetas de débito visuales (con colores y branding
- * por banco) y un slot vacío para agregar una nueva. Click en una
- * tarjeta abre el modal de edición.
- *
- * Empty state: si no hay cuentas, mostramos una pieza de marketing
- * inline explicando la utilidad — así la asesora / psicólogo entiende
- * por qué le conviene registrarlas en lugar de poner texto libre.
- */
-function WalletSection() {
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ["bank-accounts"],
-    queryFn: () => api.listBankAccounts(),
-  });
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<BankAccount | null>(null);
-
-  return (
-    <section className="mb-6 sm:mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="font-serif text-base sm:text-lg text-ink-900 leading-tight">Mis cuentas</h2>
-          <p className="text-xs text-ink-500 mt-0.5">
-            Cuentas a las que recibes pagos. Aparecen al registrar un recibo.
-          </p>
-        </div>
-        <button
-          onClick={() => setCreating(true)}
-          className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
-        >
-          <Plus className="h-3.5 w-3.5" /> Agregar cuenta
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="rounded-xl border border-dashed border-line-200 bg-bg-50 px-5 py-8 text-center text-sm text-ink-400 inline-flex items-center justify-center gap-2 w-full">
-          <Loader2 className="h-4 w-4 animate-spin" /> Cargando cuentas…
-        </div>
-      ) : accounts.length === 0 ? (
-        <WalletEmpty onAdd={() => setCreating(true)} />
-      ) : (
-        <WalletStack
-          accounts={accounts}
-          onCardEdit={(acc) => setEditing(acc)}
-          onAdd={() => setCreating(true)}
-        />
-      )}
-
-      {creating && <BankAccountModal onClose={() => setCreating(false)} />}
-      {editing && <BankAccountModal account={editing} onClose={() => setEditing(null)} />}
-    </section>
-  );
-}
