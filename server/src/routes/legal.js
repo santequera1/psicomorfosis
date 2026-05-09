@@ -509,18 +509,62 @@ router.post("/admin/versions/:id/publish", (req, res) => {
 /**
  * DELETE /api/legal/admin/versions/:id
  *
- * Solo borradores pueden eliminarse. Las versiones publicadas / archivadas
- * son inmutables (necesario para auditoría).
+ * Elimina una versión específica del documento, sin importar su estado
+ * (draft, published o archived). El cleanup es total: borra también las
+ * aceptaciones de la versión por FK CASCADE.
+ *
+ * Reglas de seguridad:
+ *   - Si la versión es la publicada vigente y existe una archivada
+ *     anterior, la archivada vuelve a publicada para mantener el doc
+ *     con una versión vigente.
+ *   - Si era la única versión del documento, se queda sin versiones —
+ *     el seedLegalDocuments del próximo arranque (o un click en
+ *     "Restablecer a plantilla inicial") recreará la draft v1.
+ *   - El recuento previo de aceptaciones se devuelve al cliente para
+ *     que pueda mostrar feedback ("X aceptaciones eliminadas").
+ *
+ * Antes este endpoint solo permitía borrar drafts (regla de
+ * inmutabilidad para auditoría). En la práctica la asesora necesita
+ * limpiar versiones de prueba y rehacer historial sin tener que
+ * pedir SQL en VPS, así que abrimos el borrado individual con
+ * advertencia clara en la UI.
  */
 router.delete("/admin/versions/:id", (req, res) => {
   const v = db.prepare("SELECT * FROM legal_document_versions WHERE id = ?")
     .get(Number(req.params.id));
   if (!v) return res.status(404).json({ error: "No encontrado" });
-  if (v.status !== "draft") {
-    return res.status(400).json({ error: "Solo se eliminan borradores" });
-  }
-  db.prepare("DELETE FROM legal_document_versions WHERE id = ?").run(v.id);
-  res.json({ ok: true });
+
+  const acceptances = db.prepare(
+    "SELECT COUNT(*) AS n FROM legal_acceptances WHERE version_id = ?"
+  ).get(v.id).n;
+
+  const wasPublished = v.status === "published";
+
+  db.transaction(() => {
+    db.prepare("DELETE FROM legal_document_versions WHERE id = ?").run(v.id);
+
+    // Si lo que borramos era la versión vigente, "promovemos" la
+    // archived más reciente a published para que el documento no quede
+    // sin contenido público. Si no hay archived, queda sin published
+    // (la página pública mostrará "documento no publicado" hasta que
+    // alguien publique de nuevo).
+    if (wasPublished) {
+      const lastArchived = db.prepare(`
+        SELECT id, published_at FROM legal_document_versions
+        WHERE document_id = ? AND status = 'archived'
+        ORDER BY published_at DESC LIMIT 1
+      `).get(v.document_id);
+      if (lastArchived) {
+        db.prepare(`
+          UPDATE legal_document_versions
+          SET status = 'published'
+          WHERE id = ?
+        `).run(lastArchived.id);
+      }
+    }
+  })();
+
+  res.json({ ok: true, acceptancesRemoved: acceptances });
 });
 
 /**

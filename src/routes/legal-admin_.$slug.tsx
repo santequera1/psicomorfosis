@@ -66,6 +66,12 @@ function LegalDocumentEditPage() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  // Versión específica del historial que se quiere eliminar (null = nada).
+  // Guardamos el objeto para mostrar info útil en el ConfirmDialog
+  // (label, status). El borrado real sale por deleteVersionMut.
+  const [confirmDeleteVersion, setConfirmDeleteVersion] = useState<
+    { id: number; version_label: string; status: string } | null
+  >(null);
 
   // Auto-cargar al entrar:
   //   - Si hay borrador pendiente → editarlo.
@@ -249,6 +255,27 @@ function LegalDocumentEditPage() {
     onError: () => { blockAutosaveRef.current = false; },
   });
 
+  // Borrar una versión específica del historial (cualquier estado:
+  // draft, published o archived). El backend hace cleanup en cascada
+  // de las aceptaciones de esa versión. Distinto de deleteDraftMut
+  // porque no toca editingVersionId — se asume que la asesora no
+  // está borrando la versión que está editando ahora.
+  const deleteVersionMut = useMutation({
+    mutationFn: (versionId: number) => api.legalAdminDeleteVersion(versionId),
+    onSuccess: (resp) => {
+      qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
+      qc.invalidateQueries({ queryKey: ["legal-public", slug] });
+      qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
+      const acc = resp.acceptancesRemoved;
+      toast.success(
+        acc > 0
+          ? `Versión eliminada (${acc} aceptación${acc === 1 ? "" : "es"} también borrada${acc === 1 ? "" : "s"}).`
+          : "Versión eliminada."
+      );
+    },
+    onError: (e: any) => toast.error(e?.message ?? "No se pudo eliminar la versión."),
+  });
+
   // Restablecer a plantilla inicial. Operación destructiva: borra todas
   // las versiones y aceptaciones del documento. Útil para empezar de cero
   // durante pruebas, o si los cambios acumulados ya no aportan.
@@ -392,6 +419,7 @@ function LegalDocumentEditPage() {
             previewVersionId={previewVersionId}
             onPreview={(id) => setPreviewVersionId(id === previewVersionId ? null : id)}
             onEditDraft={(id) => { setPreviewVersionId(null); setEditingVersionId(id); }}
+            onDelete={(v) => setConfirmDeleteVersion(v)}
           />
           <DocumentMeta
             doc={doc}
@@ -436,6 +464,28 @@ function LegalDocumentEditPage() {
           onConfirm={() => {
             setConfirmReset(false);
             resetMut.mutate();
+          }}
+        />
+      )}
+
+      {confirmDeleteVersion && (
+        <ConfirmDialog
+          title={`Eliminar versión ${confirmDeleteVersion.version_label}`}
+          message={
+            confirmDeleteVersion.status === "published"
+              ? "Esta es la versión vigente. Si la eliminas, la página pública volverá a la versión archivada anterior (si existe), o quedará sin contenido publicado. Las aceptaciones registradas para esta versión también se eliminarán."
+              : confirmDeleteVersion.status === "archived"
+                ? "Las aceptaciones de los usuarios que vieron esta versión también se eliminarán de la base de datos. La acción no se puede deshacer."
+                : "El borrador y todo lo que has escrito en él se eliminarán. La acción no se puede deshacer."
+          }
+          confirmLabel="Sí, eliminar"
+          cancelLabel="Cancelar"
+          danger
+          onCancel={() => setConfirmDeleteVersion(null)}
+          onConfirm={() => {
+            const id = confirmDeleteVersion.id;
+            setConfirmDeleteVersion(null);
+            deleteVersionMut.mutate(id);
           }}
         />
       )}
@@ -493,13 +543,14 @@ function PreviewVersionView({
 }
 
 function VersionsHistory({
-  versions, editingVersionId, previewVersionId, onPreview, onEditDraft,
+  versions, editingVersionId, previewVersionId, onPreview, onEditDraft, onDelete,
 }: {
   versions: Array<{ id: number; version_label: string; status: string; created_at: string; published_at: string | null; summary_of_changes: string | null; created_by_name: string | null; published_by_name: string | null }>;
   editingVersionId: number | null;
   previewVersionId: number | null;
   onPreview: (id: number) => void;
   onEditDraft: (id: number) => void;
+  onDelete: (v: { id: number; version_label: string; status: string }) => void;
 }) {
   return (
     <div className="rounded-xl border border-line-200 bg-surface overflow-hidden">
@@ -533,7 +584,7 @@ function VersionsHistory({
                   {v.summary_of_changes && (
                     <div className="text-[11px] text-ink-500 mt-1 leading-snug">"{v.summary_of_changes}"</div>
                   )}
-                  <div className="mt-1.5 flex flex-wrap gap-1">
+                  <div className="mt-1.5 flex flex-wrap gap-2 items-center">
                     {v.status === "draft" && !isEditing && (
                       <button onClick={() => onEditDraft(v.id)} className="text-[11px] text-brand-700 hover:underline">
                         Editar
@@ -542,6 +593,19 @@ function VersionsHistory({
                     {v.status !== "draft" && (
                       <button onClick={() => onPreview(v.id)} className="text-[11px] text-brand-700 hover:underline inline-flex items-center gap-1">
                         {isPreviewing ? <><EyeOff className="h-3 w-3" /> Ocultar</> : <><Eye className="h-3 w-3" /> Ver</>}
+                      </button>
+                    )}
+                    {/* Eliminar: cualquier versión que no sea la que se está
+                        editando ahora mismo. Borrar la activa rompería el
+                        editor; la asesora puede usar "Descartar cambios"
+                        para esa. */}
+                    {!isEditing && (
+                      <button
+                        onClick={() => onDelete(v)}
+                        className="text-[11px] text-error hover:underline inline-flex items-center gap-1 ml-auto"
+                        title="Eliminar esta versión"
+                      >
+                        <Trash2 className="h-3 w-3" /> Eliminar
                       </button>
                     )}
                   </div>

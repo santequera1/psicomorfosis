@@ -1464,7 +1464,10 @@ export const api = {
       method: "POST",
     }),
   legalAdminDeleteVersion: (id: number) =>
-    request<{ ok: true }>(`/api/legal/admin/versions/${id}`, { method: "DELETE" }),
+    request<{ ok: true; acceptancesRemoved: number }>(
+      `/api/legal/admin/versions/${id}`,
+      { method: "DELETE" },
+    ),
   legalAdminListAcceptances: (params: { slug?: string; limit?: number; offset?: number } = {}) =>
     request<{
       rows: Array<{
