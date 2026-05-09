@@ -25,8 +25,9 @@ import { toast } from "sonner";
 import {
   Loader2, Send, Trash2, Eye, EyeOff,
   CheckCircle2, AlertCircle, X, Clock, Archive, FileSignature, History,
-  ExternalLink, ClipboardCheck,
+  ExternalLink, ClipboardCheck, RotateCcw,
 } from "lucide-react";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { api, getStoredUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LegalDocumentEditor, LegalDocumentView } from "@/components/legal/LegalDocumentEditor";
@@ -63,6 +64,8 @@ function LegalDocumentEditPage() {
   const [editingHtml, setEditingHtml] = useState<string>("");
   const [previewVersionId, setPreviewVersionId] = useState<number | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // Auto-cargar al entrar:
   //   - Si hay borrador pendiente → editarlo.
@@ -246,6 +249,38 @@ function LegalDocumentEditPage() {
     onError: () => { blockAutosaveRef.current = false; },
   });
 
+  // Restablecer a plantilla inicial. Operación destructiva: borra todas
+  // las versiones y aceptaciones del documento. Útil para empezar de cero
+  // durante pruebas, o si los cambios acumulados ya no aportan.
+  const resetMut = useMutation({
+    mutationFn: () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      blockAutosaveRef.current = true;
+      return api.legalAdminResetDocument(slug);
+    },
+    onSuccess: (resp) => {
+      // Saltamos directo al nuevo draft v1 con el body del seed.
+      setEditingVersionId(resp.versionId);
+      // El editingHtml local podría tener contenido viejo: forzamos a
+      // que el useEffect resincronice con la nueva versión leyendo
+      // bodyHtml desde el query.
+      setEditingHtml("");
+      lastSyncedVersionRef.current = null;
+      qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
+      qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
+      qc.invalidateQueries({ queryKey: ["legal-public", slug] });
+      toast.success("Documento restablecido a la plantilla inicial.");
+      blockAutosaveRef.current = false;
+    },
+    onError: (e: any) => {
+      blockAutosaveRef.current = false;
+      toast.error(e?.message ?? "No se pudo restablecer.");
+    },
+  });
+
   if (!allowed || loadingDoc) {
     return (
       <LegalAdminShell title="Cargando…">
@@ -316,20 +351,27 @@ function LegalDocumentEditPage() {
                   disabled={!editingVersionId || saveMut.isPending}
                   className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
                 >
-                  <Send className="h-4 w-4" /> Publicar como versión vigente
+                  <Send className="h-4 w-4" /> Publicar cambios
                 </button>
                 {draft && (
                   <button
-                    onClick={() => {
-                      if (confirm("¿Descartar este borrador? La acción no se puede deshacer.")) {
-                        deleteDraftMut.mutate(draft.id);
-                      }
-                    }}
-                    className="h-10 px-3 rounded-lg text-sm text-error hover:bg-error-soft inline-flex items-center gap-2"
+                    onClick={() => setConfirmDiscard(true)}
+                    className="h-10 px-3 rounded-lg text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2"
+                    title="Descartar los cambios del borrador actual y volver a la última versión publicada"
                   >
-                    <Trash2 className="h-4 w-4" /> Descartar
+                    <Trash2 className="h-4 w-4" /> Descartar cambios
                   </button>
                 )}
+                {/* Reset a plantilla inicial: empuja al margen para que sea
+                    claro que es una acción destructiva, separada del flujo
+                    normal de publicación. */}
+                <button
+                  onClick={() => setConfirmReset(true)}
+                  className="ml-auto h-10 px-3 rounded-lg text-sm text-error hover:bg-error-soft inline-flex items-center gap-2"
+                  title="Borrar todo el contenido editado y volver a la plantilla original del catálogo"
+                >
+                  <RotateCcw className="h-4 w-4" /> Restablecer a plantilla inicial
+                </button>
               </div>
             </>
           )}
@@ -365,6 +407,36 @@ function LegalDocumentEditPage() {
           publishing={publishMut.isPending}
           initialSummary={editingVersion?.summaryOfChanges ?? ""}
           onPublish={(summary) => publishMut.mutate({ versionId: editingVersionId, summary })}
+        />
+      )}
+
+      {confirmDiscard && draft && (
+        <ConfirmDialog
+          title="Descartar cambios"
+          message="Vas a perder todo lo que has escrito desde la última vez que publicaste. La página pública no cambia. ¿Confirmas?"
+          confirmLabel="Sí, descartar"
+          cancelLabel="Seguir editando"
+          danger
+          onCancel={() => setConfirmDiscard(false)}
+          onConfirm={() => {
+            setConfirmDiscard(false);
+            deleteDraftMut.mutate(draft.id);
+          }}
+        />
+      )}
+
+      {confirmReset && (
+        <ConfirmDialog
+          title="Restablecer a plantilla inicial"
+          message={`Esto borra TODO el contenido y el historial de "${doc.title}" — versión publicada, archivadas y aceptaciones — y deja el documento como la plantilla original del sistema. La acción no se puede deshacer.`}
+          confirmLabel="Sí, restablecer"
+          cancelLabel="Cancelar"
+          danger
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => {
+            setConfirmReset(false);
+            resetMut.mutate();
+          }}
         />
       )}
     </LegalAdminShell>

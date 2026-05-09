@@ -1441,6 +1441,16 @@ export const api = {
       `/api/legal/admin/documents/${slug}/draft`,
       { method: "POST" },
     ),
+  /**
+   * Restablece el documento a su plantilla inicial: borra TODAS las
+   * versiones (draft, published, archived) + aceptaciones, y deja una
+   * draft v1 con el body original del catálogo. Operación destructiva.
+   */
+  legalAdminResetDocument: (slug: string) =>
+    request<{ versionId: number; reset: true }>(
+      `/api/legal/admin/documents/${slug}/reset`,
+      { method: "POST" },
+    ),
   legalAdminUpdateVersion: (
     id: number,
     input: { bodyHtml?: string; summaryOfChanges?: string },

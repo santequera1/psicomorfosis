@@ -23,6 +23,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth, requireLegalAdmin } from "../auth.js";
+import { LEGAL_DOCUMENTS_SEED } from "../legal-seed.js";
 
 const router = Router();
 
@@ -392,6 +393,59 @@ router.post("/admin/documents/:slug/draft", (req, res) => {
   `).run(doc.id, label, body, stripHtml(body), req.user.id);
 
   res.json({ versionId: r.lastInsertRowid, created: true });
+});
+
+/**
+ * POST /api/legal/admin/documents/:slug/reset
+ *
+ * "Restablecer a plantilla inicial". Borra TODAS las versiones del
+ * documento (draft, published y archived) y crea una nueva draft v1
+ * con el body original del seed (LEGAL_DOCUMENTS_SEED). Útil para
+ * volver a un estado limpio durante pruebas o cuando los cambios
+ * acumulados ya no aportan.
+ *
+ * Operación destructiva: pierde el historial completo del documento
+ * en cuestión. No afecta a otros documentos. Solo legal_admin.
+ */
+router.post("/admin/documents/:slug/reset", (req, res) => {
+  const doc = db.prepare("SELECT * FROM legal_documents WHERE slug = ?")
+    .get(req.params.slug);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+  // El body inicial viene del catálogo en código fuente — no del último
+  // estado de la DB. Así "restablecer" significa siempre "volver a la
+  // plantilla que el equipo de desarrollo definió", no "volver a la
+  // primera versión que la asesora vio". Si algún slug no está en el
+  // catálogo (ej: alguien creó documentos legales custom en el futuro),
+  // devolvemos error en lugar de borrar sin tener qué recrear.
+  const seedDoc = LEGAL_DOCUMENTS_SEED.find((s) => s.slug === doc.slug);
+  if (!seedDoc) {
+    return res.status(400).json({
+      error: "Este documento no tiene plantilla inicial en el catálogo. No se puede restablecer.",
+    });
+  }
+
+  const newVersionId = db.transaction(() => {
+    // Borra acceptances primero (FK CASCADE las borraría igual, pero
+    // ser explícitos deja claro qué pasa). En modelo de aceptación
+    // bloqueante: si la asesora restablece, las aceptaciones previas
+    // quedan huérfanas y los usuarios tendrán que re-aceptar la próxima
+    // publicación. Esto es coherente con "restablecer = empezar de cero".
+    db.prepare("DELETE FROM legal_acceptances WHERE document_id = ?").run(doc.id);
+    db.prepare("DELETE FROM legal_document_versions WHERE document_id = ?").run(doc.id);
+    const r = db.prepare(`
+      INSERT INTO legal_document_versions
+        (document_id, version_label, body_html, body_text, status, created_by, summary_of_changes)
+      VALUES (?, ?, ?, ?, 'draft', ?, ?)
+    `).run(
+      doc.id, "2026-v1", seedDoc.body_html, stripHtml(seedDoc.body_html),
+      req.user.id,
+      "Restablecido a plantilla inicial.",
+    );
+    return r.lastInsertRowid;
+  })();
+
+  res.json({ versionId: newVersionId, reset: true });
 });
 
 /** Edita el body / summary del borrador. Solo drafts; publicadas son inmutables. */
