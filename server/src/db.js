@@ -745,6 +745,56 @@ function backfillExisting() {
     console.warn("[db] backfill seed templates falló:", err.message);
   }
 
+  // 1b-bis. Cleanup de plantillas duplicadas dentro del mismo workspace.
+  //
+  // Bug histórico: el endpoint POST /templates/:id/clone insertaba sin
+  // verificar existencia previa, así que cada vez que un psicólogo
+  // presionaba "Editar" sobre una plantilla del sistema, se generaba
+  // una nueva copia con sufijo "(personalizada)". El modal de plantillas
+  // se llenaba de duplicados con uses_count=0.
+  //
+  // Cleanup: para cada (workspace_id, name) repetido, dejamos la fila
+  // con MAYOR uses_count (preservando el trabajo del usuario si la usó),
+  // y rompiendo empates por id menor (la más antigua, que es la base).
+  // Solo borramos si todas las copias están vacías (uses_count = 0) o
+  // todas tienen el mismo body_json — así no perdemos versiones editadas.
+  try {
+    const dups = db.prepare(`
+      SELECT workspace_id, name, COUNT(*) AS n
+      FROM document_templates
+      WHERE workspace_id IS NOT NULL AND archived = 0
+      GROUP BY workspace_id, name
+      HAVING COUNT(*) > 1
+    `).all();
+
+    let removed = 0;
+    for (const d of dups) {
+      const rows = db.prepare(`
+        SELECT id, body_json, uses_count
+        FROM document_templates
+        WHERE workspace_id = ? AND name = ? AND archived = 0
+        ORDER BY uses_count DESC, id ASC
+      `).all(d.workspace_id, d.name);
+      // Solo limpiamos si todas tienen el mismo body (son duplicados reales,
+      // no versiones distintas con el mismo nombre). Si alguien edito una
+      // copia, la dejamos toda y solo informamos.
+      const bodies = new Set(rows.map((r) => r.body_json));
+      if (bodies.size !== 1) continue;
+      const keep = rows[0].id;
+      const toDelete = rows.slice(1).map((r) => r.id);
+      if (toDelete.length > 0) {
+        db.prepare(`DELETE FROM document_templates WHERE id IN (${toDelete.map(() => "?").join(",")})`)
+          .run(...toDelete);
+        removed += toDelete.length;
+      }
+    }
+    if (removed > 0) {
+      console.log(`[db] backfill: eliminadas ${removed} plantillas duplicadas`);
+    }
+  } catch (err) {
+    console.warn("[db] backfill duplicate templates falló:", err.message);
+  }
+
   // 1c. Definiciones de tests psicométricos. La función es idempotente
   // (INSERT ... ON CONFLICT(id) DO UPDATE) así que correrla en cada
   // arranque permite agregar tests nuevos al catálogo sin tocar la DB.
@@ -1495,7 +1545,13 @@ function getSystemTemplates() {
           h2("P — Plan"),
           p("{{sesion.p}}"),
           hr(),
-          p("Firmado por {{profesional.nombre}} el {{fecha.larga}}."),
+          // Bloque de firma neutro: línea para firmar y datos del profesional.
+          // Antes había un literal "Firmado por X el Y" que aparecía siempre,
+          // dando apariencia de firma incluso cuando el documento estaba en
+          // borrador. La firma efectiva se gestiona desde el editor con el
+          // bloque de firma del profesional, no en este texto plano.
+          p("____________________________"),
+          p("{{profesional.nombre}} — TP {{profesional.tarjeta_profesional}}"),
         ],
       },
     },

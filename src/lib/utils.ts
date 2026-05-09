@@ -56,3 +56,52 @@ export function roleLabel(u: { role: string; isPlatformAdmin?: boolean }): strin
     default: return u.role.replace("_", " ");
   }
 }
+
+/**
+ * Parsea una fecha que puede venir del backend en distintos formatos:
+ *   - ISO con Z o offset → se respeta la TZ del string
+ *   - ISO sin Z (ej. de SQLite `datetime('now')` → "2026-05-09 02:50:00")
+ *     se asume UTC, que es lo que SQLite efectivamente guarda
+ *   - undefined/null → null
+ *
+ * Esto evita el bug donde una nota guardada en SQLite a las 21:50 hora
+ * Colombia (= 02:50 UTC del día siguiente) se mostraba con `new Date(...)`
+ * sin sufijo Z como hora local del navegador, lo que en algunos
+ * sistemas / SSR renderizaba como las 2:50 a.m. del día equivocado.
+ */
+export function parseBackendDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  // Si ya trae Z o offset, confiamos en el string.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso);
+  // Caso típico de SQLite "YYYY-MM-DD HH:MM:SS" → asumimos UTC.
+  const normalized = iso.includes(" ") ? iso.replace(" ", "T") : iso;
+  return new Date(normalized + "Z");
+}
+
+/** Formatea una fecha ISO del backend en hora Colombia, fecha + hora. */
+export function formatDateTimeCO(
+  iso: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" },
+): string {
+  const d = parseBackendDate(iso);
+  if (!d) return "—";
+  try {
+    return d.toLocaleString("es-CO", { timeZone: "America/Bogota", ...options });
+  } catch {
+    return d.toString();
+  }
+}
+
+/** Formatea una fecha ISO del backend en hora Colombia, solo fecha. */
+export function formatDateCO(
+  iso: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" },
+): string {
+  const d = parseBackendDate(iso);
+  if (!d) return "—";
+  try {
+    return d.toLocaleDateString("es-CO", { timeZone: "America/Bogota", ...options });
+  } catch {
+    return d.toString();
+  }
+}

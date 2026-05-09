@@ -521,12 +521,29 @@ router.post("/templates/:id/clone", (req, res) => {
     WHERE id = ? AND (workspace_id IS NULL OR workspace_id = ?)
   `).get(req.params.id, ws(req));
   if (!orig) return res.status(404).json({ error: "Plantilla no encontrada" });
+
+  const cloneName = orig.name + (orig.scope === "system" ? " (personalizada)" : " (copia)");
+
+  // Idempotente: si ya hay una plantilla del workspace con el nombre que
+  // generaríamos al clonar, devolvemos esa en lugar de crear otra. Antes
+  // este endpoint creaba duplicados cada vez que el psicólogo presionaba
+  // "Editar" sobre una plantilla del sistema, llenando el modal de
+  // plantillas con copias idénticas.
+  const existingClone = db.prepare(`
+    SELECT * FROM document_templates
+    WHERE workspace_id = ? AND name = ? AND archived = 0
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(ws(req), cloneName);
+  if (existingClone) {
+    return res.json({ ...existingClone, body_json: safeJSON(existingClone.body_json), archived: !!existingClone.archived });
+  }
+
   const ins = db.prepare(`
     INSERT INTO document_templates (workspace_id, name, description, category, scope, body_json, body_text, legal_disclaimer, created_by_user_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'workspace', ?, ?, ?, ?, ?, ?)
   `).run(
-    ws(req),
-    orig.name + (orig.scope === "system" ? " (personalizada)" : " (copia)"),
+    ws(req), cloneName,
     orig.description, orig.category,
     orig.body_json, orig.body_text, orig.legal_disclaimer,
     req.user.id, now(), now()
@@ -732,12 +749,24 @@ router.get("/:id", (req, res) => {
  * - Si nada: crea un body vacío.
  */
 router.post("/", (req, res) => {
-  const { name, type, patient_id, patient_name, template_id, body_json, note_id } = req.body ?? {};
+  const { name, type, patient_id, template_id, body_json, note_id } = req.body ?? {};
+  let { patient_name } = req.body ?? {};
   if (!name) return res.status(400).json({ error: "name requerido" });
+
+  // Si el cliente pasó `patient_id` pero olvidó `patient_name` (caso típico
+  // del flujo "Generar documento" desde la historia clínica), lo
+  // resolvemos aquí. Antes el header del documento mostraba "Sin paciente
+  // vinculado" aunque el id estuviera persistido — ahora se llena solo.
+  if (patient_id && !patient_name) {
+    const p = db.prepare("SELECT name FROM patients WHERE id = ? AND workspace_id = ?")
+      .get(patient_id, ws(req));
+    if (p) patient_name = p.name;
+  }
 
   let finalBody = body_json ?? { type: "doc", content: [{ type: "paragraph" }] };
   let resolvedType = type ?? "informe";
   let resolvedTemplateId = null;
+  let interpolationCtx = null;
 
   if (template_id) {
     const tpl = db.prepare(`
@@ -749,12 +778,31 @@ router.post("/", (req, res) => {
     if (tplBody) {
       // Si viene note_id, las {{sesion.*}} se rellenan con datos reales de
       // esa nota clínica; si no, sesion.* queda con defaults (fecha de hoy).
-      const ctx = buildInterpolationContext(ws(req), patient_id, req.user.name, note_id ?? null);
-      finalBody = interpolateDoc(tplBody, ctx);
+      interpolationCtx = buildInterpolationContext(ws(req), patient_id, req.user.name, note_id ?? null);
+      finalBody = interpolateDoc(tplBody, interpolationCtx);
     }
     resolvedType = tpl.category || resolvedType;
     resolvedTemplateId = tpl.id;
     db.prepare("UPDATE document_templates SET uses_count = uses_count + 1 WHERE id = ?").run(tpl.id);
+  }
+
+  // Si el cliente pidió interpolar el `name` (ej: "Nota de evolución — sesión {{sesion.numero}}"),
+  // lo expandimos con el mismo contexto que el body. Útil para que el título
+  // del documento incluya el número de sesión correcto sin que el cliente
+  // tenga que calcularlo.
+  let resolvedName = name;
+  if (interpolationCtx && /\{\{[^}]+\}\}/.test(name)) {
+    resolvedName = name.replace(/\{\{([^}]+)\}\}/g, (_m, key) => {
+      const path = String(key).trim().split(".");
+      let cur = interpolationCtx;
+      for (const k of path) {
+        if (cur && typeof cur === "object" && k in cur) cur = cur[k];
+        else return "";
+      }
+      return cur == null ? "" : String(cur);
+    }).replace(/\s+—\s+sesión\s*$/i, "").trim();
+    // El replace final limpia "— sesión " si quedó suelto al expandir un
+    // {{sesion.numero}} vacío (caso: documento sin nota vinculada).
   }
 
   const id = newDocId(ws(req));
@@ -767,7 +815,7 @@ router.post("/", (req, res) => {
       status, professional, created_at, updated_at
     ) VALUES (?, ?, ?, ?, 'editor', ?, ?, ?, ?, ?, 'borrador', ?, ?, ?)
   `).run(
-    id, ws(req), name, resolvedType,
+    id, ws(req), resolvedName, resolvedType,
     patient_id ?? null, patient_name ?? null,
     JSON.stringify(finalBody), text, resolvedTemplateId,
     req.user.name ?? "",

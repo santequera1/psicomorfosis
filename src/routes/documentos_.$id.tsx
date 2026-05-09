@@ -13,6 +13,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 import { api, type PsmDocument, type TipTapDoc, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
+import { formatDateTimeCO } from "@/lib/utils";
 import { PatientPicker } from "@/components/app/PatientPicker";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
@@ -155,7 +156,25 @@ function DocumentDetailPage() {
     return <AppShell><div className="flex items-center justify-center min-h-[60vh] text-ink-500"><Loader2 className="h-5 w-5 animate-spin" /></div></AppShell>;
   }
   if (error || !doc) {
-    return <AppShell><div className="text-center py-20"><AlertCircle className="h-8 w-8 mx-auto text-ink-400 mb-2" /><p className="text-ink-500">Documento no encontrado.</p></div></AppShell>;
+    // Si la URL es claramente inválida (ej: /documentos/partes — el usuario
+    // tipeó manualmente), guiamos a volver en vez de dejarlo en seco.
+    return (
+      <AppShell>
+        <div className="max-w-md mx-auto text-center py-20">
+          <AlertCircle className="h-10 w-10 mx-auto text-ink-400 mb-3" />
+          <h2 className="font-serif text-xl text-ink-900">Documento no encontrado</h2>
+          <p className="text-sm text-ink-500 mt-1.5">
+            El documento "<code className="text-ink-700">{id}</code>" no existe o fue eliminado.
+          </p>
+          <Link
+            to="/documentos"
+            className="inline-flex items-center gap-1.5 mt-5 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800"
+          >
+            Volver a Documentos
+          </Link>
+        </div>
+      </AppShell>
+    );
   }
 
   // Si es archivo subido, mostramos el viewer en una página dedicada
@@ -642,9 +661,12 @@ function PatientLinkRow({ doc, disabled }: { doc: PsmDocument; disabled?: boolea
   );
 }
 
+// Formato local del archivo para mantener llamadas existentes; delega al
+// helper central que sí respeta TZ Colombia y normaliza fechas SQLite.
 function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("es-CO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatDateTimeCO(iso, {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 function sanitizeFilename(name: string): string {

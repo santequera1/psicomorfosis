@@ -10,11 +10,12 @@ import {
   ChevronDown, ChevronRight, Edit3, Plus, X, ExternalLink, Loader2, Check, Lock, History, AlertCircle, Trash2,
   Search,
 } from "lucide-react";
-import { cn, displayPatientName, displayPatientShortName } from "@/lib/utils";
+import { cn, displayPatientName, displayPatientShortName, formatDateTimeCO } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 type Patient = ApiPatient;
 
@@ -26,11 +27,10 @@ const BLOCK_ICONS: Record<keyof typeof BLOCK_LABELS, React.ComponentType<{ class
   plan: Pill,
 };
 
-function formatDateTime(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
-  } catch { return iso; }
-}
+// Re-export del helper central para no romper llamadas existentes en este
+// archivo. Asume que el ISO viene del backend (SQLite UTC sin Z) y formatea
+// en hora Colombia.
+const formatDateTime = (iso: string) => formatDateTimeCO(iso);
 
 function parseSoap(content: string): SoapContent | null {
   try {
@@ -390,6 +390,10 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note?.content ?? "");
   const [showHistory, setShowHistory] = useState(false);
+  // Confirmación previa antes de firmar — la firma deja la nota
+  // inmodificable per Res. 1995/1999, así que un click accidental
+  // en "Firmar" no debería bloquear la sección sin advertencia.
+  const [confirmSign, setConfirmSign] = useState(false);
   const Icon = BLOCK_ICONS[kind];
   const title = BLOCK_LABELS[kind];
 
@@ -520,7 +524,7 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
             <div className="flex items-center gap-2">
               {note.isDraft && (
                 <button
-                  onClick={() => signMu.mutate()}
+                  onClick={() => setConfirmSign(true)}
                   disabled={signMu.isPending}
                   className="text-brand-700 hover:underline font-medium disabled:opacity-60 inline-flex items-center gap-1"
                 >
@@ -537,6 +541,16 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
             </div>
           </div>
           {showHistory && <BlockHistory patientId={patientId} kind={kind} />}
+          {confirmSign && (
+            <ConfirmDialog
+              title={`Firmar "${title}"`}
+              message={`Una vez firmada, esta sección no podrá editarse (Resolución 1995/1999). Para hacer cambios, deberás crear una nueva versión y la actual quedará en el historial. ¿Confirmas la firma?`}
+              confirmLabel="Sí, firmar"
+              cancelLabel="Cancelar"
+              onCancel={() => setConfirmSign(false)}
+              onConfirm={() => { setConfirmSign(false); signMu.mutate(); }}
+            />
+          )}
         </>
       ) : (
         <p className="text-sm text-ink-400 italic">Sin contenido. Haz clic en ✏ para comenzar.</p>
@@ -676,6 +690,7 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
   const [editing, setEditing] = useState(false);
   const [supersedeOpen, setSupersedeOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmSign, setConfirmSign] = useState(false);
   const soap = parseSoap(note.content);
 
   const KIND_STYLE: Record<string, { label: string; bg: string }> = {
@@ -764,7 +779,7 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
                   <Edit3 className="h-3 w-3" /> Editar
                 </button>
                 <button
-                  onClick={() => signMu.mutate()}
+                  onClick={() => setConfirmSign(true)}
                   disabled={signMu.isPending}
                   className="h-8 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-1.5"
                 >
@@ -799,6 +814,17 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
           note={note}
           patientId={patientId}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {confirmSign && (
+        <ConfirmDialog
+          title="Firmar nota de sesión"
+          message="Una vez firmada, la nota no podrá editarse. Si necesitas hacer cambios después, deberás crear una nueva versión y la actual quedará en el historial firmado (Resolución 1995/1999). ¿Confirmas la firma?"
+          confirmLabel="Sí, firmar"
+          cancelLabel="Cancelar"
+          onCancel={() => setConfirmSign(false)}
+          onConfirm={() => { setConfirmSign(false); signMu.mutate(); }}
         />
       )}
     </article>
@@ -836,8 +862,13 @@ function GenerateDocFromNoteModal({ note, patientId, onClose }: { note: Clinical
   async function pick(t: DocumentTemplate) {
     setCreating(t.id);
     try {
+      // Usamos el placeholder {{sesion.numero}} para que el backend
+      // calcule el número cronológico real de sesión del paciente al
+      // momento de crear el documento. Antes pasábamos `note.id` que
+      // es el id de la fila (ej: 99) y no el N° de sesión (ej: 12),
+      // así que el título salía con un número absurdo.
       const created = await api.createDocument({
-        name: `${t.name} — sesión ${note.id}`,
+        name: `${t.name} — sesión {{sesion.numero}}`,
         type: t.category,
         patient_id: patientId,
         template_id: t.id,

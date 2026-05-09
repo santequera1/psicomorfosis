@@ -95,22 +95,31 @@ function formatRelativeAppointment(dateStr, timeStr, mode) {
  */
 function enrichWithAppointments(patients, workspaceId) {
   if (patients.length === 0) return patients;
-  // Próxima cita (futura, no cancelada/atendida)
+  // Próxima cita (futura, no cancelada/atendida).
+  //
+  // Las citas se guardan con `date` y `time` en hora local de Colombia
+  // (lo que el psicólogo escogió en la agenda). El servidor está en UTC,
+  // así que `date('now', 'localtime')` daba la fecha UTC del VPS — eso
+  // hacía que las citas del día de hoy hora Colombia se trataran como
+  // pasadas a partir de las 19:00 hora Colombia (= 00:00 UTC del día
+  // siguiente). Forzamos `-5 hours` para alinear el "hoy" del query a
+  // hora Bogotá. Colombia no aplica horario de verano, así que el offset
+  // es estable.
   const nextStmt = db.prepare(`
     SELECT date, time FROM appointments
     WHERE workspace_id = ? AND patient_id = ?
-      AND (date > date('now', 'localtime')
-           OR (date = date('now', 'localtime') AND time >= strftime('%H:%M', 'now', 'localtime')))
+      AND (date > date('now', '-5 hours')
+           OR (date = date('now', '-5 hours') AND time >= strftime('%H:%M', 'now', '-5 hours')))
       AND status NOT IN ('cancelada', 'atendida')
     ORDER BY date ASC, time ASC
     LIMIT 1
   `);
-  // Última cita atendida (pasada)
+  // Última cita atendida (pasada).
   const lastStmt = db.prepare(`
     SELECT date, time FROM appointments
     WHERE workspace_id = ? AND patient_id = ?
-      AND (date < date('now', 'localtime')
-           OR (date = date('now', 'localtime') AND time < strftime('%H:%M', 'now', 'localtime')))
+      AND (date < date('now', '-5 hours')
+           OR (date = date('now', '-5 hours') AND time < strftime('%H:%M', 'now', '-5 hours')))
       AND status = 'atendida'
     ORDER BY date DESC, time DESC
     LIMIT 1
