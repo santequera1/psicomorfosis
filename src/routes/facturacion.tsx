@@ -73,8 +73,11 @@ function FacturacionPage() {
   });
   // Cuentas del wallet — se usan en la columna "Método" para renderizar
   // un chip BankCard xs cuando el recibo está vinculado a una cuenta.
+  // queryKey "all" para distinguir de WalletKpiCard que pide solo
+  // activas (queryKey "active"). Antes ambos compartían cache y
+  // producía conteos inestables al refrescar.
   const { data: bankAccounts = [] } = useQuery({
-    queryKey: ["bank-accounts"],
+    queryKey: ["bank-accounts", "all"],
     queryFn: () => api.listBankAccounts({ includeArchived: true }),
   });
   const accountById = useMemo(() => {
@@ -421,11 +424,10 @@ export function ReceiptFormModal({
   );
 
   // Cuentas registradas del wallet — se muestran como selector visual
-  // cuando el método NO es efectivo. El usuario puede elegir una de las
-  // suyas o "Sin cuenta específica" para mantener compatibilidad con
-  // el campo `bank` texto libre.
+  // cuando el método NO es efectivo. Usa queryKey "active" igual que
+  // WalletKpiCard para compartir cache (ambas piden solo activas).
   const { data: bankAccounts = [] } = useQuery({
-    queryKey: ["bank-accounts"],
+    queryKey: ["bank-accounts", "active"],
     queryFn: () => api.listBankAccounts(),
   });
   // Si el invoice ya tenía una cuenta vinculada, partir con ella; si no,

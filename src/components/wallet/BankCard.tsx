@@ -37,15 +37,18 @@ export interface BankCardProps {
   className?: string;
 }
 
-// Bordes y altos por tamaño. Las tarjetas físicas tienen radio de
-// ~3.18mm que en pantalla son ~8px (rounded-lg). Antes usábamos
-// rounded-xl/2xl (12-16px) y se sentía como botón pastilla más que
-// tarjeta de débito real.
+// Bordes y proporciones por tamaño. Las tarjetas físicas tienen ratio
+// 1.585:1 (85.6mm × 53.98mm) y radio de ~3.18mm = ~8px en pantalla.
+// Antes usábamos h-20 fijo + rounded-xl, lo que las hacía ver como
+// botón pastilla muy ancho. Ahora aspect-[320/202] (1.585) + rounded-lg
+// para que se vean como tarjetas de débito reales.
 const SIZE_CLASS = {
   xs: "h-10 px-3 py-1.5 rounded-md text-[11px]",
-  mini: "h-20 px-3 py-2.5 rounded-lg",
-  sm: "h-28 p-3 rounded-lg",
-  md: "h-40 sm:h-44 p-5 rounded-lg",
+  // mini: aspect-ratio garantizado, ancho controlado por el padre.
+  // Ej: padre w-[180px] → tarjeta 180×113. Padre 220px → 220×138.
+  mini: "aspect-[320/202] px-3.5 py-3 rounded-lg",
+  sm: "aspect-[320/202] p-4 rounded-lg",
+  md: "aspect-[320/202] p-5 rounded-lg",
 };
 
 export function BankCard({
