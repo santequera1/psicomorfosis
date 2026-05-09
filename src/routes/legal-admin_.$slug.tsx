@@ -159,23 +159,44 @@ function LegalDocumentEditPage() {
     }, 1200);
   }
 
-  // Publicar. Antes de disparar la mutación cancelamos cualquier auto-save
-  // pendiente para evitar que llegue al backend cuando la versión ya esté
-  // publicada (de ahí el 400 que veía la asesora en consola).
+  // Publicar.
+  //
+  // UX clave: la asesora piensa en "edita y publica". El versionado interno
+  // (draft → published → archivada) existe por auditoría SIC, pero NO debe
+  // forzarla a hacer pasos manuales. Por eso, en una sola transacción de
+  // mutation hacemos:
+  //   1) UPDATE summary del draft actual
+  //   2) POST publish → archiva la anterior y publica esta
+  //   3) POST draft → crea el siguiente borrador clonando la recién
+  //      publicada, listo para que la asesora siga editando sin paso
+  //      intermedio "esta versión ya no se puede editar".
+  //
+  // Antes el frontend ponía editingVersionId=null y dependía del useEffect
+  // para crear el nuevo draft. Eso generaba una ventana de tiempo donde el
+  // doc cacheado todavía mostraba la versión recién publicada como draft;
+  // el useEffect la elegía y los siguientes edits / publicaciones daban
+  // 400 "Solo se pueden editar borradores". Ahora saltamos directo al
+  // nuevo id sin pasar por null.
   const publishMut = useMutation({
-    mutationFn: (input: { versionId: number; summary: string }) => {
+    mutationFn: async (input: { versionId: number; summary: string }) => {
       // Cancela debounce + bloquea futuros auto-saves de esta versión.
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
       blockAutosaveRef.current = true;
-      return api.legalAdminUpdateVersion(input.versionId, { summaryOfChanges: input.summary })
-        .then(() => api.legalAdminPublishVersion(input.versionId));
+      await api.legalAdminUpdateVersion(input.versionId, { summaryOfChanges: input.summary });
+      await api.legalAdminPublishVersion(input.versionId);
+      // Crea (o reutiliza) el draft siguiente. El backend garantiza
+      // idempotencia: si ya existiera un draft, devuelve ese.
+      const next = await api.legalAdminCreateDraft(slug);
+      return { nextDraftId: next.versionId };
     },
-    onSuccess: () => {
+    onSuccess: (resp) => {
       setPublishOpen(false);
-      setEditingVersionId(null);
+      // Saltamos directo al nuevo draft. NO pasamos por null para evitar
+      // que el useEffect resincronice contra estado cacheado.
+      setEditingVersionId(resp.nextDraftId);
       // Forzamos refetch del documento + del endpoint público para que la
       // página /privacidad o /terminos refleje el cambio sin esperar caché.
       qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
@@ -195,8 +216,6 @@ function LegalDocumentEditPage() {
       } else {
         toast.success("Publicado. La nueva versión ya es la vigente.");
       }
-      // Re-habilitar auto-save: el useEffect creará un draft fresco y al
-      // cargarlo, el blockAutosaveRef se resetea.
       blockAutosaveRef.current = false;
     },
     onError: (e: any) => {
@@ -541,7 +560,11 @@ function PublishModal({
   initialSummary: string;
 }) {
   const [summary, setSummary] = useState(initialSummary);
-  const canSubmit = summary.trim().length >= 5 && !publishing;
+  // El resumen es opcional. Antes exigíamos mínimo 5 chars, pero la
+  // asesora muchas veces solo quiere corregir un typo y no necesita
+  // describirlo. Si lo deja vacío, no aparece la línea "Cambios respecto
+  // a la versión anterior" en la página pública.
+  const canSubmit = !publishing;
 
   return (
     <div className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm flex items-center justify-center px-4">
@@ -551,8 +574,8 @@ function PublishModal({
             <Send className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-serif text-lg text-ink-900">Publicar nueva versión</h3>
-            <p className="text-xs text-ink-500">La versión vigente actual quedará archivada.</p>
+            <h3 className="font-serif text-lg text-ink-900">Publicar cambios</h3>
+            <p className="text-xs text-ink-500">El contenido nuevo entrará vigente de inmediato.</p>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center" aria-label="Cerrar">
             <X className="h-4 w-4" />
@@ -560,23 +583,22 @@ function PublishModal({
         </header>
 
         <div className="px-5 py-4 space-y-3">
-          <div className="rounded-md bg-warning-soft border border-warning/20 p-3 text-xs text-ink-900 leading-relaxed">
-            Una vez publicada, esta versión no se podrá editar. Si necesitas
-            cambiar algo, deberás crear una nueva versión.
-          </div>
+          <p className="text-sm text-ink-700 leading-relaxed">
+            Tu nuevo contenido reemplazará al que está publicado actualmente.
+            Después podrás seguir editando y publicar otra vez cuando quieras.
+          </p>
           <div>
             <label className="block text-xs font-medium text-ink-700 mb-1.5">
-              Resumen de cambios <span className="text-ink-400 font-normal">(visible en el banner público)</span>
+              Resumen breve de los cambios <span className="text-ink-400 font-normal">(opcional, queda en el historial)</span>
             </label>
             <textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               autoFocus
-              placeholder="Ej: Aclaramos cláusula octava sobre borrado de respaldos."
-              rows={3}
+              placeholder="Ej: corregí ortografía en el punto 3."
+              rows={2}
               className="w-full rounded-lg border border-line-200 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
             />
-            <p className="text-[11px] text-ink-500 mt-1">Mínimo 5 caracteres. La asesora legal lo verá en el historial.</p>
           </div>
         </div>
 
