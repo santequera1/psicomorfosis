@@ -78,6 +78,17 @@ router.get("/public/:slug", (req, res) => {
   if (!v) {
     return res.status(404).json({ error: "Documento no publicado" });
   }
+  // ¿Existe alguna versión anterior (archived) de este documento? Si no,
+  // es la primera publicación y la página pública omitirá el bloque de
+  // "Cambios respecto a la versión anterior" — no hay cambios versus
+  // una versión que nunca existió, y el summary de la primera publicación
+  // típicamente es metadato técnico ("Importación inicial…") que no
+  // aporta al lector externo.
+  const prev = db.prepare(`
+    SELECT 1 FROM legal_document_versions
+    WHERE document_id = ? AND status = 'archived'
+    LIMIT 1
+  `).get(v.document_id);
   res.set("Cache-Control", "public, max-age=300"); // 5 min
   res.json({
     slug: v.slug,
@@ -87,6 +98,7 @@ router.get("/public/:slug", (req, res) => {
     bodyHtml: v.body_html,
     publishedAt: v.published_at,
     summaryOfChanges: v.summary_of_changes,
+    hasPreviousVersion: !!prev,
   });
 });
 

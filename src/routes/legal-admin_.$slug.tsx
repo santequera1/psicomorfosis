@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, Send, Trash2, Eye, EyeOff,
+  Loader2, Send, Trash2, Eye, EyeOff,
   CheckCircle2, AlertCircle, X, Clock, Archive, FileSignature, History,
   ExternalLink, ClipboardCheck,
 } from "lucide-react";
@@ -179,12 +179,10 @@ function LegalDocumentEditPage() {
       title={doc.title}
       subtitle={doc.description ?? undefined}
       fullWidth
+      backTo="/legal-admin"
+      backLabel="Documentos"
     >
       <div className="mb-4 flex items-center gap-3">
-        <Link to="/legal-admin" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">
-          <ArrowLeft className="h-4 w-4" /> Volver
-        </Link>
-        <span className="text-ink-300">·</span>
         <SaveIndicator dirty={dirtyRef.current} pending={saveMut.isPending} hasDraft={!!editingVersionId} />
       </div>
 

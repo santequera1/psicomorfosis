@@ -257,17 +257,31 @@ function calcStrength(pwd: string): { score: number; label: string } {
   return { score, label: labels[score] };
 }
 
-/** Lienzo cálido para las páginas del portal antes de iniciar sesión. */
-export function PortalCanvas({ children }: { children: React.ReactNode }) {
+/**
+ * Lienzo cálido para las páginas del portal antes de iniciar sesión y
+ * para los documentos legales públicos. `width` permite que el header
+ * (logo) se alinee con el ancho del contenido principal — necesario en
+ * páginas legales con TOC lateral, que usan más ancho que un formulario
+ * de activación.
+ */
+export function PortalCanvas({
+  children,
+  width = "narrow",
+}: {
+  children: React.ReactNode;
+  /** narrow = max-w-3xl (default, formularios). wide = max-w-5xl (legal). */
+  width?: "narrow" | "wide";
+}) {
   // Aplicar clase para evitar el .dark global del staff
   useEffect(() => {
     const wasDark = document.documentElement.classList.contains("dark");
     document.documentElement.classList.remove("dark");
     return () => { if (wasDark) document.documentElement.classList.add("dark"); };
   }, []);
+  const headerWidth = width === "wide" ? "max-w-5xl" : "max-w-3xl";
   return (
     <div className="min-h-screen bg-bg flex flex-col">
-      <header className="px-6 py-5 flex items-center justify-between max-w-3xl mx-auto w-full">
+      <header className={`px-6 py-5 flex items-center justify-between ${headerWidth} mx-auto w-full`}>
         <div className="inline-flex items-center gap-2.5 text-ink-900">
           <Logo className="h-7 w-7 text-brand-700" />
           <span className="font-serif text-lg">Psicomorfosis</span>

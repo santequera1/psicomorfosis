@@ -45,9 +45,10 @@ export function LegalPublicPage({ slug, fallbackTitle }: { slug: string; fallbac
     retry: 1,
   });
 
-  // Inyectamos id slugificado a cada h2 y h3 del HTML para anclar la TOC.
-  // Lo hacemos parseando el HTML como string una sola vez (memoizado por
-  // bodyHtml). Devuelve {html, headings[]}.
+  // Inyectamos id slugificado y scroll-margin-top a cada h2 del HTML
+  // para anclar la TOC y para que al hacer click en el ancla el heading
+  // no quede pegado al borde superior de la ventana (queda con un offset).
+  // Memoizado por bodyHtml.
   const { html, headings } = useMemo(() => {
     if (!data?.bodyHtml) return { html: "", headings: [] as Heading[] };
     const out: Heading[] = [];
@@ -61,40 +62,50 @@ export function LegalPublicPage({ slug, fallbackTitle }: { slug: string; fallbac
         while (used.has(id)) id = `${slugify(text)}-${++attempt}`;
         used.add(id);
         out.push({ id, text });
-        return `<h2 id="${id}"${attrs ?? ""}>${inner}</h2>`;
+        return `<h2 id="${id}" style="scroll-margin-top:96px"${attrs ?? ""}>${inner}</h2>`;
       },
     );
     return { html: withIds, headings: out };
   }, [data?.bodyHtml]);
 
-  // Highlight activo en TOC mientras se hace scroll.
+  // Highlight activo del TOC. Estrategia simple: en cada scroll buscamos
+  // el último heading cuyo top esté por encima de un umbral fijo (100px
+  // del viewport top). Es más predecible que IntersectionObserver para
+  // documentos largos donde múltiples headings caben en el viewport.
   const [activeId, setActiveId] = useState<string | null>(null);
   const articleRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!html || headings.length === 0) return;
-    const root = articleRef.current;
-    if (!root) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        // El primer heading visible "desde arriba" es el activo.
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActiveId((visible[0].target as HTMLElement).id);
-      },
-      { rootMargin: "-80px 0px -75% 0px", threshold: 0 },
-    );
-    headings.forEach((h) => {
-      const el = root.querySelector(`#${CSS.escape(h.id)}`);
-      if (el) obs.observe(el);
-    });
-    return () => obs.disconnect();
+    const THRESHOLD = 110; // pixels desde el top del viewport
+    function pickActive() {
+      const root = articleRef.current;
+      if (!root) return;
+      let candidate: string | null = null;
+      for (const h of headings) {
+        const el = root.querySelector(`#${CSS.escape(h.id)}`);
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top - THRESHOLD <= 0) candidate = h.id;
+        else break;
+      }
+      // Si todos están por debajo del umbral (estamos arriba del todo),
+      // marcamos el primero como activo para que el TOC no quede vacío.
+      setActiveId(candidate ?? headings[0].id);
+    }
+    pickActive();
+    const onScroll = () => pickActive();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [html, headings]);
 
   return (
-    <PortalCanvas>
-      <div className="max-w-[1100px] mx-auto">
+    <PortalCanvas width="wide">
+      <div className="max-w-5xl mx-auto">
         {isLoading && (
           <div className="flex items-center justify-center py-20 text-ink-400">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -132,7 +143,12 @@ export function LegalPublicPage({ slug, fallbackTitle }: { slug: string; fallbac
                   </span>
                   <span className="font-mono text-ink-500">Versión {data.versionLabel}</span>
                 </div>
-                {data.summaryOfChanges && (
+                {/* Solo mostramos el "Cambios respecto a la versión anterior"
+                    cuando efectivamente hay una versión anterior archivada.
+                    En la primera publicación de un documento el summary
+                    suele ser metadato técnico ("Importación inicial…") que
+                    no aporta al lector externo. */}
+                {data.hasPreviousVersion && data.summaryOfChanges && (
                   <p className="text-xs text-ink-500 mt-3 italic max-w-2xl">
                     Cambios respecto a la versión anterior: {data.summaryOfChanges}
                   </p>

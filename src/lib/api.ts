@@ -1354,6 +1354,7 @@ export const api = {
       bodyHtml: string;
       publishedAt: string;
       summaryOfChanges: string | null;
+      hasPreviousVersion: boolean;
     }>(`/api/legal/public/${slug}`),
   legalListPublic: () =>
     request<Array<{

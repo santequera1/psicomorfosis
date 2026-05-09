@@ -19,10 +19,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Scale, FileText, ChevronRight, Loader2, Globe, Lock, Edit3,
   CheckCircle2, Clock, ClipboardCheck, LogOut, PanelLeftClose, PanelLeftOpen,
-  Settings,
+  Settings, Sun, Moon, ArrowLeft,
 } from "lucide-react";
 import { api, getStoredUser, clearSession } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
 
 // ─── Persistencia del collapsed (mismo patrón que AppSidebar) ──────────
 const KEY_LEGAL_COLLAPSED = "psm.legal-sidebar.collapsed";
@@ -216,6 +217,8 @@ export function LegalAdminShell({
   subtitle,
   children,
   fullWidth = false,
+  backTo,
+  backLabel = "Volver",
 }: {
   title: string;
   subtitle?: string;
@@ -224,6 +227,11 @@ export function LegalAdminShell({
    *  max-width). Útil para el editor cuando se quiere ganar espacio
    *  con el sidebar colapsado. */
   fullWidth?: boolean;
+  /** Cuando se entrega, muestra un botón "← Volver" en el header del
+   *  shell. Útil para vistas anidadas (editor de un documento) donde
+   *  hay un destino natural al que regresar. */
+  backTo?: string;
+  backLabel?: string;
 }) {
   const [user] = useState(() => getStoredUser());
   const [collapsed, setCollapsedState] = useState<boolean>(() => readCollapsed());
@@ -231,6 +239,13 @@ export function LegalAdminShell({
     setCollapsedState(v);
     writeCollapsed(v);
   }
+  // Estado del tema, igual que en el Topbar clínico — el toggle
+  // alterna claro/oscuro y persiste; aquí mantenemos solo el state
+  // local para forzar el re-render del icono Sun/Moon.
+  const [themePref, setThemePref] = useState<ThemePreference>(() => getTheme());
+  const isDark = themePref === "oscuro" ||
+    (themePref === "auto" && typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
 
   return (
     <div className="min-h-screen bg-bg-50 text-ink-900 flex">
@@ -303,11 +318,29 @@ export function LegalAdminShell({
       </aside>
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur border-b border-line-200 h-16 flex items-center px-4 sm:px-8">
+        <header className="sticky top-0 z-30 bg-surface/80 backdrop-blur border-b border-line-200 h-16 flex items-center gap-3 px-4 sm:px-8">
+          {backTo && (
+            <Link
+              to={backTo}
+              className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center gap-1.5 text-sm shrink-0"
+              aria-label={backLabel}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">{backLabel}</span>
+            </Link>
+          )}
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Asesoría legal</div>
             <div className="font-serif text-lg text-ink-900 leading-tight truncate">{title}</div>
           </div>
+          <button
+            onClick={() => setThemePref(toggleTheme())}
+            className="h-10 w-10 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center justify-center shrink-0"
+            aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            title={isDark ? "Modo claro" : "Modo oscuro"}
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </header>
         <main className={cn(
           "flex-1 px-4 sm:px-8 py-6 sm:py-8 w-full",
