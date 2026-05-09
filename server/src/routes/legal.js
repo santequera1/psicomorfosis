@@ -328,15 +328,29 @@ router.get("/admin/documents/:slug", (req, res) => {
   });
 });
 
-/** Body completo de una versión (HTML para editar). */
+/** Body completo de una versión (HTML para editar) + presencia. */
 router.get("/admin/versions/:id", (req, res) => {
   const v = db.prepare(`
-    SELECT v.*, d.slug, d.title AS document_title
+    SELECT v.*, d.slug, d.title AS document_title,
+           lu.name AS last_modified_by_name
     FROM legal_document_versions v
     JOIN legal_documents d ON d.id = v.document_id
+    LEFT JOIN users lu ON lu.id = v.last_modified_by
     WHERE v.id = ?
   `).get(Number(req.params.id));
   if (!v) return res.status(404).json({ error: "No encontrado" });
+
+  // Editores activos en los últimos 60s (excluyendo al que pregunta —
+  // a la asesora no le interesa verse a sí misma como "editando ahora").
+  const activeEditors = db.prepare(`
+    SELECT user_id, user_name, last_seen_at
+    FROM legal_document_editors
+    WHERE version_id = ?
+      AND user_id != ?
+      AND last_seen_at >= datetime('now', '-60 seconds')
+    ORDER BY last_seen_at DESC
+  `).all(v.id, req.user.id);
+
   res.json({
     id: v.id,
     documentId: v.document_id,
@@ -348,6 +362,68 @@ router.get("/admin/versions/:id", (req, res) => {
     status: v.status,
     createdAt: v.created_at,
     publishedAt: v.published_at,
+    lastModifiedBy: v.last_modified_by
+      ? { id: v.last_modified_by, name: v.last_modified_by_name }
+      : null,
+    lastModifiedAt: v.last_modified_at,
+    activeEditors: activeEditors.map((e) => ({
+      userId: e.user_id,
+      name: e.user_name,
+      lastSeenAt: e.last_seen_at,
+    })),
+  });
+});
+
+/**
+ * POST /api/legal/admin/versions/:id/heartbeat
+ *
+ * Marca al usuario actual como "editando ahora" en esa versión. El
+ * frontend lo llama cada 30s mientras tiene el editor abierto. Si en
+ * 60s no hay otro heartbeat, la entrada deja de aparecer en
+ * activeEditors. Devuelve la lista actualizada para que el cliente
+ * la pinte sin tener que hacer un GET aparte.
+ *
+ * Solo aplica a versiones en estado 'draft' — no tiene sentido
+ * trackear presencia sobre versiones publicadas/archivadas (no se
+ * editan).
+ */
+router.post("/admin/versions/:id/heartbeat", (req, res) => {
+  const versionId = Number(req.params.id);
+  const v = db.prepare("SELECT id, status FROM legal_document_versions WHERE id = ?")
+    .get(versionId);
+  if (!v) return res.status(404).json({ error: "No encontrado" });
+  if (v.status !== "draft") {
+    // Idempotente: respondemos OK pero sin tracking porque no aplica.
+    return res.json({ activeEditors: [] });
+  }
+
+  // UPSERT: si la fila existe, actualizamos last_seen_at; si no,
+  // insertamos. SQLite usa INSERT ... ON CONFLICT.
+  db.prepare(`
+    INSERT INTO legal_document_editors (version_id, user_id, user_name, last_seen_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(version_id, user_id) DO UPDATE SET
+      last_seen_at = datetime('now'),
+      user_name = excluded.user_name
+  `).run(versionId, req.user.id, req.user.name ?? "Asesor legal");
+
+  // Devolvemos editores activos excluyendo al que llama. Mismo query
+  // que en el GET, así el cliente no necesita un fetch separado.
+  const activeEditors = db.prepare(`
+    SELECT user_id, user_name, last_seen_at
+    FROM legal_document_editors
+    WHERE version_id = ?
+      AND user_id != ?
+      AND last_seen_at >= datetime('now', '-60 seconds')
+    ORDER BY last_seen_at DESC
+  `).all(versionId, req.user.id);
+
+  res.json({
+    activeEditors: activeEditors.map((e) => ({
+      userId: e.user_id,
+      name: e.user_name,
+      lastSeenAt: e.last_seen_at,
+    })),
   });
 });
 
@@ -470,6 +546,10 @@ router.patch("/admin/versions/:id", (req, res) => {
   if (updates.length === 0) {
     return res.json({ ok: true, noop: true });
   }
+  // Trackeamos quién y cuándo editó por última vez para que otros
+  // legal_admins vean "María editó esto hace 5 min" al abrir el doc.
+  updates.push("last_modified_by = ?", "last_modified_at = ?");
+  args.push(req.user.id, new Date().toISOString());
   args.push(v.id);
   db.prepare(`UPDATE legal_document_versions SET ${updates.join(", ")} WHERE id = ?`).run(...args);
   res.json({ ok: true });

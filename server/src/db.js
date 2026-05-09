@@ -734,6 +734,28 @@ function runMigrations() {
     // mostrar la cuenta del wallet cuando hay bank_account_id.
     "ALTER TABLE invoices ADD COLUMN bank_account_id INTEGER REFERENCES bank_accounts(id) ON DELETE SET NULL",
     "CREATE INDEX IF NOT EXISTS idx_invoices_bank_account ON invoices(bank_account_id)",
+    // ─── Co-edición de documentos legales (10 may 2026) ─────────────────
+    //
+    // Cuando hay 2+ legal_admins (María, Alba, etc.), pueden abrir el
+    // mismo draft simultáneamente y pisarse cambios sin enterarse. NO
+    // bloqueamos la edición — solo indicamos al editor "Alba está
+    // editando ahora" o "María modificó esto hace 5 min" para que se
+    // coordinen fuera de banda. El último auto-save sigue ganando, lo
+    // cual es aceptable para una asesoría pequeña.
+    //
+    // Heartbeat: el frontend hace POST /admin/versions/:id/heartbeat
+    // cada 30s. La fila se UPSERT-ea (PRIMARY KEY compuesta). Editores
+    // activos = filas con last_seen_at en los últimos 60s.
+    "ALTER TABLE legal_document_versions ADD COLUMN last_modified_by INTEGER REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE legal_document_versions ADD COLUMN last_modified_at TEXT",
+    `CREATE TABLE IF NOT EXISTS legal_document_editors (
+      version_id INTEGER NOT NULL REFERENCES legal_document_versions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_name TEXT NOT NULL,
+      last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (version_id, user_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_legal_editors_seen ON legal_document_editors(version_id, last_seen_at DESC)",
   ];
   for (const sql of migrations) {
     try {

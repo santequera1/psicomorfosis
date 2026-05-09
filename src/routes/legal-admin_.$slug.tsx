@@ -32,6 +32,8 @@ import { api, getStoredUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LegalDocumentEditor, LegalDocumentView } from "@/components/legal/LegalDocumentEditor";
 import { LegalAdminShell } from "./legal-admin";
+import { useLegalPresence } from "@/components/legal/useLegalPresence";
+import { PresenceBanner } from "@/components/legal/PresenceBanner";
 
 export const Route = createFileRoute("/legal-admin_/$slug")({
   head: ({ params }) => ({ meta: [{ title: `Editar · ${params.slug} · Psicomorfosis` }] }),
@@ -308,6 +310,15 @@ function LegalDocumentEditPage() {
     },
   });
 
+  // Presencia: heartbeat cada 30s mientras se está editando un draft.
+  // Devuelve la lista de OTROS legal_admins activos en este mismo
+  // versionId. Se usa para pintar el PresenceBanner. No corre cuando
+  // editingVersionId es null (no hay nada que editar).
+  const activeEditors = useLegalPresence(editingVersionId);
+  // Datos del usuario actual para el banner (no mostrar "última edición:
+  // tú mismo"). getStoredUser ya está importado al inicio del archivo.
+  const currentUser = getStoredUser();
+
   if (!allowed || loadingDoc) {
     return (
       <LegalAdminShell title="Cargando…">
@@ -344,8 +355,20 @@ function LegalDocumentEditPage() {
       backTo="/legal-admin"
       backLabel="Documentos"
     >
-      <div className="mb-4 flex items-center gap-3">
-        <SaveIndicator dirty={dirtyRef.current} pending={saveMut.isPending} hasDraft={!!editingVersionId} />
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex items-center gap-3">
+          <SaveIndicator dirty={dirtyRef.current} pending={saveMut.isPending} hasDraft={!!editingVersionId} />
+        </div>
+        {/* Banner de presencia: visible solo si hay otros editando o
+            edición reciente de otra persona en los últimos 30 min. */}
+        {editingVersionId && (
+          <PresenceBanner
+            activeEditors={activeEditors}
+            lastModifiedBy={editingVersion?.lastModifiedBy ?? null}
+            lastModifiedAt={editingVersion?.lastModifiedAt ?? null}
+            currentUserId={currentUser?.id}
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">

@@ -1480,7 +1480,22 @@ export const api = {
       status: "draft" | "published" | "archived";
       createdAt: string;
       publishedAt: string | null;
+      lastModifiedBy: { id: number; name: string } | null;
+      lastModifiedAt: string | null;
+      activeEditors: Array<{ userId: number; name: string; lastSeenAt: string }>;
     }>(`/api/legal/admin/versions/${id}`),
+  /**
+   * Marca al usuario como "editando ahora" en la versión indicada.
+   * El frontend debe llamarlo cada ~30s mientras el editor está
+   * abierto. Devuelve la lista actualizada de otros editores
+   * activos (excluyendo al que llama).
+   */
+  legalAdminHeartbeat: (versionId: number) =>
+    request<{
+      activeEditors: Array<{ userId: number; name: string; lastSeenAt: string }>;
+    }>(`/api/legal/admin/versions/${versionId}/heartbeat`, {
+      method: "POST",
+    }),
   legalAdminCreateDraft: (slug: string) =>
     request<{ versionId: number; created: boolean }>(
       `/api/legal/admin/documents/${slug}/draft`,
