@@ -39,10 +39,19 @@ function slugify(text: string): string {
 }
 
 export function LegalPublicPage({ slug, fallbackTitle }: { slug: string; fallbackTitle: string }) {
+  // staleTime 0 + refetch on focus/mount: la página legal es pública y la
+  // asesora puede publicar una nueva versión en cualquier momento. Si
+  // dejábamos cache largo en el cliente, después de publicar el redactor
+  // veía la versión vieja al recargar. El backend ya tiene Cache-Control
+  // max-age=30 must-revalidate + ETag, así que un revalidate solo
+  // descarga el body cuando cambió de verdad.
   const { data, isLoading, isError } = useQuery({
     queryKey: ["legal-public", slug],
     queryFn: () => api.legalGetPublic(slug),
     retry: 1,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Inyectamos id slugificado y scroll-margin-top a cada h2 del HTML

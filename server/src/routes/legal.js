@@ -89,7 +89,13 @@ router.get("/public/:slug", (req, res) => {
     WHERE document_id = ? AND status = 'archived'
     LIMIT 1
   `).get(v.document_id);
-  res.set("Cache-Control", "public, max-age=300"); // 5 min
+  // Cache corto + revalidación obligatoria. Los documentos legales son de
+  // baja frecuencia de cambio pero alta criticidad: cuando la asesora
+  // publica una nueva versión, queremos que la página pública la refleje
+  // de inmediato. ETag basado en version_id+published_at permite que el
+  // browser revalide rápido sin descargar el body si no cambió.
+  res.set("Cache-Control", "public, max-age=30, must-revalidate");
+  res.set("ETag", `W/"legal-${v.id}-${v.published_at ?? ""}"`);
   res.json({
     slug: v.slug,
     title: v.title,

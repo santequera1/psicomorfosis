@@ -108,42 +108,94 @@ function LegalDocumentEditPage() {
   });
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  // Bandera para suprimir auto-saves después de publicar / eliminar el draft.
+  // Si el último change quedó pendiente con debounce y entre tanto la versión
+  // pasó a 'published', el PATCH llegaría tarde y el backend devolvería 400
+  // ("Solo se pueden editar borradores"). Cuando bloqueamos esta bandera, el
+  // timer pendiente queda inerte hasta que se cargue una nueva versión draft.
+  const blockAutosaveRef = useRef(false);
 
   function onChangeHtml(html: string) {
     setEditingHtml(html);
-    if (!editingVersionId) return;
+    if (!editingVersionId || blockAutosaveRef.current) return;
     dirtyRef.current = true;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
+      // Doble check al disparar — el bloqueo puede haberse activado
+      // entre el setTimeout y su ejecución (publicación inmediata).
+      if (blockAutosaveRef.current) return;
       saveMut.mutate({ id: editingVersionId, bodyHtml: html }, {
         onSuccess: () => { dirtyRef.current = false; },
       });
     }, 1200);
   }
 
-  // Publicar.
+  // Publicar. Antes de disparar la mutación cancelamos cualquier auto-save
+  // pendiente para evitar que llegue al backend cuando la versión ya esté
+  // publicada (de ahí el 400 que veía la asesora en consola).
   const publishMut = useMutation({
-    mutationFn: (input: { versionId: number; summary: string }) =>
-      api.legalAdminUpdateVersion(input.versionId, { summaryOfChanges: input.summary })
-        .then(() => api.legalAdminPublishVersion(input.versionId)),
+    mutationFn: (input: { versionId: number; summary: string }) => {
+      // Cancela debounce + bloquea futuros auto-saves de esta versión.
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      blockAutosaveRef.current = true;
+      return api.legalAdminUpdateVersion(input.versionId, { summaryOfChanges: input.summary })
+        .then(() => api.legalAdminPublishVersion(input.versionId));
+    },
     onSuccess: () => {
       setPublishOpen(false);
       setEditingVersionId(null);
+      // Forzamos refetch del documento + del endpoint público para que la
+      // página /privacidad o /terminos refleje el cambio sin esperar caché.
       qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
       qc.invalidateQueries({ queryKey: ["legal-admin-docs"] });
-      toast.success("Publicado. La nueva versión ya es la vigente.");
+      qc.invalidateQueries({ queryKey: ["legal-public", slug] });
+      // Toast con CTA opcional para verificar al instante. Solo se muestra
+      // si el documento es público (tiene publicPath); para acuerdos
+      // internos no aplica abrir página pública.
+      if (doc?.publicPath) {
+        toast.success("Publicado. La nueva versión ya es la vigente.", {
+          action: {
+            label: "Ver página",
+            onClick: () => window.open(doc.publicPath!, "_blank", "noopener,noreferrer"),
+          },
+          duration: 8000,
+        });
+      } else {
+        toast.success("Publicado. La nueva versión ya es la vigente.");
+      }
+      // Re-habilitar auto-save: el useEffect creará un draft fresco y al
+      // cargarlo, el blockAutosaveRef se resetea.
+      blockAutosaveRef.current = false;
     },
-    onError: (e: any) => toast.error(e?.message ?? "No se pudo publicar"),
+    onError: (e: any) => {
+      blockAutosaveRef.current = false;
+      toast.error(e?.message ?? "No se pudo publicar");
+    },
   });
 
   // Eliminar borrador.
   const deleteDraftMut = useMutation({
-    mutationFn: (versionId: number) => api.legalAdminDeleteVersion(versionId),
+    mutationFn: (versionId: number) => {
+      // Mismo patrón de protección que en publishMut: cancelamos el
+      // auto-save pendiente para que no intente actualizar una versión
+      // que ya borramos (devolvería 404 en el backend).
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      blockAutosaveRef.current = true;
+      return api.legalAdminDeleteVersion(versionId);
+    },
     onSuccess: () => {
       setEditingVersionId(null);
       qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
       toast.success("Borrador eliminado");
+      blockAutosaveRef.current = false;
     },
+    onError: () => { blockAutosaveRef.current = false; },
   });
 
   if (!allowed || loadingDoc) {
