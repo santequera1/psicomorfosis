@@ -18,10 +18,23 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Scale, FileText, ChevronRight, Loader2, Globe, Lock, Edit3,
-  CheckCircle2, Clock, ClipboardCheck, LogOut,
+  CheckCircle2, Clock, ClipboardCheck, LogOut, PanelLeftClose, PanelLeftOpen,
+  Settings,
 } from "lucide-react";
 import { api, getStoredUser, clearSession } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+// ─── Persistencia del collapsed (mismo patrón que AppSidebar) ──────────
+const KEY_LEGAL_COLLAPSED = "psm.legal-sidebar.collapsed";
+function readCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(KEY_LEGAL_COLLAPSED) === "1";
+}
+function writeCollapsed(v: boolean) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(KEY_LEGAL_COLLAPSED, v ? "1" : "0");
+  }
+}
 
 export const Route = createFileRoute("/legal-admin")({
   head: () => ({ meta: [{ title: "Asesoría legal · Psicomorfosis" }] }),
@@ -202,33 +215,54 @@ export function LegalAdminShell({
   title,
   subtitle,
   children,
+  fullWidth = false,
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  /** Si true, el contenido principal usa todo el ancho disponible (sin
+   *  max-width). Útil para el editor cuando se quiere ganar espacio
+   *  con el sidebar colapsado. */
+  fullWidth?: boolean;
 }) {
   const [user] = useState(() => getStoredUser());
+  const [collapsed, setCollapsedState] = useState<boolean>(() => readCollapsed());
+  function setCollapsed(v: boolean) {
+    setCollapsedState(v);
+    writeCollapsed(v);
+  }
 
   return (
     <div className="min-h-screen bg-bg-50 text-ink-900 flex">
-      <aside className="hidden md:flex w-64 shrink-0 sticky top-0 h-screen border-r border-line-200 bg-surface flex-col">
-        <div className="px-5 h-16 border-b border-line-200 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+      <aside
+        className={cn(
+          "hidden md:flex shrink-0 sticky top-0 h-screen border-r border-line-200 bg-surface flex-col transition-[width] duration-200 ease-out",
+          collapsed ? "w-16" : "w-64",
+        )}
+      >
+        <div className={cn(
+          "h-16 border-b border-line-200 flex items-center gap-3",
+          collapsed ? "px-3 justify-center" : "px-5",
+        )}>
+          <div className="h-9 w-9 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
             <Scale className="h-5 w-5" />
           </div>
-          <div className="leading-tight">
-            <div className="font-serif text-[16px] text-ink-900">Psicomorfosis</div>
-            <div className="text-[11px] text-ink-500 tracking-wide">Asesoría legal</div>
-          </div>
+          {!collapsed && (
+            <div className="leading-tight min-w-0">
+              <div className="font-serif text-[16px] text-ink-900">Psicomorfosis</div>
+              <div className="text-[11px] text-ink-500 tracking-wide">Asesoría legal</div>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 p-3 space-y-0.5">
-          <SideLink to="/legal-admin" icon={FileText} label="Documentos" exact />
-          <SideLink to="/legal-admin/aceptaciones" icon={ClipboardCheck} label="Aceptaciones" />
+          <SideLink to="/legal-admin" icon={FileText} label="Documentos" exact collapsed={collapsed} />
+          <SideLink to="/legal-admin/aceptaciones" icon={ClipboardCheck} label="Aceptaciones" collapsed={collapsed} />
+          <SideLink to="/configuracion" icon={Settings} label="Configuración" collapsed={collapsed} />
         </nav>
 
         <div className="border-t border-line-200 p-3 space-y-2">
-          {user && (
+          {user && !collapsed && (
             <div className="flex items-center gap-3 px-2 py-2">
               <div className="h-9 w-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-semibold shrink-0">
                 {(user.name ?? "?").split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
@@ -244,10 +278,26 @@ export function LegalAdminShell({
               clearSession();
               window.location.replace("/login");
             }}
-            className="w-full inline-flex items-center gap-2 text-ink-500 hover:text-ink-900 hover:bg-bg-100 rounded-md px-3 py-2 text-xs"
+            title="Cerrar sesión"
+            className={cn(
+              "w-full inline-flex items-center gap-2 text-ink-500 hover:text-ink-900 hover:bg-bg-100 rounded-md px-3 py-2 text-xs",
+              collapsed && "justify-center",
+            )}
           >
-            <LogOut className="h-4 w-4" />
-            Cerrar sesión
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>Cerrar sesión</span>}
+          </button>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? "Expandir" : "Colapsar"}
+            className={cn(
+              "w-full inline-flex items-center gap-2 text-ink-500 hover:text-ink-900 hover:bg-bg-100 rounded-md px-3 py-2 text-xs",
+              collapsed && "justify-center",
+            )}
+          >
+            {collapsed
+              ? <PanelLeftOpen className="h-4 w-4 shrink-0" />
+              : <><PanelLeftClose className="h-4 w-4 shrink-0" /> <span>Colapsar</span></>}
           </button>
         </div>
       </aside>
@@ -259,7 +309,10 @@ export function LegalAdminShell({
             <div className="font-serif text-lg text-ink-900 leading-tight truncate">{title}</div>
           </div>
         </header>
-        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1180px] w-full mx-auto">
+        <main className={cn(
+          "flex-1 px-4 sm:px-8 py-6 sm:py-8 w-full",
+          fullWidth ? "" : "max-w-[1180px] mx-auto",
+        )}>
           {subtitle && <p className="text-sm text-ink-500 mb-5 max-w-2xl">{subtitle}</p>}
           {children}
         </main>
@@ -269,24 +322,29 @@ export function LegalAdminShell({
 }
 
 function SideLink({
-  to, icon: Icon, label, exact = false,
+  to, icon: Icon, label, exact = false, collapsed = false,
 }: {
   to: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   exact?: boolean;
+  collapsed?: boolean;
 }) {
   return (
     <Link
       to={to}
       activeOptions={{ exact }}
-      className="group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-ink-700 hover:bg-bg-100"
+      title={collapsed ? label : undefined}
+      className={cn(
+        "group flex items-center gap-3 rounded-md py-2.5 text-sm text-ink-700 hover:bg-bg-100",
+        collapsed ? "justify-center px-0" : "px-3",
+      )}
       activeProps={{
         className: "bg-brand-100 text-brand-800 font-medium",
       }}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      <span>{label}</span>
+      {!collapsed && <span>{label}</span>}
     </Link>
   );
 }

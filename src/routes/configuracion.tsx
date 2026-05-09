@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
+import { LegalAdminShell } from "./legal-admin";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -47,16 +48,35 @@ const SECCIONES = [
 ];
 
 function ConfiguracionPage() {
-  const [active, setActive] = useState("perfil");
+  const [user] = useState(() => getStoredUser());
+  const isLegal = !!user?.isLegalAdmin;
+
+  // Para la asesora legal mostramos solo lo que aplica a su rol:
+  // apariencia (claro/oscuro/tipografía), seguridad (cambiar contraseña)
+  // y mi cuenta (eliminar cuenta + derechos Habeas Data). Las pestañas
+  // clínicas (Perfil profesional, Workspace, Sedes, Equipo, Notificaciones,
+  // Integraciones, Tutoriales) no aplican porque su workspace es virtual
+  // y no tiene pacientes.
+  const SECCIONES_LEGAL_IDS = new Set(["apariencia", "seguridad", "cuenta"]);
+
+  // Default tab: legal entra a apariencia (lo más probable que necesite),
+  // el psicólogo entra a perfil como antes.
+  const [active, setActive] = useState(isLegal ? "apariencia" : "perfil");
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
-  // Ocultar pestaña Sedes en modo individual
-  const secciones = SECCIONES.filter((s) => s.id !== "sedes" || isOrg);
+  // Filtrado:
+  //   - legal_admin: solo apariencia/seguridad/cuenta
+  //   - psicólogo modo individual: oculta Sedes (no aplica)
+  const secciones = SECCIONES.filter((s) => {
+    if (isLegal) return SECCIONES_LEGAL_IDS.has(s.id);
+    if (s.id === "sedes" && !isOrg) return false;
+    return true;
+  });
 
-  return (
-    <AppShell>
-      <div className="max-w-[1180px] mx-auto">
+  const body = (
+    <div className={isLegal ? "" : "max-w-[1180px] mx-auto"}>
+      {!isLegal && (
         <header className="mb-5 sm:mb-7">
           <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Ajustes · {workspace?.name ?? "Workspace"}</div>
           <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Configuración</h1>
@@ -64,48 +84,60 @@ function ConfiguracionPage() {
             Modo <span className="font-medium text-ink-900">{isOrg ? "Organización" : "Individual"}</span>
           </p>
         </header>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:gap-6">
-          {/* Tabs horizontales con scroll en mobile, sidebar sticky en desktop */}
-          <aside className="md:rounded-xl md:bg-surface md:border md:border-line-200 md:shadow-soft md:p-2 md:h-fit md:sticky md:top-20 -mx-4 sm:-mx-6 md:mx-0 px-4 sm:px-6 md:px-0 overflow-x-auto md:overflow-visible no-scrollbar">
-            <div className="flex md:flex-col gap-1 md:gap-0 pb-1 md:pb-0">
-              {secciones.map((s) => {
-                const Icon = s.icon;
-                const isActive = active === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setActive(s.id)}
-                    className={cn(
-                      "flex items-center gap-2 md:gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors shrink-0 md:w-full md:text-left whitespace-nowrap",
-                      isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100"
-                    )}
-                  >
-                    <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-700" : "text-ink-400")} />
-                    <span className="md:flex-1">{s.label}</span>
-                    {isActive && <ChevronRight className="h-4 w-4 text-brand-700 hidden md:inline-block" />}
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:gap-6">
+        {/* Tabs horizontales con scroll en mobile, sidebar sticky en desktop */}
+        <aside className="md:rounded-xl md:bg-surface md:border md:border-line-200 md:shadow-soft md:p-2 md:h-fit md:sticky md:top-20 -mx-4 sm:-mx-6 md:mx-0 px-4 sm:px-6 md:px-0 overflow-x-auto md:overflow-visible no-scrollbar">
+          <div className="flex md:flex-col gap-1 md:gap-0 pb-1 md:pb-0">
+            {secciones.map((s) => {
+              const Icon = s.icon;
+              const isActive = active === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActive(s.id)}
+                  className={cn(
+                    "flex items-center gap-2 md:gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors shrink-0 md:w-full md:text-left whitespace-nowrap",
+                    isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100"
+                  )}
+                >
+                  <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-700" : "text-ink-400")} />
+                  <span className="md:flex-1">{s.label}</span>
+                  {isActive && <ChevronRight className="h-4 w-4 text-brand-700 hidden md:inline-block" />}
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
-          <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-4 sm:p-6 md:p-7">
-            {active === "perfil" && <PerfilPanel />}
-            {active === "workspace" && <WorkspacePanel />}
-            {active === "sedes" && <SedesPanel />}
-            {active === "equipo" && <EquipoPanel />}
-            {active === "notificaciones" && <NotifPanel />}
-            {active === "seguridad" && <SeguridadPanel />}
-            {active === "apariencia" && <AparienciaPanel />}
-            {active === "integraciones" && <IntegracionesPanel />}
-            {active === "tutoriales" && <TutorialesPanel />}
-            {active === "cuenta" && <CuentaPanel />}
-          </main>
-        </div>
+        <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-4 sm:p-6 md:p-7">
+          {active === "perfil" && <PerfilPanel />}
+          {active === "workspace" && <WorkspacePanel />}
+          {active === "sedes" && <SedesPanel />}
+          {active === "equipo" && <EquipoPanel />}
+          {active === "notificaciones" && <NotifPanel />}
+          {active === "seguridad" && <SeguridadPanel />}
+          {active === "apariencia" && <AparienciaPanel />}
+          {active === "integraciones" && <IntegracionesPanel />}
+          {active === "tutoriales" && <TutorialesPanel />}
+          {active === "cuenta" && <CuentaPanel />}
+        </main>
       </div>
-    </AppShell>
+    </div>
   );
+
+  // La asesora legal ve la configuración dentro de SU shell (sin sidebar
+  // clínico ni topbar de pacientes). El resto de los usuarios usa AppShell.
+  if (isLegal) {
+    return (
+      <LegalAdminShell title="Configuración" subtitle="Personaliza apariencia, seguridad y datos de tu cuenta.">
+        {body}
+      </LegalAdminShell>
+    );
+  }
+
+  return <AppShell>{body}</AppShell>;
 }
 
 

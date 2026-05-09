@@ -292,6 +292,10 @@ router.get("/admin/documents/:slug", (req, res) => {
     ORDER BY v.id DESC
   `).all(doc.id);
 
+  const acceptancesCount = db.prepare(`
+    SELECT COUNT(*) AS n FROM legal_acceptances WHERE document_id = ?
+  `).get(doc.id).n;
+
   res.json({
     id: doc.id,
     slug: doc.slug,
@@ -300,6 +304,7 @@ router.get("/admin/documents/:slug", (req, res) => {
     publicPath: doc.public_path,
     requiresAcceptance: !!doc.requires_acceptance,
     acceptanceAudience: doc.acceptance_audience,
+    acceptancesCount,
     versions,
   });
 });

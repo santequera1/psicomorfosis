@@ -1410,6 +1410,7 @@ export const api = {
       publicPath: string | null;
       requiresAcceptance: boolean;
       acceptanceAudience: "staff" | "patient" | "both" | "none";
+      acceptancesCount: number;
       versions: Array<{
         id: number;
         version_label: string;

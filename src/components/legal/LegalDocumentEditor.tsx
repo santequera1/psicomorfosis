@@ -133,7 +133,7 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 
   return (
-    <div className="border-b border-line-200 bg-bg-50 px-2 py-1.5 flex flex-wrap items-center gap-0.5 sticky top-16 z-20">
+    <div className="border-b border-line-200 bg-bg-50 px-2 py-1.5 flex flex-wrap items-center gap-0.5">
       <Btn title="Deshacer" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}>
         <Undo className="h-4 w-4" />
       </Btn>

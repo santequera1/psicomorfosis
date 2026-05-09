@@ -23,8 +23,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Loader2, FilePlus, Save, Send, Trash2, Eye, EyeOff,
+  ArrowLeft, Loader2, Send, Trash2, Eye, EyeOff,
   CheckCircle2, AlertCircle, X, Clock, Archive, FileSignature, History,
+  ExternalLink, ClipboardCheck,
 } from "lucide-react";
 import { api, getStoredUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -63,14 +64,31 @@ function LegalDocumentEditPage() {
   const [previewVersionId, setPreviewVersionId] = useState<number | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
 
-  // Cuando llega el doc, elegimos automáticamente:
-  // - El draft pendiente si existe.
-  // - Si no, no abrimos editor (el usuario hará click en "Crear borrador").
+  // Auto-cargar al entrar:
+  //   - Si hay borrador pendiente → editarlo.
+  //   - Si no, lo creamos automáticamente. Sin paso intermedio: la
+  //     asesora viene a editar, no a configurar estados — el botón
+  //     "Crear borrador" era fricción innecesaria.
+  // Idempotente: solo dispara la mutación una vez (creatingRef).
+  const creatingRef = useRef(false);
   useEffect(() => {
     if (!doc) return;
     const draft = doc.versions.find((v) => v.status === "draft");
-    if (draft) setEditingVersionId(draft.id);
-  }, [doc]);
+    if (draft) {
+      setEditingVersionId(draft.id);
+      creatingRef.current = false;
+      return;
+    }
+    if (!editingVersionId && !creatingRef.current) {
+      creatingRef.current = true;
+      api.legalAdminCreateDraft(slug)
+        .then((resp) => {
+          setEditingVersionId(resp.versionId);
+          qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
+        })
+        .catch(() => { creatingRef.current = false; });
+    }
+  }, [doc, slug, qc, editingVersionId]);
 
   // Cargamos el HTML del editingVersionId (puede ser un draft que se acaba
   // de crear, o uno que ya existía).
@@ -102,16 +120,6 @@ function LegalDocumentEditPage() {
       });
     }, 1200);
   }
-
-  // Crear draft (cuando no había).
-  const createDraftMut = useMutation({
-    mutationFn: () => api.legalAdminCreateDraft(slug),
-    onSuccess: (resp) => {
-      setEditingVersionId(resp.versionId);
-      qc.invalidateQueries({ queryKey: ["legal-doc", slug] });
-      toast.success("Borrador creado");
-    },
-  });
 
   // Publicar.
   const publishMut = useMutation({
@@ -170,6 +178,7 @@ function LegalDocumentEditPage() {
     <LegalAdminShell
       title={doc.title}
       subtitle={doc.description ?? undefined}
+      fullWidth
     >
       <div className="mb-4 flex items-center gap-3">
         <Link to="/legal-admin" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-900">
@@ -183,11 +192,10 @@ function LegalDocumentEditPage() {
         {/* Editor */}
         <section>
           {!editingVersionId && !previewVersion && (
-            <NoDraftState
-              hasPublished={!!published}
-              onCreate={() => createDraftMut.mutate()}
-              creating={createDraftMut.isPending}
-            />
+            <div className="flex flex-col items-center justify-center py-20 text-ink-400 gap-3">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-sm">Preparando borrador…</span>
+            </div>
           )}
 
           {editingVersionId && !previewVersion && (
@@ -245,7 +253,11 @@ function LegalDocumentEditPage() {
             onPreview={(id) => setPreviewVersionId(id === previewVersionId ? null : id)}
             onEditDraft={(id) => { setPreviewVersionId(null); setEditingVersionId(id); }}
           />
-          <DocumentMeta doc={doc} />
+          <DocumentMeta
+            doc={doc}
+            acceptancesCount={doc.acceptancesCount}
+            hasPublished={!!published}
+          />
         </aside>
       </div>
 
@@ -274,32 +286,6 @@ function SaveIndicator({
     return <span className="text-xs text-warning inline-flex items-center gap-1.5"><AlertCircle className="h-3 w-3" /> Cambios sin guardar</span>;
   }
   return <span className="text-xs text-success inline-flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3" /> Guardado</span>;
-}
-
-function NoDraftState({
-  hasPublished, onCreate, creating,
-}: { hasPublished: boolean; onCreate: () => void; creating: boolean }) {
-  return (
-    <div className="rounded-xl border border-dashed border-line-200 bg-bg-50 p-10 text-center">
-      <div className="mx-auto h-12 w-12 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center mb-4">
-        <FilePlus className="h-6 w-6" />
-      </div>
-      <h3 className="font-serif text-lg text-ink-900">Sin borrador activo</h3>
-      <p className="text-sm text-ink-500 mt-1.5 max-w-md mx-auto">
-        {hasPublished
-          ? "El borrador se creará a partir de la última versión publicada. Lo podrás editar y publicar cuando quieras."
-          : "Aún no se ha publicado ninguna versión de este documento. Crea un borrador para empezar."}
-      </p>
-      <button
-        onClick={onCreate}
-        disabled={creating}
-        className="mt-5 h-11 px-5 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
-      >
-        {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FilePlus className="h-4 w-4" />}
-        Crear borrador
-      </button>
-    </div>
-  );
 }
 
 function PreviewVersionView({
@@ -400,17 +386,71 @@ function VersionsHistory({
 }
 
 function DocumentMeta({
-  doc,
+  doc, acceptancesCount, hasPublished,
 }: {
   doc: { title: string; slug: string; publicPath: string | null; requiresAcceptance: boolean; acceptanceAudience: string };
+  acceptancesCount: number;
+  hasPublished: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-line-200 bg-bg-50 p-4 text-xs text-ink-700 space-y-1.5">
-      <div><span className="text-ink-500">Slug:</span> <code className="text-ink-900">{doc.slug}</code></div>
-      <div><span className="text-ink-500">URL pública:</span> {doc.publicPath ? <code className="text-ink-900">{doc.publicPath}</code> : "Solo interno"}</div>
-      <div><span className="text-ink-500">Requiere aceptación:</span> {doc.requiresAcceptance ? `Sí (${doc.acceptanceAudience})` : "No"}</div>
+    <div className="space-y-3">
+      {/* Atajos */}
+      {(doc.publicPath || acceptancesCount > 0) && (
+        <div className="rounded-xl border border-line-200 bg-surface overflow-hidden">
+          {doc.publicPath && (
+            <a
+              href={doc.publicPath}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-bg-50 transition-colors"
+              title={hasPublished ? "Abre la versión vigente en una pestaña nueva" : "Aún no hay versión publicada"}
+            >
+              <div className="h-8 w-8 rounded-md bg-info-soft text-info flex items-center justify-center shrink-0">
+                <ExternalLink className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-ink-900 font-medium leading-tight">Ver página publicada</div>
+                <div className="text-[11px] text-ink-500 truncate">
+                  {hasPublished ? doc.publicPath : "Aún no se publica"}
+                </div>
+              </div>
+            </a>
+          )}
+          {acceptancesCount > 0 && (
+            <Link
+              to="/legal-admin/aceptaciones"
+              search={{ slug: doc.slug } as never}
+              className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-bg-50 transition-colors border-t border-line-100"
+            >
+              <div className="h-8 w-8 rounded-md bg-success-soft text-success flex items-center justify-center shrink-0">
+                <ClipboardCheck className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-ink-900 font-medium leading-tight">
+                  {acceptancesCount} aceptación{acceptancesCount === 1 ? "" : "es"}
+                </div>
+                <div className="text-[11px] text-ink-500">Ver quiénes y cuándo aceptaron</div>
+              </div>
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Metadatos técnicos */}
+      <div className="rounded-xl border border-line-200 bg-bg-50 p-4 text-xs text-ink-700 space-y-1.5">
+        <div><span className="text-ink-500">Slug:</span> <code className="text-ink-900">{doc.slug}</code></div>
+        <div><span className="text-ink-500">URL pública:</span> {doc.publicPath ? <code className="text-ink-900">{doc.publicPath}</code> : "Solo interno"}</div>
+        <div><span className="text-ink-500">Requiere aceptación:</span> {doc.requiresAcceptance ? `Sí (${audienceLabelShort(doc.acceptanceAudience)})` : "No (implícita por uso)"}</div>
+      </div>
     </div>
   );
+}
+
+function audienceLabelShort(a: string) {
+  if (a === "staff") return "psicólogos";
+  if (a === "patient") return "pacientes";
+  if (a === "both") return "ambos";
+  return "ninguno";
 }
 
 function PublishModal({

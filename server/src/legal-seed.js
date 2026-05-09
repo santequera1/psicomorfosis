@@ -279,6 +279,17 @@ const CONSENTIMIENTO_PACIENTE_HTML = `
 const stripHtml = (html) =>
   html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
+// Política de aceptación bloqueante:
+//   - privacidad y terminos: aceptación implícita por uso. Páginas
+//     públicas, sin modal de re-aceptación; cumple con la Ley 1581
+//     porque las páginas están disponibles permanentemente y los
+//     pacientes ya consienten formalmente al activar su cuenta.
+//   - acuerdo-beta y convenio-beta-tester: SÍ requieren aceptación
+//     explícita en modal bloqueante para todo psicólogo nuevo —
+//     son documentos contractuales que definen la relación durante
+//     la beta privada.
+//   - consentimiento-paciente: plantilla informativa, no se acepta
+//     en plataforma; se firma fuera (paciente con su psicólogo).
 export const LEGAL_DOCUMENTS_SEED = [
   {
     slug: "privacidad",
@@ -286,8 +297,8 @@ export const LEGAL_DOCUMENTS_SEED = [
     description:
       "Política pública sobre tratamiento de datos personales conforme a la Ley 1581 de 2012.",
     public_path: "/privacidad",
-    requires_acceptance: 1,
-    acceptance_audience: "both",
+    requires_acceptance: 0,
+    acceptance_audience: "none",
     body_html: PRIVACIDAD_HTML,
   },
   {
@@ -295,8 +306,8 @@ export const LEGAL_DOCUMENTS_SEED = [
     title: "Términos y condiciones",
     description: "Términos generales del servicio durante la beta privada.",
     public_path: "/terminos",
-    requires_acceptance: 1,
-    acceptance_audience: "both",
+    requires_acceptance: 0,
+    acceptance_audience: "none",
     body_html: TERMINOS_HTML,
   },
   {
@@ -315,8 +326,8 @@ export const LEGAL_DOCUMENTS_SEED = [
     description:
       "Compromisos y beneficios del psicólogo participante en la beta privada.",
     public_path: null,
-    requires_acceptance: 0,
-    acceptance_audience: "none",
+    requires_acceptance: 1,
+    acceptance_audience: "staff",
     body_html: CONVENIO_BETA_HTML,
   },
   {
@@ -335,6 +346,13 @@ export const LEGAL_DOCUMENTS_SEED = [
  * Inserta los documentos iniciales como version 1 en estado **draft**
  * (para que la abogada los revise y publique). Idempotente por slug:
  * si un documento ya existe, no se toca.
+ *
+ * También sincroniza los flags de aceptación (`requires_acceptance` y
+ * `acceptance_audience`) de los documentos ya existentes con la
+ * política definida en LEGAL_DOCUMENTS_SEED. Esto permite cambiar la
+ * política de aceptación (por ejemplo, "términos ya no requiere modal
+ * bloqueante") sin tocar la DB a mano. NO toca el `body_html` de los
+ * documentos existentes — eso lo edita la asesora.
  */
 export function seedLegalDocuments(db) {
   const insDoc = db.prepare(`
@@ -346,22 +364,42 @@ export function seedLegalDocuments(db) {
       (document_id, version_label, body_html, body_text, summary_of_changes, status)
     VALUES (?, ?, ?, ?, ?, 'draft')
   `);
-  const exists = db.prepare("SELECT id FROM legal_documents WHERE slug = ?");
+  const get = db.prepare("SELECT id, requires_acceptance, acceptance_audience FROM legal_documents WHERE slug = ?");
+  const updateFlags = db.prepare(`
+    UPDATE legal_documents
+    SET requires_acceptance = ?, acceptance_audience = ?
+    WHERE slug = ?
+  `);
 
   let inserted = 0;
+  let synced = 0;
   for (const d of LEGAL_DOCUMENTS_SEED) {
-    if (exists.get(d.slug)) continue;
-    const docId = insDoc.run(
-      d.slug, d.title, d.description, d.public_path,
-      d.requires_acceptance, d.acceptance_audience,
-    ).lastInsertRowid;
-    insVer.run(
-      docId, "2026-v1", d.body_html, stripHtml(d.body_html),
-      "Importación inicial desde código fuente. Pendiente de revisión por la asesora legal.",
-    );
-    inserted++;
+    const existing = get.get(d.slug);
+    if (!existing) {
+      const docId = insDoc.run(
+        d.slug, d.title, d.description, d.public_path,
+        d.requires_acceptance, d.acceptance_audience,
+      ).lastInsertRowid;
+      insVer.run(
+        docId, "2026-v1", d.body_html, stripHtml(d.body_html),
+        "Importación inicial desde código fuente. Pendiente de revisión por la asesora legal.",
+      );
+      inserted++;
+      continue;
+    }
+    // Doc ya existía: sincronizar política de aceptación si difiere.
+    const flagsChanged =
+      existing.requires_acceptance !== d.requires_acceptance ||
+      existing.acceptance_audience !== d.acceptance_audience;
+    if (flagsChanged) {
+      updateFlags.run(d.requires_acceptance, d.acceptance_audience, d.slug);
+      synced++;
+    }
   }
   if (inserted > 0) {
     console.log(`[db] seed legal docs: ${inserted} documento(s) creado(s) como draft`);
+  }
+  if (synced > 0) {
+    console.log(`[db] seed legal docs: ${synced} documento(s) con flags de aceptación actualizados`);
   }
 }

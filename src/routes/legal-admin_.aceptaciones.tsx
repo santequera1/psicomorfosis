@@ -15,13 +15,18 @@ import { LegalAdminShell } from "./legal-admin";
 
 export const Route = createFileRoute("/legal-admin_/aceptaciones")({
   head: () => ({ meta: [{ title: "Aceptaciones · Asesoría legal" }] }),
+  validateSearch: (s): { slug?: string } => {
+    const v = s.slug;
+    return typeof v === "string" && v ? { slug: v } : {};
+  },
   component: AceptacionesPage,
 });
 
 function AceptacionesPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [allowed, setAllowed] = useState(false);
-  const [slug, setSlug] = useState<string>("");
+  const [slug, setSlug] = useState<string>(search.slug ?? "");
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
