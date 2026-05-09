@@ -19,11 +19,12 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Scale, FileText, ChevronRight, Loader2, Globe, Lock, Edit3,
   CheckCircle2, Clock, ClipboardCheck, LogOut, PanelLeftClose, PanelLeftOpen,
-  Settings, Sun, Moon, ArrowLeft,
+  Settings, Sun, Moon, ArrowLeft, Bug,
 } from "lucide-react";
 import { api, getStoredUser, clearSession } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
+import { ReportProblemModal } from "@/components/app/ReportProblemModal";
 
 // ─── Persistencia del collapsed (mismo patrón que AppSidebar) ──────────
 const KEY_LEGAL_COLLAPSED = "psm.legal-sidebar.collapsed";
@@ -235,6 +236,7 @@ export function LegalAdminShell({
 }) {
   const [user] = useState(() => getStoredUser());
   const [collapsed, setCollapsedState] = useState<boolean>(() => readCollapsed());
+  const [reportOpen, setReportOpen] = useState(false);
   function setCollapsed(v: boolean) {
     setCollapsedState(v);
     writeCollapsed(v);
@@ -288,6 +290,17 @@ export function LegalAdminShell({
               </div>
             </div>
           )}
+          <button
+            onClick={() => setReportOpen(true)}
+            title="Reportar problema"
+            className={cn(
+              "w-full inline-flex items-center gap-2 text-ink-500 hover:text-ink-900 hover:bg-bg-100 rounded-md px-3 py-2 text-xs",
+              collapsed && "justify-center",
+            )}
+          >
+            <Bug className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>Reportar problema</span>}
+          </button>
           <button
             onClick={() => {
               clearSession();
@@ -350,6 +363,8 @@ export function LegalAdminShell({
           {children}
         </main>
       </div>
+
+      {reportOpen && <ReportProblemModal onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
