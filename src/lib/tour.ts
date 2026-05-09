@@ -315,10 +315,41 @@ export async function runTour(name: string, steps: TourStep[], opts: RunOpts = {
     delete (window as any).__psmTour;
   });
 
-  // Exponemos el client en window para que el HTML inline del content
-  // pueda llamar __psmTour.exit() (botón "Saltar tour"). Es feo pero
-  // funciona y no requiere un parser de eventos custom.
+  // Exponemos el client en window para que el event delegation del
+  // botón "Saltar tour" pueda llamar exit() sin tener que importar
+  // este módulo. El listener delegado se instala una sola vez (ver
+  // installSkipDelegation abajo).
   (window as any).__psmTour = client;
+  installSkipDelegation();
 
   await client.start(name);
+}
+
+/**
+ * Listener global delegado para los botones [data-tour-skip] que
+ * `withSkip` (en tours.ts) inyecta al final del content de cada step.
+ *
+ * Antes usábamos `onclick` inline en el HTML del content, pero algunos
+ * navegadores con escudos de seguridad sanitizaban el inline handler y
+ * borraban TODO el bloque, dejando dialogs vacíos. Con event delegation
+ * el botón es HTML puro (sin handlers inline) y el click se captura a
+ * nivel de document — funciona en todos los navegadores.
+ *
+ * Idempotente: solo registra el listener una vez por sesión.
+ */
+let skipDelegationInstalled = false;
+function installSkipDelegation() {
+  if (skipDelegationInstalled) return;
+  if (typeof document === "undefined") return;
+  skipDelegationInstalled = true;
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement | null;
+    const btn = t?.closest("[data-tour-skip]") as HTMLElement | null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const client = (window as unknown as { __psmTour?: { exit?: () => void } })
+      .__psmTour;
+    client?.exit?.();
+  });
 }

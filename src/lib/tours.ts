@@ -35,24 +35,26 @@ async function openSidebarAndWait() {
 }
 
 /**
- * Wrapper neutral para el content del step.
+ * Wrapper para el content del step. Inyecta al final un botón
+ * "Saltar tour" estilo link discreto.
  *
- * En versiones anteriores este helper inyectaba un botón "Saltar tour"
- * con onclick inline. Resultó que algunos navegadores con escudos de
- * seguridad activos (Brave por defecto, Firefox con NoScript) sanitizan
- * el HTML cuando detectan inline event handlers, y al hacerlo borran
- * TODO el contenido del bloque — produciendo dialogs vacíos.
- *
- * El cierre del tour ya está disponible vía:
- *   - X arriba a la derecha del dialog (closeButton: true)
- *   - Tecla Escape (exitOnEscape: true)
- *   - Botón "Reiniciar tutoriales" en /configuración (escape hatch)
- *
- * Mantengo la firma de la función para no tener que tocar todos los
- * tours; ahora simplemente devuelve el HTML sin modificación.
+ * Importante: NO usamos inline `onclick` porque algunos navegadores
+ * con escudos de seguridad activos (Brave por defecto, Firefox con
+ * NoScript) sanitizan el HTML al detectar handlers inline y borran
+ * todo el contenido del bloque. En su lugar usamos `data-tour-skip`
+ * y un event delegation global instalado en `lib/tour.ts` cuando
+ * arranca el primer tour. Eso funciona en todos los navegadores
+ * porque no es un inline handler — es un listener real en document.
  */
 function withSkip(html: string): string {
-  return html;
+  return `${html}
+    <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--color-line-100, #e7e3da); text-align: right;">
+      <button
+        type="button"
+        data-tour-skip
+        style="background: none; border: 0; padding: 4px 8px; color: var(--color-ink-500, #7a8898); font-size: 12px; font-family: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;"
+      >Saltar tour</button>
+    </div>`;
 }
 
 export const TOUR_NAMES = {

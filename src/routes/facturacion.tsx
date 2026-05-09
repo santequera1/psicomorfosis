@@ -14,6 +14,7 @@ import { api, type Invoice, type BankAccount } from "@/lib/api";
 import { useAutoTour, invoicesTour, TOUR_NAMES } from "@/lib/tours";
 import { BankCard } from "@/components/wallet/BankCard";
 import { BankAccountModal } from "@/components/wallet/BankAccountModal";
+import { WalletStack, WalletEmpty } from "@/components/wallet/WalletStack";
 
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
@@ -299,7 +300,17 @@ function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => vo
     try {
       const blob = await api.downloadInvoicePdf(invoice.id);
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
+      // Abrimos vía <a target="_blank"> (no window.open) porque después de
+      // un await los browsers consideran que se perdió el "user gesture"
+      // y bloquean window.open como popup. El click() programático sobre
+      // un anchor es la forma estándar y no se bloquea.
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       // El blob lo necesita la pestaña nueva mientras carga el viewer; 60s sobra.
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err: any) {
@@ -1167,43 +1178,13 @@ function WalletSection() {
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando cuentas…
         </div>
       ) : accounts.length === 0 ? (
-        <button
-          onClick={() => setCreating(true)}
-          className="w-full rounded-xl border-2 border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 px-6 py-8 text-center transition-colors group"
-        >
-          <div className="mx-auto h-10 w-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-            <Plus className="h-5 w-5" />
-          </div>
-          <div className="font-medium text-sm text-ink-900">Agrega tu primera cuenta</div>
-          <p className="text-xs text-ink-500 mt-1 max-w-md mx-auto">
-            Registra Bancolombia, Nequi, Daviplata o cualquier otra. Al cobrar
-            podrás elegir a cuál te transfirieron y los reportes te mostrarán
-            cuánto entró por cada cuenta.
-          </p>
-        </button>
+        <WalletEmpty onAdd={() => setCreating(true)} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts.map((acc) => (
-            <BankCard
-              key={acc.id}
-              bankId={acc.bankId}
-              label={acc.label}
-              last4={acc.last4}
-              holderName={acc.holderName}
-              accountType={acc.accountType}
-              brand={acc.brand}
-              onClick={() => setEditing(acc)}
-            />
-          ))}
-          {/* Slot extra para agregar otra cuenta sin scroll */}
-          <button
-            onClick={() => setCreating(true)}
-            className="rounded-2xl border-2 border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 h-44 sm:h-48 flex flex-col items-center justify-center gap-2 text-ink-500 hover:text-ink-900 transition-colors"
-          >
-            <Plus className="h-6 w-6" />
-            <span className="text-xs font-medium">Agregar otra</span>
-          </button>
-        </div>
+        <WalletStack
+          accounts={accounts}
+          onCardEdit={(acc) => setEditing(acc)}
+          onAdd={() => setCreating(true)}
+        />
       )}
 
       {creating && <BankAccountModal onClose={() => setCreating(false)} />}

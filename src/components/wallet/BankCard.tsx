@@ -164,9 +164,15 @@ function DecoStrokes({ colors }: { colors: string[] }) {
   return (
     <svg
       viewBox="0 0 320 200"
-      className="absolute inset-0 w-full h-full pointer-events-none"
+      // pointer-events: none + style explícito evita que el SVG
+      // capture clicks aunque se renderice por encima de hermanos.
+      // z-0 mantiene las decoraciones detrás del contenido interactivo
+      // de la tarjeta (chip, label, logo).
+      className="absolute inset-0 w-full h-full pointer-events-none z-0"
+      style={{ pointerEvents: "none" }}
       preserveAspectRatio="none"
       aria-hidden
+      focusable={false}
     >
       {/* Líneas curvas en distintas posiciones para emular el patrón
           de la tarjeta plata real. Stroke gordito y opacidad controlada. */}

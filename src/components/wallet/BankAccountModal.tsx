@@ -11,7 +11,7 @@
  * impacto visual de cada cambio (banco, label, last4, brand).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Loader2, Trash2 } from "lucide-react";
@@ -19,6 +19,22 @@ import { api, type BankAccount, type BankAccountInput } from "@/lib/api";
 import { BANK_CHOICES, ACCOUNT_TYPE_LABEL, type BankBrand, type AccountType, type CardBrand } from "@/lib/banks";
 import { BankCard } from "./BankCard";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+
+/**
+ * Cuando el banco ya implica el tipo de cuenta (Nequi y Daviplata son
+ * billeteras digitales, no admiten elegir entre ahorros/corriente), no
+ * mostramos el selector y forzamos el tipo automáticamente. Otros
+ * bancos sí permiten elegir.
+ */
+const BANK_LOCKS_TYPE: Record<string, AccountType> = {
+  nequi: "nequi",
+  daviplata: "daviplata",
+};
+
+/** Tipos visibles cuando el banco no impone uno. */
+const TYPE_OPTIONS_BANK: AccountType[] = ["ahorros", "corriente"];
+/** Tipos visibles para banco "otra" (más flexibilidad). */
+const TYPE_OPTIONS_OTRA: AccountType[] = ["ahorros", "corriente", "otra"];
 
 interface Props {
   account?: BankAccount;
@@ -36,6 +52,27 @@ export function BankAccountModal({ account, onClose }: Props) {
   const [accountType, setAccountType] = useState<AccountType | "">(
     (account?.accountType as AccountType) ?? "ahorros",
   );
+
+  // Si el banco fija el tipo (Nequi → nequi, Daviplata → daviplata),
+  // sincronizamos automáticamente al cambiar de banco. Para "otra" o
+  // bancos tradicionales dejamos lo que el usuario haya elegido,
+  // siempre que sea compatible con las opciones disponibles.
+  useEffect(() => {
+    const locked = BANK_LOCKS_TYPE[bankId];
+    if (locked) {
+      setAccountType(locked);
+      return;
+    }
+    // Banco normal: si el tipo actual era nequi/daviplata (heredado
+    // de un cambio anterior), volvemos al default ahorros.
+    if (accountType === "nequi" || accountType === "daviplata") {
+      setAccountType("ahorros");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankId]);
+
+  const lockedType = BANK_LOCKS_TYPE[bankId];
+  const typeOptions = bankId === "otra" ? TYPE_OPTIONS_OTRA : TYPE_OPTIONS_BANK;
   const [last4, setLast4] = useState(account?.last4 ?? "");
   const [holderName, setHolderName] = useState(account?.holderName ?? "");
   const [brand, setBrand] = useState<CardBrand>(account?.brand ?? "none");
@@ -141,19 +178,25 @@ export function BankAccountModal({ account, onClose }: Props) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-ink-700 mb-1.5">Tipo</label>
-                  <select
-                    value={accountType}
-                    onChange={(e) => setAccountType(e.target.value as AccountType)}
-                    className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
-                  >
-                    {(["ahorros", "corriente", "nequi", "daviplata", "otra"] as const).map((t) => (
-                      <option key={t} value={t}>{ACCOUNT_TYPE_LABEL[t]}</option>
-                    ))}
-                  </select>
-                </div>
+              <div className={lockedType ? "" : "grid grid-cols-2 gap-3"}>
+                {/* Solo mostramos el selector de tipo cuando el banco
+                    NO lo impone. Nequi y Daviplata se autoasignan a su
+                    propio tipo (no tiene sentido elegir ahorros/corriente
+                    en una billetera digital). */}
+                {!lockedType && (
+                  <div>
+                    <label className="block text-xs font-medium text-ink-700 mb-1.5">Tipo</label>
+                    <select
+                      value={accountType}
+                      onChange={(e) => setAccountType(e.target.value as AccountType)}
+                      className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+                    >
+                      {typeOptions.map((t) => (
+                        <option key={t} value={t}>{ACCOUNT_TYPE_LABEL[t]}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-medium text-ink-700 mb-1.5">
                     Últimos 4 <span className="text-ink-400 font-normal">(opcional)</span>
