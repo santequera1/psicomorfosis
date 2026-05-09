@@ -165,7 +165,13 @@ export function AppSidebar() {
       <aside
         className={cn(
           // Mobile: fixed drawer con transform
-          "fixed sm:sticky top-0 z-50 h-screen bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border",
+          "fixed sm:sticky top-0 z-50 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border",
+          // Altura: en mobile usamos h-dvh (dynamic viewport height) que
+          // sí descuenta las barras de address/tabs del browser. h-screen
+          // (100vh) las incluye, así el footer (avatar + reportar +
+          // cerrar sesión) quedaba fuera del viewport en algunos
+          // celulares y no se podía hacer scroll para verlo.
+          "h-dvh sm:h-screen",
           "transition-transform duration-250 ease-out sm:transition-[width] sm:transform-none",
           // Desktop: shrink-0 para que no se achique en flex
           "shrink-0",

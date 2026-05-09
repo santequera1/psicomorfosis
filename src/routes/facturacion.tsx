@@ -596,7 +596,11 @@ export function ReceiptFormModal({
                   </p>
                 </>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                /* Selector compacto: 2 cols siempre (incluso mobile)
+                   con BankCard size="mini". Antes en mobile era 1 col
+                   con tamaño "sm" y se veía grandote, robaba espacio
+                   al resto del form. */
+                <div className="grid grid-cols-2 gap-2">
                   {bankAccounts.map((acc) => (
                     <button
                       key={acc.id}
@@ -613,7 +617,7 @@ export function ReceiptFormModal({
                         last4={acc.last4}
                         accountType={acc.accountType}
                         brand={acc.brand}
-                        size="sm"
+                        size="mini"
                       />
                     </button>
                   ))}
@@ -621,7 +625,7 @@ export function ReceiptFormModal({
                     type="button"
                     onClick={() => setBankAccountId(null)}
                     className={cn(
-                      "rounded-lg h-32 border-2 border-dashed text-xs font-medium flex items-center justify-center transition-colors",
+                      "rounded-lg aspect-[320/202] border-2 border-dashed text-xs font-medium flex items-center justify-center transition-colors text-center px-2",
                       bankAccountId === null
                         ? "border-brand-700 bg-brand-50 text-brand-800"
                         : "border-line-200 text-ink-500 hover:border-brand-400",

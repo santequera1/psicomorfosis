@@ -253,7 +253,7 @@ export function LegalAdminShell({
     <div className="min-h-screen bg-bg-50 text-ink-900 flex">
       <aside
         className={cn(
-          "hidden md:flex shrink-0 sticky top-0 h-screen border-r border-line-200 bg-surface flex-col transition-[width] duration-200 ease-out",
+          "hidden md:flex shrink-0 sticky top-0 h-dvh md:h-screen border-r border-line-200 bg-surface flex-col transition-[width] duration-200 ease-out",
           collapsed ? "w-16" : "w-64",
         )}
       >
