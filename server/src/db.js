@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 import { seedTestDefinitions } from "./psych_test_definitions.js";
+import { seedLegalDocuments } from "./legal-seed.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = join(__dirname, "..", "data.db");
@@ -638,6 +639,60 @@ function runMigrations() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     "CREATE INDEX IF NOT EXISTS idx_err_attach_report ON error_report_attachments(report_id)",
+    // ─── Sistema de documentos legales (8 may 2026) ─────────────────────
+    //
+    // Permite que un nuevo rol `legal_admin` (la abogada del proyecto)
+    // edite directamente las políticas, términos y acuerdos sin pedir a
+    // un dev que toque código. Cada documento tiene N versiones; las
+    // páginas públicas /privacidad y /terminos renderizan la última
+    // versión `published`. Las aceptaciones registran qué versión vio
+    // cada usuario para tener prueba auditable ante SIC.
+    //
+    // requires_acceptance + acceptance_audience determinan si los
+    // usuarios deben pasar por el modal bloqueante de re-aceptación
+    // tras publicar una nueva versión.
+    "ALTER TABLE users ADD COLUMN is_legal_admin INTEGER DEFAULT 0",
+    `CREATE TABLE IF NOT EXISTS legal_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      description TEXT,
+      public_path TEXT,                        -- ej "/privacidad"; NULL = solo interno
+      requires_acceptance INTEGER DEFAULT 0,
+      acceptance_audience TEXT DEFAULT 'none', -- staff | patient | both | none
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_legal_documents_slug ON legal_documents(slug)",
+    "CREATE INDEX IF NOT EXISTS idx_legal_documents_public_path ON legal_documents(public_path)",
+    `CREATE TABLE IF NOT EXISTS legal_document_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL REFERENCES legal_documents(id) ON DELETE CASCADE,
+      version_label TEXT NOT NULL,             -- ej "2026-v1"
+      body_html TEXT NOT NULL,                 -- HTML producido por TipTap
+      body_text TEXT,                          -- texto plano para búsqueda / accesibilidad
+      summary_of_changes TEXT,                 -- nota corta del legal_admin
+      status TEXT NOT NULL DEFAULT 'draft',    -- draft | published | archived
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      published_at TEXT,
+      published_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_ldv_document_status ON legal_document_versions(document_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_ldv_published ON legal_document_versions(document_id, published_at DESC)",
+    `CREATE TABLE IF NOT EXISTS legal_acceptances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE,
+      document_id INTEGER NOT NULL REFERENCES legal_documents(id) ON DELETE CASCADE,
+      version_id INTEGER NOT NULL REFERENCES legal_document_versions(id) ON DELETE CASCADE,
+      accepted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      ip TEXT,
+      user_agent TEXT,
+      CHECK ((user_id IS NOT NULL) OR (patient_id IS NOT NULL))
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_legal_acc_user ON legal_acceptances(user_id, document_id)",
+    "CREATE INDEX IF NOT EXISTS idx_legal_acc_patient ON legal_acceptances(patient_id, document_id)",
+    "CREATE INDEX IF NOT EXISTS idx_legal_acc_version ON legal_acceptances(version_id)",
   ];
   for (const sql of migrations) {
     try {
@@ -819,6 +874,42 @@ function backfillExisting() {
   } catch (err) {
     console.warn("[db] backfill platform_admin falló:", err.message);
   }
+
+  // 7. Sistema legal: documentos iniciales + cuenta de la asesora legal
+  // (María Rivera). Igual que platform_admin, vive en su propio workspace
+  // virtual ("Asesoría legal") y no tiene pacientes ni vista clínica.
+  // Idempotente.
+  try {
+    seedLegalDocuments(db);
+
+    let legalWsId = db.prepare(`SELECT id FROM workspaces WHERE name = ?`)
+      .get("Asesoría legal Psicomorfosis")?.id;
+    if (!legalWsId) {
+      legalWsId = db.prepare(`INSERT INTO workspaces (name, mode) VALUES (?, ?)`)
+        .run("Asesoría legal Psicomorfosis", "individual").lastInsertRowid;
+      console.log(`[db] backfill: creado workspace legal id=${legalWsId}`);
+    }
+
+    const existingLegal = db.prepare(`SELECT id FROM users WHERE username = ?`).get("mariarivera");
+    if (!existingLegal) {
+      db.prepare(`
+        INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin)
+        VALUES (?, ?, ?, ?, ?, 'legal_admin', 1)
+      `).run(
+        legalWsId,
+        "mariarivera",
+        bcrypt.hashSync("Psico@2026!N", 10),
+        "María Rivera",
+        "legal@psicomorfosis.co",
+      );
+      console.log(`[db] backfill: creada cuenta mariarivera (asesora legal)`);
+    } else {
+      // Asegurar flag idempotente
+      db.prepare(`UPDATE users SET is_legal_admin = 1, role = 'legal_admin' WHERE id = ?`).run(existingLegal.id);
+    }
+  } catch (err) {
+    console.warn("[db] backfill legal_admin falló:", err.message);
+  }
 }
 
 function seed() {
@@ -828,7 +919,24 @@ function seed() {
   const wsIndividual = seedIndividualWorkspace();
   const wsOrg = seedOrganizationWorkspace();
   seedPlatformAdmin();
+  seedLegalAdmin();
+  seedLegalDocuments(db);
   console.log(`[db] seed done — WS individual=${wsIndividual}, WS organización=${wsOrg}`);
+}
+
+/** Crea el workspace + cuenta de la asesora legal (María Rivera). */
+function seedLegalAdmin() {
+  const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)")
+    .run("Asesoría legal Psicomorfosis", "individual").lastInsertRowid;
+  db.prepare(`
+    INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin)
+    VALUES (?, ?, ?, ?, ?, 'legal_admin', 1)
+  `).run(
+    wsId, "mariarivera",
+    bcrypt.hashSync("Psico@2026!N", 10),
+    "María Rivera",
+    "legal@psicomorfosis.co",
+  );
 }
 
 /** Crea el workspace + cuenta del dueño de la plataforma (Stiven). */

@@ -68,6 +68,24 @@ export function requirePlatformAdmin(req, res, next) {
   next();
 }
 
+/**
+ * Requiere que el JWT pertenezca a un asesor legal (rol transversal,
+ * sin workspace clínico). Solo lo cumplen las cuentas marcadas con
+ * `is_legal_admin = 1`. Edita políticas y términos desde /legal-admin.
+ */
+export function requireLegalAdmin(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: "Missing token" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload.is_legal_admin) {
+    return res.status(403).json({ error: "Acceso solo para asesores legales" });
+  }
+  req.user = payload;
+  next();
+}
+
 /** Lo opuesto a requirePatient: bloquea pacientes en rutas de staff. */
 export function requireStaff(req, res, next) {
   const header = req.headers.authorization ?? "";

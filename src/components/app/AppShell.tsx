@@ -4,6 +4,7 @@ import { Topbar } from "./Topbar";
 import { SidebarProvider } from "./SidebarContext";
 import { Fab } from "./Fab";
 import { getToken } from "@/lib/api";
+import { PendingLegalGate } from "@/components/legal/PendingLegalGate";
 
 /**
  * Guard de autenticación que envuelve a cada ruta protegida.
@@ -59,6 +60,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
         <Fab />
+        {/* Bloqueante: si hay políticas/términos pendientes de aceptar
+            (versión nueva publicada), muestra modal hasta aceptar. */}
+        <PendingLegalGate />
       </div>
     </SidebarProvider>
   );

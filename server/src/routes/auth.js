@@ -41,8 +41,9 @@ router.post("/login", (req, res) => {
   if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
   // Bloquear login si el workspace está deshabilitado. Excepción: platform
-  // admins pueden seguir entrando (necesitan acceso para reactivar cuentas).
-  if (user.disabled_at && !user.is_platform_admin) {
+  // admins y legal admins pueden seguir entrando (necesitan acceso para
+  // reactivar cuentas o publicar políticas aunque su workspace esté off).
+  if (user.disabled_at && !user.is_platform_admin && !user.is_legal_admin) {
     return res.status(403).json({
       error: user.disabled_reason
         ? `Cuenta deshabilitada: ${user.disabled_reason}`
@@ -63,6 +64,7 @@ router.post("/login", (req, res) => {
     name: user.name,
     professional_id: user.professional_id ?? null,
     is_platform_admin: !!user.is_platform_admin,
+    is_legal_admin: !!user.is_legal_admin,
   });
   res.json({
     token,
@@ -73,6 +75,7 @@ router.post("/login", (req, res) => {
       email: user.email,
       role: user.role,
       isPlatformAdmin: !!user.is_platform_admin,
+      isLegalAdmin: !!user.is_legal_admin,
       workspaceId: user.workspace_id,
       workspaceName: user.workspace_name,
       workspaceMode: user.workspace_mode,
@@ -82,13 +85,14 @@ router.post("/login", (req, res) => {
 
 router.get("/me", requireAuth, (req, res) => {
   const user = db.prepare(`
-    SELECT u.id, u.username, u.name, u.email, u.role, u.workspace_id, u.is_platform_admin,
+    SELECT u.id, u.username, u.name, u.email, u.role, u.workspace_id,
+           u.is_platform_admin, u.is_legal_admin,
            w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
     FROM users u JOIN workspaces w ON u.workspace_id = w.id
     WHERE u.id = ?
   `).get(req.user.id);
   if (!user) return res.status(404).json({ error: "No encontrado" });
-  if (user.disabled_at && !user.is_platform_admin) {
+  if (user.disabled_at && !user.is_platform_admin && !user.is_legal_admin) {
     return res.status(403).json({ error: "Cuenta deshabilitada" });
   }
   res.json({
@@ -99,6 +103,7 @@ router.get("/me", requireAuth, (req, res) => {
       email: user.email,
       role: user.role,
       isPlatformAdmin: !!user.is_platform_admin,
+      isLegalAdmin: !!user.is_legal_admin,
       workspaceId: user.workspace_id,
       workspaceName: user.workspace_name,
       workspaceMode: user.workspace_mode,
@@ -255,7 +260,7 @@ router.post("/update-credentials", requireAuth, (req, res) => {
   // no quede con un JWT desincronizado de su username.
   const fresh = db.prepare(`
     SELECT u.id, u.username, u.name, u.email, u.role, u.workspace_id,
-           u.is_platform_admin, u.professional_id,
+           u.is_platform_admin, u.is_legal_admin, u.professional_id,
            w.name AS workspace_name, w.mode AS workspace_mode
     FROM users u JOIN workspaces w ON u.workspace_id = w.id
     WHERE u.id = ?
@@ -269,6 +274,7 @@ router.post("/update-credentials", requireAuth, (req, res) => {
     name: fresh.name,
     professional_id: fresh.professional_id ?? null,
     is_platform_admin: !!fresh.is_platform_admin,
+    is_legal_admin: !!fresh.is_legal_admin,
   });
 
   res.json({
@@ -281,6 +287,7 @@ router.post("/update-credentials", requireAuth, (req, res) => {
       email: fresh.email,
       role: fresh.role,
       isPlatformAdmin: !!fresh.is_platform_admin,
+      isLegalAdmin: !!fresh.is_legal_admin,
       workspaceId: fresh.workspace_id,
       workspaceName: fresh.workspace_name,
       workspaceMode: fresh.workspace_mode,

@@ -29,6 +29,8 @@ export interface ApiUser {
   role: string;
   /** Cross-workspace platform admin (dueño de la plataforma). */
   isPlatformAdmin?: boolean;
+  /** Asesor legal (edita políticas/términos en /legal-admin). Cross-workspace. */
+  isLegalAdmin?: boolean;
   workspaceId: number;
   workspaceName: string;
   workspaceMode: WorkspaceMode;
@@ -1341,4 +1343,138 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+
+  // ─── Legal: lectura pública (sin auth) ──────────────────────────────
+  legalGetPublic: (slug: string) =>
+    request<{
+      slug: string;
+      title: string;
+      description: string | null;
+      versionLabel: string;
+      bodyHtml: string;
+      publishedAt: string;
+      summaryOfChanges: string | null;
+    }>(`/api/legal/public/${slug}`),
+  legalListPublic: () =>
+    request<Array<{
+      slug: string;
+      title: string;
+      description: string | null;
+      publicPath: string | null;
+      versionLabel: string | null;
+      publishedAt: string | null;
+    }>>("/api/legal/public"),
+
+  // ─── Legal: usuario autenticado ─────────────────────────────────────
+  legalMyPending: () =>
+    request<{
+      pending: Array<{
+        documentId: number;
+        slug: string;
+        title: string;
+        description: string | null;
+        versionId: number;
+        versionLabel: string;
+        bodyHtml: string;
+        publishedAt: string;
+        summaryOfChanges: string | null;
+      }>;
+    }>("/api/legal/me/pending"),
+  legalAccept: (versionId: number) =>
+    request<{ accepted: true; acceptanceId: number; alreadyAccepted?: boolean }>(
+      "/api/legal/me/accept",
+      { method: "POST", body: JSON.stringify({ versionId }) },
+    ),
+
+  // ─── Legal admin (María Rivera) ─────────────────────────────────────
+  legalAdminListDocuments: () =>
+    request<Array<{
+      id: number;
+      slug: string;
+      title: string;
+      description: string | null;
+      publicPath: string | null;
+      requiresAcceptance: boolean;
+      acceptanceAudience: "staff" | "patient" | "both" | "none";
+      createdAt: string;
+      latestPublished: { id: number; version_label: string; published_at: string } | null;
+      pendingDraft: { id: number; version_label: string; created_at: string; summary_of_changes: string | null } | null;
+      acceptancesCount: number;
+    }>>("/api/legal/admin/documents"),
+  legalAdminGetDocument: (slug: string) =>
+    request<{
+      id: number;
+      slug: string;
+      title: string;
+      description: string | null;
+      publicPath: string | null;
+      requiresAcceptance: boolean;
+      acceptanceAudience: "staff" | "patient" | "both" | "none";
+      versions: Array<{
+        id: number;
+        version_label: string;
+        status: "draft" | "published" | "archived";
+        summary_of_changes: string | null;
+        created_at: string;
+        published_at: string | null;
+        created_by_name: string | null;
+        published_by_name: string | null;
+      }>;
+    }>(`/api/legal/admin/documents/${slug}`),
+  legalAdminGetVersion: (id: number) =>
+    request<{
+      id: number;
+      documentId: number;
+      documentSlug: string;
+      documentTitle: string;
+      versionLabel: string;
+      bodyHtml: string;
+      summaryOfChanges: string | null;
+      status: "draft" | "published" | "archived";
+      createdAt: string;
+      publishedAt: string | null;
+    }>(`/api/legal/admin/versions/${id}`),
+  legalAdminCreateDraft: (slug: string) =>
+    request<{ versionId: number; created: boolean }>(
+      `/api/legal/admin/documents/${slug}/draft`,
+      { method: "POST" },
+    ),
+  legalAdminUpdateVersion: (
+    id: number,
+    input: { bodyHtml?: string; summaryOfChanges?: string },
+  ) =>
+    request<{ ok: true }>(`/api/legal/admin/versions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  legalAdminPublishVersion: (id: number) =>
+    request<{ ok: true; publishedAt: string }>(`/api/legal/admin/versions/${id}/publish`, {
+      method: "POST",
+    }),
+  legalAdminDeleteVersion: (id: number) =>
+    request<{ ok: true }>(`/api/legal/admin/versions/${id}`, { method: "DELETE" }),
+  legalAdminListAcceptances: (params: { slug?: string; limit?: number; offset?: number } = {}) =>
+    request<{
+      rows: Array<{
+        id: number;
+        accepted_at: string;
+        ip: string | null;
+        user_agent: string | null;
+        user_id: number | null;
+        patient_id: string | null;
+        user_name: string | null;
+        user_email: string | null;
+        patient_name: string | null;
+        document_slug: string;
+        document_title: string;
+        version_label: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/api/legal/admin/acceptances${qs({
+      slug: params.slug ?? null,
+      limit: params.limit ?? null,
+      offset: params.offset ?? null,
+    })}`),
 };

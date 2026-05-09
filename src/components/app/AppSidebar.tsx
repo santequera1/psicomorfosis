@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
   PanelLeftClose, PanelLeftOpen, X, Shield, LogOut, Bug,
+  Scale, FileText, ClipboardCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn, roleLabel } from "@/lib/utils";
@@ -103,7 +104,30 @@ export function AppSidebar() {
     },
   ];
 
-  const visibleGroups = user?.isPlatformAdmin ? platformAdminGroups : groups;
+  // Sidebar exclusivo de la asesora legal: solo documentos legales,
+  // aceptaciones (audit log) y configuración personal. Sin nada
+  // clínico — su rol es transversal y no maneja pacientes.
+  const legalAdminGroups: typeof groups = [
+    {
+      label: "Asesoría legal",
+      items: [
+        { to: "/legal-admin", label: "Documentos", icon: FileText },
+        { to: "/legal-admin/aceptaciones", label: "Aceptaciones", icon: ClipboardCheck },
+      ],
+    },
+    {
+      label: "Cuenta",
+      items: [
+        { to: "/configuracion", label: "Configuración", icon: Settings },
+      ],
+    },
+  ];
+
+  const visibleGroups = user?.isLegalAdmin
+    ? legalAdminGroups
+    : user?.isPlatformAdmin
+      ? platformAdminGroups
+      : groups;
 
   // Eventos custom para que código fuera de React (ej: el tour de
   // TourGuideJS) pueda abrir/cerrar el drawer en mobile sin acoplarse

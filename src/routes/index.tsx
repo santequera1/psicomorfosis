@@ -26,6 +26,11 @@ function IndexPage() {
   // para no romper SSR ni hacer flash del AdminDashboard.
   useEffect(() => {
     const u = getStoredUser();
+    if (u?.isLegalAdmin) {
+      // La asesora legal no usa el flujo clínico — su área es /legal-admin.
+      navigate({ to: "/legal-admin", replace: true });
+      return;
+    }
     if (u?.isPlatformAdmin) {
       navigate({ to: "/platform", replace: true });
     }

@@ -26,6 +26,7 @@ import notesRoutes from "./routes/notes.js";
 import portalRoutes from "./routes/portal.js";
 import platformRoutes from "./routes/platform.js";
 import errorReportsRoutes from "./routes/errorReports.js";
+import legalRoutes from "./routes/legal.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -55,6 +56,10 @@ app.use("/api/uploads", express.static(UPLOADS_DIR, {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/platform", platformRoutes);
+// Documentos legales: rutas públicas (/public/*), del usuario (/me/*) y
+// del asesor legal (/admin/*). Cada banda aplica su propio middleware
+// de auth interno; aquí solo lo montamos en el prefijo.
+app.use("/api/legal", legalRoutes);
 app.use("/api/workspace", workspaceRoutes);
 app.use("/api/patients", patientsRoutes);
 app.use("/api/appointments", appointmentsRoutes);

@@ -111,7 +111,11 @@ const BOOTSTRAP_SCRIPT = `
       } else if (!token && !isPublic) {
         location.replace('/login');
       } else if (token && user && user.role !== 'paciente' && path === '/login') {
-        location.replace('/');
+        // Asesor legal aterriza en su dashboard exclusivo.
+        location.replace(user.isLegalAdmin ? '/legal-admin' : '/');
+      } else if (token && user && user.isLegalAdmin && path === '/') {
+        // Si una asesora legal navega a home, la mandamos a su área.
+        location.replace('/legal-admin');
       }
     }
   } catch(e) {}

@@ -19,6 +19,7 @@ import { Route as PrescripcionRouteImport } from './routes/prescripcion'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LegalAdminRouteImport } from './routes/legal-admin'
 import { Route as HistoriaClinicaRouteImport } from './routes/historia-clinica'
 import { Route as HistoriaRouteImport } from './routes/historia'
 import { Route as FacturacionRouteImport } from './routes/facturacion'
@@ -35,6 +36,8 @@ import { Route as PLoginRouteImport } from './routes/p_.login'
 import { Route as PInicioRouteImport } from './routes/p_.inicio'
 import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
 import { Route as PCitasRouteImport } from './routes/p_.citas'
+import { Route as LegalAdminAceptacionesRouteImport } from './routes/legal-admin_.aceptaciones'
+import { Route as LegalAdminSlugRouteImport } from './routes/legal-admin_.$slug'
 import { Route as FirmarTokenRouteImport } from './routes/firmar.$token'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
 import { Route as PFirmarDocIdRouteImport } from './routes/p_.firmar.$docId'
@@ -89,6 +92,11 @@ const PacientesRoute = PacientesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalAdminRoute = LegalAdminRouteImport.update({
+  id: '/legal-admin',
+  path: '/legal-admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoriaClinicaRoute = HistoriaClinicaRouteImport.update({
@@ -171,6 +179,16 @@ const PCitasRoute = PCitasRouteImport.update({
   path: '/p/citas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LegalAdminAceptacionesRoute = LegalAdminAceptacionesRouteImport.update({
+  id: '/legal-admin_/aceptaciones',
+  path: '/legal-admin/aceptaciones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalAdminSlugRoute = LegalAdminSlugRouteImport.update({
+  id: '/legal-admin_/$slug',
+  path: '/legal-admin/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FirmarTokenRoute = FirmarTokenRouteImport.update({
   id: '/firmar/$token',
   path: '/firmar/$token',
@@ -205,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
@@ -217,6 +236,8 @@ export interface FileRoutesByFullPath {
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
+  '/legal-admin/$slug': typeof LegalAdminSlugRoute
+  '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -238,6 +259,7 @@ export interface FileRoutesByTo {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
@@ -250,6 +272,8 @@ export interface FileRoutesByTo {
   '/tests': typeof TestsRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
+  '/legal-admin/$slug': typeof LegalAdminSlugRoute
+  '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -272,6 +296,7 @@ export interface FileRoutesById {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
@@ -284,6 +309,8 @@ export interface FileRoutesById {
   '/tests': typeof TestsRoute
   '/documentos_/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
+  '/legal-admin_/$slug': typeof LegalAdminSlugRoute
+  '/legal-admin_/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p_/citas': typeof PCitasRoute
   '/p_/documentos': typeof PDocumentosRoute
   '/p_/inicio': typeof PInicioRoute
@@ -307,6 +334,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/legal-admin'
     | '/login'
     | '/pacientes'
     | '/platform'
@@ -319,6 +347,8 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos/$id'
     | '/firmar/$token'
+    | '/legal-admin/$slug'
+    | '/legal-admin/aceptaciones'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -340,6 +370,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/legal-admin'
     | '/login'
     | '/pacientes'
     | '/platform'
@@ -352,6 +383,8 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos/$id'
     | '/firmar/$token'
+    | '/legal-admin/$slug'
+    | '/legal-admin/aceptaciones'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -373,6 +406,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/legal-admin'
     | '/login'
     | '/pacientes'
     | '/platform'
@@ -385,6 +419,8 @@ export interface FileRouteTypes {
     | '/tests'
     | '/documentos_/$id'
     | '/firmar/$token'
+    | '/legal-admin_/$slug'
+    | '/legal-admin_/aceptaciones'
     | '/p_/citas'
     | '/p_/documentos'
     | '/p_/inicio'
@@ -407,6 +443,7 @@ export interface RootRouteChildren {
   FacturacionRoute: typeof FacturacionRoute
   HistoriaRoute: typeof HistoriaRoute
   HistoriaClinicaRoute: typeof HistoriaClinicaRoute
+  LegalAdminRoute: typeof LegalAdminRoute
   LoginRoute: typeof LoginRoute
   PacientesRoute: typeof PacientesRoute
   PlatformRoute: typeof PlatformRoute
@@ -419,6 +456,8 @@ export interface RootRouteChildren {
   TestsRoute: typeof TestsRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
   FirmarTokenRoute: typeof FirmarTokenRoute
+  LegalAdminSlugRoute: typeof LegalAdminSlugRoute
+  LegalAdminAceptacionesRoute: typeof LegalAdminAceptacionesRoute
   PCitasRoute: typeof PCitasRoute
   PDocumentosRoute: typeof PDocumentosRoute
   PInicioRoute: typeof PInicioRoute
@@ -503,6 +542,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal-admin': {
+      id: '/legal-admin'
+      path: '/legal-admin'
+      fullPath: '/legal-admin'
+      preLoaderRoute: typeof LegalAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/historia-clinica': {
@@ -617,6 +663,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PCitasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/legal-admin_/aceptaciones': {
+      id: '/legal-admin_/aceptaciones'
+      path: '/legal-admin/aceptaciones'
+      fullPath: '/legal-admin/aceptaciones'
+      preLoaderRoute: typeof LegalAdminAceptacionesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal-admin_/$slug': {
+      id: '/legal-admin_/$slug'
+      path: '/legal-admin/$slug'
+      fullPath: '/legal-admin/$slug'
+      preLoaderRoute: typeof LegalAdminSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/firmar/$token': {
       id: '/firmar/$token'
       path: '/firmar/$token'
@@ -663,6 +723,7 @@ const rootRouteChildren: RootRouteChildren = {
   FacturacionRoute: FacturacionRoute,
   HistoriaRoute: HistoriaRoute,
   HistoriaClinicaRoute: HistoriaClinicaRoute,
+  LegalAdminRoute: LegalAdminRoute,
   LoginRoute: LoginRoute,
   PacientesRoute: PacientesRoute,
   PlatformRoute: PlatformRoute,
@@ -675,6 +736,8 @@ const rootRouteChildren: RootRouteChildren = {
   TestsRoute: TestsRoute,
   DocumentosIdRoute: DocumentosIdRoute,
   FirmarTokenRoute: FirmarTokenRoute,
+  LegalAdminSlugRoute: LegalAdminSlugRoute,
+  LegalAdminAceptacionesRoute: LegalAdminAceptacionesRoute,
   PCitasRoute: PCitasRoute,
   PDocumentosRoute: PDocumentosRoute,
   PInicioRoute: PInicioRoute,
