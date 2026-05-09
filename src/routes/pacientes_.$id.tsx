@@ -22,6 +22,7 @@ import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { ApplicationDetailModal } from "@/components/tests/ApplicationDetailModal";
+import { ReceiptFormModal } from "@/routes/facturacion";
 
 export const Route = createFileRoute("/pacientes_/$id")({
   head: ({ params }: { params: { id: string } }) => ({
@@ -243,7 +244,7 @@ function PatientDetailPage() {
         {tab === "tests" && <TabTests rows={patientTests as any[]} />}
         {tab === "prescripcion" && <TabPrescripcion patientId={id} />}
         {tab === "documentos" && <TabDocumentos rows={docs} patientId={patient.id} />}
-        {tab === "facturacion" && <TabFacturacion patientId={id} />}
+        {tab === "facturacion" && <TabFacturacion patientId={id} patientName={displayPatientName(patient)} />}
       </div>
 
       {editing && patient && <EditPatientInlineModal patient={patient} onClose={() => setEditing(false)} />}
@@ -1067,8 +1068,11 @@ function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) 
   );
 }
 
-function TabFacturacion({ patientId }: { patientId: string }) {
+function TabFacturacion({ patientId, patientName }: { patientId: string; patientName: string }) {
   const [certOpen, setCertOpen] = useState(false);
+  // Atajo contextual: abre el modal de nuevo recibo con paciente
+  // pre-llenado, sin tener que ir a /facturacion y buscarlo manualmente.
+  const [newReceiptOpen, setNewReceiptOpen] = useState(false);
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices", { patient_id: patientId }],
     queryFn: () => api.listInvoices({ patient_id: patientId }),
@@ -1103,7 +1107,13 @@ function TabFacturacion({ patientId }: { patientId: string }) {
       <div className="md:col-span-2 rounded-xl border border-line-200 bg-surface">
         <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-serif text-base text-ink-900">Recibos del paciente</h3>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setNewReceiptOpen(true)}
+              className="h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
+            >
+              <Plus className="h-3 w-3" /> Nuevo recibo
+            </button>
             <button
               onClick={() => setCertOpen(true)}
               disabled={paidCount === 0}
@@ -1160,6 +1170,14 @@ function TabFacturacion({ patientId }: { patientId: string }) {
 
       {certOpen && (
         <CertificateModal patientId={patientId} onClose={() => setCertOpen(false)} />
+      )}
+      {newReceiptOpen && (
+        <ReceiptFormModal
+          mode="create"
+          presetPatientId={patientId}
+          presetPatientName={patientName}
+          onClose={() => setNewReceiptOpen(false)}
+        />
       )}
     </div>
   );

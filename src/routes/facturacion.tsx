@@ -10,8 +10,10 @@ import {
   Download, CheckCircle2, Loader2, Pencil, Trash2, Settings, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type Invoice } from "@/lib/api";
+import { api, type Invoice, type BankAccount } from "@/lib/api";
 import { useAutoTour, invoicesTour, TOUR_NAMES } from "@/lib/tours";
+import { BankCard } from "@/components/wallet/BankCard";
+import { BankAccountModal } from "@/components/wallet/BankAccountModal";
 
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
@@ -68,6 +70,17 @@ function FacturacionPage() {
     queryKey: ["invoices-summary"],
     queryFn: () => api.invoicesSummary(),
   });
+  // Cuentas del wallet — se usan en la columna "Método" para renderizar
+  // un chip BankCard xs cuando el recibo está vinculado a una cuenta.
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["bank-accounts"],
+    queryFn: () => api.listBankAccounts({ includeArchived: true }),
+  });
+  const accountById = useMemo(() => {
+    const m = new Map<number, BankAccount>();
+    for (const a of bankAccounts) m.set(a.id, a);
+    return m;
+  }, [bankAccounts]);
 
   const filtered = useMemo(() => invoices.filter((f) => {
     if (filter === "Pagados" && f.status !== "pagada") return false;
@@ -120,6 +133,12 @@ function FacturacionPage() {
           <KpiCard icon={<Receipt className="h-4 w-4" />} label="Total" value={String(summary?.total ?? invoices.length)} hint="emitidos" delta={{ neutral: true, value: "" }} />
         </div>
 
+        {/* Wallet del psicólogo: cuentas bancarias registradas, con la
+            apariencia de tarjetas de débito reales. Las usadas al
+            registrar pagos aparecen como chips de la cuenta destino. */}
+        <WalletSection />
+
+
         <section data-tour="invoices-list" className="rounded-xl bg-surface border border-line-200 shadow-soft overflow-hidden">
           <div className="px-3 sm:px-5 py-3 sm:py-4 border-b border-line-100 space-y-2 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
             <h2 className="font-serif text-base sm:text-lg text-ink-900 sm:mr-auto">Movimientos recientes</h2>
@@ -168,9 +187,22 @@ function FacturacionPage() {
                     <td className="px-5 py-3.5 text-ink-500">{f.concept}</td>
                     <td className="px-5 py-3.5 text-ink-500 tabular">{f.date}</td>
                     <td className="px-5 py-3.5 text-ink-500">
-                      {f.method}
-                      {f.bank && <span className="text-ink-400"> · {f.bank}</span>}
-                      {f.eps && <span className="text-ink-400"> · {f.eps}</span>}
+                      <div className="flex flex-col gap-1 items-start">
+                        <span>{f.method}</span>
+                        {/* Si hay vínculo con el wallet, render chip visual.
+                            Si no, fallback al texto bank libre del legacy. */}
+                        {f.bank_account_id && accountById.has(f.bank_account_id) ? (
+                          <BankCard
+                            size="xs"
+                            bankId={accountById.get(f.bank_account_id)!.bankId}
+                            label={accountById.get(f.bank_account_id)!.label}
+                            last4={accountById.get(f.bank_account_id)!.last4}
+                          />
+                        ) : f.bank ? (
+                          <span className="text-ink-400 text-xs">{f.bank}</span>
+                        ) : null}
+                        {f.eps && <span className="text-ink-400 text-xs">{f.eps}</span>}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-right tabular text-ink-900 font-medium">{fmt(f.amount)}</td>
                     <td className="px-5 py-3.5">
@@ -371,21 +403,47 @@ export function ReceiptFormModal({
       : "Presencial"
   );
 
+  // Cuentas registradas del wallet — se muestran como selector visual
+  // cuando el método NO es efectivo. El usuario puede elegir una de las
+  // suyas o "Sin cuenta específica" para mantener compatibilidad con
+  // el campo `bank` texto libre.
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ["bank-accounts"],
+    queryFn: () => api.listBankAccounts(),
+  });
+  // Si el invoice ya tenía una cuenta vinculada, partir con ella; si no,
+  // sugerir la default del workspace en modo crear.
+  const [bankAccountId, setBankAccountId] = useState<number | null>(() => {
+    if (invoice?.bank_account_id != null) return invoice.bank_account_id;
+    return null;
+  });
+  // Cuando carga la lista de cuentas en modo crear, preseleccionamos la
+  // default — sin sobrescribir si el usuario ya eligió otra.
+  useEffect(() => {
+    if (mode !== "create") return;
+    if (bankAccountId != null) return;
+    const def = bankAccounts.find((a) => a.isDefault);
+    if (def) setBankAccountId(def.id);
+  }, [bankAccounts, mode, bankAccountId]);
+
   const mu = useMutation({
     mutationFn: () => {
-      const body: Partial<Invoice> = {
+      const body: Partial<Invoice> & { bank_account_id?: number | null } = {
         patient_id: patientId || null,
         patient_name: patientName,
         concept,
         amount: Math.max(0, Math.round(amount)),
         method,
         modality,
-        bank: method === "Transferencia" ? (bank || null) : null,
+        bank: method === "Transferencia" || method === "Tarjeta" || method === "PSE"
+          ? (bank || null)
+          : null,
         eps: method === "Convenio" ? (eps || null) : null,
         payment_reference: reference || null,
         payment_notes: notes || null,
         status,
         date,
+        bank_account_id: method === "Efectivo" ? null : (bankAccountId ?? null),
       };
       return mode === "create"
         ? api.createInvoice(body)
@@ -400,7 +458,6 @@ export function ReceiptFormModal({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const isMethodTransfer = method === "Transferencia";
   const isMethodConvenio = method === "Convenio";
 
   // Cerrar solo con Esc o el botón X — clic afuera NO cierra para evitar que
@@ -495,21 +552,67 @@ export function ReceiptFormModal({
             </label>
           </div>
 
-          {/* Campos condicionales */}
-          {isMethodTransfer && (
-            <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Banco</span>
-              <input
-                list="psm-banks"
-                value={bank}
-                onChange={(e) => setBank(e.target.value)}
-                placeholder="Bancolombia, Davivienda, Nequi…"
-                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
-              />
-              <datalist id="psm-banks">
-                {COMMON_BANKS.map((b) => <option key={b} value={b} />)}
-              </datalist>
-            </label>
+          {/* Cuentas registradas (wallet). Aparece para todos los métodos
+              menos Efectivo. Si la asesora no tiene cuentas todavía, ofrecemos
+              fallback al input de banco texto libre con datalist. */}
+          {method !== "Efectivo" && method !== "Convenio" && (
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+                Cuenta destino
+              </span>
+              {bankAccounts.length === 0 ? (
+                <>
+                  <input
+                    list="psm-banks"
+                    value={bank}
+                    onChange={(e) => setBank(e.target.value)}
+                    placeholder="Bancolombia, Davivienda, Nequi…"
+                    className="w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+                  />
+                  <datalist id="psm-banks">
+                    {COMMON_BANKS.map((b) => <option key={b} value={b} />)}
+                  </datalist>
+                  <p className="text-[11px] text-ink-500">
+                    Tip: registra tus cuentas arriba para verlas con sus colores.
+                  </p>
+                </>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {bankAccounts.map((acc) => (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setBankAccountId(acc.id === bankAccountId ? null : acc.id)}
+                      className={cn(
+                        "rounded-lg p-0 transition-all",
+                        bankAccountId === acc.id ? "ring-2 ring-offset-2 ring-brand-700" : "opacity-80 hover:opacity-100",
+                      )}
+                    >
+                      <BankCard
+                        bankId={acc.bankId}
+                        label={acc.label}
+                        last4={acc.last4}
+                        accountType={acc.accountType}
+                        brand={acc.brand}
+                        size="sm"
+                      />
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setBankAccountId(null)}
+                    className={cn(
+                      "rounded-lg h-32 border-2 border-dashed text-xs font-medium flex items-center justify-center transition-colors",
+                      bankAccountId === null
+                        ? "border-brand-700 bg-brand-50 text-brand-800"
+                        : "border-line-200 text-ink-500 hover:border-brand-400",
+                    )}
+                  >
+                    Sin cuenta específica
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {isMethodConvenio && (
             <label className="block animate-in fade-in slide-in-from-top-1 duration-200">
@@ -1021,5 +1124,90 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
         </footer>
       </form>
     </div>
+  );
+}
+
+/**
+ * Sección "Mis cuentas" del wallet. Muestra las cuentas activas del
+ * psicólogo como tarjetas de débito visuales (con colores y branding
+ * por banco) y un slot vacío para agregar una nueva. Click en una
+ * tarjeta abre el modal de edición.
+ *
+ * Empty state: si no hay cuentas, mostramos una pieza de marketing
+ * inline explicando la utilidad — así la asesora / psicólogo entiende
+ * por qué le conviene registrarlas en lugar de poner texto libre.
+ */
+function WalletSection() {
+  const { data: accounts = [], isLoading } = useQuery({
+    queryKey: ["bank-accounts"],
+    queryFn: () => api.listBankAccounts(),
+  });
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<BankAccount | null>(null);
+
+  return (
+    <section className="mb-6 sm:mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="font-serif text-base sm:text-lg text-ink-900 leading-tight">Mis cuentas</h2>
+          <p className="text-xs text-ink-500 mt-0.5">
+            Cuentas a las que recibes pagos. Aparecen al registrar un recibo.
+          </p>
+        </div>
+        <button
+          onClick={() => setCreating(true)}
+          className="h-9 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+        >
+          <Plus className="h-3.5 w-3.5" /> Agregar cuenta
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-xl border border-dashed border-line-200 bg-bg-50 px-5 py-8 text-center text-sm text-ink-400 inline-flex items-center justify-center gap-2 w-full">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando cuentas…
+        </div>
+      ) : accounts.length === 0 ? (
+        <button
+          onClick={() => setCreating(true)}
+          className="w-full rounded-xl border-2 border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 px-6 py-8 text-center transition-colors group"
+        >
+          <div className="mx-auto h-10 w-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+            <Plus className="h-5 w-5" />
+          </div>
+          <div className="font-medium text-sm text-ink-900">Agrega tu primera cuenta</div>
+          <p className="text-xs text-ink-500 mt-1 max-w-md mx-auto">
+            Registra Bancolombia, Nequi, Daviplata o cualquier otra. Al cobrar
+            podrás elegir a cuál te transfirieron y los reportes te mostrarán
+            cuánto entró por cada cuenta.
+          </p>
+        </button>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {accounts.map((acc) => (
+            <BankCard
+              key={acc.id}
+              bankId={acc.bankId}
+              label={acc.label}
+              last4={acc.last4}
+              holderName={acc.holderName}
+              accountType={acc.accountType}
+              brand={acc.brand}
+              onClick={() => setEditing(acc)}
+            />
+          ))}
+          {/* Slot extra para agregar otra cuenta sin scroll */}
+          <button
+            onClick={() => setCreating(true)}
+            className="rounded-2xl border-2 border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 h-44 sm:h-48 flex flex-col items-center justify-center gap-2 text-ink-500 hover:text-ink-900 transition-colors"
+          >
+            <Plus className="h-6 w-6" />
+            <span className="text-xs font-medium">Agregar otra</span>
+          </button>
+        </div>
+      )}
+
+      {creating && <BankAccountModal onClose={() => setCreating(false)} />}
+      {editing && <BankAccountModal account={editing} onClose={() => setEditing(null)} />}
+    </section>
   );
 }

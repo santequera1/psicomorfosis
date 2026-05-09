@@ -693,6 +693,47 @@ function runMigrations() {
     "CREATE INDEX IF NOT EXISTS idx_legal_acc_user ON legal_acceptances(user_id, document_id)",
     "CREATE INDEX IF NOT EXISTS idx_legal_acc_patient ON legal_acceptances(patient_id, document_id)",
     "CREATE INDEX IF NOT EXISTS idx_legal_acc_version ON legal_acceptances(version_id)",
+    // ─── Wallet de cuentas bancarias del workspace (9 may 2026) ─────────
+    //
+    // Permite al psicólogo registrar las cuentas a las que recibe pagos
+    // (Bancolombia, Nequi, Daviplata, etc.) y vincular cada recibo a una
+    // de ellas. Antes el campo `invoices.bank` era texto libre, ahora hay
+    // catálogo controlado y trazabilidad por cuenta.
+    //
+    //   bank_id          → identificador del catálogo en frontend
+    //                      (bancolombia, nequi, daviplata, bbva,
+    //                      davivienda, banco-bogota, scotiabank, av-villas,
+    //                      nu, otra). Define color y branding de la tarjeta.
+    //   label            → nombre que el psicólogo le da ("Mi principal",
+    //                      "Cuenta de la consulta", etc.).
+    //   account_type     → ahorros | corriente | nequi | daviplata | otra.
+    //   last4            → últimos 4 dígitos para identificación visual
+    //                      (opcional — no requerimos número completo por
+    //                      sensibilidad de datos).
+    //   holder_name      → titular (opcional, si difiere del psicólogo).
+    //   brand            → mastercard | visa | amex | none. Aparece en
+    //                      esquina inferior derecha de la tarjeta.
+    //   is_default       → la default se preselecciona en nuevos recibos.
+    `CREATE TABLE IF NOT EXISTS bank_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      bank_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      account_type TEXT,
+      last4 TEXT,
+      holder_name TEXT,
+      brand TEXT DEFAULT 'none',
+      is_default INTEGER DEFAULT 0,
+      archived_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_bank_accounts_workspace ON bank_accounts(workspace_id)",
+    "CREATE INDEX IF NOT EXISTS idx_bank_accounts_default ON bank_accounts(workspace_id, is_default) WHERE is_default = 1",
+    // Vincula un recibo a una cuenta del wallet. Mantenemos `bank` (texto
+    // libre) por compatibilidad con recibos viejos. El frontend prioriza
+    // mostrar la cuenta del wallet cuando hay bank_account_id.
+    "ALTER TABLE invoices ADD COLUMN bank_account_id INTEGER REFERENCES bank_accounts(id) ON DELETE SET NULL",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_bank_account ON invoices(bank_account_id)",
   ];
   for (const sql of migrations) {
     try {

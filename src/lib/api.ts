@@ -95,6 +95,29 @@ export interface PlatformUsage {
   appts_30d: number;
 }
 
+export interface BankAccount {
+  id: number;
+  bankId: string;
+  label: string;
+  accountType: string | null;
+  last4: string | null;
+  holderName: string | null;
+  brand: "mastercard" | "visa" | "amex" | "none";
+  isDefault: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface BankAccountInput {
+  bankId: string;
+  label: string;
+  accountType?: string | null;
+  last4?: string | null;
+  holderName?: string | null;
+  brand?: "mastercard" | "visa" | "amex" | "none";
+  isDefault?: boolean;
+}
+
 export interface Sede {
   id: number;
   name: string;
@@ -183,6 +206,8 @@ export interface Invoice {
   payment_notes: string | null;
   paid_at: string | null;
   created_at: string | null;
+  /** FK opcional al wallet del workspace (lib/banks.ts catalog). */
+  bank_account_id: number | null;
 }
 
 export type NoteKind =
@@ -1342,6 +1367,26 @@ export const api = {
     request<{ ok: boolean }>(`/api/platform/error-reports/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    }),
+
+  // ─── Wallet de cuentas bancarias ────────────────────────────────────
+  listBankAccounts: (params: { includeArchived?: boolean } = {}) =>
+    request<BankAccount[]>(
+      `/api/bank-accounts${qs({ includeArchived: params.includeArchived ? "true" : null })}`,
+    ),
+  createBankAccount: (input: BankAccountInput) =>
+    request<BankAccount>("/api/bank-accounts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateBankAccount: (id: number, input: Partial<BankAccountInput>) =>
+    request<BankAccount>(`/api/bank-accounts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  deleteBankAccount: (id: number) =>
+    request<{ ok: true; alreadyArchived?: boolean }>(`/api/bank-accounts/${id}`, {
+      method: "DELETE",
     }),
 
   // ─── Legal: lectura pública (sin auth) ──────────────────────────────

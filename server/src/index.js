@@ -27,6 +27,7 @@ import portalRoutes from "./routes/portal.js";
 import platformRoutes from "./routes/platform.js";
 import errorReportsRoutes from "./routes/errorReports.js";
 import legalRoutes from "./routes/legal.js";
+import bankAccountsRoutes from "./routes/bankAccounts.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -68,6 +69,7 @@ app.use("/api/tasks", tasksRoutes);
 app.use("/api/tareas", tareasRoutes);
 app.use("/api/documents", documentsRoutes);
 app.use("/api/invoices", invoicesRoutes);
+app.use("/api/bank-accounts", bankAccountsRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/settings", settingsRoutes);
 // portalRoutes va ANTES que notesRoutes porque expone endpoints públicos

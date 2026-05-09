@@ -61,6 +61,10 @@ function rowToInvoice(r) {
     payment_notes: r.payment_notes ?? null,
     paid_at: r.paid_at ?? null,
     created_at: r.created_at ?? null,
+    // Vínculo con el wallet del psicólogo. Cuando hay bank_account_id,
+    // la UI lo prefiere sobre el campo `bank` (texto libre legacy) y
+    // muestra un chip con el color/branding de la cuenta registrada.
+    bank_account_id: r.bank_account_id ?? null,
   };
 }
 
@@ -121,11 +125,31 @@ router.post("/", (req, res) => {
   const i = req.body ?? {};
   const id = i.id ?? nextReceiptId(req.user.workspace_id);
   const now = new Date().toISOString();
+
+  // Si viene bank_account_id, validamos que pertenezca al workspace y
+  // copiamos su label al campo `bank` texto libre — así los reportes
+  // viejos siguen funcionando sin tener que JOIN. Si la cuenta está
+  // archivada igual permitimos vincularla (puede ser una cuenta vieja
+  // que se usa para registrar pagos retroactivos).
+  let bankAccountId = null;
+  let bankFromAccount = null;
+  const rawAccountId = i.bank_account_id ?? i.bankAccountId ?? null;
+  if (rawAccountId != null && rawAccountId !== "") {
+    const acc = db.prepare(
+      "SELECT id, label, bank_id FROM bank_accounts WHERE id = ? AND workspace_id = ?"
+    ).get(Number(rawAccountId), req.user.workspace_id);
+    if (acc) {
+      bankAccountId = acc.id;
+      bankFromAccount = acc.label;
+    }
+  }
+
   db.prepare(`
     INSERT INTO invoices (
       id, workspace_id, patient_id, patient_name, professional, concept, amount,
-      method, status, date, modality, bank, eps, payment_reference, payment_notes, paid_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      method, status, date, modality, bank, eps, payment_reference, payment_notes, paid_at, created_at,
+      bank_account_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id, req.user.workspace_id,
     i.patient_id ?? i.patientId ?? null,
@@ -137,12 +161,13 @@ router.post("/", (req, res) => {
     i.status ?? "pendiente",
     i.date ?? new Date().toISOString().slice(0, 10),
     i.modality ?? null,
-    i.bank ?? null,
+    i.bank ?? bankFromAccount ?? null,
     i.eps ?? null,
     i.payment_reference ?? null,
     i.payment_notes ?? null,
     i.status === "pagada" ? (i.paid_at ?? now) : null,
     now,
+    bankAccountId,
   );
   const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(id);
   res.status(201).json(rowToInvoice(row));
@@ -153,6 +178,26 @@ router.patch("/:id", (req, res) => {
     .get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Recibo no encontrado" });
   const b = req.body ?? {};
+  // bank_account_id: si viene en el body, validamos que pertenezca al
+  // workspace y opcionalmente actualizamos el campo `bank` con el label
+  // de la cuenta. Para "desvincular" se manda null o cadena vacía.
+  let nextBankAccountId = existing.bank_account_id;
+  let bankFromAccount = null;
+  const rawAccountId = b.bank_account_id ?? b.bankAccountId;
+  if (rawAccountId !== undefined) {
+    if (rawAccountId === null || rawAccountId === "") {
+      nextBankAccountId = null;
+    } else {
+      const acc = db.prepare(
+        "SELECT id, label FROM bank_accounts WHERE id = ? AND workspace_id = ?"
+      ).get(Number(rawAccountId), req.user.workspace_id);
+      if (acc) {
+        nextBankAccountId = acc.id;
+        bankFromAccount = acc.label;
+      }
+    }
+  }
+
   const m = {
     patient_id: b.patient_id !== undefined ? (b.patient_id || null) : existing.patient_id,
     patient_name: b.patient_name !== undefined ? (b.patient_name || "") : existing.patient_name,
@@ -162,7 +207,7 @@ router.patch("/:id", (req, res) => {
     status: b.status ?? existing.status,
     date: b.date ?? existing.date,
     modality: b.modality !== undefined ? (b.modality || null) : existing.modality,
-    bank: b.bank !== undefined ? (b.bank || null) : existing.bank,
+    bank: b.bank !== undefined ? (b.bank || null) : (bankFromAccount ?? existing.bank),
     eps: b.eps !== undefined ? (b.eps || null) : existing.eps,
     payment_reference: b.payment_reference !== undefined ? (b.payment_reference || null) : existing.payment_reference,
     payment_notes: b.payment_notes !== undefined ? (b.payment_notes || null) : existing.payment_notes,
@@ -175,11 +220,13 @@ router.patch("/:id", (req, res) => {
   db.prepare(`
     UPDATE invoices SET
       patient_id=?, patient_name=?, concept=?, amount=?, method=?, status=?, date=?,
-      modality=?, bank=?, eps=?, payment_reference=?, payment_notes=?, paid_at=?
+      modality=?, bank=?, eps=?, payment_reference=?, payment_notes=?, paid_at=?,
+      bank_account_id=?
     WHERE id=? AND workspace_id=?
   `).run(
     m.patient_id, m.patient_name, m.concept, m.amount, m.method, m.status, m.date,
     m.modality, m.bank, m.eps, m.payment_reference, m.payment_notes, paidAt,
+    nextBankAccountId,
     req.params.id, req.user.workspace_id,
   );
   const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(req.params.id);
