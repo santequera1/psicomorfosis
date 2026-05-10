@@ -137,56 +137,52 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-   try {
-     const i = req.body ?? {};
-     const id = i.id ?? generateUniqueReceiptId(req.user.workspace_id);
-     const now = new Date().toISOString();
+  try {
+    const i = req.body ?? {};
+    const id = i.id ?? generateUniqueReceiptId(req.user.workspace_id);
+    const now = new Date().toISOString();
 
-  // Si viene bank_account_id, validamos que pertenezca al workspace y
-  // copiamos su label al campo `bank` texto libre — así los reportes
-  // viejos siguen funcionando sin tener que JOIN. Si la cuenta está
-  // archivada igual permitimos vincularla (puede ser una cuenta vieja
-  // que se usa para registrar pagos retroactivos).
-  let bankAccountId = null;
-  let bankFromAccount = null;
-  const rawAccountId = i.bank_account_id ?? i.bankAccountId ?? null;
-  if (rawAccountId != null && rawAccountId !== "") {
-    const acc = db.prepare(
-      "SELECT id, label, bank_id FROM bank_accounts WHERE id = ? AND workspace_id = ?"
-    ).get(Number(rawAccountId), req.user.workspace_id);
-    if (acc) {
-      bankAccountId = acc.id;
-      bankFromAccount = acc.label;
+    let bankAccountId = null;
+    let bankFromAccount = null;
+    const rawAccountId = i.bank_account_id ?? i.bankAccountId ?? null;
+    if (rawAccountId != null && rawAccountId !== "") {
+      const acc = db.prepare(
+        "SELECT id, label, bank_id FROM bank_accounts WHERE id = ? AND workspace_id = ?"
+      ).get(Number(rawAccountId), req.user.workspace_id);
+      if (acc) {
+        bankAccountId = acc.id;
+        bankFromAccount = acc.label;
+      }
     }
-  }
 
-  db.prepare(`
-    INSERT INTO invoices (
-      id, workspace_id, patient_id, patient_name, professional, concept, amount,
-      method, status, date, modality, bank, eps, payment_reference, payment_notes, paid_at, created_at,
-      bank_account_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    id, req.user.workspace_id,
-    i.patient_id ?? i.patientId ?? null,
-    i.patient_name ?? i.patientName ?? "",
-    i.professional ?? req.user.name ?? "",
-    i.concept ?? "Sesión",
-    Math.max(0, Math.round(Number(i.amount ?? 0))),
-    i.method ?? "Efectivo",
-    i.status ?? "pendiente",
-    i.date ?? new Date().toISOString().slice(0, 10),
-    i.modality ?? null,
-    i.bank ?? bankFromAccount ?? null,
-    i.eps ?? null,
-    i.payment_reference ?? null,
-    i.payment_notes ?? null,
-    i.status === "pagada" ? (i.paid_at ?? now) : null,
-    now,
-    bankAccountId,
-  );
-  const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(id);
-  res.status(201).json(rowToInvoice(row));
+    db.prepare(`
+      INSERT INTO invoices (
+        id, workspace_id, patient_id, patient_name, professional, concept, amount,
+        method, status, date, modality, bank, eps, payment_reference, payment_notes, paid_at, created_at,
+        bank_account_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, req.user.workspace_id,
+      i.patient_id ?? i.patientId ?? null,
+      i.patient_name ?? i.patientName ?? "",
+      i.professional ?? req.user.name ?? "",
+      i.concept ?? "Sesión",
+      Math.max(0, Math.round(Number(i.amount ?? 0))),
+      i.method ?? "Efectivo",
+      i.status ?? "pendiente",
+      i.date ?? new Date().toISOString().slice(0, 10),
+      i.modality ?? null,
+      i.bank ?? bankFromAccount ?? null,
+      i.eps ?? null,
+      i.payment_reference ?? null,
+      i.payment_notes ?? null,
+      i.status === "pagada" ? (i.paid_at ?? now) : null,
+      now,
+      bankAccountId,
+    );
+    const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(id);
+    console.log("[invoices POST] created id=", id, "ws=", req.user.workspace_id);
+    res.status(201).json(rowToInvoice(row));
   } catch (e) {
     console.error("[invoices POST] error:", e);
     res.status(500).json({ error: "Error al crear recibo: " + (e?.message ?? String(e)) });
