@@ -405,7 +405,8 @@ export function ReceiptFormModal({
   const [patientId, setPatientId] = useState<string | null>(invoice?.patient_id ?? presetPatientId ?? null);
   const [patientName, setPatientName] = useState<string>(invoice?.patient_name ?? presetPatientName ?? "");
   const [concept, setConcept] = useState(invoice?.concept ?? presetConcept ?? "Sesión individual");
-  const [amount, setAmount] = useState(invoice?.amount ?? presetAmount ?? 80000);
+  const [amountStr, setAmountStr] = useState(String(invoice?.amount ?? presetAmount ?? 80000));
+  const amount = Math.max(0, Math.round(Number(amountStr) || 0));
   const [method, setMethod] = useState<typeof PAYMENT_METHODS[number]>(
     (PAYMENT_METHODS as readonly string[]).includes(invoice?.method ?? "")
       ? (invoice!.method as typeof PAYMENT_METHODS[number])
@@ -529,10 +530,11 @@ export function ReceiptFormModal({
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Valor (COP)</span>
               <input
-                type="number"
-                min={0}
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                type="text"
+                inputMode="numeric"
+                value={amountStr}
+                onChange={(e) => setAmountStr(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="0"
                 className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular"
               />
               <p className="text-[11px] text-ink-500 mt-1">{fmt(amount)}</p>
