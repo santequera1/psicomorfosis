@@ -70,7 +70,7 @@ function rowToInvoice(r) {
 
 function nextReceiptId(workspaceId) {
   const year = new Date().getFullYear();
-  const prefix = `R-${year}-`;
+  const prefix = `R-${workspaceId}-${year}-`;
   const last = db.prepare(`
     SELECT id FROM invoices
     WHERE workspace_id = ? AND id LIKE ?
@@ -281,8 +281,8 @@ router.get("/preview-pdf", (req, res) => {
 
     // Datos de muestra del recibo
     const today = new Date().toISOString().slice(0, 10);
-    const inv = {
-      id: "R-2026-0001",
+const inv = {
+       id: "R-WS1-2026-0001",
       patient_id: "PAC-MUESTRA",
       patient_name: "Paciente de Ejemplo",
       professional: prof.name,
