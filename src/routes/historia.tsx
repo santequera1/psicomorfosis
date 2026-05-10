@@ -370,17 +370,30 @@ function ClinicalBlocks({ patientId }: { patientId: string }) {
   return (
     <section className="mb-12">
       <h2 className="text-xs uppercase tracking-widest text-brand-700 font-semibold mb-4">Historia clínica</h2>
-      {isLoading && (
-        <div className="rounded-xl border border-line-200 bg-surface p-6 text-sm text-ink-500 inline-flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+      {isLoading ? (
+        <div className="grid md:grid-cols-2 gap-4">
+          {(Object.keys(BLOCK_LABELS) as (keyof typeof BLOCK_LABELS)[]).map((kind) => (
+            <div key={kind} className="rounded-xl bg-surface border border-line-200 p-5 animate-pulse">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="h-8 w-8 rounded-lg bg-bg-100" />
+                <div className="h-4 w-32 rounded bg-bg-100" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 w-full rounded bg-bg-100" />
+                <div className="h-3 w-4/5 rounded bg-bg-100" />
+                <div className="h-3 w-2/3 rounded bg-bg-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {(Object.keys(BLOCK_LABELS) as (keyof typeof BLOCK_LABELS)[]).map((kind) => {
+            const note = notes.find((n) => n.kind === kind && !n.isSuperseded);
+            return <ClinicalBlock key={kind} kind={kind} note={note ?? null} patientId={patientId} />;
+          })}
         </div>
       )}
-      <div className="grid md:grid-cols-2 gap-4">
-        {(Object.keys(BLOCK_LABELS) as (keyof typeof BLOCK_LABELS)[]).map((kind) => {
-          const note = notes.find((n) => n.kind === kind && !n.isSuperseded);
-          return <ClinicalBlock key={kind} kind={kind} note={note ?? null} patientId={patientId} />;
-        })}
-      </div>
     </section>
   );
 }
@@ -399,19 +412,38 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
   const patchMu = useMutation({
     mutationFn: (content: string) => api.updateNote(note!.id, { content }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes", patientId] }); setEditing(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      setEditing(false);
+    },
   });
   const supersedeMu = useMutation({
     mutationFn: (content: string) => api.supersedeNote(note!.id, { content, sign: true }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes", patientId] }); setEditing(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      setEditing(false);
+    },
   });
   const createMu = useMutation({
     mutationFn: (content: string) => api.createNote(patientId, { kind, content }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes", patientId] }); setEditing(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      setEditing(false);
+    },
   });
   const signMu = useMutation({
     mutationFn: () => api.signNote(note!.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes", patientId] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
   });
 
   function startEdit() {
@@ -469,13 +501,23 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
                 Borrador
               </span>
             )}
-            <button
-              onClick={startEdit}
-              className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 hover:text-ink-900 flex items-center justify-center"
-              title={note?.signedAt ? "Crear nueva versión" : "Editar"}
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-            </button>
+            {note?.signedAt ? (
+              <button
+                onClick={startEdit}
+                className="h-8 w-8 rounded-md text-brand-700 hover:bg-brand-50 flex items-center justify-center"
+                title="Crear nueva versión (la actual queda en historial)"
+              >
+                <History className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={startEdit}
+                className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 hover:text-ink-900 flex items-center justify-center"
+                title="Editar"
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -702,11 +744,19 @@ function SessionNoteCard({ note, patientId }: { note: ClinicalNote; patientId: s
 
   const signMu = useMutation({
     mutationFn: () => api.signNote(note.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", patientId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
   });
   const deleteMu = useMutation({
     mutationFn: () => api.deleteNote(note.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notes", patientId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
     onError: (e: Error) => alert(e.message),
   });
 
@@ -973,7 +1023,12 @@ function InlineSoapEditor({ note, patientId, onClose }: { note: ClinicalNote; pa
 
   const mu = useMutation({
     mutationFn: () => api.updateNote(note.id, { content: JSON.stringify(soap) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes", patientId] }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+      onClose();
+    },
   });
 
   return (
@@ -1091,6 +1146,8 @@ function NoteEditor({ patientId, patientName, onClose }: { patientId: string; pa
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
       toast.success(signNow ? "Nota creada y firmada" : "Borrador guardado");
       onClose();
     },
@@ -1227,6 +1284,8 @@ function SupersedeNoteEditor({ note, patientId, onClose }: { note: ClinicalNote;
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes", patientId] });
+      qc.invalidateQueries({ queryKey: ["patient", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
       toast.success("Nueva versión firmada");
       onClose();
     },

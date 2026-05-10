@@ -115,7 +115,7 @@ function enrichWithAppointments(patients, workspaceId) {
     LIMIT 1
   `);
   // Última cita atendida (pasada).
-  const lastStmt = db.prepare(`
+  const lastApptStmt = db.prepare(`
     SELECT date, time FROM appointments
     WHERE workspace_id = ? AND patient_id = ?
       AND (date < date('now', '-5 hours')
@@ -124,9 +124,31 @@ function enrichWithAppointments(patients, workspaceId) {
     ORDER BY date DESC, time DESC
     LIMIT 1
   `);
+  // Última nota clínica — cualquier tipo de nota indica contacto clínico.
+  // created_at se guarda en UTC; se ajusta a hora Colombia (-5 h).
+  const lastNoteStmt = db.prepare(`
+    SELECT date(created_at, '-5 hours') AS date FROM clinical_notes
+    WHERE workspace_id = ? AND patient_id = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `);
   return patients.map((p) => {
     const next = nextStmt.get(workspaceId, p.id);
-    const last = lastStmt.get(workspaceId, p.id);
+    const lastAppt = lastApptStmt.get(workspaceId, p.id);
+    const lastNote = lastNoteStmt.get(workspaceId, p.id);
+
+    // Tomar el más reciente entre última cita atendida y última nota.
+    let last = null;
+    if (lastAppt?.date && lastNote?.date) {
+      last = lastAppt.date >= lastNote.date
+        ? lastAppt
+        : { date: lastNote.date, time: null };
+    } else if (lastAppt?.date) {
+      last = lastAppt;
+    } else if (lastNote?.date) {
+      last = { date: lastNote.date, time: null };
+    }
+
     return {
       ...p,
       derived_next_session: next ? formatRelativeAppointment(next.date, next.time, "future") : null,
