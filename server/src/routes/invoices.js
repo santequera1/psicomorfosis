@@ -84,6 +84,21 @@ function nextReceiptId(workspaceId) {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+// Genera un ID único con manejo de colisión por race condition
+function generateUniqueReceiptId(workspaceId, maxRetries = 5) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const id = nextReceiptId(workspaceId);
+    try {
+      const existing = db.prepare("SELECT id FROM invoices WHERE id = ?").get(id);
+      if (!existing) return id;
+    } catch {
+      return id;
+    }
+  }
+  // Fallback: usar timestamp + random si hay muchos conflictos
+  return `R-${workspaceId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 router.get("/", (req, res) => {
   const { status, q, patient_id } = req.query;
   let sql = "SELECT * FROM invoices WHERE workspace_id = ?";
@@ -122,9 +137,10 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", (req, res) => {
-  const i = req.body ?? {};
-  const id = i.id ?? nextReceiptId(req.user.workspace_id);
-  const now = new Date().toISOString();
+   try {
+     const i = req.body ?? {};
+     const id = i.id ?? generateUniqueReceiptId(req.user.workspace_id);
+     const now = new Date().toISOString();
 
   // Si viene bank_account_id, validamos que pertenezca al workspace y
   // copiamos su label al campo `bank` texto libre — así los reportes
@@ -171,6 +187,10 @@ router.post("/", (req, res) => {
   );
   const row = db.prepare("SELECT * FROM invoices WHERE id = ?").get(id);
   res.status(201).json(rowToInvoice(row));
+  } catch (e) {
+    console.error("[invoices POST] error:", e);
+    res.status(500).json({ error: "Error al crear recibo: " + (e?.message ?? String(e)) });
+  }
 });
 
 router.patch("/:id", (req, res) => {
