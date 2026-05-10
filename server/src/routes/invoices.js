@@ -68,35 +68,30 @@ function rowToInvoice(r) {
   };
 }
 
-function nextReceiptId(workspaceId) {
+function generateUniqueReceiptId(workspaceId) {
   const year = new Date().getFullYear();
   const prefix = `R-${workspaceId}-${year}-`;
+
+  // Encuentra el último número de secuencia para este workspace+año
   const last = db.prepare(`
     SELECT id FROM invoices
     WHERE workspace_id = ? AND id LIKE ?
     ORDER BY id DESC LIMIT 1
   `).get(workspaceId, `${prefix}%`);
+
   let n = 1;
   if (last) {
     const m = last.id.match(/-(\d+)$/);
     if (m) n = parseInt(m[1], 10) + 1;
   }
-  return `${prefix}${String(n).padStart(4, "0")}`;
-}
 
-// Genera un ID único con manejo de colisión por race condition
-function generateUniqueReceiptId(workspaceId, maxRetries = 5) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const id = nextReceiptId(workspaceId);
-    try {
-      const existing = db.prepare("SELECT id FROM invoices WHERE id = ?").get(id);
-      if (!existing) return id;
-    } catch {
-      return id;
-    }
+  // Avanza hasta encontrar un ID libre (cubre race conditions y IDs pre-existentes)
+  let id = `${prefix}${String(n).padStart(4, "0")}`;
+  while (db.prepare("SELECT 1 FROM invoices WHERE id = ?").get(id)) {
+    id = `${prefix}${String(++n).padStart(4, "0")}`;
   }
-  // Fallback: usar timestamp + random si hay muchos conflictos
-  return `R-${workspaceId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  return id;
 }
 
 router.get("/", (req, res) => {
