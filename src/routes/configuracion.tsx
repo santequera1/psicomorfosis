@@ -1622,12 +1622,14 @@ function IntegracionesPanel() {
   //   - Google Meet: 00897B (teal)
   //   - WhatsApp: 25D366
   //   - Calendly: 006BFF
+  //   - iLovePDF: E5322D (rojo característico de la marca)
   const integrations = [
     { id: "gcal",     name: "Google Calendar",   slug: "googlecalendar", color: "4285F4", desc: "Sincroniza tu agenda con Google Calendar en dos sentidos." },
     { id: "zoom",     name: "Zoom",              slug: "zoom",           color: "0B5CFF", desc: "Genera automáticamente salas de Zoom para sesiones de telepsicología." },
     { id: "gmeet",    name: "Google Meet",       slug: "googlemeet",     color: "00897B", desc: "Crea enlaces de Google Meet asociados a cada cita virtual." },
     { id: "wa",       name: "WhatsApp Business", slug: "whatsapp",       color: "25D366", desc: "Recordatorios de cita y mensajería con pacientes por WhatsApp." },
     { id: "calendly", name: "Calendly",          slug: "calendly",       color: "006BFF", desc: "Recibe reservas de pacientes desde tu enlace público de Calendly." },
+    { id: "ilovepdf", name: "iLovePDF",          slug: "ilovepdf",       color: "E5322D", desc: "Comprime, combina y convierte documentos clínicos en PDF desde la plataforma." },
   ];
 
   return (
