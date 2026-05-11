@@ -373,13 +373,123 @@ arranque NO requiere contexto previo — este documento es autocontenido.
 
 ## 10. Pendientes / observaciones
 
-- [ ] **Audio de psicóloga sobre plataforma anterior**: Stiven va a compartir
-  un audio donde una psicóloga describe su experiencia con una plataforma
-  competidora que usa IA. Cuando llegue, incorporar observaciones a este
-  documento (probablemente en sección 5.3 UX y/o sección 6 priorización).
+- [x] ~~**Audio de psicóloga sobre plataforma anterior**~~ → recibido, ver
+  sección 11.
 - [ ] Investigar si OpenRouter ofrece zero-retention explícito en su contrato.
 - [ ] Definir el texto exacto del documento `ia-clinica` (Otoniel lo redacta;
   Claude puede preparar un borrador en Bloque A para que él solo pula).
 - [ ] Decidir si la nota guardada con `generated_with_ai: true` se distingue
   visualmente en el historial del paciente (sello "✨ IA-asistida") o queda
   invisible al usuario final.
+
+## 11. Observaciones de psicóloga: plataforma de la ESE Cartagena
+
+### 11.1 Lo que describió (audio del 2026-05-11)
+
+Una psicóloga que trabajó en la Alcaldía de Cartagena (red ESE pública)
+describió cómo era el flujo de registro clínico ahí. Resumen:
+
+1. **Identificación por documento**: ingresaba el documento del paciente
+   y la base de datos autocompletaba todos sus datos.
+2. **Fecha de consulta**: la ingresaba a mano.
+3. **Tipo de consulta** → menú de opciones predefinidas.
+4. **La plataforma sugería posibles diagnósticos** según el tipo de
+   consulta elegido.
+5. **Al elegir un diagnóstico, la plataforma redactaba** la historia
+   clínica automáticamente.
+6. **Recomendaciones generadas** también según el diagnóstico.
+7. **Su síntesis**: *"prácticamente nosotros le tocaba solamente elegir
+   opciones y la misma aplicación generaba tanto la redacción de la
+   historia clínica como el motivo de la consulta como el diagnóstico
+   y la recomendación"*.
+
+### 11.2 Análisis: dos enfoques distintos en juego
+
+Lo que describe es un **modelo guiado por opciones** (form-driven), no un
+**modelo de notas libres** (text-driven, que es lo que hace Psiris y lo
+que tenemos planeado para v1).
+
+| Aspecto | Modelo guiado (ESE) | Modelo notas libres (v1) |
+|---|---|---|
+| Input principal | Menús de opciones | Texto libre escrito |
+| Velocidad por consulta | Muy rápida si caso típico | Media |
+| Flexibilidad clínica | Baja (encasilla en opciones predefinidas) | Alta |
+| Curva de aprendizaje | Bajísima | Baja |
+| Sesgo hacia diagnósticos comunes | Alto (lo que está en el menú) | Bajo |
+| Ideal para | EPS de alto volumen, consultas cortas | Clínica privada, sesiones largas |
+| Riesgo de "psicología fast food" | Alto | Bajo |
+
+**Conclusión**: para Psicomorfosis (clínica privada / independiente), el
+modelo de **notas libres** (v1 planeado) sigue siendo el indicado como
+caso principal. Pero hay piezas del modelo guiado que **son ORO** y
+podemos extraer:
+
+### 11.3 Funcionalidades a incorporar al roadmap (v2 y siguientes)
+
+Ajustes y nuevas features priorizadas basadas en el audio:
+
+**v1.1 — Mejora del caso ya planeado (notas → SOAP)**
+- Inyectar **contexto del paciente** en el prompt: nombre preferido, edad,
+  género, motivo de consulta vigente. Esto ya estaba en el plan (sección
+  5.2) pero el audio lo refuerza: las psicólogas esperan que la app sepa
+  con quién están trabajando, no que ella se lo repita a la IA.
+- Inyectar también el **historial de las últimas 2-3 notas** del mismo
+  paciente para mantener continuidad entre sesiones.
+
+**v2 — Sugerencia de códigos CIE-11**
+- La app ya tiene un bloque `cie11` en historia clínica que casi nadie
+  llena por flojera de buscar el código.
+- Botón "✨ Sugerir CIE-11 a partir de la nota actual": la IA propone
+  2-3 códigos CIE-11 candidatos con su justificación clínica, la
+  psicóloga elige uno o ninguno.
+- Mantiene la responsabilidad clínica en ella pero le ahorra el "buscar
+  manualmente en una lista de 1.500 códigos".
+
+**v3 — Sugerencia de plan terapéutico / tareas**
+- A partir del análisis SOAP generado o de la nota completa, sugerir:
+  - Técnicas terapéuticas pertinentes (ej. exposición gradual, registro
+    de pensamientos, mindfulness).
+  - Tareas concretas para el paciente entre sesiones.
+  - Frecuencia y duración recomendada del tratamiento.
+- Integración directa con el módulo de Tareas existente: "Crear tarea
+  desde sugerencia → carga título y descripción en el modal".
+
+**v4 — Modo guiado opcional (futuro lejano)**
+- Para psicólogas que vienen del sistema EPS y prefieren el flujo
+  form-driven, ofrecer un modo alternativo:
+  - Selector de tipo de consulta (primera vez, control, crisis, etc).
+  - Selector de motivo principal de consulta (con sugerencias CIE-11).
+  - Selector de área de afectación (laboral, familiar, pareja, escolar).
+  - Generación de borrador SOAP a partir de las selecciones.
+- **Riesgo a evitar**: que se convierta en "psicología por menús" que
+  desvirtúa la calidad clínica. Por eso queda como modo OPCIONAL y NO
+  es la entrada principal — la entrada principal sigue siendo notas
+  libres en v1.
+
+### 11.4 Insights cualitativos del audio
+
+- **La psicóloga valoró ese sistema**: lo describió como ágil ("nos
+  tocaba solamente elegir opciones"). Es señal positiva de que las
+  psicólogas SÍ adoptan herramientas de IA cuando les ahorran tiempo
+  real. La beta enganchará si lo hacemos bien.
+- **Su expectativa puede ser "que la app haga TODO"**: hay que balancear
+  ese deseo con responsabilidad clínica. Por eso el preview editable
+  obligatorio y la label "Borrador IA - revisa antes de guardar" son
+  cruciales para mantener a la profesional en control.
+- **La ESE usa identificación por documento como entrada**: nosotros ya
+  tenemos esto en `/pacientes` (búsqueda por documento), pero no
+  está prominente en el flujo de nueva nota. En la v1, al abrir el
+  editor de SOAP, podríamos mostrar más visible el contexto del
+  paciente (nombre, doc, edad, motivo) — ya está pero es discreto.
+
+### 11.5 Ajustes concretos al plan original
+
+- **Bloque B (backend)**: agregar a `clinical-note/draft` la inyección
+  de las últimas 2-3 notas del paciente como contexto adicional. Pasa de
+  enviar solo motivo a enviar motivo + últimas notas + datos demográficos.
+- **Bloque C (frontend)**: en el modal del Asistente IA, mostrar arriba
+  un bloque pequeño con quién es el paciente ("Estás generando nota para
+  Cami, 28 años, motivo: ansiedad generalizada") para que la psicóloga
+  sienta que la IA "sabe con quién trabaja".
+- **Roadmap post-v1**: queda definido el camino v1.1 → v2 → v3 → v4
+  arriba, en ese orden de prioridad.
