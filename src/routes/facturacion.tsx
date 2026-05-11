@@ -574,7 +574,7 @@ export function ReceiptFormModal({
           </div>
 
           {/* Cuentas registradas (wallet). Aparece para todos los métodos
-              menos Efectivo. Si la asesora no tiene cuentas todavía, ofrecemos
+              menos Efectivo. Si no hay cuentas registradas todavía, ofrecemos
               fallback al input de banco texto libre con datalist. */}
           {method !== "Efectivo" && method !== "Convenio" && (
             <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">

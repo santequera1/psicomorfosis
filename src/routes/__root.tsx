@@ -1,4 +1,4 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+﻿import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
@@ -114,7 +114,7 @@ const BOOTSTRAP_SCRIPT = `
         // Asesor legal aterriza en su dashboard exclusivo.
         location.replace(user.isLegalAdmin ? '/legal-admin' : '/');
       } else if (token && user && user.isLegalAdmin && path === '/') {
-        // Si una asesora legal navega a home, la mandamos a su área.
+        // Si un asesor legal navega a home, la mandamos a su área.
         location.replace('/legal-admin');
       }
     }

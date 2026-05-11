@@ -9,7 +9,7 @@
  *   - StarterKit (headings, párrafos, listas, blockquote, link, bold/italic).
  *   - Typography (autoescape de comillas tipográficas, em-dash, etc).
  *   - TextAlign (aunque rara vez se justifica un párrafo legal,
- *     la abogada lo puede pedir para encabezados centrados).
+ *     el equipo legal lo puede pedir para encabezados centrados).
  *
  * El editor trabaja en HTML (no en TipTapDoc JSON) porque el backend
  * persiste `body_html` y las páginas públicas lo renderizan con

@@ -1,4 +1,4 @@
-// Cliente HTTP para el backend Psicomorfosis (Express + SQLite).
+﻿// Cliente HTTP para el backend Psicomorfosis (Express + SQLite).
 
 /**
  * Resuelve la URL base del backend.
@@ -1329,7 +1329,7 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     ),
   /** Suma un usuario a un workspace existente. Usado para sumar otra
-   *  asesora legal al workspace legal compartido, u otra psicóloga a
+   *  asesor legal al workspace legal compartido, u otra psicóloga a
    *  un workspace de clínica. */
   platformAddWorkspaceUser: (workspaceId: number, body: {
     name: string;

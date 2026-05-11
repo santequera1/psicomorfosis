@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { LegalAdminShell } from "./legal-admin";
 import { useState, useEffect } from "react";
@@ -52,7 +52,7 @@ function ConfiguracionPage() {
   const [user] = useState(() => getStoredUser());
   const isLegal = !!user?.isLegalAdmin;
 
-  // Para la asesora legal mostramos solo lo que aplica a su rol:
+  // Paral asesor legal mostramos solo lo que aplica a su rol:
   // apariencia (claro/oscuro/tipografía), seguridad (cambiar contraseña)
   // y mi cuenta (eliminar cuenta + derechos Habeas Data). Las pestañas
   // clínicas (Perfil profesional, Workspace, Sedes, Equipo, Notificaciones,
@@ -211,7 +211,7 @@ function ConfiguracionPage() {
     </div>
   );
 
-  // La asesora legal ve la configuración dentro de SU shell (sin sidebar
+  // El asesor legal ve la configuración dentro de SU shell (sin sidebar
   // clínico ni topbar de pacientes). El resto de los usuarios usa AppShell.
   if (isLegal) {
     return (

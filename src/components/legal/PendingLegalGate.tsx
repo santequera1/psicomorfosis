@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Gate bloqueante: si el usuario autenticado tiene documentos legales
- * pendientes de aceptar (porque la asesora publicó una nueva versión),
+ * pendientes de aceptar (porque el asesor publicó una nueva versión),
  * mostramos un modal modal-no-cerrable hasta que los acepte uno a uno.
  *
  * Reglas:
- *   - La asesora legal queda **excluida** del gate (es ella quien
+ *   - El asesor legal queda **excluida** del gate (es ella quien
  *     edita los documentos; sería absurdo bloquearla con su propio
  *     trabajo en draft o publicación reciente).
  *   - El platform admin sí pasa por el gate igual que cualquier staff

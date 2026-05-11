@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+﻿import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
@@ -104,7 +104,7 @@ export function AppSidebar() {
     },
   ];
 
-  // Sidebar exclusivo de la asesora legal: solo documentos legales,
+  // Sidebar exclusivo del asesor legal: solo documentos legales,
   // aceptaciones (audit log) y configuración personal. Sin nada
   // clínico — su rol es transversal y no maneja pacientes.
   const legalAdminGroups: typeof groups = [

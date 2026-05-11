@@ -1,4 +1,4 @@
-# Política de manejo de datos en producción
+﻿# Política de manejo de datos en producción
 
 > A partir del **11 de mayo de 2026** Psicomorfosis dejó de operar con
 > datos demo: a partir de la primera invitación a una psicóloga real,
@@ -73,7 +73,7 @@ tail -20 ~/backups/psicomorfosis/backup.log
 ```
 
 ### Snapshots a disco de versiones legales publicadas
-Cada vez que la asesora legal publica una versión nueva de un
+Cada vez que el asesor legal publica una versión nueva de un
 documento (privacidad, términos, acuerdo-beta, etc.), el server
 escribe automáticamente el HTML completo + metadata a:
 ```

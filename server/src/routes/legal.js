@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Rutas del sistema legal de Psicomorfosis.
  *
  * Tres bandas de endpoints según su consumidor:
@@ -12,7 +12,7 @@
  *      registrar aceptación.
  *
  *   3) /api/legal/admin/*      — requiere auth + is_legal_admin. Lo
- *      consume el dashboard de la asesora legal. CRUD de versiones
+ *      consume el dashboard del asesor legal. CRUD de versiones
  *      (draft/published), publicación, audit log de aceptaciones.
  *
  * Las versiones nunca se editan después de publicadas: para corregir
@@ -41,7 +41,7 @@ function stripHtml(html) {
  * Snapshot fuera-de-DB de una versión recién publicada.
  *
  * Motivación: si la DB se pierde, se reseembrase por accidente o un
- * bug borra versiones, queremos que el trabajo de la asesora legal
+ * bug borra versiones, queremos que el trabajo del asesor legal
  * NO desaparezca. Por eso, cada vez que se publica una versión,
  * escribimos también el HTML completo + metadata a disco como un
  * archivo HTML standalone, legible sin la app. Estos snapshots viven
@@ -82,7 +82,7 @@ function snapshotPublishedVersion(versionId) {
 
     // Nombre del archivo: <version_label>__id<ID>__<timestampSlug>.html
     // El timestamp evita colisiones si dos versiones distintas comparten
-    // version_label (raro pero posible si la asesora repite etiqueta).
+    // version_label (raro pero posible si el asesor repite etiqueta).
     const tsSlug = String(row.published_at || new Date().toISOString())
       .replace(/[:.]/g, "-");
     const safeLabel = String(row.version_label).replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -190,7 +190,7 @@ router.get("/public/:slug", (req, res) => {
     LIMIT 1
   `).get(v.document_id);
   // Cache corto + revalidación obligatoria. Los documentos legales son de
-  // baja frecuencia de cambio pero alta criticidad: cuando la asesora
+  // baja frecuencia de cambio pero alta criticidad: cuando el asesor
   // publica una nueva versión, queremos que la página pública la refleje
   // de inmediato. ETag basado en version_id+published_at permite que el
   // browser revalide rápido sin descargar el body si no cambió.
@@ -440,7 +440,7 @@ router.get("/admin/versions/:id", (req, res) => {
   if (!v) return res.status(404).json({ error: "No encontrado" });
 
   // Editores activos en los últimos 60s (excluyendo al que pregunta —
-  // a la asesora no le interesa verse a sí misma como "editando ahora").
+  // al asesor no le interesa verse a sí misma como "editando ahora").
   const activeEditors = db.prepare(`
     SELECT user_id, user_name, last_seen_at
     FROM legal_document_editors
@@ -590,7 +590,7 @@ router.post("/admin/documents/:slug/reset", (req, res) => {
   // El body inicial viene del catálogo en código fuente — no del último
   // estado de la DB. Así "restablecer" significa siempre "volver a la
   // plantilla que el equipo de desarrollo definió", no "volver a la
-  // primera versión que la asesora vio". Si algún slug no está en el
+  // primera versión que el asesor vio". Si algún slug no está en el
   // catálogo (ej: alguien creó documentos legales custom en el futuro),
   // devolvemos error en lugar de borrar sin tener qué recrear.
   const seedDoc = LEGAL_DOCUMENTS_SEED.find((s) => s.slug === doc.slug);
@@ -603,7 +603,7 @@ router.post("/admin/documents/:slug/reset", (req, res) => {
   const newVersionId = db.transaction(() => {
     // Borra acceptances primero (FK CASCADE las borraría igual, pero
     // ser explícitos deja claro qué pasa). En modelo de aceptación
-    // bloqueante: si la asesora restablece, las aceptaciones previas
+    // bloqueante: si el asesor restablece, las aceptaciones previas
     // quedan huérfanas y los usuarios tendrán que re-aceptar la próxima
     // publicación. Esto es coherente con "restablecer = empezar de cero".
     db.prepare("DELETE FROM legal_acceptances WHERE document_id = ?").run(doc.id);
@@ -706,7 +706,7 @@ router.post("/admin/versions/:id/publish", (req, res) => {
  *     que pueda mostrar feedback ("X aceptaciones eliminadas").
  *
  * Antes este endpoint solo permitía borrar drafts (regla de
- * inmutabilidad para auditoría). En la práctica la asesora necesita
+ * inmutabilidad para auditoría). En la práctical asesor necesita
  * limpiar versiones de prueba y rehacer historial sin tener que
  * pedir SQL en VPS, así que abrimos el borrado individual con
  * advertencia clara en la UI.

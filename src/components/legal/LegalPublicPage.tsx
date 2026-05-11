@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Página pública de un documento legal.
  *
  * Carga la última versión publicada del slug indicado vía
  * `/api/legal/public/<slug>`. Renderiza el HTML con el mismo styling
  * que el editor TipTap (clase `psm-editor-content`) para que la
- * vista coincida con la previsualización de la asesora legal.
+ * vista coincida con la previsualización del asesor legal.
  *
  * Mejoras visuales sobre la versión anterior hardcodeada:
  *   - Banner superior "Vigente desde DD/MM/AAAA · 2026-vN".
@@ -40,7 +40,7 @@ function slugify(text: string): string {
 
 export function LegalPublicPage({ slug, fallbackTitle }: { slug: string; fallbackTitle: string }) {
   // staleTime 0 + refetch on focus/mount: la página legal es pública y la
-  // asesora puede publicar una nueva versión en cualquier momento. Si
+  // asesor puede publicar una nueva versión en cualquier momento. Si
   // dejábamos cache largo en el cliente, después de publicar el redactor
   // veía la versión vieja al recargar. El backend ya tiene Cache-Control
   // max-age=30 must-revalidate + ETag, así que un revalidate solo

@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import { LegalPublicPage } from "@/components/legal/LegalPublicPage";
 
 /**
  * Términos y condiciones de uso de la plataforma Psicomorfosis.
  *
  * Documento público — el contenido vive en base de datos y lo edita
- * la asesora legal desde /legal-admin. Esta ruta solo carga y muestra.
+ * el asesor legal desde /legal-admin. Esta ruta solo carga y muestra.
  */
 
 export const Route = createFileRoute("/terminos")({

@@ -1,5 +1,5 @@
-/**
- * /legal-admin — dashboard exclusivo de la asesora legal.
+﻿/**
+ * /legal-admin — dashboard exclusivo del asesor legal.
  *
  * Lista los documentos legales del sistema con su estado:
  *  - Última versión publicada (con label y fecha).
@@ -209,8 +209,8 @@ function Status({
 // ─── Shell común para todas las vistas /legal-admin/* ────────────────
 //
 // Sidebar minimal con tres acciones (Documentos, Aceptaciones, Cerrar
-// sesión) y barra superior con el nombre de la asesora. Es un layout
-// dedicado distinto del AppShell clínico — la asesora no tiene
+// sesión) y barra superior con el nombre del asesor. Es un layout
+// dedicado distinto del AppShell clínico — el asesor no tiene
 // pacientes, agenda ni nada operacional.
 
 export function LegalAdminShell({
@@ -286,7 +286,7 @@ export function LegalAdminShell({
               </div>
               <div className="flex-1 min-w-0 text-sm">
                 <div className="text-ink-900 truncate">{user.name}</div>
-                <div className="text-[11px] text-ink-500 truncate">Asesora legal</div>
+                <div className="text-[11px] text-ink-500 truncate">Asesor legal</div>
               </div>
             </div>
           )}

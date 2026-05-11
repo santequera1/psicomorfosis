@@ -641,7 +641,7 @@ function runMigrations() {
     "CREATE INDEX IF NOT EXISTS idx_err_attach_report ON error_report_attachments(report_id)",
     // ─── Sistema de documentos legales (8 may 2026) ─────────────────────
     //
-    // Permite que un nuevo rol `legal_admin` (la abogada del proyecto)
+    // Permite que un nuevo rol `legal_admin` (el equipo legal del proyecto)
     // edite directamente las políticas, términos y acuerdos sin pedir a
     // un dev que toque código. Cada documento tiene N versiones; las
     // páginas públicas /privacidad y /terminos renderizan la última
@@ -1023,10 +1023,10 @@ function backfillExisting() {
     console.warn("[db] backfill platform_admin falló:", err.message);
   }
 
-  // 7. Sistema legal: documentos iniciales + cuenta de la asesora legal
-  // (María Rivera). Igual que platform_admin, vive en su propio workspace
-  // virtual ("Asesoría legal") y no tiene pacientes ni vista clínica.
-  // Idempotente.
+  // 7. Sistema legal: documentos iniciales + cuentas del equipo legal
+  // (María Rivera, Alba López, etc.). Igual que platform_admin, viven
+  // en su propio workspace virtual ("Asesoría legal") y no tienen
+  // pacientes ni vista clínica. Idempotente.
   try {
     seedLegalDocuments(db);
 
@@ -1038,9 +1038,9 @@ function backfillExisting() {
       console.log(`[db] backfill: creado workspace legal id=${legalWsId}`);
     }
 
-    // Ambas asesoras legales comparten el mismo workspace virtual y
-    // las mismas credenciales por defecto. Si se pierden por un reseed,
-    // el backfill las recrea en el siguiente arranque.
+    // El equipo legal completo comparte el mismo workspace virtual y
+    // las mismas credenciales por defecto. Si alguna cuenta se pierde
+    // por un reseed, el backfill la recrea en el siguiente arranque.
     for (const la of LEGAL_ADMINS) {
       const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get(la.username);
       if (!existing) {
@@ -1054,7 +1054,7 @@ function backfillExisting() {
           la.name,
           la.email,
         );
-        console.log(`[db] backfill: creada cuenta ${la.username} (asesora legal)`);
+        console.log(`[db] backfill: creada cuenta ${la.username} (asesor legal)`);
       } else {
         // Asegurar flag idempotente
         db.prepare(`UPDATE users SET is_legal_admin = 1, role = 'legal_admin' WHERE id = ?`).run(existing.id);
@@ -1106,7 +1106,7 @@ function seed() {
   console.log(`[db] seed done — WS individual=${wsIndividual}, WS organización=${wsOrg}`);
 }
 
-// Lista única de asesoras legales. Sirve tanto al seed inicial como
+// Lista única del equipo legal. Sirve tanto al seed inicial como
 // al backfill: cualquier cuenta que se pierda en un reseed la recrea
 // el siguiente arranque del server. Todas comparten el mismo workspace
 // virtual ("Asesoría legal Psicomorfosis") y no tienen pacientes.
@@ -1125,7 +1125,7 @@ const LEGAL_ADMINS = [
   },
 ];
 
-/** Crea el workspace legal + las cuentas de las asesoras legales. */
+/** Crea el workspace legal + las cuentas del equipo legal. */
 function seedLegalAdmin() {
   const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)")
     .run("Asesoría legal Psicomorfosis", "individual").lastInsertRowid;

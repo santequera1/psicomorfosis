@@ -1,4 +1,4 @@
-/**
+﻿/**
  * /legal-admin/<slug> — editor de un documento legal.
  *
  * Vista en dos paneles:
@@ -10,7 +10,7 @@
  *     vista previa solo lectura.
  *
  * Auto-guardado del borrador con debounce de 1.2s desde la última
- * tecla. La asesora ve un indicador "Guardado" / "Guardando…" en la
+ * tecla. El asesor ve un indicador "Guardado" / "Guardando…" en la
  * topbar para no quedar en duda sobre si su trabajo se persistió.
  *
  * Publicación: pide un resumen breve de cambios (el "summary_of_changes"
@@ -78,7 +78,7 @@ function LegalDocumentEditPage() {
   // Auto-cargar al entrar:
   //   - Si hay borrador pendiente → editarlo.
   //   - Si no, lo creamos automáticamente. Sin paso intermedio: la
-  //     asesora viene a editar, no a configurar estados — el botón
+  //     asesor viene a editar, no a configurar estados — el botón
   //     "Crear borrador" era fricción innecesaria.
   // Idempotente: solo dispara la mutación una vez (creatingRef).
   const creatingRef = useRef(false);
@@ -105,7 +105,7 @@ function LegalDocumentEditPage() {
   // de crear, o uno que ya existía).
   //
   // staleTime: 0 + refetchOnMount: 'always' es CRÍTICO aquí. Sin esto,
-  // cuando la asesora salía del editor y volvía, React Query devolvía
+  // cuando el asesor salía del editor y volvía, React Query devolvía
   // el body cacheado de la primera carga (sin sus ediciones recientes
   // del auto-save), así que el editor mostraba "la plantilla inicial".
   // Forzamos un refetch al montar para que siempre traiga el HTML más
@@ -159,7 +159,7 @@ function LegalDocumentEditPage() {
         onSuccess: () => {
           dirtyRef.current = false;
           // Sincroniza el cache de la query con el HTML que acabamos de
-          // persistir, así si la asesora sale y vuelve a entrar el editor
+          // persistir, así si el asesor sale y vuelve a entrar el editor
           // no carga datos viejos del cache. setQueryData es más barato
           // que invalidate porque evita el round-trip extra.
           qc.setQueryData(["legal-version", id], (prev: any) =>
@@ -172,14 +172,14 @@ function LegalDocumentEditPage() {
 
   // Publicar.
   //
-  // UX clave: la asesora piensa en "edita y publica". El versionado interno
+  // UX clave: el asesor piensa en "edita y publica". El versionado interno
   // (draft → published → archivada) existe por auditoría SIC, pero NO debe
   // forzarla a hacer pasos manuales. Por eso, en una sola transacción de
   // mutation hacemos:
   //   1) UPDATE summary del draft actual
   //   2) POST publish → archiva la anterior y publica esta
   //   3) POST draft → crea el siguiente borrador clonando la recién
-  //      publicada, listo para que la asesora siga editando sin paso
+  //      publicada, listo para que el asesor siga editando sin paso
   //      intermedio "esta versión ya no se puede editar".
   //
   // Antes el frontend ponía editingVersionId=null y dependía del useEffect
@@ -260,7 +260,7 @@ function LegalDocumentEditPage() {
   // Borrar una versión específica del historial (cualquier estado:
   // draft, published o archived). El backend hace cleanup en cascada
   // de las aceptaciones de esa versión. Distinto de deleteDraftMut
-  // porque no toca editingVersionId — se asume que la asesora no
+  // porque no toca editingVersionId — se asume que el asesor no
   // está borrando la versión que está editando ahora.
   const deleteVersionMut = useMutation({
     mutationFn: (versionId: number) => api.legalAdminDeleteVersion(versionId),
@@ -620,7 +620,7 @@ function VersionsHistory({
                     )}
                     {/* Eliminar: cualquier versión que no sea la que se está
                         editando ahora mismo. Borrar la activa rompería el
-                        editor; la asesora puede usar "Descartar cambios"
+                        editor; el asesor puede usar "Descartar cambios"
                         para esa. */}
                     {!isEditing && (
                       <button
@@ -720,7 +720,7 @@ function PublishModal({
 }) {
   const [summary, setSummary] = useState(initialSummary);
   // El resumen es opcional. Antes exigíamos mínimo 5 chars, pero la
-  // asesora muchas veces solo quiere corregir un typo y no necesita
+  // asesor muchas veces solo quiere corregir un typo y no necesita
   // describirlo. Si lo deja vacío, no aparece la línea "Cambios respecto
   // a la versión anterior" en la página pública.
   const canSubmit = !publishing;

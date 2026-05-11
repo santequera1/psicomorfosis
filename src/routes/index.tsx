@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+﻿import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
@@ -29,7 +29,7 @@ function IndexPage() {
   useEffect(() => {
     const u = getStoredUser();
     if (u?.isLegalAdmin) {
-      // La asesora legal no usa el flujo clínico — su área es /legal-admin.
+      // El asesor legal no usa el flujo clínico — su área es /legal-admin.
       navigate({ to: "/legal-admin", replace: true });
       return;
     }

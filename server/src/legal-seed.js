@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Documentos legales iniciales — semilla.
  *
  * Cada entrada se inserta como `legal_documents` + una primera versión
- * en estado **draft** (la abogada los revisa, ajusta y publica desde
- * /legal-admin). El HTML está construido con la misma estructura del
- * editor TipTap para que cargue limpio al editarlo.
+ * en estado **draft** (el equipo legal los revisa, ajusta y publica
+ * desde /legal-admin). El HTML está construido con la misma estructura
+ * del editor TipTap para que cargue limpio al editarlo.
  *
  * Si más adelante se quiere reimportar un doc desde cero, basta con
  * borrar la fila de `legal_documents` y reiniciar — el backfill lo
@@ -20,8 +20,8 @@ const RESPONSABLE = {
 };
 
 // HTML del aviso de privacidad — réplica del contenido actual de
-// src/routes/privacidad.tsx pero como HTML editable. La abogada puede
-// reescribir todo desde el editor.
+// src/routes/privacidad.tsx pero como HTML editable. El equipo legal
+// puede reescribir todo desde el editor.
 const PRIVACIDAD_HTML = `
 <h2>1. Quién trata tus datos</h2>
 <p>El Responsable del tratamiento de tus datos personales es <strong>${RESPONSABLE.nombre} (Psicomorfosis)</strong>, persona natural identificada con RUT ${RESPONSABLE.rut}, con domicilio en ${RESPONSABLE.direccion}. Para cualquier consulta, ejercicio de derechos o queja relacionada con tus datos puedes escribir a <a href="mailto:${RESPONSABLE.email}">${RESPONSABLE.email}</a>.</p>
@@ -156,7 +156,7 @@ ${RESPONSABLE.direccion}<br>
 
 // Acuerdo Beta + DPA — el documento más importante. Versión resumida del
 // borrador completo en notas_claude/legal/01-acuerdo-beta-y-dpa.md.
-// La abogada lo expandirá en el editor.
+// El equipo legal lo expandirá en el editor.
 const ACUERDO_BETA_HTML = `
 <h2>1. Naturaleza del acuerdo</h2>
 <p>Este documento formaliza la participación del profesional en el programa <strong>Beta Privada de Psicomorfosis</strong> y regula el tratamiento de datos personales de sus pacientes a través de la plataforma. Conforme al artículo 25 del Decreto 1377 de 2013:</p>
@@ -344,15 +344,15 @@ export const LEGAL_DOCUMENTS_SEED = [
 
 /**
  * Inserta los documentos iniciales como version 1 en estado **draft**
- * (para que la abogada los revise y publique). Idempotente por slug:
- * si un documento ya existe, no se toca.
+ * (para que el equipo legal los revise y publique). Idempotente por
+ * slug: si un documento ya existe, no se toca.
  *
  * También sincroniza los flags de aceptación (`requires_acceptance` y
  * `acceptance_audience`) de los documentos ya existentes con la
  * política definida en LEGAL_DOCUMENTS_SEED. Esto permite cambiar la
  * política de aceptación (por ejemplo, "términos ya no requiere modal
  * bloqueante") sin tocar la DB a mano. NO toca el `body_html` de los
- * documentos existentes — eso lo edita la asesora.
+ * documentos existentes — eso lo edital asesor legal.
  */
 export function seedLegalDocuments(db) {
   const insDoc = db.prepare(`
@@ -389,7 +389,7 @@ export function seedLegalDocuments(db) {
       ).lastInsertRowid;
       insVer.run(
         docId, "2026-v1", d.body_html, stripHtml(d.body_html),
-        "Importación inicial desde código fuente. Pendiente de revisión por la asesora legal.",
+        "Importación inicial desde código fuente. Pendiente de revisión por el asesor legal.",
       );
       inserted++;
       continue;
@@ -405,13 +405,13 @@ export function seedLegalDocuments(db) {
     // Restauración: el documento existe en legal_documents pero perdió
     // todas sus versiones (típicamente porque alguien hizo un reset
     // manual con DELETE FROM legal_document_versions). Recreamos la
-    // primera versión draft con el body actual del seed para que la
-    // asesora pueda volver a empezar desde el documento base.
+    // primera versión draft con el body actual del seed para que el
+    // asesor legal pueda volver a empezar desde el documento base.
     const versionsCount = countVersions.get(existing.id).n;
     if (versionsCount === 0) {
       insVer.run(
         existing.id, "2026-v1", d.body_html, stripHtml(d.body_html),
-        "Importación inicial desde código fuente. Pendiente de revisión por la asesora legal.",
+        "Importación inicial desde código fuente. Pendiente de revisión por el asesor legal.",
       );
       restored++;
     }

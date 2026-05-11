@@ -386,8 +386,9 @@ router.post("/workspaces", (req, res) => {
  * Agrega un usuario nuevo a un workspace que YA EXISTE. Sirve para
  * casos donde varias personas comparten un mismo espacio:
  *
- *   - El workspace legal (id=4) tiene María y Alba; si llega una
- *     tercera asesora, se agrega acá con isLegalAdmin=true.
+ *   - El workspace legal (id=4) tiene a María, Alba y demás miembros
+ *     del equipo; si llega un nuevo asesor legal, se agrega acá con
+ *     isLegalAdmin=true.
  *   - Una clínica (mode=organization) puede sumar otra psicóloga
  *     al mismo workspace para que compartan agenda, sedes, etc.
  *
@@ -395,7 +396,7 @@ router.post("/workspaces", (req, res) => {
  * eso el flag is_platform_admin se gestiona aparte.
  *
  * Cuando isLegalAdmin=true, el role se fuerza a 'legal_admin' y
- * NO se crea profesional asociado (la asesora legal no atiende
+ * NO se crea profesional asociado (el asesor legal no atiende
  * pacientes). Para roles staff regulares sí creamos professional
  * para que pueda aparecer en agenda y atender.
  */
@@ -435,8 +436,8 @@ router.post("/workspaces/:id/users", (req, res) => {
   try {
     const tx = db.transaction(() => {
       let profId = null;
-      // Solo creamos profesional para staff "clínico". Las asesoras
-      // legales no atienden pacientes — agregar un profesional inútil
+      // Solo creamos profesional para staff "clínico". El equipo
+      // legal no atiende pacientes — agregar un profesional inútil
       // ensucia las listas de "Profesionales activos" del workspace.
       if (!isLegalAdmin) {
         profId = db.prepare(`
