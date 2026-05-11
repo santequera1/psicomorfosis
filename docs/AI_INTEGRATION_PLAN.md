@@ -419,10 +419,24 @@ que tenemos planeado para v1).
 | Ideal para | EPS de alto volumen, consultas cortas | Clínica privada, sesiones largas |
 | Riesgo de "psicología fast food" | Alto | Bajo |
 
-**Conclusión**: para Psicomorfosis (clínica privada / independiente), el
-modelo de **notas libres** (v1 planeado) sigue siendo el indicado como
-caso principal. Pero hay piezas del modelo guiado que **son ORO** y
-podemos extraer:
+**Aclaración** (revisada el 2026-05-11 tras feedback del fundador):
+mi caracterización original de "psicología fast food" para el modelo
+guiado era sesgada y paternalista. El modelo guiado no devalúa la
+profesión — responde a una realidad operativa legítima:
+
+- Una psicóloga de ESE/EPS atiende 8-12 pacientes/día con 25-40 min
+  por consulta. Si pierde 30 min documentando cada uno son **5 horas
+  diarias de papeleo**. El modo guiado salva 60-70% de ese tiempo y
+  no por eso la calidad clínica baja: la calidad vive en pensar bien
+  al paciente, no en redactar manualmente.
+- Una porción importante del mercado colombiano de psicólogos viene
+  o trabaja part-time en el sistema público. Si Psicomorfosis solo
+  sirve para sesiones de 50 min con tiempo para sentarse a escribir,
+  perdemos esa demografía.
+
+**Conclusión revisada**: ambos modelos son válidos y atienden públicos
+distintos. La decisión de prioridad (v1 solo notas, v1 ambos, o v1
+notas + v2 guiado acelerado) queda PENDIENTE — ver sección 11.5.
 
 ### 11.3 Funcionalidades a incorporar al roadmap (v2 y siguientes)
 
@@ -491,5 +505,16 @@ Ajustes y nuevas features priorizadas basadas en el audio:
   un bloque pequeño con quién es el paciente ("Estás generando nota para
   Cami, 28 años, motivo: ansiedad generalizada") para que la psicóloga
   sienta que la IA "sabe con quién trabaja".
-- **Roadmap post-v1**: queda definido el camino v1.1 → v2 → v3 → v4
-  arriba, en ese orden de prioridad.
+- **Roadmap post-v1**: **PENDIENTE de decisión**. Stiven va a probar
+  la app un tiempo antes de definir si:
+  - (A) Mantener plan original: v1 = solo notas libres, modo guiado
+    queda para v2 o v3 según feedback.
+  - (B) Promover modo guiado a v1: ambos modos juntos en la primera
+    release (más trabajo inicial, diferencial competitivo claro desde
+    día 1, requiere curación clínica de catálogos con Nathaly/Valentina).
+  - (C) v1 notas libres ya planeadas + v2 modo guiado acelerado
+    (~1-2 semanas después de v1, con catálogos curados aparte).
+
+  En cualquier caso, las funcionalidades de las secciones 11.3 (CIE-11,
+  plan terapéutico, modo guiado) siguen sobre la mesa como roadmap
+  total. Solo cambia el orden y el alcance de v1.
