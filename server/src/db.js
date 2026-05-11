@@ -1003,22 +1003,27 @@ function backfillExisting() {
       console.log(`[db] backfill: creado workspace legal id=${legalWsId}`);
     }
 
-    const existingLegal = db.prepare(`SELECT id FROM users WHERE username = ?`).get("mariarivera");
-    if (!existingLegal) {
-      db.prepare(`
-        INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin)
-        VALUES (?, ?, ?, ?, ?, 'legal_admin', 1)
-      `).run(
-        legalWsId,
-        "mariarivera",
-        bcrypt.hashSync("Psico@2026!N", 10),
-        "María Rivera",
-        "legal@psicomorfosis.co",
-      );
-      console.log(`[db] backfill: creada cuenta mariarivera (asesora legal)`);
-    } else {
-      // Asegurar flag idempotente
-      db.prepare(`UPDATE users SET is_legal_admin = 1, role = 'legal_admin' WHERE id = ?`).run(existingLegal.id);
+    // Ambas asesoras legales comparten el mismo workspace virtual y
+    // las mismas credenciales por defecto. Si se pierden por un reseed,
+    // el backfill las recrea en el siguiente arranque.
+    for (const la of LEGAL_ADMINS) {
+      const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get(la.username);
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin)
+          VALUES (?, ?, ?, ?, ?, 'legal_admin', 1)
+        `).run(
+          legalWsId,
+          la.username,
+          bcrypt.hashSync(la.password, 10),
+          la.name,
+          la.email,
+        );
+        console.log(`[db] backfill: creada cuenta ${la.username} (asesora legal)`);
+      } else {
+        // Asegurar flag idempotente
+        db.prepare(`UPDATE users SET is_legal_admin = 1, role = 'legal_admin' WHERE id = ?`).run(existing.id);
+      }
     }
   } catch (err) {
     console.warn("[db] backfill legal_admin falló:", err.message);
@@ -1066,19 +1071,40 @@ function seed() {
   console.log(`[db] seed done — WS individual=${wsIndividual}, WS organización=${wsOrg}`);
 }
 
-/** Crea el workspace + cuenta de la asesora legal (María Rivera). */
+// Lista única de asesoras legales. Sirve tanto al seed inicial como
+// al backfill: cualquier cuenta que se pierda en un reseed la recrea
+// el siguiente arranque del server. Todas comparten el mismo workspace
+// virtual ("Asesoría legal Psicomorfosis") y no tienen pacientes.
+const LEGAL_ADMINS = [
+  {
+    username: "mariarivera",
+    password: "Psico@2026!N",
+    name: "María Rivera",
+    email: "legal@psicomorfosis.co",
+  },
+  {
+    username: "albalopez",
+    password: "Psico@2026!N",
+    name: "Alba López",
+    email: "alba@psicomorfosis.co",
+  },
+];
+
+/** Crea el workspace legal + las cuentas de las asesoras legales. */
 function seedLegalAdmin() {
   const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)")
     .run("Asesoría legal Psicomorfosis", "individual").lastInsertRowid;
-  db.prepare(`
+  const insert = db.prepare(`
     INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin)
     VALUES (?, ?, ?, ?, ?, 'legal_admin', 1)
-  `).run(
-    wsId, "mariarivera",
-    bcrypt.hashSync("Psico@2026!N", 10),
-    "María Rivera",
-    "legal@psicomorfosis.co",
-  );
+  `);
+  for (const la of LEGAL_ADMINS) {
+    insert.run(
+      wsId, la.username,
+      bcrypt.hashSync(la.password, 10),
+      la.name, la.email,
+    );
+  }
 }
 
 /** Crea el workspace + cuenta del dueño de la plataforma (Stiven). */
