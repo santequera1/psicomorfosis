@@ -10,7 +10,7 @@
  */
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db } from "../db.js";
+import { db, seedTaskColumns } from "../db.js";
 import { requirePlatformAdmin } from "../auth.js";
 import { validateUsername, validateEmail } from "../lib/validators.js";
 
@@ -336,10 +336,19 @@ router.post("/workspaces", (req, res) => {
     return res.status(409).json({ error: `Ya existe una cuenta con el correo ${ownerEmail}` });
   }
 
-  // Transacción: crear workspace + user + professional + vincularlos
+  // Transacción: crear workspace + user + professional + vincularlos.
+  //
+  // IMPORTANTE: también sembramos tareas_columns acá. Antes solo se
+  // sembraban en seed() (DB fresh) y en backfillExisting() (al arrancar
+  // el server). Los workspaces creados en runtime quedaban sin columnas
+  // hasta el próximo restart, lo que producía un bug invisible: la
+  // tarea se inserta OK pero el kanban no tiene dónde renderizarla y
+  // el usuario ve "Tarea creada" sin que aparezca nada.
   const tx = db.transaction(() => {
     const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, ?)")
       .run(workspaceName, mode).lastInsertRowid;
+
+    seedTaskColumns(wsId);
 
     const profId = db.prepare(`
       INSERT INTO professionals (workspace_id, name, title, email, phone, approach, active)

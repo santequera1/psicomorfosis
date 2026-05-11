@@ -1867,7 +1867,7 @@ function extractTextFromTipTap(node) {
 }
 
 // ─── Columnas default del kanban de tareas (organización del equipo) ───────
-function seedTaskColumns(wsId) {
+export function seedTaskColumns(wsId) {
   const ins = db.prepare(`
     INSERT INTO tareas_columns (workspace_id, name, color, icon, status, position, is_default)
     VALUES (?, ?, ?, ?, ?, ?, 1)
