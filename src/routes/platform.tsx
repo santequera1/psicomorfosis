@@ -77,7 +77,14 @@ function PlatformDashboard() {
     if (query.trim()) {
       const q = query.toLowerCase();
       const hay = (s: string | null) => (s ?? "").toLowerCase().includes(q);
-      if (!hay(w.name) && !hay(w.ownerName) && !hay(w.ownerEmail) && !hay(w.ownerUsername)) return false;
+      // Búsqueda match contra el nombre del workspace + ownerName/email/username
+      // legacy + cualquier miembro del workspace (importante para workspaces
+      // compartidos: buscar "alba" debe encontrar el legal aunque María
+      // figure como owner).
+      const matchesMember = (w.members ?? []).some((m) =>
+        hay(m.name) || hay(m.username) || hay(m.email),
+      );
+      if (!hay(w.name) && !hay(w.ownerName) && !hay(w.ownerEmail) && !hay(w.ownerUsername) && !matchesMember) return false;
     }
     return true;
   }), [workspaces, query, statusFilter]);
@@ -108,6 +115,7 @@ function PlatformDashboard() {
       "Usuarios staff", "Pacientes activos", "Documentos totales",
       "Docs últimos 7 días", "Citas últimos 30 días",
       "Owner nombre", "Owner email", "Owner usuario",
+      "Miembros (todos)",
     ];
     const escape = (v: unknown): string => {
       const s = v == null ? "" : String(v);
@@ -125,6 +133,7 @@ function PlatformDashboard() {
       w.usersCount, w.patientsCount, w.documentsCount,
       w.documents7d, w.appointments30d,
       w.ownerName ?? "", w.ownerEmail ?? "", w.ownerUsername ?? "",
+      (w.members ?? []).map((m) => `${m.name} <${m.username}>`).join("; "),
     ]);
     const csv = [headers, ...rows]
       .map((r) => r.map(escape).join(","))
@@ -311,8 +320,21 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
             </span>
           </div>
           <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
-            {ws.ownerName && <span>{ws.ownerName}</span>}
-            {ws.ownerEmail && <><span className="text-ink-300">·</span><span className="truncate">{ws.ownerEmail}</span></>}
+            {/* Render de miembros del workspace.
+                  - 1 miembro: muestra "Nombre · email" (como antes).
+                  - 2+ miembros: muestra "Nombre1, Nombre2" sin el email
+                    (para no saturar la fila). El detalle de cada uno
+                    queda accesible al entrar al workspace. */}
+            {(ws.members ?? []).length > 1 ? (
+              <span className="truncate">
+                {(ws.members ?? []).map((m) => m.name).join(", ")}
+              </span>
+            ) : (
+              <>
+                {ws.ownerName && <span>{ws.ownerName}</span>}
+                {ws.ownerEmail && <><span className="text-ink-300">·</span><span className="truncate">{ws.ownerEmail}</span></>}
+              </>
+            )}
             <span className="text-ink-300">·</span>
             <span className="tabular">{ws.patientsCount} pacientes</span>
             <span className="text-ink-300">·</span>

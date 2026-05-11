@@ -36,6 +36,17 @@ export interface ApiUser {
   workspaceMode: WorkspaceMode;
 }
 
+export interface PlatformWorkspaceMember {
+  id: number;
+  name: string;
+  username: string;
+  email: string | null;
+  role: string;
+  isLegalAdmin: boolean;
+  isPlatformAdmin: boolean;
+  lastLoginAt: string | null;
+}
+
 export interface PlatformWorkspace {
   id: number;
   name: string;
@@ -52,6 +63,10 @@ export interface PlatformWorkspace {
   ownerName: string | null;
   ownerEmail: string | null;
   ownerUsername: string | null;
+  /** Lista completa de usuarios staff del workspace. ownerName/Email son
+   *  el primero (legacy), pero workspaces compartidos como el legal
+   *  (María + Alba) requieren ver todos los miembros. */
+  members: PlatformWorkspaceMember[];
 }
 
 export interface PlatformWorkspaceDetail {

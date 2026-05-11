@@ -57,6 +57,34 @@ router.get("/workspaces", (req, res) => {
     ORDER BY (w.disabled_at IS NULL) DESC, w.created_at DESC
   `).all(since7d, since30d);
 
+  // Cargamos TODOS los miembros (no-paciente) de una sola pasada y los
+  // agrupamos por workspace en JS. Antes solo enviábamos `owner_*` (el
+  // primer user), lo que ocultaba a quienes comparten espacio — caso
+  // típico del workspace legal, donde María y Alba comparten id=4 y
+  // sólo aparecía una de ellas. Un query global + Map es O(N) sobre
+  // usuarios, mejor que N+1 subqueries por workspace.
+  const memberRows = db.prepare(`
+    SELECT id, workspace_id, name, username, email, role,
+           is_legal_admin, is_platform_admin, last_login_at
+    FROM users
+    WHERE role != 'paciente'
+    ORDER BY workspace_id, id
+  `).all();
+  const membersByWs = new Map();
+  for (const m of memberRows) {
+    if (!membersByWs.has(m.workspace_id)) membersByWs.set(m.workspace_id, []);
+    membersByWs.get(m.workspace_id).push({
+      id: m.id,
+      name: m.name,
+      username: m.username,
+      email: m.email,
+      role: m.role,
+      isLegalAdmin: !!m.is_legal_admin,
+      isPlatformAdmin: !!m.is_platform_admin,
+      lastLoginAt: m.last_login_at,
+    });
+  }
+
   res.json(rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -73,6 +101,7 @@ router.get("/workspaces", (req, res) => {
     ownerName: r.owner_name,
     ownerEmail: r.owner_email,
     ownerUsername: r.owner_username,
+    members: membersByWs.get(r.id) ?? [],
   })));
 });
 
