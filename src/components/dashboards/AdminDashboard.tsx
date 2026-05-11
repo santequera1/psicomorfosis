@@ -130,12 +130,13 @@ export function AdminDashboard() {
         </div>
       </header>
 
-      {/* Quick actions: accesos rápidos a las acciones más comunes. En mobile
-          se compactan a solo iconos en 3 columnas (2 filas) para no ocupar
-          tanto vertical entre el saludo y los KPIs. En desktop se ven los
-          6 con icon + label en una sola fila. */}
+      {/* Quick actions: accesos rápidos a las acciones más comunes. Los 6
+          van siempre en una sola fila — en mobile son solo iconos compactos
+          (label oculto vía hidden sm:inline en QuickAction); en desktop se
+          ven los 6 con icon + label. Una sola fila evita robar vertical entre
+          saludo y KPIs y mantiene la fila como una "barra de acciones" clara. */}
       <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4" data-tour="quick-actions">
-        <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Agendar cita" onClick={() => setNewApptOpen(true)} />
           <QuickAction icon={<UserPlus className="h-4 w-4" />} label="Nuevo paciente" onClick={() => setNewPatientOpen(true)} />
           <QuickAction icon={<FilePen className="h-4 w-4" />} label="Nueva nota" onClick={() => setNewNoteOpen(true)} />
@@ -422,9 +423,11 @@ function QuickAction({ icon, label, onClick, to }: {
   to?: string;
 }) {
   // En mobile (< sm) solo icono — el label se oculta para liberar espacio.
-  // El title sirve para tooltip al hover (no aplica en mobile pero queda
-  // accesible para screen readers). En desktop label visible.
-  const cls = "h-12 px-3 rounded-lg border border-line-200 bg-surface text-sm text-ink-900 hover:border-brand-400 hover:bg-brand-50/30 inline-flex items-center justify-center gap-2 transition-colors";
+  // Con 6 cells en una sola fila el padding horizontal se reduce a px-1.5
+  // para que cada icono respire sin desbordar en pantallas de 360px. En
+  // desktop el padding crece y aparece el label. El title sirve para tooltip
+  // al hover (no aplica en mobile pero queda accesible para screen readers).
+  const cls = "h-11 sm:h-12 px-1.5 sm:px-3 rounded-lg border border-line-200 bg-surface text-sm text-ink-900 hover:border-brand-400 hover:bg-brand-50/30 inline-flex items-center justify-center gap-2 transition-colors";
   const inner = (
     <>
       {icon}

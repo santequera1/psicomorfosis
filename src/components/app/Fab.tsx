@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Plus, Calendar, UserPlus, FilePen, Receipt } from "lucide-react";
+import { Plus, Calendar, UserPlus, FilePen, Receipt, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
@@ -12,11 +13,13 @@ type Action = "appointment" | "patient" | "note" | "receipt";
 
 /**
  * FAB global de acción rápida. Vive dentro de AppShell, así que aparece en
- * todas las rutas autenticadas. Tres atajos: nueva cita, nuevo paciente y
- * nueva nota — los modales son los mismos que abren los botones contextuales
- * de cada página, lo que mantiene una sola fuente de verdad para esos flujos.
+ * todas las rutas autenticadas. Atajos a las acciones más comunes (nueva
+ * cita, paciente, nota, recibo) + un atajo a Configuración. Los modales
+ * son los mismos que abren los botones contextuales de cada página, lo
+ * que mantiene una sola fuente de verdad para esos flujos.
  */
 export function Fab() {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<Action | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +70,10 @@ export function Fab() {
             menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-3 pointer-events-none"
           )}
         >
+          {/* Orden top→bottom: Configuración primero (separada visualmente
+              de las acciones de creación), luego los 4 atajos de "Nuevo X".
+              El stagger más alto es el primero en el DOM (entra al final). */}
+          <FabItem icon={Settings} label="Configuración" onClick={() => { setMenuOpen(false); navigate({ to: "/configuracion" }); }} stagger={4} open={menuOpen} />
           <FabItem icon={Calendar} label="Nueva cita" onClick={() => pick("appointment")} stagger={3} open={menuOpen} />
           <FabItem icon={UserPlus} label="Nuevo paciente" onClick={() => pick("patient")} stagger={2} open={menuOpen} />
           <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} stagger={1} open={menuOpen} />

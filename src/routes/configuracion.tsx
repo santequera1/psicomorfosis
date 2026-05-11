@@ -111,11 +111,13 @@ function ConfiguracionPage() {
   const body = (
     <div className={isLegal ? "" : "max-w-[1180px] mx-auto"}>
       {/* Botón "Volver" solo en mobile cuando hay sección activa.
-          En desktop el sidebar siempre está, no hace falta. */}
+          En desktop el sidebar siempre está, no hace falta. Le damos
+          peso visual (chip con borde + bg + texto medio) porque era
+          fácil pasarlo por alto cuando se camuflaba con el título. */}
       {active && (
         <button
           onClick={() => setActive(null)}
-          className="md:hidden inline-flex items-center gap-1.5 text-sm text-ink-700 hover:text-ink-900 mb-3 -ml-1 px-2 py-1 rounded-md hover:bg-bg-100"
+          className="md:hidden inline-flex items-center gap-2 text-sm font-medium text-ink-900 mb-4 px-3 py-2 rounded-lg border border-line-200 bg-surface shadow-xs hover:border-brand-400 hover:bg-brand-50/40 hover:text-brand-800 active:scale-95 transition-all"
         >
           <ArrowLeft className="h-4 w-4" />
           Configuración
