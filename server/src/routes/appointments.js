@@ -19,14 +19,20 @@ router.use(requireAuth);
  */
 const ATTEND_GRACE_MIN = 30;
 
+// Colombia es siempre UTC-5 (sin horario de verano).
+const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
+function colombiaDateIso(date) {
+  return new Date(date.getTime() + COLOMBIA_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function autoMarkPastAppointmentsAttended(workspaceId) {
   const now = new Date();
   // Solo escaneamos las del día de hoy y hacia atrás (las futuras nunca
   // están "pasadas"). Limitamos a últimas 14 días para mantener la
-  // query barata.
-  const todayIso = now.toISOString().slice(0, 10);
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-    .toISOString().slice(0, 10);
+  // query barata. Usamos la fecha de Colombia para evitar marcar citas
+  // del día siguiente cuando el servidor está en UTC.
+  const todayIso = colombiaDateIso(now);
+  const fourteenDaysAgo = colombiaDateIso(new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000));
   const candidates = db.prepare(`
     SELECT id, date, time, duration_min FROM appointments
     WHERE workspace_id = ?
@@ -73,7 +79,7 @@ router.post("/", (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     req.user.workspace_id, a.sede_id ?? a.sedeId ?? null, a.professional_id ?? a.professionalId ?? null, a.patient_id ?? a.patientId ?? null,
-    a.date ?? new Date().toISOString().slice(0, 10),
+    a.date ?? colombiaDateIso(new Date()),
     a.time, a.duration_min ?? 50, a.patient_name ?? a.patientName ?? "",
     a.professional ?? "", a.modality ?? "individual", a.room ?? "",
     a.status ?? "pendiente", a.notes ?? ""

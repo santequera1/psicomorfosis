@@ -498,7 +498,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
   const { data: appointments = [] } = useQuery({
     queryKey: ["appointments", today],
     queryFn: () => api.listAppointments({ date: today }),

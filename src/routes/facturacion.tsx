@@ -417,7 +417,7 @@ export function ReceiptFormModal({
   const [reference, setReference] = useState(invoice?.payment_reference ?? "");
   const [notes, setNotes] = useState(invoice?.payment_notes ?? "");
   const [status, setStatus] = useState<Estado>(invoice?.status ?? "pagada");
-  const [date, setDate] = useState(invoice?.date ?? presetDate ?? new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(invoice?.date ?? presetDate ?? (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })());
   const [modality, setModality] = useState<typeof MODALITIES[number]>(
     (MODALITIES as readonly string[]).includes(invoice?.modality ?? "")
       ? (invoice!.modality as typeof MODALITIES[number])

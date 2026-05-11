@@ -42,7 +42,10 @@ function formatToday() {
 }
 
 function toIso(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function formatDayLong(d: Date) {
@@ -84,7 +87,7 @@ function AgendaPage() {
 
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toIso(new Date());
 
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const { data: todayAppointments = [] } = useQuery({
@@ -618,7 +621,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   const patientId = slot.patient_id ?? null;
 
   const [reschedOpen, setReschedOpen] = useState(false);
-  const [newDate, setNewDate] = useState<string>(slot.date ?? new Date().toISOString().slice(0, 10));
+  const [newDate, setNewDate] = useState<string>(slot.date ?? toIso(new Date()));
   const [newTime, setNewTime] = useState<string>(slot.time ?? "09:00");
   const [busy, setBusy] = useState(false);
   const [cobroOpen, setCobroOpen] = useState(false);

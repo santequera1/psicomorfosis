@@ -51,7 +51,7 @@ export function AdminDashboard() {
   // termine de cargar el workspace).
   const isOrg = (workspace?.mode ?? user?.workspaceMode) === "organization";
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const { data: invoicesSummary } = useQuery({ queryKey: ["invoices-summary"], queryFn: () => api.invoicesSummary() });
   const { data: todayAppointments = [] } = useQuery({

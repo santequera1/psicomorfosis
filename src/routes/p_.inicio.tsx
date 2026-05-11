@@ -15,7 +15,7 @@ function PortalHome() {
   const { data: tasks = [] } = useQuery({ queryKey: ["portal-tasks"], queryFn: () => api.portalTasks() });
   const { data: docs = [] } = useQuery({ queryKey: ["portal-documents"], queryFn: () => api.portalDocuments() });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
   const upcoming = appointments.filter((a) => a.date >= today && a.status !== "cancelada").slice(0, 1)[0];
   const pendingTasks = tasks.filter((t) => t.status !== "completada").length;
   const pendingDocs = docs.filter((d) => d.status === "pendiente_firma").length;

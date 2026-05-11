@@ -25,7 +25,10 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
   const [query, setQuery] = useState(prefilledPatient ? displayPatientName(prefilledPatient) : "");
   const [selected, setSelected] = useState<ApiPatient | null>(prefilledPatient ?? null);
   const [showResults, setShowResults] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
   const [time, setTime] = useState("10:30");
   const [modality, setModality] = useState<Modality>(prefilledPatient?.modality ?? "individual");
   const [duration, setDuration] = useState(50);

@@ -1187,7 +1187,7 @@ function TabFacturacion({ patientId, patientName }: { patientId: string; patient
 function CertificateModal({ patientId, onClose }: { patientId: string; onClose: () => void }) {
   const yyyy = new Date().getFullYear();
   const [from, setFrom] = useState(`${yyyy}-01-01`);
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; });
   const [busy, setBusy] = useState(false);
 
   // Cerrar con Esc.
@@ -1221,13 +1221,13 @@ function CertificateModal({ patientId, onClose }: { patientId: string; onClose: 
     const now = new Date();
     if (preset === "ytd" || preset === "year") {
       setFrom(`${now.getFullYear()}-01-01`);
-      setTo(now.toISOString().slice(0, 10));
+      setTo(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
     } else if (preset === "lastyear") {
       setFrom(`${now.getFullYear() - 1}-01-01`);
       setTo(`${now.getFullYear() - 1}-12-31`);
     } else if (preset === "all") {
       setFrom("2020-01-01");
-      setTo(now.toISOString().slice(0, 10));
+      setTo(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
     }
   }
 
