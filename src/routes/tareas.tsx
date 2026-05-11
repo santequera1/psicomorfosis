@@ -868,11 +868,15 @@ function TareaDialog({
           </Field>
 
           <Field label="Descripción">
+            {/* resize-y: el usuario puede arrastrar la esquina inferior
+                para crecer/encoger la altura. min-h-20 evita que quede
+                tan diminuta que no se vea el caret; max-h-96 evita que
+                empuje el footer del modal fuera de la pantalla. */}
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
+              className="w-full min-h-20 max-h-96 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-y"
               placeholder="Detalles, notas, contexto…"
             />
           </Field>

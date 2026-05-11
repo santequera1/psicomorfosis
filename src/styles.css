@@ -867,3 +867,21 @@ html[data-theme="aurora"] .bg-card {
     font-size: 0.8125rem !important;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Inputs nativos type="date": ocultamos el indicador del calendario que
+ * Chrome/Edge dibuja por default, porque los DateInput de la app pintan
+ * su propio icono Lucide (Calendar/CalendarDays) sobre el input. Sin
+ * esto se ven DOS iconos pegados (el nativo + el nuestro). El input
+ * sigue siendo clickeable normalmente — el código llama a showPicker()
+ * para abrir el calendario al hacer click en cualquier parte.
+ * ────────────────────────────────────────────────────────────────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  width: 0;
+  padding: 0;
+  margin: 0;
+}
+input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}

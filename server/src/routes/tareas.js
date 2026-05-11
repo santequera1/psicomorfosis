@@ -8,8 +8,11 @@ router.use(requireAuth);
 const VALID_STATUS = new Set(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]);
 const VALID_PRIORITY = new Set(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 const VALID_VISIBILITY = new Set(["private", "team", "workspace"]);
+// Debe mantenerse en sincronía con TAREA_TYPES en src/lib/api.ts.
+// Cuando se omite alguno, las plantillas que usen ese tipo (p. ej.
+// "Tests" para el MCMI-II) fallan con 400 al crear la tarea.
 const VALID_TASK_TYPES = new Set([
-  "Sesión clínica", "Documentación", "Llamada / Seguimiento",
+  "Sesión clínica", "Tests", "Documentación", "Llamada / Seguimiento",
   "Administrativo", "Capacitación", "Auto-cuidado",
   "Reunión equipo", "Reporte",
 ]);
