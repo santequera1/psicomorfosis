@@ -8,7 +8,7 @@ import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
-  ShieldAlert, Clock,
+  ShieldAlert, Clock, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession } from "@/lib/api";
@@ -60,9 +60,18 @@ function ConfiguracionPage() {
   // y no tiene pacientes.
   const SECCIONES_LEGAL_IDS = new Set(["apariencia", "seguridad", "cuenta"]);
 
-  // Default tab: legal entra a apariencia (lo más probable que necesite),
-  // el psicólogo entra a perfil como antes.
-  const [active, setActive] = useState(isLegal ? "apariencia" : "perfil");
+  // Patrón "lista → detalle" inspirado en iOS/Android Settings:
+  //   - Mobile (< md): `active === null` muestra la lista vertical de
+  //     secciones. Tocar una pone su id en active y se ve solo el
+  //     panel a pantalla completa con botón "← Configuración".
+  //   - Desktop (md+): el sidebar siempre visible a la izquierda y el
+  //     panel a la derecha. Si `active` es null, mostramos un panel
+  //     por defecto (perfil para psicólogos, apariencia para legal).
+  //
+  // Reemplaza el scroll horizontal anterior, que era invisible para
+  // muchos usuarios y dejaba opciones escondidas en mobile.
+  const defaultActive = isLegal ? "apariencia" : "perfil";
+  const [active, setActive] = useState<string | null>(null);
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
@@ -75,37 +84,118 @@ function ConfiguracionPage() {
     return true;
   });
 
+  // Lo que efectivamente se renderiza en el panel principal. En mobile
+  // sin selección, no hay panel (se ve la lista); en desktop sin
+  // selección, fallback al default.
+  const effectiveActive = active ?? defaultActive;
+  const activeSection = secciones.find((s) => s.id === effectiveActive);
+
+  // Map id → componente, para no repetir el switch entre mobile y desktop.
+  const renderPanel = () => {
+    switch (effectiveActive) {
+      case "perfil":         return <PerfilPanel />;
+      case "horario":        return <HorarioPanel />;
+      case "workspace":      return <WorkspacePanel />;
+      case "sedes":          return <SedesPanel />;
+      case "equipo":         return <EquipoPanel />;
+      case "notificaciones": return <NotifPanel />;
+      case "seguridad":      return <SeguridadPanel />;
+      case "apariencia":     return <AparienciaPanel />;
+      case "integraciones":  return <IntegracionesPanel />;
+      case "tutoriales":     return <TutorialesPanel />;
+      case "cuenta":         return <CuentaPanel />;
+      default:               return null;
+    }
+  };
+
   const body = (
     <div className={isLegal ? "" : "max-w-[1180px] mx-auto"}>
+      {/* Botón "Volver" solo en mobile cuando hay sección activa.
+          En desktop el sidebar siempre está, no hace falta. */}
+      {active && (
+        <button
+          onClick={() => setActive(null)}
+          className="md:hidden inline-flex items-center gap-1.5 text-sm text-ink-700 hover:text-ink-900 mb-3 -ml-1 px-2 py-1 rounded-md hover:bg-bg-100"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Configuración
+        </button>
+      )}
+
       {!isLegal && (
         <header className="mb-5 sm:mb-7">
-          <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Ajustes · {workspace?.name ?? "Workspace"}</div>
-          <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Configuración</h1>
-          <p className="text-sm text-ink-500 mt-1">
+          {/* Eyebrow: oculto en mobile cuando hay sección activa
+              (ya tienes el botón Volver arriba y el contexto está claro). */}
+          <div className={cn(
+            "text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold",
+            active && "hidden md:block",
+          )}>
+            Ajustes · {workspace?.name ?? "Workspace"}
+          </div>
+          <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">
+            {/* En mobile con sección activa muestra el nombre de la sección;
+                en desktop o sin sección activa, "Configuración". */}
+            <span className="md:hidden">{active ? activeSection?.label ?? "Configuración" : "Configuración"}</span>
+            <span className="hidden md:inline">Configuración</span>
+          </h1>
+          <p className={cn(
+            "text-sm text-ink-500 mt-1",
+            active && "hidden md:block",
+          )}>
             Modo <span className="font-medium text-ink-900">{isOrg ? "Organización" : "Individual"}</span>
           </p>
         </header>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:gap-6">
-        {/* Tabs horizontales con scroll en mobile, sidebar sticky en desktop */}
-        <aside className="md:rounded-xl md:bg-surface md:border md:border-line-200 md:shadow-soft md:p-2 md:h-fit md:sticky md:top-20 -mx-4 sm:-mx-6 md:mx-0 px-4 sm:px-6 md:px-0 overflow-x-auto md:overflow-visible no-scrollbar">
-          <div className="flex md:flex-col gap-1 md:gap-0 pb-1 md:pb-0">
+      {/* ── Vista mobile lista (solo cuando !active) ───────────────── */}
+      {!active && (
+        <div className="md:hidden flex flex-col gap-2">
+          {secciones.map((s) => {
+            const Icon = s.icon;
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActive(s.id)}
+                className="w-full bg-surface border border-line-200 rounded-xl p-4 flex items-center gap-3 hover:border-brand-400 transition-colors shadow-xs text-left active:scale-[0.99]"
+              >
+                <div className="h-10 w-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-ink-900 leading-tight">{s.label}</div>
+                  <div className="text-xs text-ink-500 mt-0.5 truncate">{s.desc}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-ink-400 shrink-0" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Vista detalle (mobile con active + siempre en desktop) ─── */}
+      <div className={cn(
+        "grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 md:gap-6",
+        !active && "hidden md:grid",
+      )}>
+        {/* Sidebar: oculto en mobile (en mobile usa la vista lista).
+            En desktop es sticky a la izquierda. */}
+        <aside className="hidden md:block md:rounded-xl md:bg-surface md:border md:border-line-200 md:shadow-soft md:p-2 md:h-fit md:sticky md:top-20">
+          <div className="flex flex-col gap-0.5">
             {secciones.map((s) => {
               const Icon = s.icon;
-              const isActive = active === s.id;
+              const isActive = effectiveActive === s.id;
               return (
                 <button
                   key={s.id}
                   onClick={() => setActive(s.id)}
                   className={cn(
-                    "flex items-center gap-2 md:gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors shrink-0 md:w-full md:text-left whitespace-nowrap",
-                    isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100"
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors w-full text-left",
+                    isActive ? "bg-brand-100 text-brand-800" : "text-ink-700 hover:bg-bg-100",
                   )}
                 >
                   <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-brand-700" : "text-ink-400")} />
-                  <span className="md:flex-1">{s.label}</span>
-                  {isActive && <ChevronRight className="h-4 w-4 text-brand-700 hidden md:inline-block" />}
+                  <span className="flex-1">{s.label}</span>
+                  {isActive && <ChevronRight className="h-4 w-4 text-brand-700" />}
                 </button>
               );
             })}
@@ -113,17 +203,7 @@ function ConfiguracionPage() {
         </aside>
 
         <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-4 sm:p-6 md:p-7">
-          {active === "perfil" && <PerfilPanel />}
-          {active === "horario" && <HorarioPanel />}
-          {active === "workspace" && <WorkspacePanel />}
-          {active === "sedes" && <SedesPanel />}
-          {active === "equipo" && <EquipoPanel />}
-          {active === "notificaciones" && <NotifPanel />}
-          {active === "seguridad" && <SeguridadPanel />}
-          {active === "apariencia" && <AparienciaPanel />}
-          {active === "integraciones" && <IntegracionesPanel />}
-          {active === "tutoriales" && <TutorialesPanel />}
-          {active === "cuenta" && <CuentaPanel />}
+          {renderPanel()}
         </main>
       </div>
     </div>
