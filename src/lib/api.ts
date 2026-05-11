@@ -1328,6 +1328,23 @@ export const api = {
       `/api/platform/workspaces`,
       { method: "POST", body: JSON.stringify(body) },
     ),
+  /** Suma un usuario a un workspace existente. Usado para sumar otra
+   *  asesora legal al workspace legal compartido, u otra psicóloga a
+   *  un workspace de clínica. */
+  platformAddWorkspaceUser: (workspaceId: number, body: {
+    name: string;
+    email: string;
+    username?: string;
+    password: string;
+    isLegalAdmin?: boolean;
+    professionalTitle?: string;
+    professionalPhone?: string;
+    professionalApproach?: string;
+  }) =>
+    request<{ workspaceId: number; userId: number; professionalId: number | null; username: string; role: string }>(
+      `/api/platform/workspaces/${workspaceId}/users`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
   platformGetUsage: () => request<PlatformUsage>(`/api/platform/usage`),
 
   // ─── Error reports (admin only) ──────────────────────────────────────

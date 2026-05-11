@@ -6,6 +6,7 @@ import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
+  UserPlus, RefreshCw,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -711,6 +712,7 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
   });
   const [resetting, setResetting] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
   const [editing, setEditing] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
+  const [adding, setAdding] = useState(false);
 
   return (
     <AppShell>
@@ -751,8 +753,16 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
             </section>
 
             <section className="rounded-xl border border-line-200 bg-surface">
-              <div className="px-5 py-3 border-b border-line-100">
+              <div className="px-5 py-3 border-b border-line-100 flex items-center justify-between gap-3">
                 <h3 className="font-serif text-lg text-ink-900">Usuarios del workspace</h3>
+                <button
+                  onClick={() => setAdding(true)}
+                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                  title="Agregar otro miembro a este workspace"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Agregar miembro</span>
+                </button>
               </div>
               <ul className="divide-y divide-line-100">
                 {data.users.map((u) => (
@@ -814,6 +824,14 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
         <EditUserModal
           user={editing}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {adding && data && (
+        <AddWorkspaceUserModal
+          workspaceId={data.workspace.id}
+          workspaceName={data.workspace.name}
+          existingUsers={data.users}
+          onClose={() => setAdding(false)}
         />
       )}
     </AppShell>
@@ -1122,6 +1140,227 @@ function Field({ label, required, children }: { label: string; required?: boolea
       {children}
     </label>
   );
+}
+
+/**
+ * Modal para agregar otro miembro a un workspace existente. Útil para
+ * casos donde varias personas comparten un mismo espacio:
+ *  - El workspace legal (María + Alba + posibles próximos abogados).
+ *  - Un workspace de clínica (organization) con varias psicólogas.
+ *
+ * Detección automática del rol: si el workspace ya tiene un user con
+ * is_legal_admin, el nuevo es por defecto legal_admin. Si no, super_admin
+ * regular del workspace. El platform_admin NO es seleccionable acá —
+ * eso es una decisión que se toca a mano por riesgo.
+ */
+function AddWorkspaceUserModal({
+  workspaceId, workspaceName, existingUsers, onClose,
+}: {
+  workspaceId: number;
+  workspaceName: string;
+  existingUsers: PlatformWorkspaceDetail["users"];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const isLegalWorkspace = existingUsers.some((u) => u.role === "legal_admin");
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [password, setPassword] = useState(() => randomPassword());
+  const [isLegal, setIsLegal] = useState(isLegalWorkspace);
+  const [created, setCreated] = useState<{ username: string; password: string } | null>(null);
+
+  // Sugerimos username desde el email si el usuario no lo ha tocado.
+  useEffect(() => {
+    if (usernameTouched) return;
+    const local = (email.split("@")[0] ?? "").toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    setUsername(local);
+  }, [email, usernameTouched]);
+
+  const mu = useMutation({
+    mutationFn: () => api.platformAddWorkspaceUser(workspaceId, {
+      name: name.trim(),
+      email: email.trim(),
+      username: username.trim() || undefined,
+      password,
+      isLegalAdmin: isLegal,
+    }),
+    onSuccess: (r) => {
+      setCreated({ username: r.username, password });
+      qc.invalidateQueries({ queryKey: ["platform-workspace", workspaceId] });
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      qc.invalidateQueries({ queryKey: ["platform-usage"] });
+      toast.success("Miembro agregado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canSubmit = name.trim().length > 1 && email.includes("@") && password.length >= 6 && !mu.isPending;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (canSubmit) mu.mutate(); }}
+        className="w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-xl border border-line-200 shadow-modal max-h-[92vh] overflow-y-auto"
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-serif text-lg text-ink-900">Agregar miembro</h3>
+            <p className="text-xs text-ink-500 mt-0.5 truncate">a "{workspaceName}"</p>
+          </div>
+          <button type="button" onClick={onClose} className="h-8 w-8 rounded-md hover:bg-bg-100 flex items-center justify-center text-ink-500 shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        {created ? (
+          <div className="p-5 space-y-4">
+            <div className="flex items-start gap-3 rounded-lg bg-success-soft border border-success/20 p-4">
+              <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0 text-sm text-ink-900">
+                <p className="font-medium">Miembro creado correctamente</p>
+                <p className="text-xs text-ink-500 mt-1">
+                  Compártele estas credenciales (te recomiendo recordarle cambiar la
+                  contraseña al primer ingreso desde <em>Configuración → Cuenta</em>).
+                </p>
+              </div>
+            </div>
+            <CredentialRow label="Usuario" value={created.username} />
+            <CredentialRow label="Contraseña" value={created.password} />
+            <footer className="pt-2 flex justify-end">
+              <button type="button" onClick={onClose} className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+                Listo
+              </button>
+            </footer>
+          </div>
+        ) : (
+          <>
+            <div className="p-5 space-y-4">
+              <FormField label="Nombre completo" required>
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej. Camila Restrepo Pérez"
+                  className="w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-400"
+                />
+              </FormField>
+              <FormField label="Correo electrónico" required>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="camila@correo.co"
+                  className="w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-400"
+                />
+              </FormField>
+              <FormField label="Usuario (login)" hint="Solo letras, números, punto, guion bajo o guion. Se sugiere desde el correo.">
+                <input
+                  value={username}
+                  onChange={(e) => { setUsernameTouched(true); setUsername(e.target.value.toLowerCase()); }}
+                  placeholder="camilarestrepo"
+                  className="w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-400 tabular"
+                />
+              </FormField>
+              <FormField label="Contraseña inicial" hint="Se genera aleatoria. Puedes regenerarla o escribir una propia (mín 6 caracteres).">
+                <div className="flex gap-2">
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-400 tabular"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPassword(randomPassword())}
+                    className="h-10 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
+                    title="Generar otra contraseña aleatoria"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </FormField>
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-line-200 px-3 py-2.5 cursor-pointer hover:border-brand-400">
+                <input
+                  type="checkbox"
+                  checked={isLegal}
+                  onChange={(e) => setIsLegal(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0 text-xs">
+                  <div className="font-medium text-ink-900">Es asesor/a legal</div>
+                  <div className="text-ink-500 mt-0.5">
+                    {isLegal
+                      ? "Tendrá acceso al editor de documentos legales (/legal-admin), no aparecerá en agenda y no atenderá pacientes."
+                      : "Será staff clínico regular del workspace (puede atender pacientes, agendar, escribir notas)."}
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <footer className="px-5 py-3 border-t border-line-100 bg-bg-100/30 flex items-center justify-end gap-2">
+              <button type="button" onClick={onClose} className="h-10 px-4 rounded-lg text-sm text-ink-700 hover:bg-bg-100">
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              >
+                {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                <UserPlus className="h-4 w-4" /> Crear miembro
+              </button>
+            </footer>
+          </>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function FormField({ label, hint, required, children }: {
+  label: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-ink-700 mb-1.5 block">
+        {label}{required && <span className="text-rose-700 ml-1">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-[11px] text-ink-500 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function CredentialRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-line-200 bg-bg-50 px-3 py-2.5">
+      <div className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{label}</div>
+      <div className="flex items-center justify-between gap-3 mt-0.5">
+        <code className="text-sm text-ink-900 tabular truncate">{value}</code>
+        <button
+          type="button"
+          onClick={() => { navigator.clipboard.writeText(value); toast.success("Copiado"); }}
+          className="h-7 px-2 rounded text-[11px] text-ink-700 hover:bg-bg-100 inline-flex items-center gap-1 shrink-0"
+        >
+          <Copy className="h-3 w-3" /> Copiar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function randomPassword(): string {
+  // Letras + dígitos sin caracteres ambiguos (0/O, 1/l/I).
+  const a = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 10; i++) s += a[Math.floor(Math.random() * a.length)];
+  return s;
 }
 
 function formatRelative(iso: string): string {

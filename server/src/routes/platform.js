@@ -380,6 +380,102 @@ router.post("/workspaces", (req, res) => {
 });
 
 /**
+ * POST /api/platform/workspaces/:id/users
+ * Body: { name, email, username?, password, role?, isLegalAdmin?, professionalTitle? }
+ *
+ * Agrega un usuario nuevo a un workspace que YA EXISTE. Sirve para
+ * casos donde varias personas comparten un mismo espacio:
+ *
+ *   - El workspace legal (id=4) tiene María y Alba; si llega una
+ *     tercera asesora, se agrega acá con isLegalAdmin=true.
+ *   - Una clínica (mode=organization) puede sumar otra psicóloga
+ *     al mismo workspace para que compartan agenda, sedes, etc.
+ *
+ * NUNCA permite crear platform_admin desde esta UI (riesgoso); para
+ * eso el flag is_platform_admin se gestiona aparte.
+ *
+ * Cuando isLegalAdmin=true, el role se fuerza a 'legal_admin' y
+ * NO se crea profesional asociado (la asesora legal no atiende
+ * pacientes). Para roles staff regulares sí creamos professional
+ * para que pueda aparecer en agenda y atender.
+ */
+router.post("/workspaces/:id/users", (req, res) => {
+  const wsId = Number(req.params.id);
+  const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(wsId);
+  if (!ws) return res.status(404).json({ error: "Workspace no encontrado" });
+
+  const {
+    name, email, username, password,
+    isLegalAdmin = false,
+    professionalTitle, professionalPhone, professionalApproach,
+  } = req.body ?? {};
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "name, email y password son requeridos" });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+  }
+  const v = validateEmail(email);
+  if (!v.ok) return res.status(400).json({ error: v.error });
+
+  let finalUsername = (username ?? "").toString().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  if (!finalUsername) finalUsername = suggestUsername(email);
+  if (!finalUsername) return res.status(400).json({ error: "username inválido" });
+  if (db.prepare("SELECT 1 FROM users WHERE username = ?").get(finalUsername)) {
+    return res.status(409).json({ error: `El username "${finalUsername}" ya existe` });
+  }
+  if (db.prepare("SELECT 1 FROM users WHERE LOWER(email) = ?").get(v.value)) {
+    return res.status(409).json({ error: `Ya existe una cuenta con el correo ${email}` });
+  }
+
+  const role = isLegalAdmin ? "legal_admin" : "super_admin";
+  const legalFlag = isLegalAdmin ? 1 : 0;
+
+  try {
+    const tx = db.transaction(() => {
+      let profId = null;
+      // Solo creamos profesional para staff "clínico". Las asesoras
+      // legales no atienden pacientes — agregar un profesional inútil
+      // ensucia las listas de "Profesionales activos" del workspace.
+      if (!isLegalAdmin) {
+        profId = db.prepare(`
+          INSERT INTO professionals (workspace_id, name, title, email, phone, approach, active)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `).run(
+          wsId, name.trim(),
+          professionalTitle ?? "Psicólogo/a clínico/a",
+          v.value,
+          professionalPhone ?? null,
+          professionalApproach ?? null,
+        ).lastInsertRowid;
+      }
+
+      const userId = db.prepare(`
+        INSERT INTO users (workspace_id, username, password_hash, name, email, role, is_legal_admin, professional_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        wsId, finalUsername, bcrypt.hashSync(password, 10),
+        name.trim(), v.value, role, legalFlag, profId,
+      ).lastInsertRowid;
+
+      return { userId, profId };
+    });
+    const { userId, profId } = tx();
+    res.status(201).json({
+      workspaceId: wsId,
+      userId,
+      professionalId: profId,
+      username: finalUsername,
+      role,
+    });
+  } catch (err) {
+    console.error("[platform] add user to workspace failed:", err);
+    res.status(500).json({ error: "No se pudo agregar el miembro: " + (err?.message ?? "error desconocido") });
+  }
+});
+
+/**
  * GET /api/platform/usage
  * KPIs globales de la plataforma para el dashboard top.
  */
