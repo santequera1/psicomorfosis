@@ -337,8 +337,19 @@ export const invoicesTour: TourStep[] = [
  *    está en medio del tour y nosotros desmontáramos al cambiar de
  *    ruta, lo cortaríamos a la mitad. El tour vive su ciclo solo.
  */
-export function useAutoTour(name: string, steps: TourStep[]) {
+export function useAutoTour(
+  name: string,
+  steps: TourStep[],
+  options?: { enabled?: boolean },
+) {
+  // `enabled` permite al caller gatear el tour cuando algún modal
+  // bloqueante está en pantalla (típicamente PendingLegalGate). El
+  // setTimeout interno solo se programa cuando enabled === true, así
+  // que si el usuario tarda 30s en aceptar los términos, el tour
+  // arranca recién cuando el modal desaparezca (no encima).
+  const enabled = options?.enabled ?? true;
   useEffect(() => {
+    if (!enabled) return;
     // En mobile (< 640px) solo disparamos el tour principal de
     // bienvenida. Los tours de página (pacientes, tests, recibos,
     // historia, documentos) son más útiles en desktop, donde:
@@ -375,5 +386,5 @@ export function useAutoTour(name: string, steps: TourStep[]) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
+  }, [name, enabled]);
 }
