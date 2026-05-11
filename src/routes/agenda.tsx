@@ -6,7 +6,7 @@ import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { KpiCard } from "@/components/app/KpiCard";
 import { api, type ApiPatient } from "@/lib/api";
-import { displayPatientName } from "@/lib/utils";
+import { displayPatientName, cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -360,6 +360,13 @@ function DayView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
   );
 }
 
+// Mapeo entre los days de settings (CSV con slugs en inglés ISO) y el
+// índice 0-6 de WEEK_DAYS_LOCAL (lunes=0 ... domingo=6).
+const SETTING_DAY_TO_INDEX: Record<string, number> = {
+  monday: 0, tuesday: 1, wednesday: 2, thursday: 3,
+  friday: 4, saturday: 5, sunday: 6,
+};
+
 function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
   // Semana de lunes a domingo que contiene `date`.
   const now = new Date();
@@ -378,26 +385,60 @@ function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
     queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
   });
 
+  // Horario de atención del psicólogo desde settings — configurado en
+  // /configuracion → Horario. Si la key no existe (workspaces viejos
+  // sin backfill, o legales que no aplican), caemos al default 8-18
+  // lun-vie para no romper la vista.
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.getSettings(),
+  });
+  const startHour = Math.max(0, Math.min(23, parseInt(String(settings?.work_start_hour ?? "08"), 10) || 8));
+  const endHour = Math.max(startHour + 1, Math.min(24, parseInt(String(settings?.work_end_hour ?? "18"), 10) || 18));
+  const workDaysSet = useMemo(() => {
+    const csv = String(settings?.work_days ?? "monday,tuesday,wednesday,thursday,friday");
+    return new Set(
+      csv.split(",").map((s) => s.trim()).filter(Boolean),
+    );
+  }, [settings?.work_days]);
+
   const WEEK_DAYS_LOCAL = useMemo(() => {
     const names = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+    const slugs = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
     return names.map((n, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      return { label: n, num: d.getDate(), iso: toIso(d), isToday: d.toDateString() === now.toDateString() };
+      return {
+        label: n,
+        num: d.getDate(),
+        iso: toIso(d),
+        isToday: d.toDateString() === now.toDateString(),
+        isWorking: workDaysSet.has(slugs[i]),
+      };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromIso]);
+  }, [fromIso, workDaysSet]);
 
-  const hours = Array.from({ length: 11 }, (_, i) => 8 + i); // 8:00 - 18:00
+  // Array dinámico de horas según el rango del psicólogo (inclusivo
+  // del label de fin para que la línea final aparezca en la grilla).
+  const hours = useMemo(() => {
+    const len = endHour - startHour + 1;
+    return Array.from({ length: len }, (_, i) => startHour + i);
+  }, [startHour, endHour]);
 
   function slotsForDay(dayIso: string) {
     return (weekAppointments as any[]).filter((a) => a.date === dayIso);
   }
 
+  // Posiciona una cita en la grilla relativa al rango configurado.
+  // Si la cita cae fuera del rango (ej: 7:00 cuando el rango es 8-18),
+  // queda en 0% o 100% — sigue siendo visible y clickeable, solo
+  // queda en el borde de la grilla.
   function topPercent(time: string) {
     const [h, m] = time.split(":").map(Number);
-    const minutesFromStart = (h - 8) * 60 + m;
-    return (minutesFromStart / (11 * 60)) * 100;
+    const totalMinutes = (endHour - startHour) * 60;
+    const minutesFromStart = (h - startHour) * 60 + m;
+    return Math.max(0, Math.min(100, (minutesFromStart / totalMinutes) * 100));
   }
 
   return (
@@ -410,7 +451,15 @@ function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
       <div className="grid grid-cols-[50px_repeat(7,minmax(80px,1fr))] text-xs min-w-175">
         <div />
         {WEEK_DAYS_LOCAL.map((d) => (
-          <div key={d.iso} className={"px-2 pb-2 text-center border-b " + (d.isToday ? "border-brand-700" : "border-line-100")}>
+          <div
+            key={d.iso}
+            className={cn(
+              "px-2 pb-2 text-center border-b",
+              d.isToday ? "border-brand-700" : "border-line-100",
+              !d.isWorking && !d.isToday && "opacity-60",
+            )}
+            title={!d.isWorking ? "Día no laborable según tu configuración" : undefined}
+          >
             <div className="text-ink-500 uppercase tracking-wider text-[10px]">{d.label}</div>
             <div className={"font-serif text-lg mt-0.5 tabular " + (d.isToday ? "text-brand-700 font-semibold" : "text-ink-900")}>
               {d.num}
@@ -427,8 +476,20 @@ function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
         </div>
 
         {WEEK_DAYS_LOCAL.map((d) => (
-          <div key={d.iso} className={"relative border-l " + (d.isToday ? "border-brand-400/50 bg-brand-50/30" : "border-line-100")} style={{ height: `${hours.length * 56}px` }}>
-            {hours.map((_, i) => (
+          <div
+            key={d.iso}
+            className={cn(
+              "relative border-l",
+              d.isToday ? "border-brand-400/50 bg-brand-50/30" : "border-line-100",
+              // Días no laborables: fondo levemente atenuado para señalar
+              // visualmente que no son días de atención por defecto. La
+              // grilla sigue clickeable — el psicólogo puede crear citas
+              // ahí si lo necesita, solo no son su rutina.
+              !d.isWorking && !d.isToday && "bg-bg-100/40",
+            )}
+            style={{ height: `${(hours.length - 1) * 56}px` }}
+          >
+            {hours.slice(0, -1).map((_, i) => (
               <div key={i} className="h-14 border-b border-line-100/60" />
             ))}
             {slotsForDay(d.iso).map((s: any) => (

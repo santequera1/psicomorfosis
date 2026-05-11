@@ -8,7 +8,7 @@ import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
-  ShieldAlert,
+  ShieldAlert, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession } from "@/lib/api";
@@ -36,6 +36,7 @@ export const Route = createFileRoute("/configuracion")({
 
 const SECCIONES = [
   { id: "perfil",       label: "Perfil profesional", icon: User,         desc: "Datos personales y credenciales" },
+  { id: "horario",      label: "Horario de atención", icon: Clock,       desc: "Días y horas en que atiendes pacientes" },
   { id: "workspace",    label: "Workspace",          icon: Home,         desc: "Modo individual u organización" },
   { id: "sedes",        label: "Sedes",              icon: Building2,    desc: "Consultorios y ubicaciones" },
   { id: "equipo",       label: "Equipo",             icon: Users2,       desc: "Profesionales del workspace" },
@@ -113,6 +114,7 @@ function ConfiguracionPage() {
 
         <main className="rounded-xl bg-surface border border-line-200 shadow-soft p-4 sm:p-6 md:p-7">
           {active === "perfil" && <PerfilPanel />}
+          {active === "horario" && <HorarioPanel />}
           {active === "workspace" && <WorkspacePanel />}
           {active === "sedes" && <SedesPanel />}
           {active === "equipo" && <EquipoPanel />}
@@ -860,6 +862,209 @@ function AparienciaPanel() {
             </button>
           ))}
         </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Horario de atención ──────────────────────────────────────────────────
+//
+// El psicólogo elige hora de inicio, hora de fin y qué días trabaja.
+// El mismo rango aplica a todos los días activos — es el modelo
+// "un rango único + días" que el usuario eligió en feedback.
+//
+// Persistencia: 3 keys en la tabla settings (workspace_id, key, value):
+//   - work_start_hour: "08" (string, hora 24h sin minutos por ahora)
+//   - work_end_hour:   "18"
+//   - work_days:       "monday,tuesday,wednesday,thursday,friday" (CSV)
+//
+// La agenda (WeekView) lee estos valores para renderizar la grilla
+// y atenuar los días no laborables. Si el psicólogo crea una cita
+// fuera de horario igual se permite — no bloqueamos, solo es la
+// vista por defecto.
+
+const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+type DayKey = typeof DAY_KEYS[number];
+
+const DAY_LABELS: Record<DayKey, string> = {
+  monday:    "Lunes",
+  tuesday:   "Martes",
+  wednesday: "Miércoles",
+  thursday:  "Jueves",
+  friday:    "Viernes",
+  saturday:  "Sábado",
+  sunday:    "Domingo",
+};
+const DAY_SHORT: Record<DayKey, string> = {
+  monday: "Lun", tuesday: "Mar", wednesday: "Mié",
+  thursday: "Jue", friday: "Vie", saturday: "Sáb", sunday: "Dom",
+};
+
+function HorarioPanel() {
+  const qc = useQueryClient();
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.getSettings(),
+  });
+
+  // Estado local del form. Defaults razonables si el backend aún no
+  // respondió o si el backfill no se ha ejecutado en este workspace.
+  const [startHour, setStartHour] = useState<string>("08");
+  const [endHour, setEndHour] = useState<string>("18");
+  const [days, setDays] = useState<Set<DayKey>>(
+    new Set(["monday", "tuesday", "wednesday", "thursday", "friday"]),
+  );
+  const [loaded, setLoaded] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // Cuando llegan los settings los volcamos al state. `loaded` evita
+  // pisar lo que el usuario está editando si el query refetch dispara.
+  useEffect(() => {
+    if (settings && !loaded) {
+      if (settings.work_start_hour) setStartHour(String(settings.work_start_hour).padStart(2, "0"));
+      if (settings.work_end_hour) setEndHour(String(settings.work_end_hour).padStart(2, "0"));
+      if (settings.work_days) {
+        const parsed = String(settings.work_days)
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s): s is DayKey => (DAY_KEYS as readonly string[]).includes(s));
+        setDays(new Set(parsed));
+      }
+      setLoaded(true);
+    }
+  }, [settings, loaded]);
+
+  const startNum = parseInt(startHour, 10);
+  const endNum = parseInt(endHour, 10);
+  const rangeOk = Number.isFinite(startNum) && Number.isFinite(endNum) && startNum < endNum;
+  const daysOk = days.size > 0;
+  const canSave = rangeOk && daysOk;
+
+  const mu = useMutation({
+    mutationFn: () => api.updateSettings({
+      work_start_hour: startHour.padStart(2, "0"),
+      work_end_hour: endHour.padStart(2, "0"),
+      work_days: DAY_KEYS.filter((d) => days.has(d)).join(","),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      setSavedAt(new Date().toLocaleTimeString("es-CO"));
+      toast.success("Horario guardado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function toggleDay(d: DayKey) {
+    setDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d); else next.add(d);
+      return next;
+    });
+  }
+
+  function applyPreset(preset: "lv" | "ls" | "ld") {
+    if (preset === "lv") setDays(new Set(["monday","tuesday","wednesday","thursday","friday"]));
+    else if (preset === "ls") setDays(new Set(["monday","tuesday","wednesday","thursday","friday","saturday"]));
+    else setDays(new Set(DAY_KEYS));
+  }
+
+  // Genera opciones de hora 00-23 para los selectores.
+  const hourOptions = Array.from({ length: 24 }, (_, h) => h.toString().padStart(2, "0"));
+
+  return (
+    <>
+      <SectionHeader
+        title="Horario de atención"
+        desc="Define los días y las horas en las que normalmente atiendes. Tu agenda usará este rango como vista por defecto. Igual puedes crear citas fuera de horario si lo necesitas."
+      />
+
+      {/* Días de la semana */}
+      <div className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 mb-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h3 className="text-sm font-medium text-ink-900">Días que trabajas</h3>
+          <div className="flex gap-1 text-[11px]">
+            <button onClick={() => applyPreset("lv")} className="px-2 py-1 rounded-md border border-line-200 text-ink-700 hover:border-brand-400">L–V</button>
+            <button onClick={() => applyPreset("ls")} className="px-2 py-1 rounded-md border border-line-200 text-ink-700 hover:border-brand-400">L–S</button>
+            <button onClick={() => applyPreset("ld")} className="px-2 py-1 rounded-md border border-line-200 text-ink-700 hover:border-brand-400">L–D</button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {DAY_KEYS.map((d) => {
+            const active = days.has(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => toggleDay(d)}
+                className={cn(
+                  "h-10 px-3 sm:px-4 rounded-lg text-sm border transition-colors min-w-[64px]",
+                  active
+                    ? "bg-brand-700 border-brand-700 text-white"
+                    : "bg-surface border-line-200 text-ink-700 hover:border-brand-400",
+                )}
+              >
+                <span className="sm:hidden">{DAY_SHORT[d]}</span>
+                <span className="hidden sm:inline">{DAY_LABELS[d]}</span>
+              </button>
+            );
+          })}
+        </div>
+        {!daysOk && (
+          <p className="text-xs text-error mt-2 inline-flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" /> Selecciona al menos un día.
+          </p>
+        )}
+      </div>
+
+      {/* Horario */}
+      <div className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 mb-4">
+        <h3 className="text-sm font-medium text-ink-900 mb-3">Horario</h3>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">Hora de inicio</label>
+            <select
+              value={startHour}
+              onChange={(e) => setStartHour(e.target.value)}
+              className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+            >
+              {hourOptions.map((h) => <option key={h} value={h}>{h}:00</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">Hora de fin</label>
+            <select
+              value={endHour}
+              onChange={(e) => setEndHour(e.target.value)}
+              className="w-full h-11 rounded-lg border border-line-200 bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+            >
+              {hourOptions.map((h) => <option key={h} value={h}>{h}:00</option>)}
+            </select>
+          </div>
+        </div>
+        {!rangeOk && (
+          <p className="text-xs text-error mt-2 inline-flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" /> La hora de fin debe ser mayor que la de inicio.
+          </p>
+        )}
+        <p className="text-[11px] text-ink-500 mt-2">
+          Vista previa: {DAY_KEYS.filter((d) => days.has(d)).map((d) => DAY_SHORT[d]).join(" · ") || "—"}{" "}
+          de {startHour}:00 a {endHour}:00.
+        </p>
+      </div>
+
+      {/* Footer guardar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs text-ink-500">
+          {savedAt && <span className="inline-flex items-center gap-1"><Check className="h-3 w-3 text-success" /> Guardado a las {savedAt}</span>}
+        </div>
+        <button
+          onClick={() => mu.mutate()}
+          disabled={!canSave || mu.isPending}
+          className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+        >
+          {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Guardar horario
+        </button>
       </div>
     </>
   );

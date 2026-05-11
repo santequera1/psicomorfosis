@@ -1023,6 +1023,35 @@ function backfillExisting() {
   } catch (err) {
     console.warn("[db] backfill legal_admin falló:", err.message);
   }
+
+  // 8. Defaults de horario de atención por workspace.
+  //
+  // Cada psicólogo configura su horario en /configuracion → Horario,
+  // pero los workspaces que existían antes de esta feature (incluida
+  // la versión beta antes del 10 may) no tienen las keys puestas. Si
+  // están vacías, la agenda asume 8:00-18:00 lun-vie y al guardar
+  // por primera vez se persiste. El backfill las inicializa para que
+  // GET /api/settings devuelva siempre los 3 campos.
+  try {
+    const upsert = db.prepare(`
+      INSERT INTO settings (workspace_id, key, value)
+      VALUES (?, ?, ?)
+      ON CONFLICT(workspace_id, key) DO NOTHING
+    `);
+    const allWs = db.prepare("SELECT id FROM workspaces").all();
+    let touched = 0;
+    for (const ws of allWs) {
+      const r1 = upsert.run(ws.id, "work_start_hour", "08");
+      const r2 = upsert.run(ws.id, "work_end_hour", "18");
+      const r3 = upsert.run(ws.id, "work_days", "monday,tuesday,wednesday,thursday,friday");
+      if (r1.changes || r2.changes || r3.changes) touched++;
+    }
+    if (touched > 0) {
+      console.log(`[db] backfill: horario default 8-18 lun-vie aplicado a ${touched} workspace(s)`);
+    }
+  } catch (err) {
+    console.warn("[db] backfill horario default falló:", err.message);
+  }
 }
 
 function seed() {

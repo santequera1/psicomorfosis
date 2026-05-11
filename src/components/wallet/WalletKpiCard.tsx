@@ -74,11 +74,11 @@ export function WalletKpiCard({ className }: Props) {
         </div>
 
         {isLoading ? (
-          <div className="rounded-lg bg-bg-100 aspect-[8/5] w-full animate-pulse" />
+          <div className="rounded-lg bg-bg-100 aspect-video w-full animate-pulse" />
         ) : accounts.length === 0 ? (
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg border border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 aspect-[8/5] w-full flex flex-col items-center justify-center gap-1 text-ink-500 transition-colors"
+            className="rounded-lg border border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 aspect-video w-full flex flex-col items-center justify-center gap-1 text-ink-500 transition-colors"
           >
             <Plus className="h-4 w-4" />
             <span className="text-[11px] font-medium text-center px-3">Agrega tu primera cuenta</span>

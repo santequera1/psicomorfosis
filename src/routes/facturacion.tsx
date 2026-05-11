@@ -627,7 +627,7 @@ export function ReceiptFormModal({
                     type="button"
                     onClick={() => setBankAccountId(null)}
                     className={cn(
-                      "rounded-lg aspect-[8/5] border-2 border-dashed text-xs font-medium flex items-center justify-center transition-colors text-center px-2",
+                      "rounded-lg aspect-video border-2 border-dashed text-xs font-medium flex items-center justify-center transition-colors text-center px-2",
                       bankAccountId === null
                         ? "border-brand-700 bg-brand-50 text-brand-800"
                         : "border-line-200 text-ink-500 hover:border-brand-400",

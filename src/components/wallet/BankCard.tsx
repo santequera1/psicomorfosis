@@ -38,7 +38,7 @@ export interface BankCardProps {
 }
 
 // Bordes y proporciones por tamaño. Las tarjetas físicas tienen ratio
-// 1.585:1 (85.6mm × 53.98mm). Usamos aspect-[16/9] (1.78) — más
+// 1.585:1 (85.6mm × 53.98mm). Usamos aspect-video (1.78) — más
 // alargado que el ratio real para que dentro del KPI estrecho del
 // grid se vea como rectángulo de tarjeta y no como cuadrado. El
 // border-radius se reduce a rounded (4px), más cercano al radio
@@ -47,9 +47,9 @@ const SIZE_CLASS = {
   xs: "h-10 px-3 py-1.5 rounded text-[11px]",
   // mini: aspect-ratio garantizado, ancho controlado por el padre.
   // Ej: padre w-[120px] → tarjeta 120×68. Padre 220px → 220×124.
-  mini: "aspect-[16/9] px-3 py-2 rounded",
-  sm: "aspect-[16/9] p-4 rounded-md",
-  md: "aspect-[16/9] p-5 rounded-md",
+  mini: "aspect-video px-3 py-2 rounded",
+  sm: "aspect-video p-4 rounded-md",
+  md: "aspect-video p-5 rounded-md",
 };
 
 export function BankCard({
