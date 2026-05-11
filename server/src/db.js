@@ -773,7 +773,42 @@ export function initDb() {
   const isFresh = !existsSync(DB_PATH) || db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'").get().n === 0;
   db.exec(SCHEMA);
   runMigrations();
-  if (isFresh || db.prepare("SELECT COUNT(*) AS n FROM workspaces").get().n === 0) {
+  const noWorkspaces = db.prepare("SELECT COUNT(*) AS n FROM workspaces").get().n === 0;
+  if (isFresh || noWorkspaces) {
+    // SALVAGUARDA: en producción una DB sin workspaces casi siempre es
+    // síntoma de un desastre (backup mal restaurado, file borrado por
+    // accidente, etc), NO una primera instalación legítima. Sembrar
+    // automáticamente borraría la oportunidad de recuperar desde el
+    // último backup y dejaría datos demo encima de un workspace real.
+    //
+    // En NODE_ENV=production exigimos el flag explícito ALLOW_FRESH_SEED=1
+    // para sembrar. En cualquier otro entorno (dev, local) se siembra
+    // normalmente.
+    const isProd = process.env.NODE_ENV === "production";
+    const allowed = process.env.ALLOW_FRESH_SEED === "1";
+    if (isProd && !allowed) {
+      console.error("┌──────────────────────────────────────────────────────────────┐");
+      console.error("│  ❌ FRESH SEED BLOQUEADO EN PRODUCCIÓN                       │");
+      console.error("├──────────────────────────────────────────────────────────────┤");
+      console.error("│  La base de datos parece vacía (sin workspaces).             │");
+      console.error("│  En producción NO sembramos automáticamente — eso borraría   │");
+      console.error("│  cualquier dato real de las clínicas y reemplazaría con      │");
+      console.error("│  pacientes demo. Esto casi siempre es un desastre.           │");
+      console.error("│                                                              │");
+      console.error("│  ACCIÓN ESPERADA:                                            │");
+      console.error("│    1) Detener el server inmediatamente.                      │");
+      console.error("│    2) Restaurar desde ~/backups/psicomorfosis/db/ el último  │");
+      console.error("│       snapshot anterior al incidente.                        │");
+      console.error("│    3) Reiniciar.                                             │");
+      console.error("│                                                              │");
+      console.error("│  Si DE VERAS quieres sembrar fresh (primera instalación      │");
+      console.error("│  legítima), reinicia con ALLOW_FRESH_SEED=1 en el entorno.   │");
+      console.error("└──────────────────────────────────────────────────────────────┘");
+      throw new Error("FRESH_SEED_BLOCKED_IN_PRODUCTION");
+    }
+    if (allowed) {
+      console.warn("[db] ⚠️  ALLOW_FRESH_SEED=1 — sembrando datos demo en producción. ¿Estás seguro?");
+    }
     seed();
   } else {
     backfillExisting();
