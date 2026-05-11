@@ -395,6 +395,7 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
 
 // ─── Modal: crear cuenta ───────────────────────────────────────────────────
 function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
+  useEscToClose(onClose);
   const qc = useQueryClient();
   const [form, setForm] = useState({
     workspaceName: "",
@@ -427,11 +428,10 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto">
       <form
         onSubmit={(e) => { e.preventDefault(); if (!created) createMu.mutate(); }}
         className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -585,6 +585,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
 
 // ─── Modal: deshabilitar ───────────────────────────────────────────────────
 function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose: () => void }) {
+  useEscToClose(onClose);
   const qc = useQueryClient();
   const [reason, setReason] = useState("");
   const mu = useMutation({
@@ -598,11 +599,10 @@ function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
         className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-line-100">
           <p className="text-[11px] uppercase tracking-widest text-risk-high font-medium">Plataforma</p>
@@ -634,6 +634,7 @@ function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose
 
 // ─── Modal: eliminar workspace permanentemente ─────────────────────────────
 function DeleteWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose: () => void }) {
+  useEscToClose(onClose);
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState("");
   const matches = confirm === ws.name;
@@ -648,11 +649,10 @@ function DeleteWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose:
     onError: (e: Error) => toast.error(e.message),
   });
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/50 backdrop-blur-sm pt-16 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/50 backdrop-blur-sm pt-16 p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); if (matches) mu.mutate(); }}
         className="w-full max-w-md rounded-2xl bg-surface shadow-modal border border-rose-300/40"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start gap-3">
           <div className="h-10 w-10 rounded-full bg-rose-500/10 text-rose-700 flex items-center justify-center shrink-0">
@@ -850,6 +850,7 @@ function EditUserModal({
   user: PlatformWorkspaceDetail["users"][number];
   onClose: () => void;
 }) {
+  useEscToClose(onClose);
   const qc = useQueryClient();
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email ?? "");
@@ -914,11 +915,10 @@ function EditUserModal({
   const canSubmit = hasChanges && usernameOk && emailOk && !mu.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); if (canSubmit) mu.mutate(); }}
         className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -1018,6 +1018,7 @@ function ResetPasswordModal({
   workspaceName: string;
   onClose: () => void;
 }) {
+  useEscToClose(onClose);
   const [password, setPassword] = useState(() => {
     // Sugerimos password aleatoria de 10 chars: letras + dígitos
     const a = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -1046,11 +1047,10 @@ function ResetPasswordModal({
   const waMessage = `Hola ${user.name.split(" ")[0]}, te restablecí tu contraseña en Psicomorfosis 🔑\n\nUsuario: ${user.username}\nNueva contraseña: ${password}\n\nIngresa en https://psico.wailus.co/login y luego cámbiala desde Configuración.`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); if (!done) mu.mutate(); }}
         className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -1161,6 +1161,7 @@ function AddWorkspaceUserModal({
   existingUsers: PlatformWorkspaceDetail["users"];
   onClose: () => void;
 }) {
+  useEscToClose(onClose);
   const qc = useQueryClient();
   const isLegalWorkspace = existingUsers.some((u) => u.role === "legal_admin");
 
@@ -1361,6 +1362,30 @@ function randomPassword(): string {
   let s = "";
   for (let i = 0; i < 10; i++) s += a[Math.floor(Math.random() * a.length)];
   return s;
+}
+
+/**
+ * Hook: cierra el modal cuando el usuario presiona Escape.
+ *
+ * Los modales con formularios (Crear cuenta, Editar usuario, Reset
+ * contraseña, Confirm disable/delete, Agregar miembro) tienen campos
+ * sensibles que el admin va llenando. Cerrar con un click accidental
+ * en el backdrop borra todo el progreso — UX pobre. Por eso ninguno
+ * de esos modales escucha onClick en el backdrop; este hook deja la
+ * vía de cierre vía teclado (Esc) además del botón X explícito.
+ *
+ * Se ignora si hay otro modal anidado escuchando — el último en montar
+ * gana porque el listener captura en bubble desde document. Para
+ * Psicomorfosis no hay anidación, así que el caso simple es suficiente.
+ */
+function useEscToClose(onClose: () => void) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 }
 
 function formatRelative(iso: string): string {
