@@ -72,6 +72,20 @@ periódicamente:
 tail -20 ~/backups/psicomorfosis/backup.log
 ```
 
+### Snapshots a disco de versiones legales publicadas
+Cada vez que la asesora legal publica una versión nueva de un
+documento (privacidad, términos, acuerdo-beta, etc.), el server
+escribe automáticamente el HTML completo + metadata a:
+```
+~/backups/psicomorfosis/legal-versions/<slug>/<version_label>__id<ID>__<timestamp>.html
+```
+Es un HTML standalone, abrible en cualquier navegador, con header de
+metadata (quién publicó, cuándo, resumen de cambios). Si la DB se
+pierde y los textos legales también, este es el respaldo de última
+línea. Best-effort: si la escritura falla la publicación sigue, solo
+se loguea `[legal-snapshot] FALLÓ …`. Configurable con la env var
+`LEGAL_SNAPSHOT_DIR`.
+
 ### Backfills idempotentes
 `backfillExisting()` corre en cada arranque cuando NO es seed fresh.
 Solo INSERTA si falta el dato (`WHERE NOT EXISTS`, `INSERT … ON CONFLICT …

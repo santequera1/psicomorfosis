@@ -21,6 +21,9 @@
  */
 
 import { Router } from "express";
+import { writeFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { db } from "../db.js";
 import { requireAuth, requireLegalAdmin } from "../auth.js";
 import { LEGAL_DOCUMENTS_SEED } from "../legal-seed.js";
@@ -32,6 +35,102 @@ const router = Router();
 /** Quita HTML para guardar también una versión en texto plano. */
 function stripHtml(html) {
   return String(html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Snapshot fuera-de-DB de una versión recién publicada.
+ *
+ * Motivación: si la DB se pierde, se reseembrase por accidente o un
+ * bug borra versiones, queremos que el trabajo de la asesora legal
+ * NO desaparezca. Por eso, cada vez que se publica una versión,
+ * escribimos también el HTML completo + metadata a disco como un
+ * archivo HTML standalone, legible sin la app. Estos snapshots viven
+ * junto a los backups SQLite (mismo directorio padre por simetría
+ * operacional) y los cubre el script de backup diario gracias a que
+ * estarán dentro de uploads/ o un directorio similar — en realidad
+ * los snapshots viven en ~/backups/psicomorfosis/legal-versions/
+ * que NO está dentro de uploads, pero el operador puede tar-zippearlo
+ * cuando quiera; lo importante es que existen como segunda copia
+ * persistente fuera del SQLite.
+ *
+ * El path se puede sobreescribir con la env var LEGAL_SNAPSHOT_DIR.
+ * Por default usa ~/backups/psicomorfosis/legal-versions/.
+ *
+ * IMPORTANTE: esta función NO debe romper el endpoint si falla. Es
+ * un best-effort: si el disco está lleno, los permisos están mal o
+ * cualquier otra cosa, logueamos y seguimos — la publicación en la
+ * DB ya quedó hecha. Por eso usamos try/catch interno y no propaga.
+ */
+function snapshotPublishedVersion(versionId) {
+  try {
+    const row = db.prepare(`
+      SELECT v.id, v.version_label, v.body_html, v.summary_of_changes,
+             v.published_at, v.published_by,
+             d.slug, d.title,
+             u.name AS publisher_name, u.username AS publisher_username
+      FROM legal_document_versions v
+      JOIN legal_documents d ON d.id = v.document_id
+      LEFT JOIN users u ON u.id = v.published_by
+      WHERE v.id = ?
+    `).get(versionId);
+    if (!row) return;
+
+    const baseDir = process.env.LEGAL_SNAPSHOT_DIR
+      || path.join(os.homedir(), "backups", "psicomorfosis", "legal-versions");
+    const docDir = path.join(baseDir, row.slug);
+    mkdirSync(docDir, { recursive: true });
+
+    // Nombre del archivo: <version_label>__id<ID>__<timestampSlug>.html
+    // El timestamp evita colisiones si dos versiones distintas comparten
+    // version_label (raro pero posible si la asesora repite etiqueta).
+    const tsSlug = String(row.published_at || new Date().toISOString())
+      .replace(/[:.]/g, "-");
+    const safeLabel = String(row.version_label).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filename = `${safeLabel}__id${row.id}__${tsSlug}.html`;
+    const fullPath = path.join(docDir, filename);
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>${row.title} — ${row.version_label}</title>
+<style>
+  body { font-family: -apple-system, system-ui, "Inter", sans-serif; max-width: 780px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; line-height: 1.55; }
+  header.snapshot-meta { background: #f5f5f4; border: 1px solid #d6d3d1; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.875rem; color: #44403c; }
+  header.snapshot-meta h1 { margin: 0 0 0.5rem 0; font-size: 1.1rem; color: #1a1a1a; }
+  header.snapshot-meta dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+  header.snapshot-meta dt { font-weight: 600; }
+  h2 { margin-top: 2rem; }
+</style>
+</head>
+<body>
+<header class="snapshot-meta">
+<h1>Snapshot legal · ${row.title}</h1>
+<dl>
+<dt>Documento</dt><dd>${row.slug}</dd>
+<dt>Versión</dt><dd>${row.version_label} (ID interno ${row.id})</dd>
+<dt>Publicado el</dt><dd>${row.published_at ?? "(sin fecha)"}</dd>
+<dt>Publicado por</dt><dd>${row.publisher_name ?? "—"} (${row.publisher_username ?? "?"})</dd>
+<dt>Resumen de cambios</dt><dd>${row.summary_of_changes ?? "(no especificado)"}</dd>
+</dl>
+<p style="margin-top:1rem;margin-bottom:0;font-style:italic;color:#78716c;">
+Snapshot generado automáticamente al publicar esta versión. Si la versión
+en la base de datos se pierde, este archivo conserva el contenido íntegro
+para restauración manual.
+</p>
+</header>
+<main>
+${row.body_html ?? ""}
+</main>
+</body>
+</html>`;
+
+    writeFileSync(fullPath, html, "utf-8");
+    console.log(`[legal-snapshot] OK → ${fullPath}`);
+  } catch (err) {
+    // Best-effort: no debe romper la publicación. Sólo loguea.
+    console.warn(`[legal-snapshot] FALLÓ para version ${versionId}: ${err.message}`);
+  }
 }
 
 /** Genera el siguiente label "2026-vN" para un documento. */
@@ -583,6 +682,9 @@ router.post("/admin/versions/:id/publish", (req, res) => {
     `).run(now, req.user.id, v.id);
   });
   tx();
+  // Snapshot fuera-de-DB. Fuera de la transacción a propósito: si el
+  // filesystem falla no queremos rollback de una publicación válida.
+  snapshotPublishedVersion(v.id);
   res.json({ ok: true, publishedAt: now });
 });
 
