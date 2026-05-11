@@ -37,7 +37,7 @@ APP_DIR="${APP_DIR:-/home/ubuntu/apps/psicomorfosis}"
 DB_PATH="${DB_PATH:-$APP_DIR/server/data.db}"
 UPLOADS_PATH="${UPLOADS_PATH:-$APP_DIR/server/uploads}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups/psicomorfosis}"
-KEEP_DAYS="${KEEP_DAYS:-14}"
+KEEP_DAYS="${KEEP_DAYS:-30}"
 
 TIMESTAMP="$(date +%Y-%m-%d_%H-%M-%S)"
 LOG_FILE="$BACKUP_DIR/backup.log"
