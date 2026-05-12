@@ -566,6 +566,63 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
     else navigate({ to: "/documentos/$id", params: { id: doc.id } });
   }
 
+  // Bloque de botones de acción (Abrir, Descargar, Menú). Lo extraemos
+  // a una variable porque se renderiza en DOS posiciones según viewport:
+  //   - Desktop (sm+): a la derecha de la info, opacity 0 hasta hover.
+  //   - Mobile: en una fila propia debajo de la info, siempre visible.
+  // El estado del menú está en el componente padre, así que ambas
+  // ubicaciones lo comparten (solo una es visible por CSS).
+  const actions = (
+    <>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); goToDoc(); }}
+        className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Abrir">
+        <Eye className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={handleDownload}
+        disabled={downloading}
+        className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50"
+        title={isFile ? "Descargar archivo" : "Descargar como PDF"}
+      >
+        {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+      </button>
+      <div className="relative">
+        <button
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMenuToggle(); }}
+          className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 flex items-center justify-center" title="Más">
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
+            onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onCloseMenu(); goToDoc(); }}
+              className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+              <Pencil className="h-4 w-4" /> Abrir
+            </button>
+            {!isFile && (
+              <button onClick={(e) => { e.stopPropagation(); onCloseMenu(); onDuplicate(); }}
+                className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+                <Copy className="h-4 w-4" /> Duplicar y reasignar
+              </button>
+            )}
+            <button onClick={onArchive}
+              className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
+              <Archive className="h-4 w-4" /> Archivar
+            </button>
+            <button onClick={onDelete}
+              className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-500/10 inline-flex items-center gap-2">
+              <Trash2 className="h-4 w-4" /> Eliminar
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <li
       className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors group cursor-pointer"
@@ -595,57 +652,21 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
             <span className="hidden md:inline truncate max-w-35">{doc.professional}</span>
           </div>
         </div>
+        {/* Acciones en DESKTOP: a la derecha, opacity 0 hasta hover. */}
         <div
-          className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:transition-opacity"
+          className="hidden sm:flex items-center gap-1 shrink-0 sm:opacity-0 group-hover:opacity-100 sm:transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); goToDoc(); }}
-            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center" title="Abrir">
-            <Eye className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50"
-            title={isFile ? "Descargar archivo" : "Descargar como PDF"}
-          >
-            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          </button>
-          <div className="relative">
-            <button
-              onClick={(e) => { e.stopPropagation(); e.preventDefault(); onMenuToggle(); }}
-              className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 flex items-center justify-center" title="Más">
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-line-200 bg-surface shadow-card py-1 z-30"
-                onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onCloseMenu(); goToDoc(); }}
-                  className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
-                  <Pencil className="h-4 w-4" /> Abrir
-                </button>
-                {!isFile && (
-                  <button onClick={(e) => { e.stopPropagation(); onCloseMenu(); onDuplicate(); }}
-                    className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
-                    <Copy className="h-4 w-4" /> Duplicar y reasignar
-                  </button>
-                )}
-                <button onClick={onArchive}
-                  className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
-                  <Archive className="h-4 w-4" /> Archivar
-                </button>
-                <button onClick={onDelete}
-                  className="w-full text-left px-3 py-2 text-sm text-rose-700 hover:bg-rose-500/10 inline-flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" /> Eliminar
-                </button>
-              </div>
-            )}
-          </div>
+          {actions}
         </div>
+      </div>
+      {/* Acciones en MOBILE: fila aparte abajo, siempre visibles. El
+          padding-left alinea con el inicio del contenido (avatar + gap). */}
+      <div
+        className="flex sm:hidden items-center justify-end gap-1 mt-3 pl-12"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {actions}
       </div>
     </li>
   );

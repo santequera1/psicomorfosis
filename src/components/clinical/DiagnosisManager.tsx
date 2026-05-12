@@ -386,7 +386,7 @@ function AddDiagnosisModal({
                             selectedEntry?.id === e.id && "bg-brand-50/80 border-brand-700",
                           )}
                         >
-                          <code className="text-[11px] text-brand-800 font-medium tabular shrink-0 min-w-[60px]">
+                          <code className="text-[11px] text-brand-800 font-medium tabular shrink-0 min-w-15">
                             {e.code}
                           </code>
                           <span className="text-xs text-ink-900 truncate flex-1">{e.name}</span>
@@ -446,7 +446,7 @@ function AddDiagnosisModal({
                           isSel && "bg-info-soft border-info",
                         )}
                       >
-                        <code className="text-[11px] text-info font-medium tabular shrink-0 min-w-[60px]">
+                        <code className="text-[11px] text-info font-medium tabular shrink-0 min-w-15">
                           {r.code}
                         </code>
                         <span className="text-xs text-ink-900 truncate flex-1">{r.name}</span>
@@ -516,7 +516,10 @@ function AddDiagnosisModal({
           </div>
         </div>
 
-        <footer className="px-5 py-3 border-t border-line-100 bg-bg-100/30 flex items-center justify-end gap-2 sticky bottom-0">
+        {/* Footer sticky con fondo OPACO (no /30) para que el contenido
+            del modal no se transparente debajo de los botones al scrollear
+            en mobile. Shadow superior para reforzar la separación visual. */}
+        <footer className="px-5 py-3 border-t border-line-200 bg-surface flex items-center justify-end gap-2 sticky bottom-0 shadow-[0_-4px_6px_-2px_rgba(0,0,0,0.04)]">
           <button type="button" onClick={onClose} className="h-10 px-4 rounded-lg text-sm text-ink-700 hover:bg-bg-100">
             Cancelar
           </button>
@@ -636,7 +639,7 @@ function SystemPicker({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "h-9 pl-3 pr-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 inline-flex items-center gap-2 hover:border-brand-400 min-w-[160px]",
+          "h-9 pl-3 pr-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 inline-flex items-center gap-2 hover:border-brand-400 min-w-40",
           open && "border-brand-700",
         )}
       >
@@ -644,7 +647,7 @@ function SystemPicker({
         <ChevronDown className={cn("h-4 w-4 text-ink-400 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-30 min-w-[200px] rounded-lg border border-line-200 bg-surface shadow-modal py-1">
+        <div className="absolute left-0 top-full mt-1 z-30 min-w-50 rounded-lg border border-line-200 bg-surface shadow-modal py-1">
           {DIAGNOSTIC_SYSTEMS.map((s) => (
             <button
               key={s}
