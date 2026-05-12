@@ -263,6 +263,47 @@ export type DiagnosticSystem = "CIE-11" | "DSM-5-TR" | "Otro";
 
 export const DIAGNOSTIC_SYSTEMS: DiagnosticSystem[] = ["CIE-11", "DSM-5-TR", "Otro"];
 
+// ─── Diagnóstico estructurado del paciente ─────────────────────────────────
+
+/** Diagnóstico clínico asignado a un paciente. La psicóloga puede asignar
+ *  N por paciente y marcar uno como principal. */
+export interface ClinicalDiagnosis {
+  id: number;
+  workspaceId: number;
+  patientId: string;
+  code: string;
+  system: DiagnosticSystem;
+  name: string;
+  /** Si vino del catálogo curado, este es su id estable interno. Si fue
+   *  agregado libre (system="Otro" o nombre custom), es null. */
+  catalogId: string | null;
+  isPrimary: boolean;
+  /** Nota libre opcional específica de ESTE diagnóstico (no la
+   *  formulación clínica del paciente, que va en el bloque cie11). */
+  note: string | null;
+  addedById: number | null;
+  addedByName: string | null;
+  createdAt: string;
+  archivedAt: string | null;
+}
+
+/** Entrada del catálogo curado de diagnósticos (response del servidor). */
+export interface DiagnosisCatalogEntry {
+  id: string;
+  category: string;
+  name: string;
+  /** Cuando se pide ?system=X, esto es el código de ese sistema (string).
+   *  Cuando no se pide system, esto es un objeto con códigos paralelos. */
+  code?: string;
+  codes?: { "CIE-11"?: string | null; "DSM-5-TR"?: string | null };
+  keywords: string[];
+}
+
+export interface DiagnosisCatalog {
+  categories: string[];
+  entries: DiagnosisCatalogEntry[];
+}
+
 export interface SoapContent {
   s: string;
   o: string;
@@ -1306,6 +1347,40 @@ export const api = {
   supersedeNote: (id: number, body: { content: string; sign?: boolean; diagnosticSystem?: DiagnosticSystem | null }) =>
     request<ClinicalNote>(`/api/notes/${id}/supersede`, { method: "POST", body: JSON.stringify(body) }),
   deleteNote: (id: number) => request<{ ok: true }>(`/api/notes/${id}`, { method: "DELETE" }),
+
+  // ─── Diagnósticos clínicos estructurados ───────────────────────────────
+  /** Devuelve el catálogo curado. Si pasa system, filtra entradas con
+   *  código en ese sistema; sin filtro, devuelve con códigos paralelos. */
+  getDiagnosisCatalog: (system?: DiagnosticSystem) =>
+    request<DiagnosisCatalog>(
+      `/api/diagnoses/catalog${system ? `?system=${encodeURIComponent(system)}` : ""}`,
+    ),
+  listPatientDiagnoses: (patientId: string) =>
+    request<ClinicalDiagnosis[]>(`/api/patients/${patientId}/diagnoses`),
+  addPatientDiagnosis: (patientId: string, body: {
+    code: string;
+    system: DiagnosticSystem;
+    name: string;
+    catalogId?: string | null;
+    isPrimary?: boolean;
+    note?: string | null;
+  }) =>
+    request<ClinicalDiagnosis>(`/api/patients/${patientId}/diagnoses`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateDiagnosis: (id: number, body: {
+    isPrimary?: boolean;
+    note?: string | null;
+    name?: string;
+    code?: string;
+  }) =>
+    request<ClinicalDiagnosis>(`/api/diagnoses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  archiveDiagnosis: (id: number) =>
+    request<{ ok: true }>(`/api/diagnoses/${id}`, { method: "DELETE" }),
 
   // ─── Plataforma (solo platform admins) ────────────────────────────────
   platformListWorkspaces: () =>

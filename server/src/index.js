@@ -35,6 +35,7 @@ import platformRoutes from "./routes/platform.js";
 import errorReportsRoutes from "./routes/errorReports.js";
 import legalRoutes from "./routes/legal.js";
 import bankAccountsRoutes from "./routes/bankAccounts.js";
+import diagnosesRoutes from "./routes/diagnoses.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -88,6 +89,10 @@ app.use("/api", portalRoutes); // /patients/:id/invite, /patient-invite/*, /auth
 // "Something went wrong" puede no tener sesión válida y aún así queremos
 // recibirlo. Mismo razonamiento que portalRoutes: ir antes que notesRoutes.
 app.use("/api", errorReportsRoutes); // /error-reports
+// Diagnósticos clínicos: /diagnoses/catalog, /patients/:id/diagnoses,
+// /diagnoses/:id. requireAuth global. Va antes de notesRoutes para
+// que sus rutas con /patients/:id/diagnoses no choquen con notes.
+app.use("/api", diagnosesRoutes);
 app.use("/api", notesRoutes);  // /patients/:id/notes y /notes/:id (require auth)
 
 app.use((err, _req, res, _next) => {

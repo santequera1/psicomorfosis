@@ -787,6 +787,37 @@ function runMigrations() {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_email_log_workspace ON email_log(workspace_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_email_log_appt ON email_log(appointment_id)",
+    // ─── Impresión diagnóstica estructurada (12 may 2026) ────────────
+    //
+    // Antes el bloque 'cie11' era texto libre. Ahora la psicóloga
+    // puede agregar N diagnósticos estructurados a un paciente
+    // (autocomplete desde el catálogo curado en diagnoses-catalog.js)
+    // y opcionalmente añadir una formulación clínica libre en el
+    // bloque 'cie11' existente.
+    //
+    // is_primary marca el diagnóstico principal (puede haber 0 o 1
+    // primary; el resto son comorbilidades). archived_at permite soft
+    // delete sin perder el historial clínico.
+    `CREATE TABLE IF NOT EXISTS clinical_diagnoses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      patient_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      system TEXT NOT NULL,
+      name TEXT NOT NULL,
+      catalog_id TEXT,
+      is_primary INTEGER DEFAULT 0,
+      note TEXT,
+      added_by_id INTEGER,
+      added_by_name TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      archived_at TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY (added_by_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_clinical_diagnoses_patient ON clinical_diagnoses(patient_id) WHERE archived_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS idx_clinical_diagnoses_workspace ON clinical_diagnoses(workspace_id)",
   ];
   for (const sql of migrations) {
     try {
