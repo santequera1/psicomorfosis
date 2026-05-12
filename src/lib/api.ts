@@ -931,6 +931,8 @@ export const api = {
   // Appointments
   listAppointments: (params: Record<string, string | number | undefined> = {}) =>
     request<Array<Record<string, any>>>(`/api/appointments${qs(params)}`),
+  getAppointment: (id: number | string) =>
+    request<Record<string, any>>(`/api/appointments/${id}`),
   createAppointment: (body: Record<string, unknown>) =>
     request("/api/appointments", { method: "POST", body: JSON.stringify(body) }),
   updateAppointment: (id: number | string, body: Record<string, unknown>) =>

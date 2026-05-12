@@ -108,6 +108,23 @@ router.get("/", (req, res) => {
   res.json(db.prepare(sql).all(...args));
 });
 
+/**
+ * GET /api/appointments/:id — devuelve UNA cita por id.
+ *
+ * Usado por el deeplink desde notificaciones (la psicóloga hace click en
+ * "Cita próxima · María" y queremos llevarla directo al detalle, sin
+ * forzarla a buscar entre todas las citas del día). El filtro por
+ * workspace_id es la garantía de que no se puede leer citas de otro
+ * workspace pasando un id arbitrario.
+ */
+router.get("/:id", (req, res) => {
+  const row = db.prepare(
+    "SELECT * FROM appointments WHERE id = ? AND workspace_id = ?"
+  ).get(req.params.id, req.user.workspace_id);
+  if (!row) return res.status(404).json({ error: "Cita no encontrada" });
+  res.json(row);
+});
+
 router.post("/", (req, res) => {
   const a = req.body ?? {};
   const r = db.prepare(`

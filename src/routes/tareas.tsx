@@ -1,4 +1,4 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -15,12 +15,16 @@ import {
 import { useWorkspace } from "@/lib/workspace";
 import { cn, displayPatientName } from "@/lib/utils";
 
-type TareasSearch = { patient?: string };
+type TareasSearch = { patient?: string; id?: number };
 export const Route = createFileRoute("/tareas")({
   head: () => ({ meta: [{ title: "Tareas — Psicomorfosis" }] }),
-  validateSearch: (s: Record<string, unknown>): TareasSearch => ({
-    patient: typeof s.patient === "string" ? s.patient : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): TareasSearch => {
+    const id = typeof s.id === "number" ? s.id : typeof s.id === "string" ? Number(s.id) : undefined;
+    return {
+      patient: typeof s.patient === "string" ? s.patient : undefined,
+      id: Number.isFinite(id) ? id : undefined,
+    };
+  },
   component: TareasPage,
 });
 
@@ -227,6 +231,24 @@ function TareasPage() {
   const [editing, setEditing] = useState<Tarea | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draggedId, setDraggedId] = useState<number | null>(null);
+
+  // Deeplink desde notificaciones: si la URL trae ?id=N, abrir el modal
+  // de edición de esa tarea. Limpiamos el search-param después para que
+  // un reload no reabra el modal (sería raro UX).
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!searchParams.id || tasks.length === 0) return;
+    const task = tasks.find((t) => t.id === searchParams.id);
+    if (task) {
+      setEditing(task);
+      setDialogOpen(true);
+    }
+    navigate({
+      to: "/tareas",
+      search: (prev: TareasSearch) => ({ ...prev, id: undefined }),
+      replace: true,
+    });
+  }, [searchParams.id, tasks, navigate]);
 
   // Filtros
   const filteredTasks = useMemo(() => {

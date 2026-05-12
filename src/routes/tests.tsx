@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
@@ -17,8 +17,13 @@ import {
 import { cn, displayPatientName } from "@/lib/utils";
 import { useAutoTour, testsTour, TOUR_NAMES } from "@/lib/tours";
 
+type TestsSearch = { app?: number };
 export const Route = createFileRoute("/tests")({
   head: () => ({ meta: [{ title: "Tests psicométricos · Psicomorfosis" }] }),
+  validateSearch: (s: Record<string, unknown>): TestsSearch => {
+    const v = typeof s.app === "number" ? s.app : typeof s.app === "string" ? Number(s.app) : undefined;
+    return { app: Number.isFinite(v) ? v : undefined };
+  },
   component: TestsPage,
 });
 
@@ -48,6 +53,28 @@ function TestsPage() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editingTest, setEditingTest] = useState<PsychTest | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
+
+  // Deeplink desde notificaciones: si la URL trae ?app=N, fetch de la
+  // aplicación y abrir el detalle. La aplicación puede no estar en el
+  // listado actual (por filtros), por eso un fetch directo es más
+  // confiable que filtrar `applications`. Limpiamos search-param tras
+  // abrir para que reload no reabra el modal.
+  const navigate = useNavigate();
+  const searchParams = useSearch({ from: "/tests" });
+  const { data: targetApp } = useQuery({
+    queryKey: ["test-application", searchParams.app],
+    queryFn: () => api.getTestApplication(String(searchParams.app!)),
+    enabled: !!searchParams.app,
+  });
+  useEffect(() => {
+    if (!targetApp) return;
+    setDetailApp(targetApp);
+    navigate({
+      to: "/tests",
+      search: (prev: TestsSearch) => ({ ...prev, app: undefined }),
+      replace: true,
+    });
+  }, [targetApp, navigate]);
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery({
     queryKey: ["test-catalog"],

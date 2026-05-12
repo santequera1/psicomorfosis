@@ -316,35 +316,33 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
   };
 
   /**
-   * Mapea una notificación a la ruta donde el usuario puede actuar sobre
-   * ella. El backend genera IDs con prefijo (appt-N, test-N, task-N,
-   * doc-N, report-N) así que podemos extraer el ID interno si lo
-   * necesitamos para deeplinks específicos.
+   * Mapea una notificación a la ruta de destino + search-params para
+   * abrir directamente el item específico. El backend genera IDs con
+   * prefijo (appt-N, test-N, task-N, doc-N, report-N), de donde
+   * extraemos el ID interno.
    *
-   * Estrategia:
-   *  - documento → /documentos/$id (deeplink al editor de ese doc)
-   *  - report (platform admin) → /platform/reportes
-   *  - resto → listado del módulo correspondiente. No deeplinkeamos a
-   *    cita/test/tarea concretos porque las rutas actuales no tienen
-   *    parámetro para resaltar un item dentro del listado. Si se vuelve
-   *    necesario, se agrega search-param y se aprovecha el ID de aquí.
+   *  - cita      → /agenda?appt=N     (abre el detail modal de esa cita)
+   *  - tarea     → /tareas?id=N       (abre el dialog de edición)
+   *  - test      → /tests?app=N       (abre el detalle de la aplicación)
+   *  - documento → /documentos/N      (deeplink al editor)
+   *  - alerta    → /platform/reportes (solo platform admin)
+   *  - mensaje   → null               (módulo aún no existe)
+   *
+   * Cada ruta destino lee su search-param, dispara el modal apropiado,
+   * y limpia el parámetro (replace) para que un reload no reabra el
+   * modal — lo deja UX limpia.
    */
   function notifNav(n: Notification): { to: string; search?: Record<string, string | number> } | null {
     const [, idStr] = n.id.split("-", 2);
     const id = Number(idStr);
+    const hasId = Number.isFinite(id);
     switch (n.type) {
-      case "cita":      return { to: "/agenda" };
-      case "tarea":     return { to: "/tareas" };
-      case "test":      return { to: "/tests" };
-      case "documento":
-        return Number.isFinite(id) ? { to: `/documentos/${id}` } : { to: "/documentos" };
-      case "alerta":
-        // En el backend solo platform admin recibe alertas (reportes
-        // abiertos). Si esto cambiara, mejorar el dispatch acá.
-        return { to: "/platform/reportes" };
-      case "mensaje":
-        // Aún no tenemos un módulo de mensajes; deeplink al home.
-        return null;
+      case "cita":      return hasId ? { to: "/agenda", search: { appt: id } } : { to: "/agenda" };
+      case "tarea":     return hasId ? { to: "/tareas", search: { id } } : { to: "/tareas" };
+      case "test":      return hasId ? { to: "/tests", search: { app: id } } : { to: "/tests" };
+      case "documento": return hasId ? { to: `/documentos/${id}` } : { to: "/documentos" };
+      case "alerta":    return { to: "/platform/reportes" };
+      case "mensaje":   return null;
     }
   }
 

@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
 import { type Modality } from "@/lib/mock-data";
@@ -17,6 +17,7 @@ import {
   ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2, Receipt,
 } from "lucide-react";
 
+type AgendaSearch = { appt?: number };
 export const Route = createFileRoute("/agenda")({
   head: () => ({
     meta: [
@@ -24,6 +25,10 @@ export const Route = createFileRoute("/agenda")({
       { name: "description", content: "Agenda del día, semana y mes con panel de seguimiento clínico." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): AgendaSearch => {
+    const v = typeof s.appt === "number" ? s.appt : typeof s.appt === "string" ? Number(s.appt) : undefined;
+    return { appt: Number.isFinite(v) ? v : undefined };
+  },
   component: AgendaPage,
 });
 
@@ -85,6 +90,27 @@ function AgendaPage() {
   const goToday = () => setCurrentDate(new Date());
   const isToday = toIso(currentDate) === toIso(new Date());
   const [detailSlot, setDetailSlot] = useState<any | null>(null);
+
+  // Deeplink desde notificaciones: si la URL trae ?appt=N, hacemos fetch
+  // del appointment y abrimos el detail modal. Limpiamos el search-param
+  // después para que recargar no reabra el modal. Usamos un fetch directo
+  // (no la query de "appointments del día") porque la cita puede ser de
+  // mañana también y no la tendríamos cargada.
+  const searchParams = useSearch({ from: "/agenda" });
+  const { data: targetAppt } = useQuery({
+    queryKey: ["appointment", searchParams.appt],
+    queryFn: () => api.getAppointment(searchParams.appt!),
+    enabled: !!searchParams.appt,
+  });
+  useEffect(() => {
+    if (!targetAppt) return;
+    setDetailSlot(targetAppt);
+    navigate({
+      to: "/agenda",
+      search: (prev: AgendaSearch) => ({ ...prev, appt: undefined }),
+      replace: true,
+    });
+  }, [targetAppt, navigate]);
 
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
