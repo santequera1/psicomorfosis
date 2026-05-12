@@ -10,6 +10,7 @@ import { displayPatientName, cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { ReceiptFormModal } from "./facturacion";
 import {
   Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X,
@@ -686,6 +687,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   const [newTime, setNewTime] = useState<string>(slot.time ?? "09:00");
   const [busy, setBusy] = useState(false);
   const [cobroOpen, setCobroOpen] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   async function startSession() {
     setBusy(true);
@@ -716,8 +718,15 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
     }
   }
 
-  async function cancelAppointment() {
-    if (!confirm("¿Cancelar esta cita?")) return;
+  // El click del botón "Cancelar cita" solo abre el ConfirmDialog;
+  // la acción real (DELETE) corre en doCancelAppointment cuando el
+  // usuario confirma. Antes usábamos window.confirm() nativo pero
+  // rompía la consistencia visual con el resto de la app.
+  function cancelAppointment() {
+    setConfirmCancel(true);
+  }
+  async function doCancelAppointment() {
+    setConfirmCancel(false);
     setBusy(true);
     try {
       await api.deleteAppointment(slot.id);
@@ -842,6 +851,17 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
         presetConcept={`Sesión ${slot.modality === "virtual" ? "virtual" : "individual"}${slot.date ? ` · ${slot.date}` : ""}`}
         presetDate={slot.date ?? undefined}
         onClose={() => setCobroOpen(false)}
+      />
+    )}
+    {confirmCancel && (
+      <ConfirmDialog
+        title="¿Cancelar esta cita?"
+        message="La cita se eliminará de la agenda. Esta acción no se puede deshacer."
+        confirmLabel="Sí, cancelar cita"
+        cancelLabel="No, volver"
+        danger
+        onConfirm={doCancelAppointment}
+        onCancel={() => setConfirmCancel(false)}
       />
     )}
     </>

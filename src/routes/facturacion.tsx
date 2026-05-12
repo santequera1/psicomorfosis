@@ -15,6 +15,7 @@ import { useAutoTour, invoicesTour, TOUR_NAMES } from "@/lib/tours";
 import { BankCard } from "@/components/wallet/BankCard";
 import { BankAccountModal } from "@/components/wallet/BankAccountModal";
 import { WalletKpiCard } from "@/components/wallet/WalletKpiCard";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
@@ -263,6 +264,7 @@ function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => vo
   const qc = useQueryClient();
   const [downloading, setDownloading] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const markPaidMu = useMutation({
     mutationFn: () => api.updateInvoice(invoice.id, { status: "pagada" }),
@@ -368,16 +370,24 @@ function InlineActions({ invoice, onEdit }: { invoice: Invoice; onEdit: () => vo
         <Pencil className="h-3.5 w-3.5" />
       </button>
       <button
-        onClick={(e) => {
-          stop(e);
-          if (confirm(`¿Eliminar el recibo ${invoice.id}?`)) deleteMu.mutate();
-        }}
+        onClick={(e) => { stop(e); setConfirmDelete(true); }}
         disabled={deleteMu.isPending}
         title="Eliminar"
         className="h-8 w-8 rounded-md text-rose-700 hover:bg-rose-500/10 inline-flex items-center justify-center disabled:opacity-50"
       >
         {deleteMu.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
       </button>
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`¿Eliminar el recibo ${invoice.id}?`}
+          message="El recibo y su PDF se eliminarán definitivamente. Esta acción no se puede deshacer."
+          confirmLabel="Sí, eliminar"
+          cancelLabel="Cancelar"
+          danger
+          onConfirm={() => { setConfirmDelete(false); deleteMu.mutate(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -716,6 +726,7 @@ function ReceiptDetailModal({
 }) {
   const qc = useQueryClient();
   const [downloading, setDownloading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isPaid = factura.status === "pagada";
 
   const markPaidMu = useMutation({
@@ -826,11 +837,7 @@ function ReceiptDetailModal({
           )}
 
           <button
-            onClick={() => {
-              if (confirm(`¿Eliminar el recibo ${factura.id} definitivamente?`)) {
-                deleteMu.mutate();
-              }
-            }}
+            onClick={() => setConfirmDelete(true)}
             disabled={deleteMu.isPending}
             className="w-full h-9 rounded-md border border-rose-300/50 text-xs text-rose-700 hover:bg-rose-500/5 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
           >
@@ -839,6 +846,17 @@ function ReceiptDetailModal({
           </button>
         </div>
       </div>
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`¿Eliminar el recibo ${factura.id} definitivamente?`}
+          message="El recibo y su PDF se eliminarán de forma permanente. Esta acción no se puede deshacer."
+          confirmLabel="Sí, eliminar"
+          cancelLabel="Cancelar"
+          danger
+          onConfirm={() => { setConfirmDelete(false); deleteMu.mutate(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }
@@ -876,6 +894,7 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
   );
   const [logoPending, setLogoPending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [confirmClearLogo, setConfirmClearLogo] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   async function openPreview() {
@@ -951,8 +970,11 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function clearLogo() {
-    if (!confirm("¿Quitar el logo actual?")) return;
+  function clearLogo() {
+    setConfirmClearLogo(true);
+  }
+  async function doClearLogo() {
+    setConfirmClearLogo(false);
     setLogoPending(true);
     try {
       await api.uploadReceiptLogo(null);
@@ -1148,6 +1170,17 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
           </div>
         </footer>
       </form>
+      {confirmClearLogo && (
+        <ConfirmDialog
+          title="¿Quitar el logo actual?"
+          message="Los recibos pasarán a mostrarse sin tu logo personalizado hasta que cargues uno nuevo."
+          confirmLabel="Sí, quitar"
+          cancelLabel="Cancelar"
+          danger
+          onConfirm={doClearLogo}
+          onCancel={() => setConfirmClearLogo(false)}
+        />
+      )}
     </div>
   );
 }

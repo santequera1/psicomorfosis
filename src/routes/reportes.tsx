@@ -115,9 +115,9 @@ function ReportesPage() {
           <KpiCard
             icon={<Clock className="h-4 w-4" />}
             label="Duración promedio"
-            value={`${ops?.avg_duration_min ?? 50} min`}
+            value={ops?.avg_duration_min ? `${ops.avg_duration_min} min` : "—"}
             delta={{ neutral: true, value: "" }}
-            hint="por sesión"
+            hint={ops?.avg_duration_min ? "por sesión" : "sin sesiones aún"}
           />
         </section>
 

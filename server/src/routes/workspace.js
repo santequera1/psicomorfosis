@@ -718,7 +718,12 @@ function statsOperationalKpis(ws) {
     attendance_rate: total > 0 ? Math.round(((totals?.atendida ?? 0) / total) * 100) : 0,
     cancel_rate:     total > 0 ? Math.round(((totals?.cancelada ?? 0) / total) * 100) : 0,
     no_show_rate:    total > 0 ? Math.round(((totals?.no_show ?? 0) / total) * 100) : 0,
-    avg_duration_min: Math.round(totals?.avg_duration ?? 50),
+    // Si no hay citas en los últimos 90 días devolvemos null en vez de
+    // un default inventado (50 min). El frontend muestra "—" cuando es
+    // null para no engañar al usuario con un promedio falso.
+    avg_duration_min: total > 0 && totals?.avg_duration
+      ? Math.round(totals.avg_duration)
+      : null,
     total_last_90d: total,
   };
 }

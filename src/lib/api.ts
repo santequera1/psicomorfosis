@@ -817,7 +817,7 @@ export const api = {
       attendance_rate: number;
       cancel_rate: number;
       no_show_rate: number;
-      avg_duration_min: number;
+      avg_duration_min: number | null;
       total_last_90d: number;
     };
   }>("/api/workspace/reports-stats"),
