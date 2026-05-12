@@ -303,6 +303,7 @@ function UserMenuItem({ to, href, onClick, icon: Icon, label, onClose }: { to?: 
 type Notification = NonNullable<Awaited<ReturnType<typeof api.listNotifications>>>[number];
 
 function NotificationsPanel({ onClose, notifications }: { onClose: () => void; notifications: Notification[] }) {
+  const navigate = useNavigate();
   const iconFor = (t: Notification["type"]) => {
     switch (t) {
       case "cita": return <CalendarDays className="h-4 w-4" />;
@@ -313,6 +314,46 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
       case "documento": return <FileText className="h-4 w-4" />;
     }
   };
+
+  /**
+   * Mapea una notificación a la ruta donde el usuario puede actuar sobre
+   * ella. El backend genera IDs con prefijo (appt-N, test-N, task-N,
+   * doc-N, report-N) así que podemos extraer el ID interno si lo
+   * necesitamos para deeplinks específicos.
+   *
+   * Estrategia:
+   *  - documento → /documentos/$id (deeplink al editor de ese doc)
+   *  - report (platform admin) → /platform/reportes
+   *  - resto → listado del módulo correspondiente. No deeplinkeamos a
+   *    cita/test/tarea concretos porque las rutas actuales no tienen
+   *    parámetro para resaltar un item dentro del listado. Si se vuelve
+   *    necesario, se agrega search-param y se aprovecha el ID de aquí.
+   */
+  function notifNav(n: Notification): { to: string; search?: Record<string, string | number> } | null {
+    const [, idStr] = n.id.split("-", 2);
+    const id = Number(idStr);
+    switch (n.type) {
+      case "cita":      return { to: "/agenda" };
+      case "tarea":     return { to: "/tareas" };
+      case "test":      return { to: "/tests" };
+      case "documento":
+        return Number.isFinite(id) ? { to: `/documentos/${id}` } : { to: "/documentos" };
+      case "alerta":
+        // En el backend solo platform admin recibe alertas (reportes
+        // abiertos). Si esto cambiara, mejorar el dispatch acá.
+        return { to: "/platform/reportes" };
+      case "mensaje":
+        // Aún no tenemos un módulo de mensajes; deeplink al home.
+        return null;
+    }
+  }
+
+  function handleClickNotification(n: Notification) {
+    const dest = notifNav(n);
+    onClose(); // cerrar el panel siempre, incluso si no hay deeplink
+    if (dest) navigate({ to: dest.to as any, search: dest.search as any });
+  }
+
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
@@ -346,24 +387,46 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
           </div>
         ) : (
           <ul className="flex-1 overflow-y-auto divide-y divide-line-100">
-            {notifications.map((n) => (
-              <li key={n.id} className={"px-4 py-3 flex items-start gap-3 hover:bg-bg-100/40 transition-colors " + (!n.read ? "bg-brand-50/30" : "")}>
-                <div className={
-                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " +
-                  (n.urgent ? "bg-error-soft text-risk-high" : n.read ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-800")
-                }>
-                  {iconFor(n.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm text-ink-900 font-medium truncate">{n.title}</p>
-                    {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />}
-                  </div>
-                  <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{n.description}</p>
-                  <p className="text-[10px] text-ink-400 mt-1 tabular">{n.at}</p>
-                </div>
-              </li>
-            ))}
+            {notifications.map((n) => {
+              const dest = notifNav(n);
+              const isClickable = dest !== null;
+              return (
+                <li
+                  key={n.id}
+                  className={(!n.read ? "bg-brand-50/30" : "")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleClickNotification(n)}
+                    disabled={!isClickable}
+                    className={
+                      "w-full px-4 py-3 flex items-start gap-3 text-left transition-colors " +
+                      (isClickable
+                        ? "hover:bg-bg-100/60 active:bg-bg-100 cursor-pointer focus-visible:bg-bg-100/60 focus-visible:outline-none"
+                        : "cursor-default")
+                    }
+                  >
+                    <div className={
+                      "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " +
+                      (n.urgent ? "bg-error-soft text-risk-high" : n.read ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-800")
+                    }>
+                      {iconFor(n.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm text-ink-900 font-medium truncate">{n.title}</p>
+                        {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />}
+                      </div>
+                      <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{n.description}</p>
+                      <p className="text-[10px] text-ink-400 mt-1 tabular">{n.at}</p>
+                    </div>
+                    {isClickable && (
+                      <ChevronRight className="h-4 w-4 text-ink-400 shrink-0 mt-1" />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
