@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
+import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,10 @@ function PlatformDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "deshabilitado">("todos");
   const [createOpen, setCreateOpen] = useState(false);
+  // Vista persistida del listado: 'list' (filas detalladas con botones)
+  // o 'cards' (tarjetas compactas, mejor en mobile y para escanear muchas
+  // cuentas de un vistazo).
+  const [viewMode, setViewMode] = usePersistedViewMode("psm.platform.view", "list");
   const [disabling, setDisabling] = useState<PlatformWorkspace | null>(null);
   const [deleting, setDeleting] = useState<PlatformWorkspace | null>(null);
 
@@ -248,6 +253,7 @@ function PlatformDashboard() {
                 </button>
               ))}
             </div>
+            <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
           </div>
 
           {isLoading ? (
@@ -257,6 +263,17 @@ function PlatformDashboard() {
               {workspaces.length === 0
                 ? "Aún no hay cuentas. Click en \"Crear cuenta\" para invitar al primer psicólogo."
                 : "Sin coincidencias con los filtros."}
+            </div>
+          ) : viewMode === "cards" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
+              {filtered.map((w) => (
+                <WorkspaceCard
+                  key={w.id}
+                  ws={w}
+                  onDisable={() => setDisabling(w)}
+                  onDelete={() => setDeleting(w)}
+                />
+              ))}
             </div>
           ) : (
             <ul className="divide-y divide-line-100">
@@ -295,6 +312,50 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
 
   const isDisabled = !!ws.disabledAt;
 
+  // Fila de acciones — la renderizamos en dos ubicaciones con clases
+  // responsive: arriba a la derecha en desktop, abajo de la info en mobile.
+  // En mobile el listado vertical permite que los botones tengan tamaño
+  // tappable sin desbordar el ancho de la pantalla.
+  const actions = (
+    <>
+      {isDisabled ? (
+        <button
+          onClick={() => enableMu.mutate()}
+          disabled={enableMu.isPending}
+          className="h-8 px-3 rounded-md border border-line-200 text-xs text-success hover:border-success/50 inline-flex items-center gap-1.5"
+          title="Reactivar cuenta"
+        >
+          {enableMu.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
+          Reactivar
+        </button>
+      ) : (
+        <button
+          onClick={onDisable}
+          className="h-8 px-3 rounded-md border border-line-200 text-xs text-risk-high hover:border-risk-high/50 inline-flex items-center gap-1.5"
+          title="Deshabilitar cuenta"
+        >
+          <PowerOff className="h-3 w-3" />
+          Deshabilitar
+        </button>
+      )}
+      <button
+        onClick={onDelete}
+        className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
+        title="Eliminar cuenta permanentemente"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+      <Link
+        to="/platform"
+        search={{ ws: ws.id }}
+        className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+        title="Ver detalle"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Link>
+    </>
+  );
+
   return (
     <li className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors">
       <div className="flex items-start gap-3 sm:gap-4">
@@ -321,11 +382,6 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
             </span>
           </div>
           <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
-            {/* Render de miembros del workspace.
-                  - 1 miembro: muestra "Nombre · email" (como antes).
-                  - 2+ miembros: muestra "Nombre1, Nombre2" sin el email
-                    (para no saturar la fila). El detalle de cada uno
-                    queda accesible al entrar al workspace. */}
             {(ws.members ?? []).length > 1 ? (
               <span className="truncate">
                 {(ws.members ?? []).map((m) => m.name).join(", ")}
@@ -351,45 +407,130 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
             <div className="text-[11px] text-risk-high mt-1 italic">Motivo: {ws.disabledReason}</div>
           )}
         </Link>
-        <div className="flex items-center gap-1 shrink-0">
-          {isDisabled ? (
-            <button
-              onClick={() => enableMu.mutate()}
-              disabled={enableMu.isPending}
-              className="h-8 px-3 rounded-md border border-line-200 text-xs text-success hover:border-success/50 inline-flex items-center gap-1.5"
-              title="Reactivar cuenta"
-            >
-              {enableMu.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
-              Reactivar
-            </button>
-          ) : (
-            <button
-              onClick={onDisable}
-              className="h-8 px-3 rounded-md border border-line-200 text-xs text-risk-high hover:border-risk-high/50 inline-flex items-center gap-1.5"
-              title="Deshabilitar cuenta"
-            >
-              <PowerOff className="h-3 w-3" />
-              Deshabilitar
-            </button>
-          )}
-          <button
-            onClick={onDelete}
-            className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
-            title="Eliminar cuenta permanentemente"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-          <Link
-            to="/platform"
-            search={{ ws: ws.id }}
-            className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
-            title="Ver detalle"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Link>
+        {/* Acciones en DESKTOP: alineadas a la derecha de la info, en línea con el avatar. */}
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
+          {actions}
         </div>
       </div>
+      {/* Acciones en MOBILE: fila aparte debajo, full width. El padding-left
+          alinea con el inicio del contenido (avatar 40px + gap 12px). */}
+      <div className="flex sm:hidden items-center justify-end gap-1.5 mt-3 pl-[3.25rem]">
+        {actions}
+      </div>
     </li>
+  );
+}
+
+/**
+ * Tarjeta compacta del workspace (vista alterna del listado). Sin botones
+ * inline — la card es clickeable y lleva al detalle del workspace donde
+ * están todas las acciones (deshabilitar, eliminar, editar usuarios).
+ * Pensado para escanear muchas cuentas de un vistazo y para mobile.
+ */
+function WorkspaceCard({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDisable: () => void; onDelete: () => void }) {
+  const qc = useQueryClient();
+  const enableMu = useMutation({
+    mutationFn: () => api.platformEnableWorkspace(ws.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      qc.invalidateQueries({ queryKey: ["platform-usage"] });
+      toast.success("Cuenta reactivada");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const isDisabled = !!ws.disabledAt;
+
+  return (
+    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
+      <Link to="/platform" search={{ ws: ws.id }} className="block">
+        <div className="flex items-start gap-3">
+          <div className={cn(
+            "h-11 w-11 rounded-lg flex items-center justify-center shrink-0",
+            isDisabled ? "bg-bg-100 text-ink-400" : ws.mode === "organization" ? "bg-lavender-100 text-lavender-500" : "bg-brand-50 text-brand-800",
+          )}>
+            {ws.mode === "organization" ? <Building2 className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-ink-900 truncate">{ws.name}</div>
+            <div className="text-[11px] text-ink-500 truncate">
+              {(ws.members ?? []).length > 1
+                ? (ws.members ?? []).map((m) => m.name).join(", ")
+                : (ws.ownerName ?? "—")}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+          {isDisabled ? (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high">
+              <PowerOff className="h-3 w-3" /> Deshabilitada
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
+              <Power className="h-3 w-3" /> Activa
+            </span>
+          )}
+          <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+            {ws.mode === "organization" ? "Clínica" : "Individual"}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-md bg-bg-50 border border-line-100 px-2 py-1.5">
+            <div className="text-sm text-ink-900 font-medium tabular">{ws.patientsCount}</div>
+            <div className="text-[10px] text-ink-500 uppercase tracking-wider">Pacientes</div>
+          </div>
+          <div className="rounded-md bg-bg-50 border border-line-100 px-2 py-1.5">
+            <div className="text-sm text-ink-900 font-medium tabular">{ws.documentsCount}</div>
+            <div className="text-[10px] text-ink-500 uppercase tracking-wider">Docs</div>
+          </div>
+          <div className="rounded-md bg-bg-50 border border-line-100 px-2 py-1.5">
+            <div className="text-sm text-ink-900 font-medium tabular">{ws.usersCount}</div>
+            <div className="text-[10px] text-ink-500 uppercase tracking-wider">Staff</div>
+          </div>
+        </div>
+
+        {ws.lastLoginAt && (
+          <div className="mt-2 text-[11px] text-ink-500 tabular">
+            Último login: {formatRelative(ws.lastLoginAt)}
+          </div>
+        )}
+        {isDisabled && ws.disabledReason && (
+          <div className="mt-2 text-[11px] text-risk-high italic">Motivo: {ws.disabledReason}</div>
+        )}
+      </Link>
+
+      {/* Acciones rápidas — solo aparecen al hover en desktop para no
+          saturar visualmente, siempre visibles en mobile (sin hover ahí). */}
+      <div className="mt-3 pt-3 border-t border-line-100 flex items-center justify-end gap-1.5">
+        {isDisabled ? (
+          <button
+            onClick={(e) => { e.preventDefault(); enableMu.mutate(); }}
+            disabled={enableMu.isPending}
+            className="h-7 px-2.5 rounded-md border border-line-200 text-[11px] text-success hover:border-success/50 inline-flex items-center gap-1"
+            title="Reactivar cuenta"
+          >
+            {enableMu.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
+            Reactivar
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.preventDefault(); onDisable(); }}
+            className="h-7 px-2.5 rounded-md border border-line-200 text-[11px] text-risk-high hover:border-risk-high/50 inline-flex items-center gap-1"
+            title="Deshabilitar"
+          >
+            <PowerOff className="h-3 w-3" /> Deshabilitar
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.preventDefault(); onDelete(); }}
+          className="h-7 w-7 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
+          title="Eliminar cuenta"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
   );
 }
 

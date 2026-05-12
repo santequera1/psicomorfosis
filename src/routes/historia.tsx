@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -552,22 +552,16 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
           {/* Selector de sistema de clasificación — solo en el bloque
               de Diagnóstico. El campo es opcional (puede quedar vacío),
               pero por default sugerimos CIE-11 porque es el sistema
-              oficial de la OMS y el obligatorio en EPS pública colombiana. */}
+              oficial de la OMS y el obligatorio en EPS pública colombiana.
+              Usamos un dropdown custom en vez del <select> nativo para
+              que se vea consistente con el resto de la app (el predeterminado
+              del navegador rompe el look). */}
           {isDiagBlock && (
             <div className="mb-2 flex items-center gap-2 flex-wrap">
               <label className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">
                 Sistema:
               </label>
-              <select
-                value={diagSystem}
-                onChange={(e) => setDiagSystem(e.target.value as DiagnosticSystem | "")}
-                className="h-8 px-2 rounded-md border border-line-200 bg-surface text-xs text-ink-900 outline-none focus:border-brand-700"
-              >
-                <option value="">— sin especificar —</option>
-                {DIAGNOSTIC_SYSTEMS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <DiagnosticSystemPicker value={diagSystem} onChange={setDiagSystem} />
               <span className="text-[11px] text-ink-400">
                 {diagSystem === "CIE-11" && "Clasificación OMS"}
                 {diagSystem === "DSM-5-TR" && "American Psychiatric Association"}
@@ -663,6 +657,104 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
         <p className="text-sm text-ink-400 italic">Sin contenido. Haz clic en ✏ para comenzar.</p>
       )}
     </article>
+  );
+}
+
+/**
+ * Dropdown custom para elegir sistema de clasificación diagnóstica.
+ * Reemplazo del <select> HTML nativo (que se ve con el estilo del sistema
+ * y rompe la consistencia visual de la app). Usa botón + menú flotante
+ * con check de selección, cierre por click afuera y ESC.
+ */
+function DiagnosticSystemPicker({
+  value, onChange,
+}: {
+  value: DiagnosticSystem | "";
+  onChange: (v: DiagnosticSystem | "") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const display = value || "— sin especificar —";
+
+  return (
+    <div ref={containerRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "h-8 pl-2.5 pr-1.5 rounded-md border border-line-200 bg-surface text-xs text-ink-900 inline-flex items-center gap-1.5 hover:border-brand-400 transition-colors",
+          open && "border-brand-700",
+          !value && "text-ink-500",
+        )}
+      >
+        <span className="tabular">{display}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 text-ink-400 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 min-w-[180px] rounded-lg border border-line-200 bg-surface shadow-modal py-1">
+          {/* Opción "sin especificar" — útil si la psicóloga decide
+              quitar la etiqueta de un draft sin firmar todavía. */}
+          <PickerOption
+            label="— sin especificar —"
+            selected={value === ""}
+            onClick={() => { onChange(""); setOpen(false); }}
+            muted
+          />
+          <div className="my-1 h-px bg-line-100" />
+          {DIAGNOSTIC_SYSTEMS.map((s) => (
+            <PickerOption
+              key={s}
+              label={s}
+              selected={value === s}
+              onClick={() => { onChange(s); setOpen(false); }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PickerOption({
+  label, selected, onClick, muted = false,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+  muted?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "w-full px-3 py-1.5 text-xs text-left flex items-center justify-between gap-3 hover:bg-bg-100",
+        selected ? "text-ink-900 font-medium" : "text-ink-700",
+        muted && !selected && "text-ink-500 italic",
+      )}
+    >
+      <span>{label}</span>
+      {selected && <Check className="h-3.5 w-3.5 text-brand-700 shrink-0" />}
+    </button>
   );
 }
 
