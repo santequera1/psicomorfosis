@@ -4,9 +4,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
-import "dotenv/config";
+import { config as dotenvConfig } from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Cargar .env desde la RAÍZ DEL REPO (no desde cwd, porque el cwd del
+// proceso PM2 puede variar — actualmente está en /server, pero el .env
+// vive un nivel arriba). __dirname está en server/src, así que ../../
+// apunta a la raíz del repo donde está .env.
+dotenvConfig({ path: path.resolve(__dirname, "../../.env") });
 
 import { initDb } from "./db.js";
 import { verifyToken } from "./auth.js";
