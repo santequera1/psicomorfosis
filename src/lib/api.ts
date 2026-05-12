@@ -244,6 +244,11 @@ export interface ClinicalNote {
   kind: NoteKind;
   /** Texto libre para bloques y JSON stringified {s,o,a,p} para notas de sesión */
   content: string;
+  /** Solo aplica al bloque kind='cie11' (renombrado a "Diagnóstico" en UI).
+   *  Permite que el psicólogo indique qué sistema de clasificación usa
+   *  para esa nota. NULL = legacy (datos anteriores a may 2026) o sin
+   *  especificar. NO hay catálogo precargado — es solo una etiqueta. */
+  diagnosticSystem: DiagnosticSystem | null;
   createdAt: string;
   updatedAt: string;
   signedAt: string | null;
@@ -251,6 +256,12 @@ export interface ClinicalNote {
   isDraft: boolean;
   isSuperseded: boolean;
 }
+
+/** Sistemas de clasificación diagnóstica aceptados. Texto libre con la
+ *  etiqueta del sistema seleccionado; los códigos no se validan. */
+export type DiagnosticSystem = "CIE-11" | "DSM-5-TR" | "Otro";
+
+export const DIAGNOSTIC_SYSTEMS: DiagnosticSystem[] = ["CIE-11", "DSM-5-TR", "Otro"];
 
 export interface SoapContent {
   s: string;
@@ -265,7 +276,10 @@ export const BLOCK_LABELS: Record<Exclude<NoteKind, "sesion" | "evolucion" | "pr
   motivo: "Motivo de consulta",
   antecedentes: "Antecedentes personales",
   examen_mental: "Examen mental",
-  cie11: "Diagnóstico CIE-11",
+  // El kind interno sigue siendo 'cie11' por compatibilidad con datos
+  // existentes, pero el label visible se generalizó: ahora el psicólogo
+  // elige el sistema (CIE-11 / DSM-5-TR / Otro) dentro del bloque.
+  cie11: "Diagnóstico",
   plan: "Plan de tratamiento",
 };
 
@@ -1276,12 +1290,12 @@ export const api = {
     request<ClinicalNote[]>(
       `/api/patients/${patientId}/notes${qs({ kind: params.kind, include_superseded: params.include_superseded ? "true" : undefined })}`
     ),
-  createNote: (patientId: string, body: { kind: NoteKind; content: string }) =>
+  createNote: (patientId: string, body: { kind: NoteKind; content: string; diagnosticSystem?: DiagnosticSystem | null }) =>
     request<ClinicalNote>(`/api/patients/${patientId}/notes`, { method: "POST", body: JSON.stringify(body) }),
-  updateNote: (id: number, body: { content: string }) =>
+  updateNote: (id: number, body: { content?: string; diagnosticSystem?: DiagnosticSystem | null }) =>
     request<ClinicalNote>(`/api/notes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   signNote: (id: number) => request<ClinicalNote>(`/api/notes/${id}/sign`, { method: "POST" }),
-  supersedeNote: (id: number, body: { content: string; sign?: boolean }) =>
+  supersedeNote: (id: number, body: { content: string; sign?: boolean; diagnosticSystem?: DiagnosticSystem | null }) =>
     request<ClinicalNote>(`/api/notes/${id}/supersede`, { method: "POST", body: JSON.stringify(body) }),
   deleteNote: (id: number) => request<{ ok: true }>(`/api/notes/${id}`, { method: "DELETE" }),
 

@@ -17,6 +17,11 @@ const VALID_KINDS = new Set([
  */
 const BLOCK_KINDS = new Set(["motivo", "antecedentes", "examen_mental", "cie11", "plan"]);
 
+// Sistemas de clasificación diagnóstica aceptados para el bloque
+// 'cie11' (renombrado a "Diagnóstico" en el front). NULL = legacy.
+// Para otros bloques (motivo, antecedentes, etc.) este campo es ignorado.
+const VALID_DIAGNOSTIC_SYSTEMS = new Set(["CIE-11", "DSM-5-TR", "Otro"]);
+
 function toNote(row) {
   if (!row) return null;
   return {
@@ -27,6 +32,7 @@ function toNote(row) {
     authorName: row.author_name,
     kind: row.kind,
     content: row.content,
+    diagnosticSystem: row.diagnostic_system ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     signedAt: row.signed_at,
@@ -59,9 +65,19 @@ router.get("/patients/:patientId/notes", (req, res) => {
 
 // Crear nota (borrador)
 router.post("/patients/:patientId/notes", (req, res) => {
-  const { kind, content } = req.body ?? {};
+  const { kind, content, diagnosticSystem } = req.body ?? {};
   if (!VALID_KINDS.has(kind)) return res.status(400).json({ error: "kind inválido" });
   if (!content && content !== "") return res.status(400).json({ error: "content requerido" });
+
+  // diagnosticSystem solo aplica al bloque 'cie11' (= "Diagnóstico").
+  // En otros bloques se ignora silenciosamente. Valor inválido → 400.
+  let diagSystem = null;
+  if (kind === "cie11" && diagnosticSystem != null && diagnosticSystem !== "") {
+    if (!VALID_DIAGNOSTIC_SYSTEMS.has(diagnosticSystem)) {
+      return res.status(400).json({ error: "diagnosticSystem inválido" });
+    }
+    diagSystem = diagnosticSystem;
+  }
 
   // Validar que el paciente pertenezca al workspace
   const p = db.prepare("SELECT id FROM patients WHERE id = ? AND workspace_id = ?")
@@ -69,12 +85,13 @@ router.post("/patients/:patientId/notes", (req, res) => {
   if (!p) return res.status(404).json({ error: "Paciente no encontrado" });
 
   const r = db.prepare(`
-    INSERT INTO clinical_notes (workspace_id, patient_id, author_id, author_name, kind, content)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO clinical_notes (workspace_id, patient_id, author_id, author_name, kind, content, diagnostic_system)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     req.user.workspace_id, req.params.patientId,
     req.user.id, req.user.name ?? null,
-    kind, typeof content === "string" ? content : JSON.stringify(content)
+    kind, typeof content === "string" ? content : JSON.stringify(content),
+    diagSystem,
   );
   const row = db.prepare("SELECT * FROM clinical_notes WHERE id = ?").get(r.lastInsertRowid);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("note:created", toNote(row));
@@ -93,11 +110,32 @@ router.patch("/notes/:id", (req, res) => {
     return res.status(409).json({ error: "Esta nota ya fue reemplazada." });
   }
 
-  const { content } = req.body ?? {};
-  if (content === undefined) return res.status(400).json({ error: "content requerido" });
+  const { content, diagnosticSystem } = req.body ?? {};
+  if (content === undefined && diagnosticSystem === undefined) {
+    return res.status(400).json({ error: "Nada para actualizar (content o diagnosticSystem requeridos)" });
+  }
 
-  db.prepare("UPDATE clinical_notes SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-    .run(typeof content === "string" ? content : JSON.stringify(content), req.params.id);
+  // Construcción dinámica del UPDATE: solo tocamos los campos enviados.
+  const sets = [];
+  const args = [];
+  if (content !== undefined) {
+    sets.push("content = ?");
+    args.push(typeof content === "string" ? content : JSON.stringify(content));
+  }
+  if (diagnosticSystem !== undefined) {
+    if (existing.kind !== "cie11") {
+      return res.status(400).json({ error: "diagnosticSystem solo aplica al bloque de Diagnóstico" });
+    }
+    if (diagnosticSystem !== null && diagnosticSystem !== "" && !VALID_DIAGNOSTIC_SYSTEMS.has(diagnosticSystem)) {
+      return res.status(400).json({ error: "diagnosticSystem inválido" });
+    }
+    sets.push("diagnostic_system = ?");
+    args.push(diagnosticSystem || null);
+  }
+  sets.push("updated_at = CURRENT_TIMESTAMP");
+  args.push(req.params.id);
+
+  db.prepare(`UPDATE clinical_notes SET ${sets.join(", ")} WHERE id = ?`).run(...args);
   const row = db.prepare("SELECT * FROM clinical_notes WHERE id = ?").get(req.params.id);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("note:updated", toNote(row));
   res.json(toNote(row));
@@ -128,19 +166,31 @@ router.post("/notes/:id/supersede", (req, res) => {
   if (!existing) return res.status(404).json({ error: "Nota no encontrada" });
   if (existing.superseded_by_id) return res.status(409).json({ error: "Esta nota ya fue reemplazada" });
 
-  const { content, sign } = req.body ?? {};
+  const { content, sign, diagnosticSystem } = req.body ?? {};
   if (content === undefined) return res.status(400).json({ error: "content requerido" });
+
+  // El sistema diagnóstico se hereda de la nota previa salvo que el
+  // caller envíe uno nuevo explícito. Esto mantiene continuidad cuando
+  // el psicólogo actualiza la redacción pero no cambia de manual.
+  let diagSystem = existing.diagnostic_system ?? null;
+  if (existing.kind === "cie11" && diagnosticSystem !== undefined) {
+    if (diagnosticSystem !== null && diagnosticSystem !== "" && !VALID_DIAGNOSTIC_SYSTEMS.has(diagnosticSystem)) {
+      return res.status(400).json({ error: "diagnosticSystem inválido" });
+    }
+    diagSystem = diagnosticSystem || null;
+  }
 
   const tx = db.transaction(() => {
     const now = new Date().toISOString();
     const ins = db.prepare(`
-      INSERT INTO clinical_notes (workspace_id, patient_id, author_id, author_name, kind, content, created_at, updated_at, signed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO clinical_notes (workspace_id, patient_id, author_id, author_name, kind, content, diagnostic_system, created_at, updated_at, signed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       existing.workspace_id, existing.patient_id,
       req.user.id, req.user.name ?? null,
       existing.kind,
       typeof content === "string" ? content : JSON.stringify(content),
+      diagSystem,
       now, now,
       sign ? now : null
     );

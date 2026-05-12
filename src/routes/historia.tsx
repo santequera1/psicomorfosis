@@ -11,7 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { cn, displayPatientName, displayPatientShortName, formatDateTimeCO } from "@/lib/utils";
-import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent } from "@/lib/api";
+import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent, type DiagnosticSystem, DIAGNOSTIC_SYSTEMS } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -402,6 +402,13 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note?.content ?? "");
+  // Sistema diagnóstico: solo aplica al bloque 'cie11' (= Diagnóstico).
+  // CIE-11 es default razonable para clínica colombiana (sistema oficial
+  // OMS, obligatorio en EPS pública); el psicólogo lo cambia si trabaja
+  // con DSM-5-TR (común en práctica privada) o cualquier otro sistema.
+  const [diagSystem, setDiagSystem] = useState<DiagnosticSystem | "">(
+    (note?.diagnosticSystem as DiagnosticSystem | null) ?? (kind === "cie11" ? "CIE-11" : ""),
+  );
   const [showHistory, setShowHistory] = useState(false);
   // Confirmación previa antes de firmar — la firma deja la nota
   // inmodificable per Res. 1995/1999, así que un click accidental
@@ -409,9 +416,13 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
   const [confirmSign, setConfirmSign] = useState(false);
   const Icon = BLOCK_ICONS[kind];
   const title = BLOCK_LABELS[kind];
+  const isDiagBlock = kind === "cie11";
 
   const patchMu = useMutation({
-    mutationFn: (content: string) => api.updateNote(note!.id, { content }),
+    mutationFn: (content: string) => api.updateNote(note!.id, {
+      content,
+      ...(isDiagBlock ? { diagnosticSystem: diagSystem || null } : {}),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes", patientId] });
       qc.invalidateQueries({ queryKey: ["patient", patientId] });
@@ -420,7 +431,11 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
     },
   });
   const supersedeMu = useMutation({
-    mutationFn: (content: string) => api.supersedeNote(note!.id, { content, sign: true }),
+    mutationFn: (content: string) => api.supersedeNote(note!.id, {
+      content,
+      sign: true,
+      ...(isDiagBlock ? { diagnosticSystem: diagSystem || null } : {}),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes", patientId] });
       qc.invalidateQueries({ queryKey: ["patient", patientId] });
@@ -429,7 +444,11 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
     },
   });
   const createMu = useMutation({
-    mutationFn: (content: string) => api.createNote(patientId, { kind, content }),
+    mutationFn: (content: string) => api.createNote(patientId, {
+      kind,
+      content,
+      ...(isDiagBlock ? { diagnosticSystem: diagSystem || null } : {}),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes", patientId] });
       qc.invalidateQueries({ queryKey: ["patient", patientId] });
@@ -448,6 +467,12 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
   function startEdit() {
     setDraft(note?.content ?? "");
+    // Si la nota ya tenía un sistema diagnóstico, lo conservamos; si no
+    // y es el bloque de Diagnóstico, default CIE-11 (sistema OMS, el
+    // más común en Colombia). Para otros bloques queda vacío e ignorado.
+    setDiagSystem(
+      (note?.diagnosticSystem as DiagnosticSystem | null) ?? (isDiagBlock ? "CIE-11" : ""),
+    );
     setEditing(true);
   }
 
@@ -524,11 +549,41 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
       {editing ? (
         <>
+          {/* Selector de sistema de clasificación — solo en el bloque
+              de Diagnóstico. El campo es opcional (puede quedar vacío),
+              pero por default sugerimos CIE-11 porque es el sistema
+              oficial de la OMS y el obligatorio en EPS pública colombiana. */}
+          {isDiagBlock && (
+            <div className="mb-2 flex items-center gap-2 flex-wrap">
+              <label className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">
+                Sistema:
+              </label>
+              <select
+                value={diagSystem}
+                onChange={(e) => setDiagSystem(e.target.value as DiagnosticSystem | "")}
+                className="h-8 px-2 rounded-md border border-line-200 bg-surface text-xs text-ink-900 outline-none focus:border-brand-700"
+              >
+                <option value="">— sin especificar —</option>
+                {DIAGNOSTIC_SYSTEMS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <span className="text-[11px] text-ink-400">
+                {diagSystem === "CIE-11" && "Clasificación OMS"}
+                {diagSystem === "DSM-5-TR" && "American Psychiatric Association"}
+                {diagSystem === "Otro" && "Especifica en el texto"}
+              </span>
+            </div>
+          )}
           <textarea
             rows={6}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={`Escribe el ${title.toLowerCase()}…`}
+            placeholder={
+              isDiagBlock
+                ? `Escribe el código y/o descripción del diagnóstico${diagSystem ? ` (${diagSystem})` : ""}…`
+                : `Escribe el ${title.toLowerCase()}…`
+            }
             className="w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
             autoFocus
           />
@@ -558,6 +613,16 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
         </>
       ) : note ? (
         <>
+          {/* Chip con el sistema diagnóstico (solo bloque cie11). Si la
+              nota es legacy y no tiene sistema asignado, no mostramos
+              chip — no asumimos cuál era. */}
+          {isDiagBlock && note.diagnosticSystem && (
+            <div className="mb-2">
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800 border border-brand-100">
+                {note.diagnosticSystem}
+              </span>
+            </div>
+          )}
           <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap">{note.content}</p>
           <div className="mt-3 flex items-center justify-between text-[11px] text-ink-500">
             <span>

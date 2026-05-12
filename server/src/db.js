@@ -756,6 +756,18 @@ function runMigrations() {
       PRIMARY KEY (version_id, user_id)
     )`,
     "CREATE INDEX IF NOT EXISTS idx_legal_editors_seen ON legal_document_editors(version_id, last_seen_at DESC)",
+    // ─── Sistema diagnóstico opcional en notas (12 may 2026) ─────────────
+    //
+    // El bloque 'cie11' del historial pasa de ser "solo CIE-11" a un
+    // bloque genérico de Diagnóstico donde el psicólogo elige qué
+    // sistema de clasificación usa (CIE-11 OMS / DSM-5-TR APA / Otro)
+    // y escribe libremente el código + descripción. No precargamos
+    // catálogo de ningún sistema (CIE-11 está en proceso de tener API
+    // pública estable; DSM-5-TR es propietario de APA y no se puede
+    // redistribuir). Solo es texto libre con la etiqueta del sistema.
+    //
+    // NULL = legacy (datos anteriores asumían CIE-11 implícitamente).
+    "ALTER TABLE clinical_notes ADD COLUMN diagnostic_system TEXT",
   ];
   for (const sql of migrations) {
     try {
