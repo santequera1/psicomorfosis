@@ -53,7 +53,7 @@ function toDiagnosis(row) {
  * solo las entradas que tienen código para ese sistema. Sin filtro,
  * devuelve todas con sus códigos paralelos.
  */
-router.get("/catalog", (req, res) => {
+router.get("/diagnoses/catalog", (req, res) => {
   const { system } = req.query;
   if (system && system !== "all") {
     if (!VALID_SYSTEMS.has(system)) {
