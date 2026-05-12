@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import { initDb } from "./db.js";
 import { verifyToken } from "./auth.js";
+import { logSmtpStatus } from "./mailer.js";
 
 import authRoutes from "./routes/auth.js";
 import workspaceRoutes from "./routes/workspace.js";
@@ -32,6 +33,7 @@ import bankAccountsRoutes from "./routes/bankAccounts.js";
 const PORT = Number(process.env.PORT ?? 3002);
 
 initDb();
+logSmtpStatus();
 
 const app = express();
 const http = createServer(app);

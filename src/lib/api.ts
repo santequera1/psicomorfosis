@@ -891,8 +891,16 @@ export const api = {
     request("/api/appointments", { method: "POST", body: JSON.stringify(body) }),
   updateAppointment: (id: number | string, body: Record<string, unknown>) =>
     request<Record<string, any>>(`/api/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteAppointment: (id: number | string) =>
-    request<void>(`/api/appointments/${id}`, { method: "DELETE" }),
+  /** Cancela una cita. Por default envía email al paciente si tiene
+   *  correo; con `notify: false` el backend salta el aviso (útil cuando
+   *  la psicóloga ya habló con el paciente por WhatsApp). */
+  deleteAppointment: (id: number | string, opts?: { notify?: boolean }) =>
+    request<void>(`/api/appointments/${id}`, {
+      method: "DELETE",
+      ...(opts && opts.notify === false
+        ? { body: JSON.stringify({ notify: false }), headers: { "Content-Type": "application/json" } }
+        : {}),
+    }),
 
   // Tests psicométricos — catálogo y aplicaciones
   listTestCatalog: () => request<Array<PsychTest>>("/api/tests/catalog"),

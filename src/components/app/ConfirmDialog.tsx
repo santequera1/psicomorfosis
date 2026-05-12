@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  */
 export function ConfirmDialog({
   title, message, confirmLabel = "Confirmar", cancelLabel = "Cancelar",
-  danger = false, onConfirm, onCancel,
+  danger = false, onConfirm, onCancel, extraContent,
 }: {
   title: string;
   message: string;
@@ -20,6 +20,10 @@ export function ConfirmDialog({
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Slot opcional debajo del mensaje para inputs adicionales (checkboxes,
+   *  textarea para "motivo de cancelación", etc.). Útil para confirmaciones
+   *  que necesitan un pequeño extra sin tener que crear un modal aparte. */
+  extraContent?: React.ReactNode;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
@@ -49,6 +53,7 @@ export function ConfirmDialog({
             <div className="min-w-0">
               <h3 className="font-serif text-lg text-ink-900">{title}</h3>
               <p className="text-sm text-ink-700 mt-1.5 leading-relaxed">{message}</p>
+              {extraContent && <div className="mt-3">{extraContent}</div>}
             </div>
           </div>
         </div>

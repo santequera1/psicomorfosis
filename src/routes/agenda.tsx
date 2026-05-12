@@ -688,6 +688,10 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   const [busy, setBusy] = useState(false);
   const [cobroOpen, setCobroOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // Cuando la psicóloga cancela una cita, por default avisamos al paciente
+  // por email. Si ya hablaron por WhatsApp o cualquier otro canal, puede
+  // marcar este checkbox para no enviar el aviso automático (evita dobles).
+  const [cancelSkipNotify, setCancelSkipNotify] = useState(false);
 
   async function startSession() {
     setBusy(true);
@@ -723,13 +727,16 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   // usuario confirma. Antes usábamos window.confirm() nativo pero
   // rompía la consistencia visual con el resto de la app.
   function cancelAppointment() {
+    setCancelSkipNotify(false); // reset al abrir
     setConfirmCancel(true);
   }
   async function doCancelAppointment() {
     setConfirmCancel(false);
     setBusy(true);
     try {
-      await api.deleteAppointment(slot.id);
+      // Si la psicóloga marcó "no notificar", pasamos notify:false al
+      // backend para saltar el email. Default es enviar el aviso.
+      await api.deleteAppointment(slot.id, cancelSkipNotify ? { notify: false } : undefined);
       qc.invalidateQueries({ queryKey: ["appointments"] });
       onClose();
     } catch (e: any) {
@@ -862,6 +869,23 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
         danger
         onConfirm={doCancelAppointment}
         onCancel={() => setConfirmCancel(false)}
+        extraContent={
+          <label className="flex items-start gap-2.5 rounded-lg border border-line-200 px-3 py-2.5 cursor-pointer hover:border-brand-400 text-xs text-ink-700">
+            <input
+              type="checkbox"
+              checked={cancelSkipNotify}
+              onChange={(e) => setCancelSkipNotify(e.target.checked)}
+              className="mt-0.5"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-ink-900">No notificar al paciente por correo</div>
+              <div className="text-ink-500 mt-0.5">
+                Marca esta opción si ya le avisaste por WhatsApp u otro canal.
+                Por default, le enviamos un correo automático sobre la cancelación.
+              </div>
+            </div>
+          </label>
+        }
       />
     )}
     </>

@@ -768,6 +768,25 @@ function runMigrations() {
     //
     // NULL = legacy (datos anteriores asumían CIE-11 implícitamente).
     "ALTER TABLE clinical_notes ADD COLUMN diagnostic_system TEXT",
+    // ─── Log de envíos de email (12 may 2026) ────────────────────────────
+    //
+    // Auditoría de notificaciones automáticas (citas creadas/reprogramadas/
+    // canceladas). NO guarda contenido del email — solo metadata: a quién,
+    // tipo, status, tiempo de envío, error si hubo. Esto da trazabilidad
+    // sin duplicar datos sensibles ya presentes en appointments/patients.
+    `CREATE TABLE IF NOT EXISTS email_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER REFERENCES workspaces(id) ON DELETE SET NULL,
+      appointment_id INTEGER,
+      to_email TEXT NOT NULL,
+      kind TEXT NOT NULL,                -- 'appointment_created' | 'appointment_rescheduled' | 'appointment_cancelled'
+      status TEXT NOT NULL,              -- 'sent' | 'failed' | 'skipped_no_email' | 'skipped_opt_out'
+      error TEXT,
+      ms INTEGER,                        -- latencia del envío
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_email_log_workspace ON email_log(workspace_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_email_log_appt ON email_log(appointment_id)",
   ];
   for (const sql of migrations) {
     try {

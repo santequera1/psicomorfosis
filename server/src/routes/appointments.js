@@ -1,6 +1,42 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
+import { sendAppointmentEmail } from "../mailer.js";
+
+/**
+ * Dispara una notificación por email de manera asíncrona y NO bloqueante.
+ * Cualquier error queda contenido dentro del mailer (que loguea a email_log).
+ * El propósito de este wrapper es desacoplar el envío del flujo HTTP — la
+ * respuesta de la API ya salió cuando el email se está mandando.
+ */
+function notifyAsync({ kind, appointment, previous }) {
+  setImmediate(() => {
+    try {
+      const patient = appointment.patient_id
+        ? db.prepare("SELECT id, name, preferred_name, email FROM patients WHERE id = ? AND workspace_id = ?")
+            .get(appointment.patient_id, appointment.workspace_id)
+        : null;
+      if (!patient) return; // sin paciente no hay a quién notificar
+      const professional = appointment.professional_id
+        ? db.prepare("SELECT id, name, title, email FROM professionals WHERE id = ?")
+            .get(appointment.professional_id)
+        : null;
+      const workspace = db.prepare("SELECT name FROM workspaces WHERE id = ?")
+        .get(appointment.workspace_id);
+      sendAppointmentEmail({
+        kind,
+        appointment,
+        patient,
+        professional,
+        workspaceName: workspace?.name ?? null,
+        replyTo: professional?.email ?? undefined,
+        previous,
+      }).catch((err) => console.warn("[mailer] notifyAsync caught:", err?.message));
+    } catch (err) {
+      console.warn("[mailer] notifyAsync setup failed:", err?.message);
+    }
+  });
+}
 
 const router = Router();
 router.use(requireAuth);
@@ -86,6 +122,12 @@ router.post("/", (req, res) => {
   );
   const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:created", row);
+  // Email best-effort al paciente — async, no bloquea la respuesta. El
+  // caller puede saltarlo enviando notify=false en body (útil cuando
+  // la cita se agenda mientras hablas por WhatsApp con el paciente).
+  if (a.notify !== false) {
+    notifyAsync({ kind: "appointment_created", appointment: row });
+  }
   res.status(201).json(row);
 });
 
@@ -99,13 +141,35 @@ router.patch("/:id", (req, res) => {
   `).run(a.date, a.time, a.duration_min, a.patient_id, a.patient_name, a.professional, a.professional_id, a.sede_id, a.modality, a.room, a.status, a.notes, req.params.id, req.user.workspace_id);
   const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:updated", row);
+  // Email de reprogramación solo si cambió fecha u hora. Otros cambios
+  // (notas internas, status, etc.) no ameritan notificación al paciente.
+  const dateChanged = existing.date !== row.date;
+  const timeChanged = existing.time !== row.time;
+  if ((dateChanged || timeChanged) && req.body?.notify !== false) {
+    notifyAsync({
+      kind: "appointment_rescheduled",
+      appointment: row,
+      previous: { date: existing.date, time: existing.time },
+    });
+  }
   res.json(row);
 });
 
 router.delete("/:id", (req, res) => {
+  // Capturamos la cita ANTES del DELETE para tener los datos del email
+  // de cancelación. Si el caller pasa notify=false (checkbox "no avisar
+  // al paciente" en el modal de cancelar), saltamos el envío.
+  const existing = db.prepare("SELECT * FROM appointments WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.workspace_id);
   const r = db.prepare("DELETE FROM appointments WHERE id = ? AND workspace_id = ?").run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "No encontrada" });
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:deleted", { id: Number(req.params.id) });
+  // notify puede venir en body (DELETE permite body en HTTP 1.1) o en query
+  // string como ?notify=false — ambos funcionan.
+  const skipNotify = req.body?.notify === false || req.query?.notify === "false";
+  if (existing && !skipNotify) {
+    notifyAsync({ kind: "appointment_cancelled", appointment: existing });
+  }
   res.status(204).end();
 });
 
