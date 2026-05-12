@@ -476,9 +476,9 @@ const tx = db.transaction(() => {
   // 13. Recibos
   const invIns = db.prepare(`
     INSERT INTO invoices (
-      id, workspace_id, patient_id, patient_name, concept, amount, total,
+      id, workspace_id, patient_id, patient_name, concept, amount,
       method, status, date, paid_at, modality, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   // ID format: R-<wsId>-<year>-<seq>
   const year = today.getFullYear();
@@ -489,7 +489,7 @@ const tx = db.transaction(() => {
     seq++;
     invIns.run(
       id, wsId, i.patient_id, patient?.name ?? "Desconocido", i.concept,
-      i.amount, i.amount, i.method, i.status, i.date,
+      i.amount, i.method, i.status, i.date,
       i.days_paid_ago ? isoFull(daysAgo(i.days_paid_ago)) : null,
       "individual",
       isoFull(daysAgo(28 - seq)),
