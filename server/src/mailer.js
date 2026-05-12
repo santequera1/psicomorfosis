@@ -17,28 +17,41 @@
 import nodemailer from "nodemailer";
 import { db } from "./db.js";
 
-// ─── Configuración SMTP (env vars) ────────────────────────────────────
+// ─── Configuración SMTP (env vars, lazy) ──────────────────────────────
+//
+// IMPORTANTE: leemos process.env LAZY (dentro de cada función) y no al
+// top-level del módulo, porque los imports ES son "hoisteados": cuando
+// index.js importa esta función, mailer.js se evalúa ANTES de que el
+// body de index.js corra dotenv.config(). Si leyéramos los valores al
+// top-level con `const SMTP_HOST = process.env.SMTP_HOST`, capturaríamos
+// undefined antes de que dotenv haya cargado el .env.
 
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = Number(process.env.SMTP_PORT ?? 465);
-const SMTP_SECURE = String(process.env.SMTP_SECURE ?? "true") === "true";
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME ?? "Psicomorfosis";
+function getSmtpConfig() {
+  return {
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? 465),
+    secure: String(process.env.SMTP_SECURE ?? "true") === "true",
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    fromName: process.env.SMTP_FROM_NAME ?? "Psicomorfosis",
+  };
+}
 
 function smtpConfigured() {
-  return !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+  const c = getSmtpConfig();
+  return !!(c.host && c.user && c.pass);
 }
 
 let _transport = null;
 function getTransport() {
   if (_transport) return _transport;
   if (!smtpConfigured()) return null;
+  const c = getSmtpConfig();
   _transport = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE, // true para puerto 465 (SSL), false para 587 (STARTTLS)
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
+    host: c.host,
+    port: c.port,
+    secure: c.secure, // true para puerto 465 (SSL), false para 587 (STARTTLS)
+    auth: { user: c.user, pass: c.pass },
     // Timeouts conservadores: si SMTP cae, no queremos bloquear 30s la
     // creación de citas. 8s es suficiente para una sesión normal.
     connectionTimeout: 8_000,
@@ -342,8 +355,9 @@ export async function sendAppointmentEmail(opts) {
 
   try {
     const transport = getTransport();
-    const profDisplay = professional?.name ? `${professional.name} · ${SMTP_FROM_NAME}` : SMTP_FROM_NAME;
-    const fromAddress = `${profDisplay} <${SMTP_USER}>`;
+    const c = getSmtpConfig();
+    const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
+    const fromAddress = `${profDisplay} <${c.user}>`;
     const html =
       kind === "appointment_rescheduled" ? templateRescheduled({ appointment, patient, professional, workspaceName, previous }) :
       kind === "appointment_cancelled" ? templateCancelled({ appointment, patient, professional, workspaceName }) :
@@ -402,8 +416,9 @@ function logEmail(r) {
 
 /** Para debug en arranque: imprime si SMTP está configurado (sin la pass). */
 export function logSmtpStatus() {
+  const c = getSmtpConfig();
   if (smtpConfigured()) {
-    console.log(`[mailer] SMTP listo: ${SMTP_USER} @ ${SMTP_HOST}:${SMTP_PORT} (secure=${SMTP_SECURE})`);
+    console.log(`[mailer] SMTP listo: ${c.user} @ ${c.host}:${c.port} (secure=${c.secure})`);
   } else {
     console.warn("[mailer] SMTP NO configurado — emails de citas no se enviarán. Setea SMTP_HOST/USER/PASS en .env.");
   }
