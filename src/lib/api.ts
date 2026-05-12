@@ -318,9 +318,12 @@ export const BLOCK_LABELS: Record<Exclude<NoteKind, "sesion" | "evolucion" | "pr
   antecedentes: "Antecedentes personales",
   examen_mental: "Examen mental",
   // El kind interno sigue siendo 'cie11' por compatibilidad con datos
-  // existentes, pero el label visible se generalizó: ahora el psicólogo
-  // elige el sistema (CIE-11 / DSM-5-TR / Otro) dentro del bloque.
-  cie11: "Diagnóstico",
+  // existentes, pero el label visible evolucionó: primero fue "Diagnóstico
+  // CIE-11" (solo texto + selector de sistema); después "Diagnóstico" con
+  // selector; ahora "Impresión diagnóstica" — el bloque contiene una
+  // lista de dx estructurados (DiagnosisManager) + una formulación
+  // clínica libre. El término es más cálido y menos psiquiátrico/EPS.
+  cie11: "Impresión diagnóstica",
   plan: "Plan de tratamiento",
 };
 

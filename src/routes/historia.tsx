@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn, displayPatientName, displayPatientShortName, formatDateTimeCO } from "@/lib/utils";
 import { api, type ApiPatient, type ClinicalNote, type NoteKind, type DocumentTemplate, BLOCK_LABELS, type SoapContent, type DiagnosticSystem, DIAGNOSTIC_SYSTEMS } from "@/lib/api";
+import { DiagnosisManager } from "@/components/clinical/DiagnosisManager";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -487,7 +488,10 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
   // Bloque sin contenido y sin estar editándose: render compacto clickeable
   // tipo "+ Agregar X" para no saturar la vista de un paciente nuevo.
-  if (!note && !editing) {
+  // EXCEPCIÓN: el bloque cie11 ("Impresión diagnóstica") siempre usa el
+  // panel completo porque contiene el DiagnosisManager (lista de dx
+  // estructurados), que es independiente de si hay texto libre o no.
+  if (!note && !editing && !isDiagBlock) {
     return (
       <button
         onClick={startEdit}
@@ -547,35 +551,31 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
         )}
       </div>
 
+      {/* DiagnosisManager: lista de diagnósticos estructurados.
+          Solo en el bloque cie11 ("Impresión diagnóstica"). Vive arriba
+          del editor de texto libre. La psicóloga puede agregar dx del
+          catálogo, buscar en CIE-11 OMS o agregar libres. Es
+          independiente del estado editing/viewing del textarea
+          ("Formulación clínica") que vive abajo. */}
+      {isDiagBlock && (
+        <>
+          <DiagnosisManager patientId={patientId} />
+          <div className="my-4 h-px bg-line-100" />
+          <div className="text-[11px] uppercase tracking-widest text-ink-500 font-medium mb-2">
+            Formulación clínica <span className="text-ink-400 normal-case tracking-normal">(opcional)</span>
+          </div>
+        </>
+      )}
+
       {editing ? (
         <>
-          {/* Selector de sistema de clasificación — solo en el bloque
-              de Diagnóstico. El campo es opcional (puede quedar vacío),
-              pero por default sugerimos CIE-11 porque es el sistema
-              oficial de la OMS y el obligatorio en EPS pública colombiana.
-              Usamos un dropdown custom en vez del <select> nativo para
-              que se vea consistente con el resto de la app (el predeterminado
-              del navegador rompe el look). */}
-          {isDiagBlock && (
-            <div className="mb-2 flex items-center gap-2 flex-wrap">
-              <label className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">
-                Sistema:
-              </label>
-              <DiagnosticSystemPicker value={diagSystem} onChange={setDiagSystem} />
-              <span className="text-[11px] text-ink-400">
-                {diagSystem === "CIE-11" && "Clasificación OMS"}
-                {diagSystem === "DSM-5-TR" && "American Psychiatric Association"}
-                {diagSystem === "Otro" && "Especifica en el texto"}
-              </span>
-            </div>
-          )}
           <textarea
             rows={6}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
               isDiagBlock
-                ? `Escribe el código y/o descripción del diagnóstico${diagSystem ? ` (${diagSystem})` : ""}…`
+                ? "Conceptualización, hipótesis diagnóstica adicional, dinámicas relevantes del caso…"
                 : `Escribe el ${title.toLowerCase()}…`
             }
             className="w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
@@ -607,16 +607,6 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
         </>
       ) : note ? (
         <>
-          {/* Chip con el sistema diagnóstico (solo bloque cie11). Si la
-              nota es legacy y no tiene sistema asignado, no mostramos
-              chip — no asumimos cuál era. */}
-          {isDiagBlock && note.diagnosticSystem && (
-            <div className="mb-2">
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800 border border-brand-100">
-                {note.diagnosticSystem}
-              </span>
-            </div>
-          )}
           <p className="text-sm text-ink-700 leading-relaxed whitespace-pre-wrap">{note.content}</p>
           <div className="mt-3 flex items-center justify-between text-[11px] text-ink-500">
             <span>
@@ -653,6 +643,18 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
             />
           )}
         </>
+      ) : isDiagBlock ? (
+        // En el bloque cie11, si no hay textarea de formulación todavía,
+        // mostramos un mini-CTA en vez del "Sin contenido" genérico —
+        // los diagnósticos estructurados ya viven arriba (DiagnosisManager).
+        <button
+          type="button"
+          onClick={startEdit}
+          className="w-full rounded-md border border-dashed border-line-200 bg-bg-50/40 px-3 py-2.5 text-left text-xs text-ink-500 italic hover:border-brand-400 hover:bg-brand-50/30 hover:text-ink-700 transition-colors inline-flex items-center gap-2"
+        >
+          <Plus className="h-3.5 w-3.5 shrink-0" />
+          Agregar formulación clínica (opcional)
+        </button>
       ) : (
         <p className="text-sm text-ink-400 italic">Sin contenido. Haz clic en ✏ para comenzar.</p>
       )}
