@@ -17,6 +17,7 @@ dotenvConfig({ path: path.resolve(__dirname, "../../.env") });
 import { initDb } from "./db.js";
 import { verifyToken } from "./auth.js";
 import { logSmtpStatus } from "./mailer.js";
+import { logIcdStatus } from "./icd-client.js";
 
 import authRoutes from "./routes/auth.js";
 import workspaceRoutes from "./routes/workspace.js";
@@ -41,6 +42,7 @@ const PORT = Number(process.env.PORT ?? 3002);
 
 initDb();
 logSmtpStatus();
+logIcdStatus();
 
 const app = express();
 const http = createServer(app);

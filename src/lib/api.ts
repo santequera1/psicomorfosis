@@ -1355,6 +1355,15 @@ export const api = {
     request<DiagnosisCatalog>(
       `/api/diagnoses/catalog${system ? `?system=${encodeURIComponent(system)}` : ""}`,
     ),
+  /** Búsqueda LIVE en la API CIE-11 de la OMS. Se usa como fallback
+   *  cuando el catálogo local curado no devuelve resultados suficientes.
+   *  Si el server no tiene ICD_CLIENT_ID/SECRET configurados, responde
+   *  503 — la UI debe mostrar mensaje "búsqueda live no disponible" y
+   *  seguir funcionando con el catálogo local. */
+  searchIcd11: (query: string, limit = 10) =>
+    request<{ results: Array<{ code: string; name: string; chapter?: string; isLeaf?: boolean; id: string | null }> }>(
+      `/api/diagnoses/icd/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    ),
   listPatientDiagnoses: (patientId: string) =>
     request<ClinicalDiagnosis[]>(`/api/patients/${patientId}/diagnoses`),
   addPatientDiagnosis: (patientId: string, body: {

@@ -21,6 +21,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { DIAGNOSIS_CATALOG, DIAGNOSIS_CATEGORIES, filterCatalogBySystem } from "../diagnoses-catalog.js";
+import { searchIcd11, isIcdConfigured } from "../icd-client.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -73,6 +74,37 @@ router.get("/diagnoses/catalog", (req, res) => {
     categories: DIAGNOSIS_CATEGORIES,
     entries: DIAGNOSIS_CATALOG,
   });
+});
+
+/**
+ * GET /api/diagnoses/icd/search?q=ansiedad&limit=10
+ *
+ * Proxy a la API CIE-11 de la OMS. Devuelve resultados normalizados
+ * en formato { code, name, chapter, isLeaf, id }. Si las credenciales
+ * ICD no están configuradas, responde 503 con un mensaje claro.
+ *
+ * El frontend usa este endpoint solo cuando la búsqueda en el catálogo
+ * local no devuelve resultados suficientes y la psicóloga pide "buscar
+ * más en OMS". Eso ahorra requests a la API externa para el 80% de
+ * casos cubiertos por el catálogo curado.
+ */
+router.get("/diagnoses/icd/search", async (req, res) => {
+  const { q, limit } = req.query;
+  if (!q || String(q).trim().length < 2) {
+    return res.status(400).json({ error: "q (>= 2 caracteres) requerido" });
+  }
+  if (!isIcdConfigured()) {
+    return res.status(503).json({ error: "Búsqueda OMS no configurada en el server" });
+  }
+  try {
+    const results = await searchIcd11(String(q), {
+      limit: Math.min(20, Math.max(1, Number(limit ?? 10))),
+    });
+    res.json({ results });
+  } catch (err) {
+    console.warn("[icd] search falló:", err.message);
+    res.status(502).json({ error: "Búsqueda OMS no disponible en este momento" });
+  }
 });
 
 /**
