@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
 import { type Patient, type PatientStatus, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
@@ -46,6 +47,104 @@ const MODALITY_LABEL: Record<string, string> = {
 function initials(name: string) {
   return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 }
+
+/**
+ * Menú flotante de acciones de paciente. Se renderiza con createPortal
+ * en document.body y position: fixed, así nunca queda atrapado por
+ * `overflow` de ancestros (la tabla tiene overflow-x-auto que clipa
+ * también overflow-y por spec CSS). Auto-flip: si no hay espacio
+ * abajo del botón, se abre hacia arriba.
+ *
+ * Variantes:
+ *  - "full" (default): muestra Ver ficha, Editar, Historia, Agendar y
+ *    Archivar/Eliminar — usado en tabla y cards.
+ *  - "compact": sin "Archivar o eliminar" — usado en la vista de lista
+ *    mobile donde el delete vive como botón aparte.
+ */
+const MENU_HEIGHT_FULL = 240;  // 5 items + separador + padding
+const MENU_HEIGHT_COMPACT = 180;
+const MENU_WIDTH = 192; // w-48 = 12rem = 192px
+
+function PortaledActionsMenu({
+  patient, rect, onClose, onEdit, onAppointment, onRemove, variant = "full",
+}: {
+  patient: Patient;
+  rect: DOMRect;
+  onClose: () => void;
+  onEdit: () => void;
+  onAppointment: () => void;
+  onRemove?: () => void;
+  variant?: "full" | "compact";
+}) {
+  const menuHeight = variant === "compact" ? MENU_HEIGHT_COMPACT : MENU_HEIGHT_FULL;
+  // Auto-flip vertical: si abajo del botón no caben los ítems del menú
+  // sin desbordar el viewport, lo abrimos hacia arriba.
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = spaceBelow < menuHeight + 12;
+  const top = openUp ? rect.top - menuHeight - 4 : rect.bottom + 4;
+  // Alineación derecha del menú con el botón. Si el right del botón
+  // está muy cerca del borde izquierdo del viewport (caso extremo),
+  // forzamos un mínimo de 8px para no cortar el menú.
+  const left = Math.max(8, rect.right - MENU_WIDTH);
+
+  const menuJsx = (
+    <>
+      {/* Click afuera cierra. Cubre toda la pantalla. */}
+      <div
+        className="fixed inset-0 z-60"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+      />
+      <div
+        className="fixed z-61 w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1"
+        style={{ top, left }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Link
+          to="/pacientes/$id"
+          params={{ id: patient.id }}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100"
+          onClick={onClose}
+        >
+          <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha completa
+        </Link>
+        <button
+          onClick={() => { onClose(); onEdit(); }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left"
+        >
+          <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar paciente
+        </button>
+        <Link
+          to="/historia"
+          search={{ id: patient.id }}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100"
+          onClick={onClose}
+        >
+          <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia clínica
+        </Link>
+        <button
+          onClick={() => { onClose(); onAppointment(); }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left"
+        >
+          <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
+        </button>
+        {variant === "full" && onRemove && (
+          <>
+            <div className="my-1 h-px bg-line-100" />
+            <button
+              onClick={() => { onClose(); onRemove(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(menuJsx, document.body);
+}
 function avatarTone(name: string) {
   const tones = ["bg-brand-100 text-brand-800", "bg-sage-200 text-sage-700", "bg-lavender-100 text-lavender-500", "bg-warning-soft text-risk-moderate"];
   let h = 0;
@@ -67,7 +166,27 @@ function PatientsPage() {
   const [tagFilter, setTagFilter] = useState<string>("todos");
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  // Estado del menú de acciones de paciente. Antes solo guardaba el id,
+  // pero el menú se posicionaba con `absolute` dentro de un contenedor
+  // que tiene `overflow-x-auto` (la tabla) — por spec CSS, eso clipa
+  // implícitamente el eje Y también, así que cuando el paciente estaba
+  // cerca del fondo del scroll, el botón "Eliminar" quedaba oculto.
+  // Ahora guardamos el rect del botón para renderizar el menú via
+  // portal en document.body con position fixed + auto-flip.
+  const [menuOpen, setMenuOpen] = useState<{ id: string; rect: DOMRect } | null>(null);
+
+  // Cerrar el menú si la página hace scroll o cambia de tamaño — el
+  // menú no se reposicionará junto con el botón porque está fixed.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [menuOpen]);
   const [removing, setRemoving] = useState<Patient | null>(null);
   const [apptFor, setApptFor] = useState<Patient | null>(null);
   const [viewMode, setViewMode] = usePersistedViewMode("psm.patients.view", "list");
@@ -259,34 +378,25 @@ function PatientsPage() {
                     )}
                   </div>
                   <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(menuOpen === p.id ? null : p.id); }}
+                    onClick={(e) => {
+                      e.preventDefault(); e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setMenuOpen(menuOpen?.id === p.id ? null : { id: p.id, rect });
+                    }}
                     className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center shrink-0"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                 </Link>
-                {menuOpen === p.id && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenuOpen(null); }} />
-                    <div className="absolute right-3 top-10 z-40 w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1">
-                      <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenuOpen(null)}>
-                        <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha
-                      </Link>
-                      <button onClick={(e) => { e.stopPropagation(); setEditing(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
-                        <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar
-                      </button>
-                      <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenuOpen(null)}>
-                        <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
-                      </Link>
-                      <button onClick={(e) => { e.stopPropagation(); setApptFor(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
-                        <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
-                      </button>
-                      <div className="my-1 h-px bg-line-100" />
-                      <button onClick={(e) => { e.stopPropagation(); setRemoving(p); setMenuOpen(null); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
-                        <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
-                      </button>
-                    </div>
-                  </>
+                {menuOpen?.id === p.id && (
+                  <PortaledActionsMenu
+                    patient={p}
+                    rect={menuOpen.rect}
+                    onClose={() => setMenuOpen(null)}
+                    onEdit={() => setEditing(p)}
+                    onAppointment={() => setApptFor(p)}
+                    onRemove={() => setRemoving(p)}
+                  />
                 )}
               </li>
             ))}
@@ -360,54 +470,26 @@ function PatientsPage() {
                           ) : null;
                         })()}
                         <button
-                          onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === p.id ? null : p.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setMenuOpen(menuOpen?.id === p.id ? null : { id: p.id, rect });
+                          }}
                           className="h-7 w-7 rounded-md hover:bg-bg-100 text-ink-500 inline-flex items-center justify-center"
                           aria-label="Acciones"
                         >
                           <MoreVertical className="h-4 w-4" />
                         </button>
                       </div>
-                      {menuOpen === p.id && (
-                        <>
-                          <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenuOpen(null); }} />
-                          <div className="absolute right-2 top-10 z-40 w-48 rounded-lg border border-line-200 bg-surface shadow-modal py-1">
-                            <Link
-                              to="/pacientes/$id"
-                              params={{ id: p.id }}
-                              className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100"
-                              onClick={() => setMenuOpen(null)}
-                            >
-                              <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha completa
-                            </Link>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditing(p); setMenuOpen(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left"
-                            >
-                              <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar paciente
-                            </button>
-                            <Link
-                              to="/historia"
-                              search={{ id: p.id }}
-                              className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100"
-                              onClick={() => setMenuOpen(null)}
-                            >
-                              <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia clínica
-                            </Link>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setApptFor(p); setMenuOpen(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left"
-                            >
-                              <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
-                            </button>
-                            <div className="my-1 h-px bg-line-100" />
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setRemoving(p); setMenuOpen(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
-                            </button>
-                          </div>
-                        </>
+                      {menuOpen?.id === p.id && (
+                        <PortaledActionsMenu
+                          patient={p}
+                          rect={menuOpen.rect}
+                          onClose={() => setMenuOpen(null)}
+                          onEdit={() => setEditing(p)}
+                          onAppointment={() => setApptFor(p)}
+                          onRemove={() => setRemoving(p)}
+                        />
                       )}
                     </td>
                   </tr>
@@ -497,8 +579,23 @@ function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
   onRemove: () => void;
   onSchedule: () => void;
 }) {
-  const [menu, setMenu] = useState(false);
+  // Estado del menú: guarda el rect del botón para que el menú portaleado
+  // pueda posicionarse junto a él. Si está cerrado, null.
+  const [menu, setMenu] = useState<{ rect: DOMRect } | null>(null);
   const wa = whatsappUrl(p.phone);
+
+  // Cerrar el menú si la página hace scroll o cambia de tamaño — el menú
+  // es position fixed, no se reposicionará junto con el botón.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [menu]);
   return (
     <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
       <Link to="/pacientes/$id" params={{ id: p.id }} className="block">
@@ -535,38 +632,27 @@ function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
             <FaWhatsapp className="h-3.5 w-3.5" />
           </a>
         )}
-        <div className="relative">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenu((v) => !v); }}
-            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
-            title="Más"
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
-          {menu && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setMenu(false); }} />
-              <div className="absolute right-0 top-full mt-1 z-40 w-44 rounded-lg border border-line-200 bg-surface shadow-modal py-1"
-                onClick={(e) => e.stopPropagation()}>
-                <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenu(false)}>
-                  <Eye className="h-3.5 w-3.5 text-ink-400" /> Ver ficha
-                </Link>
-                <button onClick={() => { setMenu(false); onEdit(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
-                  <Edit3 className="h-3.5 w-3.5 text-ink-400" /> Editar
-                </button>
-                <Link to="/historia" search={{ id: p.id }} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100" onClick={() => setMenu(false)}>
-                  <Tag className="h-3.5 w-3.5 text-ink-400" /> Historia
-                </Link>
-                <button onClick={() => { setMenu(false); onSchedule(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 text-left">
-                  <Calendar className="h-3.5 w-3.5 text-ink-400" /> Agendar cita
-                </button>
-                <div className="my-1 h-px bg-line-100" />
-                <button onClick={() => { setMenu(false); onRemove(); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-risk-high hover:bg-error-soft text-left">
-                  <Trash2 className="h-3.5 w-3.5" /> Archivar o eliminar
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <button
+          onClick={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setMenu(menu ? null : { rect });
+          }}
+          className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+          title="Más"
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+        {menu && (
+          <PortaledActionsMenu
+            patient={p}
+            rect={menu.rect}
+            onClose={() => setMenu(null)}
+            onEdit={onEdit}
+            onAppointment={onSchedule}
+            onRemove={onRemove}
+          />
+        )}
       </div>
     </div>
   );
