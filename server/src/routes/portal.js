@@ -1,10 +1,16 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { db } from "../db.js";
-import { signToken, requireAuth, requirePatient } from "../auth.js";
+import { signToken, requireAuth, requirePatient, verifyToken } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_DIR = path.join(__dirname, "..", "..", "uploads", "documents");
 
 const router = Router();
 
@@ -567,6 +573,121 @@ router.get("/portal/documents", requirePatient, (req, res) => {
     ...r,
     pending_signature_request_id: byDocId.get(r.id) ?? null,
   })));
+});
+
+/**
+ * GET /api/portal/documents/:id — vista de un documento compartido con el
+ * paciente, en modo READ-ONLY. Sirve para que el paciente lea informes /
+ * consentimientos / etc que la psicóloga le compartió, sin permitir editar
+ * ni firmar (eso vive en /portal/documents/:id/signing).
+ *
+ * Sólo devuelve docs con shared_with_patient=1 o ya firmados, del paciente
+ * autenticado, no archivados. El status "borrador" no se filtra: la
+ * psicóloga ya decidió compartirlo, el status interno (borrador/pendiente
+ * firma) es irrelevante para el paciente y la UI no debe mostrarlo.
+ */
+router.get("/portal/documents/:id", requirePatient, (req, res) => {
+  const doc = db.prepare(`
+    SELECT * FROM documents
+    WHERE id = ? AND patient_id = ? AND workspace_id = ?
+      AND archived_at IS NULL
+      AND (shared_with_patient = 1 OR signed_at IS NOT NULL)
+  `).get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+
+  const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+  const settings = Object.fromEntries(
+    db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(req.user.workspace_id)
+      .map((s) => [s.key, s.value])
+  );
+
+  // Si hay sign-request abierta, anotarla para que la UI pueda ofrecer
+  // "Firmar" directo desde el viewer en vez de hacer un segundo fetch.
+  const sr = db.prepare(`
+    SELECT id FROM document_sign_requests
+    WHERE document_id = ? AND patient_id = ? AND signed_at IS NULL AND expires_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(doc.id, req.user.patient_id, new Date().toISOString());
+
+  // Para variables como {{paciente.nombre}} en el body — mismo contexto
+  // que se usa en /signing para mantener la paridad de render.
+  const variableContext = buildInterpolationContext(
+    req.user.workspace_id,
+    doc.patient_id,
+    doc.professional,
+  );
+
+  res.json({
+    document: {
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      kind: doc.kind,
+      mime: doc.mime,
+      filename: doc.filename,
+      original_name: doc.original_name,
+      size_bytes: doc.size_bytes,
+      body_json: safeJSON(doc.body_json),
+      body_text: doc.body_text,
+      professional: doc.professional,
+      signed_at: doc.signed_at,
+      created_at: doc.created_at,
+      updated_at: doc.updated_at,
+    },
+    clinic: { name: ws?.name, city: settings.city, address: settings.address },
+    pending_signature_request_id: sr?.id ?? null,
+    variable_context: variableContext,
+  });
+});
+
+/**
+ * GET /api/portal/documents/:id/file — sirve el archivo físico (PDF, imagen,
+ * docx) de un documento compartido con el paciente. Verifica ownership y
+ * el flag shared_with_patient antes de transmitir. El staff no usa esta ruta;
+ * tiene su propia /api/documents/:id/file detrás de requireAuth.
+ *
+ * Acepta token via Authorization header o ?t=<token>, ya que los <iframe>/<img>
+ * que renderizan PDFs/imágenes no pueden adjuntar headers fácilmente. El
+ * middleware del router de portal ya valida la sesión del paciente.
+ */
+// Variante tolerante de requirePatient que acepta ?t=<token> además del
+// header Authorization. Necesaria para <iframe src=...> y <img src=...>
+// donde el browser no puede adjuntar headers.
+function requirePatientOrToken(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  const headerToken = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const token = headerToken ?? req.query.t ?? null;
+  if (!token) return res.status(401).json({ error: "Missing token" });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (payload.role !== "paciente" || !payload.patient_id) {
+    return res.status(403).json({ error: "Acceso solo para pacientes" });
+  }
+  req.user = payload;
+  next();
+}
+
+router.get("/portal/documents/:id/file", requirePatientOrToken, (req, res) => {
+  const doc = db.prepare(`
+    SELECT id, workspace_id, filename, original_name, mime, kind, archived_at, shared_with_patient, signed_at
+    FROM documents
+    WHERE id = ? AND patient_id = ? AND workspace_id = ?
+  `).get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!doc || doc.archived_at) return res.status(404).json({ error: "Documento no encontrado" });
+  if (doc.kind !== "file" || !doc.filename) return res.status(404).json({ error: "Este documento no tiene archivo" });
+  if (!doc.shared_with_patient && !doc.signed_at) return res.status(403).json({ error: "No tienes acceso a este documento" });
+
+  const filePath = path.join(DOCS_DIR, String(doc.workspace_id), doc.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Archivo físico no encontrado" });
+
+  // inline para que el navegador renderice PDFs/imágenes; ?download=1 fuerza descarga.
+  const downloadName = doc.original_name || doc.filename;
+  const disposition = req.query.download
+    ? `attachment; filename="${encodeURIComponent(downloadName)}"`
+    : `inline; filename="${encodeURIComponent(downloadName)}"`;
+  res.setHeader("Content-Disposition", disposition);
+  if (doc.mime) res.setHeader("Content-Type", doc.mime);
+  fs.createReadStream(filePath).pipe(res);
 });
 
 // ════════════════════════════════════════════════════════════════════════════

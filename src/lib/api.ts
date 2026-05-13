@@ -819,6 +819,41 @@ export const api = {
   portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
   portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),
   portalDocuments: () => request<Array<Record<string, any>>>("/api/portal/documents"),
+  /**
+   * Detalle de un documento compartido con el paciente, modo solo-lectura.
+   * Devuelve el body_json para renderizar con DocumentEditor en read-only
+   * (kind='editor'), o metadata del archivo (kind='file') para iframe/img.
+   */
+  portalDocument: (id: string) =>
+    request<{
+      document: {
+        id: string;
+        name: string;
+        type: string;
+        kind: "editor" | "file";
+        mime: string | null;
+        filename: string | null;
+        original_name: string | null;
+        size_bytes: number | null;
+        body_json: TipTapDoc | null;
+        body_text: string | null;
+        professional: string | null;
+        signed_at: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      clinic: { name?: string; city?: string; address?: string };
+      pending_signature_request_id: string | null;
+      variable_context: Record<string, any>;
+    }>(`/api/portal/documents/${id}`),
+  /** URL del archivo (PDF/imagen) compartido. Incluye token como ?t= para iframe/img. */
+  portalDocumentFileUrl: (id: string, opts?: { download?: boolean }) => {
+    const t = getToken();
+    const qs = new URLSearchParams();
+    if (t) qs.set("t", t);
+    if (opts?.download) qs.set("download", "1");
+    return `${API_BASE}/api/portal/documents/${id}/file?${qs.toString()}`;
+  },
 
   // Workspace
   getWorkspace: () => request<Workspace>("/api/workspace"),

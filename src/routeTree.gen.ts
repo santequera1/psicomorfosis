@@ -41,6 +41,7 @@ import { Route as LegalAdminSlugRouteImport } from './routes/legal-admin_.$slug'
 import { Route as FirmarTokenRouteImport } from './routes/firmar.$token'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
 import { Route as PFirmarDocIdRouteImport } from './routes/p_.firmar.$docId'
+import { Route as PDocumentosIdRouteImport } from './routes/p_.documentos.$id'
 import { Route as PActivarTokenRouteImport } from './routes/p_.activar.$token'
 import { Route as DocumentosPlantillaIdRouteImport } from './routes/documentos_.plantilla.$id'
 
@@ -204,6 +205,11 @@ const PFirmarDocIdRoute = PFirmarDocIdRouteImport.update({
   path: '/p/firmar/$docId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PDocumentosIdRoute = PDocumentosIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => PDocumentosRoute,
+} as any)
 const PActivarTokenRoute = PActivarTokenRouteImport.update({
   id: '/p_/activar/$token',
   path: '/p/activar/$token',
@@ -239,7 +245,7 @@ export interface FileRoutesByFullPath {
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p/citas': typeof PCitasRoute
-  '/p/documentos': typeof PDocumentosRoute
+  '/p/documentos': typeof PDocumentosRouteWithChildren
   '/p/inicio': typeof PInicioRoute
   '/p/login': typeof PLoginRoute
   '/p/perfil': typeof PPerfilRoute
@@ -249,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/platform/reportes': typeof PlatformReportesRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
+  '/p/documentos/$id': typeof PDocumentosIdRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
 }
 export interface FileRoutesByTo {
@@ -275,7 +282,7 @@ export interface FileRoutesByTo {
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p/citas': typeof PCitasRoute
-  '/p/documentos': typeof PDocumentosRoute
+  '/p/documentos': typeof PDocumentosRouteWithChildren
   '/p/inicio': typeof PInicioRoute
   '/p/login': typeof PLoginRoute
   '/p/perfil': typeof PPerfilRoute
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/platform/reportes': typeof PlatformReportesRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
+  '/p/documentos/$id': typeof PDocumentosIdRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
 }
 export interface FileRoutesById {
@@ -312,7 +320,7 @@ export interface FileRoutesById {
   '/legal-admin_/$slug': typeof LegalAdminSlugRoute
   '/legal-admin_/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/p_/citas': typeof PCitasRoute
-  '/p_/documentos': typeof PDocumentosRoute
+  '/p_/documentos': typeof PDocumentosRouteWithChildren
   '/p_/inicio': typeof PInicioRoute
   '/p_/login': typeof PLoginRoute
   '/p_/perfil': typeof PPerfilRoute
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/platform_/reportes': typeof PlatformReportesRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
+  '/p_/documentos/$id': typeof PDocumentosIdRoute
   '/p_/firmar/$docId': typeof PFirmarDocIdRoute
 }
 export interface FileRouteTypes {
@@ -360,6 +369,7 @@ export interface FileRouteTypes {
     | '/platform/reportes'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
+    | '/p/documentos/$id'
     | '/p/firmar/$docId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -396,6 +406,7 @@ export interface FileRouteTypes {
     | '/platform/reportes'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
+    | '/p/documentos/$id'
     | '/p/firmar/$docId'
   id:
     | '__root__'
@@ -432,6 +443,7 @@ export interface FileRouteTypes {
     | '/platform_/reportes'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
+    | '/p_/documentos/$id'
     | '/p_/firmar/$docId'
   fileRoutesById: FileRoutesById
 }
@@ -459,7 +471,7 @@ export interface RootRouteChildren {
   LegalAdminSlugRoute: typeof LegalAdminSlugRoute
   LegalAdminAceptacionesRoute: typeof LegalAdminAceptacionesRoute
   PCitasRoute: typeof PCitasRoute
-  PDocumentosRoute: typeof PDocumentosRoute
+  PDocumentosRoute: typeof PDocumentosRouteWithChildren
   PInicioRoute: typeof PInicioRoute
   PLoginRoute: typeof PLoginRoute
   PPerfilRoute: typeof PPerfilRoute
@@ -698,6 +710,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PFirmarDocIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p_/documentos/$id': {
+      id: '/p_/documentos/$id'
+      path: '/$id'
+      fullPath: '/p/documentos/$id'
+      preLoaderRoute: typeof PDocumentosIdRouteImport
+      parentRoute: typeof PDocumentosRoute
+    }
     '/p_/activar/$token': {
       id: '/p_/activar/$token'
       path: '/p/activar/$token'
@@ -714,6 +733,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface PDocumentosRouteChildren {
+  PDocumentosIdRoute: typeof PDocumentosIdRoute
+}
+
+const PDocumentosRouteChildren: PDocumentosRouteChildren = {
+  PDocumentosIdRoute: PDocumentosIdRoute,
+}
+
+const PDocumentosRouteWithChildren = PDocumentosRoute._addFileChildren(
+  PDocumentosRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -739,7 +770,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalAdminSlugRoute: LegalAdminSlugRoute,
   LegalAdminAceptacionesRoute: LegalAdminAceptacionesRoute,
   PCitasRoute: PCitasRoute,
-  PDocumentosRoute: PDocumentosRoute,
+  PDocumentosRoute: PDocumentosRouteWithChildren,
   PInicioRoute: PInicioRoute,
   PLoginRoute: PLoginRoute,
   PPerfilRoute: PPerfilRoute,

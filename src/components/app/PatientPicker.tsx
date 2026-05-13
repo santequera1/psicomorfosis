@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ApiPatient } from "@/lib/api";
 import { cn, displayPatientName } from "@/lib/utils";
@@ -60,6 +61,9 @@ export function PatientPicker({
   const [highlight, setHighlight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Posición del dropdown — calculada desde el rect del input.
+  // Portal-renderizado a body para escapar stacking contexts del editor.
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   // Carga si no se pasaron pacientes pre-cargados
   const enabled = !passedPatients;
@@ -76,14 +80,37 @@ export function PatientPicker({
     return () => clearTimeout(t);
   }, [query]);
 
-  // Cerrar al click fuera
+  // Cerrar al click fuera. El dropdown vive en un portal (fuera del
+  // containerRef), así que también ignoramos clicks dentro del dropdown
+  // marcándolo con data-patient-picker-dropdown.
   useEffect(() => {
     if (!open) return;
     function onDoc(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if ((target as Element).closest?.("[data-patient-picker-dropdown]")) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  // Recalcular posición del dropdown cuando abre, hay scroll o se hace resize.
+  // Usar useLayoutEffect para evitar flash en el primer render del dropdown.
+  useLayoutEffect(() => {
+    if (!open) { setDropPos(null); return; }
+    function update() {
+      const r = containerRef.current?.getBoundingClientRect();
+      if (!r) return;
+      setDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
   }, [open]);
 
   const selected = useMemo(
@@ -188,8 +215,15 @@ export function PatientPicker({
         />
         {isLoading && enabled && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-400" />}
       </div>
-      {open && (
-        <div className="absolute z-30 left-0 right-0 mt-1 rounded-lg border border-line-200 bg-surface shadow-modal max-h-72 overflow-y-auto">
+      {open && dropPos && typeof window !== "undefined" && createPortal(
+        <div
+          data-patient-picker-dropdown
+          // z-[60] queda por encima del toolbar sticky del editor (z-10) y
+          // de cualquier otro panel sticky de la app. Posición fixed
+          // calculada desde el rect del input.
+          className="fixed z-60 rounded-lg border border-line-200 bg-surface shadow-modal max-h-72 overflow-y-auto"
+          style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
+        >
           {allowEmpty && (
             <button
               type="button"
@@ -236,7 +270,8 @@ export function PatientPicker({
               );
             })
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

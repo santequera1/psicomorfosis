@@ -38,17 +38,26 @@ function PortalDocuments() {
       {docs.length > 0 && (
         <ul className="space-y-2">
           {docs.map((d) => {
-            const isSigned = d.status === "firmado";
+            const isSigned = d.status === "firmado" || !!d.signed_at;
             const canSign = !!d.pending_signature_request_id;
-            const Icon = isSigned ? FileCheck2 : FileClock;
+            const Icon = isSigned ? FileCheck2 : canSign ? FileClock : FileText;
+            // No mostramos el status interno "borrador" al paciente: él no
+            // sabe (ni le importa) si la psicóloga está editando todavía.
+            // Para él, el doc o está firmado, o tiene firma pendiente, o
+            // simplemente está disponible para leer.
+            const label = isSigned ? "Firmado" : canSign ? "Por firmar" : "Compartido";
             return (
-              <li key={d.id} className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 hover:shadow-soft transition-shadow">
-                <div className="flex items-start gap-4">
+              <li key={d.id} className="rounded-xl border border-line-200 bg-surface hover:shadow-soft transition-shadow overflow-hidden">
+                <Link
+                  to="/p/documentos/$id"
+                  params={{ id: String(d.id) }}
+                  className="flex items-start gap-4 p-4 sm:p-5"
+                >
                   <div className={cn(
                     "h-11 w-11 rounded-lg flex items-center justify-center shrink-0",
                     isSigned ? "bg-success-soft text-success"
-                      : canSign ? "bg-brand-50 text-brand-700"
-                      : "bg-warning-soft text-risk-moderate"
+                      : canSign ? "bg-warning-soft text-risk-moderate"
+                      : "bg-brand-50 text-brand-700"
                   )}>
                     <Icon className="h-5 w-5" />
                   </div>
@@ -60,22 +69,25 @@ function PortalDocuments() {
                     <span className={cn(
                       "inline-block mt-2 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium",
                       isSigned ? "bg-sage-200/40 text-sage-700"
-                        : canSign ? "bg-brand-50 text-brand-800"
-                        : "bg-warning-soft text-risk-moderate"
+                        : canSign ? "bg-warning-soft text-risk-moderate"
+                        : "bg-brand-50 text-brand-800"
                     )}>
-                      {isSigned ? "Firmado" : canSign ? "Por firmar" : d.status === "pendiente_firma" ? "Por firmar" : "Borrador"}
+                      {label}
                     </span>
                   </div>
-                  {canSign && (
+                  <ChevronRight className="h-5 w-5 text-ink-400 shrink-0 mt-1" />
+                </Link>
+                {canSign && (
+                  <div className="px-4 sm:px-5 pb-4 sm:pb-5 -mt-2">
                     <Link
                       to="/p/firmar/$docId"
                       params={{ docId: String(d.id) }}
-                      className="shrink-0 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
+                      className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800"
                     >
                       <Pen className="h-3.5 w-3.5" /> Firmar ahora <ChevronRight className="h-3.5 w-3.5" />
                     </Link>
-                  )}
-                </div>
+                  </div>
+                )}
               </li>
             );
           })}
