@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { whatsappUrl } from "@/lib/display";
 import { displayPatientName } from "@/lib/utils";
+import { PortalStatusBadge } from "@/components/patients/PortalStatusBadge";
 import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -156,6 +157,7 @@ function PatientDetailPage() {
                   <span key={t} className="text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-medium">{t}</span>
                 ))}
                 <span className="text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium capitalize">{patient.status}</span>
+                <PortalStatusBadge patient={patient} size="sm" />
               </div>
             </div>
           </div>
@@ -177,9 +179,23 @@ function PatientDetailPage() {
             <button
               onClick={() => setInviteOpen(true)}
               className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
-              title="Invitar al portal del paciente"
+              title={
+                patient.portalStatus === "active"
+                  ? "Cuenta del portal activa — reinvitar regenera la invitación si la necesita"
+                  : patient.portalStatus === "invited"
+                    ? "Invitación enviada, esperando activación — reenviar genera un link nuevo"
+                    : "Invitar al portal del paciente"
+              }
             >
-              <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Invitar al portal</span><span className="sm:hidden">Portal</span>
+              <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">
+                {patient.portalStatus === "active"
+                  ? "Portal activo"
+                  : patient.portalStatus === "invited"
+                    ? "Reenviar invitación"
+                    : "Invitar al portal"}
+              </span>
+              <span className="sm:hidden">Portal</span>
             </button>
             <button
               onClick={() => setEditing(true)}
@@ -1283,7 +1299,14 @@ function CertificateModal({ patientId, onClose }: { patientId: string; onClose: 
 
 // ─── Modal: Invitar al portal del paciente ─────────────────────────────────
 function InvitePortalModal({ patient, onClose }: { patient: import("@/lib/api").ApiPatient; onClose: () => void }) {
-  const [invite, setInvite] = useState<{ url: string; expires_at: string; days_valid: number; whatsapp_text: string } | null>(null);
+  const [invite, setInvite] = useState<{
+    url: string;
+    expires_at: string;
+    days_valid: number;
+    whatsapp_text: string;
+    email_status?: "queued" | "no_smtp";
+    email_to?: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [alreadyActive, setAlreadyActive] = useState(false);
   const [generating, setGenerating] = useState(true);
@@ -1343,6 +1366,29 @@ function InvitePortalModal({ patient, onClose }: { patient: import("@/lib/api").
 
           {invite && (
             <div className="space-y-4">
+              {/* Confirmación de envío de email — primer bloque para que sea
+                  lo primero que el psicólogo lea. Si no se envió, le decimos
+                  por qué para que sepa que tiene que compartir el link
+                  manualmente. */}
+              {invite.email_status === "queued" && (
+                <div className="rounded-lg border border-success/30 bg-success-soft p-3 flex items-start gap-2">
+                  <svg className="h-4 w-4 text-success shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                  <div className="text-xs">
+                    <p className="text-success font-medium">Invitación enviada por email</p>
+                    <p className="text-ink-700 mt-0.5">Le mandamos el link a <strong>{invite.email_to}</strong>. Igualmente puedes compartírselo manualmente abajo si lo prefieres.</p>
+                  </div>
+                </div>
+              )}
+              {invite.email_status === "no_smtp" && (
+                <div className="rounded-lg border border-warning-soft bg-warning-soft p-3 flex items-start gap-2">
+                  <svg className="h-4 w-4 text-risk-moderate shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" /></svg>
+                  <div className="text-xs">
+                    <p className="text-risk-moderate font-medium">Email automático no disponible</p>
+                    <p className="text-ink-700 mt-0.5">SMTP no está configurado en este servidor. Comparte el link manualmente con el paciente (QR o WhatsApp abajo).</p>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-xl border border-line-200 bg-bg-100 p-4 flex flex-col items-center gap-3">
                 <QRCodeSVG value={invite.url} size={180} marginSize={2} />
                 <p className="text-[11px] text-ink-500">Escanea con la cámara del celular</p>

@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api, setSession, getToken, ApiError } from "@/lib/api";
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check, Heart, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Ingresar · Psicomorfosis" }] }),
@@ -11,6 +11,7 @@ export const Route = createFileRoute("/login")({
 type Tab = "login" | "signup";
 
 function LoginPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +19,9 @@ function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Si el backend nos dice que el usuario es paciente, mostramos un
+  // CTA explícito para llevarlo al portal en vez de un mensaje seco.
+  const [redirectToPortal, setRedirectToPortal] = useState(false);
 
   // Si ya hay sesión activa, saltar directo al dashboard. Evita que un usuario
   // logueado vea el formulario de login si pone /login manualmente en la URL.
@@ -29,6 +33,7 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setErr(null);
+    setRedirectToPortal(false);
     try {
       const { token, user } = await api.login(username, password);
       setSession(token, user);
@@ -41,9 +46,20 @@ function LoginPage() {
         error instanceof ApiError
           ? error.message
           : "No se pudo conectar al servidor. Verifica que el backend esté corriendo.";
+      // El backend devuelve hint:"use_patient_portal" cuando un paciente
+      // intenta entrar acá. La detección la hacemos por status + texto del
+      // mensaje porque ApiError no expone el body completo; el mensaje sí
+      // viene del backend ("Esta cuenta es de paciente...").
+      if (error instanceof ApiError && error.status === 403 && /paciente/i.test(error.message)) {
+        setRedirectToPortal(true);
+      }
       setErr(msg);
       setLoading(false);
     }
+  }
+
+  function goToPatientPortal() {
+    navigate({ to: "/p/login" });
   }
 
   return (
@@ -113,9 +129,29 @@ function LoginPage() {
               err={err}
               loading={loading}
               onSubmit={onSubmit}
+              redirectToPortal={redirectToPortal}
+              goToPatientPortal={goToPatientPortal}
             />
           ) : (
             <SignUpBlocked />
+          )}
+
+          {/* CTA discreto pero claro hacia el portal del paciente. Evita la
+              confusión de tener un único login que en realidad son dos
+              productos distintos (staff vs paciente). */}
+          {tab === "login" && (
+            <div className="mt-7 pt-5 border-t border-line-100 text-center">
+              <p className="text-xs text-ink-500">¿Eres paciente?</p>
+              <button
+                type="button"
+                onClick={goToPatientPortal}
+                className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800 hover:underline"
+              >
+                <Heart className="h-3.5 w-3.5" />
+                Ir al portal del paciente
+                <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -133,6 +169,7 @@ function LoginForm({
   username, setUsername, password, setPassword,
   showPwd, setShowPwd, remember, setRemember,
   err, loading, onSubmit,
+  redirectToPortal, goToPatientPortal,
 }: {
   username: string; setUsername: (v: string) => void;
   password: string; setPassword: (v: string) => void;
@@ -140,6 +177,8 @@ function LoginForm({
   remember: boolean; setRemember: (v: boolean) => void;
   err: string | null; loading: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  redirectToPortal: boolean;
+  goToPatientPortal: () => void;
 }) {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -207,9 +246,22 @@ function LoginForm({
       </div>
 
       {err && (
-        <div className="rounded-xl border border-risk-high/30 bg-error-soft p-3 flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 text-risk-high shrink-0 mt-0.5" />
-          <p className="text-xs text-ink-700">{err}</p>
+        <div className="rounded-xl border border-risk-high/30 bg-error-soft p-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-risk-high shrink-0 mt-0.5" />
+            <p className="text-xs text-ink-700">{err}</p>
+          </div>
+          {redirectToPortal && (
+            <button
+              type="button"
+              onClick={goToPatientPortal}
+              className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-10 rounded-full bg-brand-700 text-primary-foreground text-sm font-semibold hover:bg-brand-800 transition-colors"
+            >
+              <Heart className="h-3.5 w-3.5" />
+              Ir al portal del paciente
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       )}
 
@@ -280,7 +332,10 @@ function SignUpBlocked() {
         Solicitar acceso por correo
       </button>
       <p className="text-center text-xs text-ink-500">
-        ¿Eres paciente? Próximamente tendrás un portal independiente.
+        ¿Eres paciente?{" "}
+        <Link to="/p/login" className="text-brand-700 font-medium hover:underline">
+          Accede al portal del paciente
+        </Link>
       </p>
     </div>
   );

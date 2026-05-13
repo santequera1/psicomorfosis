@@ -54,7 +54,55 @@ function rowToPatient(r) {
     insurancePlan: r.insurance_plan ?? undefined,
     insurancePolicy: r.insurance_policy ?? undefined,
     insuranceValidUntil: r.insurance_valid_until ?? undefined,
+    // Estado del portal del paciente. Lo enriquecemos con enrichWithPortalStatus
+    // antes de pasarle el row a rowToPatient — viene en r.portal_status / r.portal_*.
+    portalStatus: r.portal_status ?? "not_invited",
+    portalActivatedAt: r.portal_activated_at ?? null,
+    portalLastLoginAt: r.portal_last_login_at ?? null,
+    portalInviteExpiresAt: r.portal_invite_expires_at ?? null,
   };
+}
+
+/**
+ * Enriquece cada paciente con el estado de su cuenta del portal:
+ *   - "active":      tiene una row en users con password_hash (ya activó)
+ *   - "invited":     tiene una patient_invites abierta (no usada, no expirada)
+ *   - "not_invited": no se ha generado invitación o la última expiró
+ *
+ * Para "active" también devolvemos legal_accepted_at (proxy de activación) y
+ * last_login_at (si disponible) para que el psicólogo vea actividad reciente.
+ * Para "invited" devolvemos expires_at para saber cuántos días quedan.
+ */
+function enrichWithPortalStatus(patients, workspaceId) {
+  if (patients.length === 0) return patients;
+  const userStmt = db.prepare(`
+    SELECT patient_id, last_login_at FROM users
+    WHERE workspace_id = ? AND role = 'paciente' AND patient_id = ?
+      AND password_hash IS NOT NULL AND length(password_hash) > 0
+  `);
+  const inviteStmt = db.prepare(`
+    SELECT expires_at FROM patient_invites
+    WHERE workspace_id = ? AND patient_id = ?
+      AND used_at IS NULL AND expires_at > ?
+    ORDER BY created_at DESC LIMIT 1
+  `);
+  const nowIso = new Date().toISOString();
+  return patients.map((p) => {
+    const u = userStmt.get(workspaceId, p.id);
+    if (u) {
+      return {
+        ...p,
+        portal_status: "active",
+        portal_activated_at: p.legal_accepted_at ?? null,
+        portal_last_login_at: u.last_login_at ?? null,
+      };
+    }
+    const inv = inviteStmt.get(workspaceId, p.id, nowIso);
+    if (inv) {
+      return { ...p, portal_status: "invited", portal_invite_expires_at: inv.expires_at };
+    }
+    return { ...p, portal_status: "not_invited" };
+  });
 }
 
 /**
@@ -172,7 +220,9 @@ router.get("/", (req, res) => {
   if (sede_id) { sql += " AND sede_id = ?"; args.push(sede_id); }
   sql += " ORDER BY name ASC";
   const rows = db.prepare(sql).all(...args);
-  res.json(enrichWithAppointments(rows, req.user.workspace_id).map(rowToPatient));
+  const enriched = enrichWithAppointments(rows, req.user.workspace_id);
+  const withPortal = enrichWithPortalStatus(enriched, req.user.workspace_id);
+  res.json(withPortal.map(rowToPatient));
 });
 
 // Archivar (soft delete) — recomendado para historias clínicas
@@ -198,7 +248,8 @@ router.get("/:id", (req, res) => {
   const row = db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
   const [enriched] = enrichWithAppointments([row], req.user.workspace_id);
-  res.json(rowToPatient(enriched));
+  const [withPortal] = enrichWithPortalStatus([enriched], req.user.workspace_id);
+  res.json(rowToPatient(withPortal));
 });
 
 function nextPatientId(wsId) {

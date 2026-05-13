@@ -8,6 +8,7 @@ import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient, verifyToken } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
+import { sendPatientInviteEmail } from "../mailer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = path.join(__dirname, "..", "..", "uploads", "documents");
@@ -83,12 +84,42 @@ router.post("/patients/:id/invite", requireAuth, (req, res) => {
     `¡Te espero!`,
   ].join("\n");
 
+  // Indicador de qué pasará con el email — el frontend lo usa para mostrarle
+  // al psicólogo si tiene que compartir el link manualmente o si ya se envió.
+  // 'queued': hay email + SMTP configurado → se enviará en background.
+  // 'no_smtp': SMTP no configurado → caer al flujo manual (QR/WhatsApp).
+  // (no_email no aplica acá porque exigimos email al inicio del endpoint.)
+  const smtpReady = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  const emailStatus = smtpReady ? "queued" : "no_smtp";
+
+  // Enviar el email DESPUÉS de responder al frontend — la red al servidor
+  // SMTP puede tardar 500ms-2s y el psicólogo no debería esperar por eso.
+  // El paciente ya quedó invitado en la DB; el email es notificación.
+  if (smtpReady) {
+    const profRow = req.user.professional_id
+      ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+      : null;
+    const professionalForEmail = profRow ?? { name: req.user.name ?? null, email: null };
+    setImmediate(() => {
+      sendPatientInviteEmail({
+        patient,
+        professional: professionalForEmail,
+        workspaceName: ws?.name ?? null,
+        url,
+        daysValid: INVITE_DAYS,
+        replyTo: professionalForEmail.email || undefined,
+      }).catch((e) => console.warn(`[invite] sendPatientInviteEmail rejected: ${e?.message ?? e}`));
+    });
+  }
+
   res.status(201).json({
     token,
     url,
     expires_at: expiresAt,
     days_valid: INVITE_DAYS,
     whatsapp_text: whatsappText,
+    email_status: emailStatus,
+    email_to: patient.email,
   });
 });
 

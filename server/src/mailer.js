@@ -423,3 +423,117 @@ export function logSmtpStatus() {
     console.warn("[mailer] SMTP NO configurado — emails de citas no se enviarán. Setea SMTP_HOST/USER/PASS en .env.");
   }
 }
+
+// ─── Invitación del paciente al portal ────────────────────────────────
+
+/**
+ * Plantilla HTML para la invitación al portal. Tono cálido (van a ser
+ * pacientes reales recibiendo esto), explicación corta de qué es el portal,
+ * CTA grande al link de activación + fallback texto del URL para clientes
+ * que bloqueen botones.
+ */
+function templatePatientInvite({ patient, professional, workspaceName, url, daysValid }) {
+  const firstName = (patient?.preferred_name?.trim() || patient?.name?.split(" ")[0] || "").trim();
+  const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
+  const profName = professional?.name ?? workspaceName ?? "tu psicóloga/o";
+
+  const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">${saludo}</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+${escapeHtml(profName)} te invita a tu espacio personal en Psicomorfosis, donde podrás:
+</p>
+<ul style="margin:0 0 14px 18px;padding:0;font-size:14px;color:#44403c;line-height:1.7;">
+  <li>Ver tus próximas citas y tareas asignadas</li>
+  <li>Responder tests psicométricos cuando te los compartan</li>
+  <li>Consultar documentos y firmar consentimientos desde tu celular</li>
+</ul>
+<p style="margin:18px 0 14px 0;font-size:14px;color:#44403c;">
+Para activarlo, necesitas crear tu contraseña en este enlace seguro:
+</p>
+<p style="text-align:center;margin:20px 0;">
+  <a href="${escapeHtml(url)}" style="display:inline-block;padding:14px 28px;background:#14685b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+    Activar mi cuenta
+  </a>
+</p>
+<p style="margin:0 0 8px 0;font-size:12px;color:#78716c;">
+Si el botón no funciona, copia y pega esta dirección en tu navegador:
+</p>
+<p style="margin:0 0 18px 0;font-size:12px;color:#57534e;word-break:break-all;">
+${escapeHtml(url)}
+</p>
+<p style="margin:14px 0 0 0;font-size:12px;color:#78716c;">
+El enlace es válido por ${daysValid} día${daysValid === 1 ? "" : "s"}. Si vence, pídele a ${escapeHtml(profName)} que te envíe uno nuevo.
+</p>
+<p style="margin:10px 0 0 0;font-size:12px;color:#78716c;">
+Tu información clínica está protegida — solo tú y ${escapeHtml(profName)} pueden verla.
+</p>`;
+  return emailLayout({ title: "Activa tu portal del paciente", bodyHtml: body });
+}
+
+/**
+ * Envía la invitación por email. Best-effort: si SMTP no está configurado o
+ * el paciente no tiene email, no rompemos el flujo — el psicólogo igual tiene
+ * el link/QR para compartir manualmente. Retornamos un objeto descriptivo
+ * para que el endpoint informe al frontend si el email se envió o no.
+ *
+ * @param {object} opts
+ * @param {object} opts.patient - row de patients (email, name, preferred_name, workspace_id)
+ * @param {object} [opts.professional] - row de professionals (name, email)
+ * @param {string} [opts.workspaceName]
+ * @param {string} opts.url - URL absoluta de activación
+ * @param {number} opts.daysValid - días de validez del token (5)
+ * @param {string} [opts.replyTo] - email del psicólogo para que paciente responda dudas
+ * @returns {Promise<{status:'sent'|'skipped_no_email'|'skipped_no_smtp'|'failed', error?:string}>}
+ */
+export async function sendPatientInviteEmail(opts) {
+  const start = Date.now();
+  const { patient, professional, workspaceName, url, daysValid, replyTo } = opts;
+  const result = {
+    workspace_id: patient?.workspace_id ?? null,
+    appointment_id: null,
+    to_email: patient?.email ?? "",
+    kind: "patient_invite",
+    status: "failed",
+    error: null,
+    ms: 0,
+  };
+
+  if (!patient?.email || !patient.email.includes("@")) {
+    result.status = "skipped_no_email";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+  if (!smtpConfigured()) {
+    result.status = "skipped_no_smtp";
+    result.error = "SMTP_HOST/USER/PASS no configurados";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+
+  try {
+    const transport = getTransport();
+    const c = getSmtpConfig();
+    const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
+    const fromAddress = `${profDisplay} <${c.user}>`;
+    const html = templatePatientInvite({ patient, professional, workspaceName, url, daysValid });
+
+    await transport.sendMail({
+      from: fromAddress,
+      to: patient.email,
+      replyTo: replyTo || undefined,
+      subject: "Activa tu portal del paciente · Psicomorfosis",
+      html,
+    });
+
+    result.status = "sent";
+  } catch (err) {
+    result.error = String(err?.message ?? err).slice(0, 500);
+    console.warn(`[mailer] invitación falló para ${patient.email}: ${result.error}`);
+  }
+
+  result.ms = Date.now() - start;
+  logEmail(result);
+  return result;
+}

@@ -190,6 +190,19 @@ export interface ApiPatient {
   insurancePolicy?: string;
   /** Fecha YYYY-MM-DD hasta la que la póliza está vigente (opcional). */
   insuranceValidUntil?: string;
+  /**
+   * Estado de la cuenta del portal del paciente:
+   *  - "not_invited": nunca se generó una invitación (o la última expiró sin uso)
+   *  - "invited":     hay una invitación abierta esperando que el paciente active
+   *  - "active":      el paciente ya activó su cuenta y puede entrar al portal
+   */
+  portalStatus?: "not_invited" | "invited" | "active";
+  /** ISO timestamp de cuándo aceptó los términos al activar (proxy de activación). */
+  portalActivatedAt?: string | null;
+  /** ISO timestamp de la última vez que entró al portal (puede ser null si nunca entró post-activación). */
+  portalLastLoginAt?: string | null;
+  /** ISO timestamp en que expira la invitación pendiente. Solo cuando portalStatus="invited". */
+  portalInviteExpiresAt?: string | null;
 }
 
 export interface EmergencyContact {
@@ -789,7 +802,17 @@ export const api = {
 
   // Portal del paciente — invitación + activación + login (públicos)
   invitePatient: (patientId: string) =>
-    request<{ token: string; url: string; expires_at: string; days_valid: number; whatsapp_text: string }>(
+    request<{
+      token: string;
+      url: string;
+      expires_at: string;
+      days_valid: number;
+      whatsapp_text: string;
+      /** "queued" = se está enviando email en background; "no_smtp" = caer al flujo manual. */
+      email_status?: "queued" | "no_smtp";
+      /** Email del paciente al que se envió/enviará. */
+      email_to?: string;
+    }>(
       `/api/patients/${patientId}/invite`,
       { method: "POST" }
     ),

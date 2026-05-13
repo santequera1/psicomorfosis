@@ -40,6 +40,19 @@ router.post("/login", (req, res) => {
   const ok = bcrypt.compareSync(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
 
+  // Pacientes NO pueden entrar por el login del staff. Tienen su propio
+  // flujo en /p/login que les enseña UI cálida + tabs propios. Sin este
+  // guard, un paciente que ponga sus credenciales acá recibía un token
+  // de paciente cargado en el shell del staff — confuso y rompe varias
+  // queries de staff que asumen role distinto.
+  if (user.role === "paciente") {
+    return res.status(403).json({
+      error: "Esta cuenta es de paciente. Ingresa desde el portal de pacientes.",
+      hint: "use_patient_portal",
+      patient_portal_url: "/p/login",
+    });
+  }
+
   // Bloquear login si el workspace está deshabilitado. Excepción: platform
   // admins y legal admins pueden seguir entrando (necesitan acceso para
   // reactivar cuentas o publicar políticas aunque su workspace esté off).

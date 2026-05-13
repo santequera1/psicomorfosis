@@ -13,6 +13,7 @@ import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCir
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 import { cn, displayPatientName } from "@/lib/utils";
+import { PortalStatusBadge } from "@/components/patients/PortalStatusBadge";
 import { useAutoTour, patientsTour, TOUR_NAMES } from "@/lib/tours";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
@@ -371,6 +372,7 @@ function PatientsPage() {
                         {p.status}
                       </span>
                       <RiskBadge risk={p.risk} types={p.riskTypes} compact />
+                      <PortalStatusBadge patient={p} size="sm" />
                       <span className="text-[10px] text-ink-400">· {MODALITY_LABEL[p.modality]}</span>
                     </div>
                     {p.nextSession && (
@@ -435,7 +437,10 @@ function PatientsPage() {
                             {p.name}{p.preferredName ? ` · ${p.preferredName}` : ""}
                             {p.pronouns && p.pronouns !== "—" && <span className="text-[10px] text-ink-400 font-normal">({p.pronouns})</span>}
                           </div>
-                          <div className="text-[11px] text-ink-500 truncate tabular">{p.doc} · {p.id}</div>
+                          <div className="text-[11px] text-ink-500 truncate tabular flex items-center gap-2">
+                            <span>{p.doc} · {p.id}</span>
+                            <PortalStatusBadge patient={p} size="sm" />
+                          </div>
                         </div>
                       </Link>
                     </td>
