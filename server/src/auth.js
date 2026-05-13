@@ -1,15 +1,34 @@
 import jwt from "jsonwebtoken";
 
-const SECRET = process.env.JWT_SECRET ?? "psicomorfosis-dev-secret-change-me";
 const EXPIRES_IN = "24h";
+const FALLBACK_SECRET = "psicomorfosis-dev-secret-change-me";
+
+// IMPORTANT: leer JWT_SECRET de forma LAZY (no a nivel de módulo). Los
+// imports ESM se evalúan ANTES del body de index.js donde corre
+// dotenvConfig(), así que si capturamos process.env.JWT_SECRET al top-level
+// siempre cae al fallback. Lo leemos al primer uso y lo cacheamos para
+// no penalizar performance.
+let _cachedSecret = null;
+function getSecret() {
+  if (_cachedSecret) return _cachedSecret;
+  const fromEnv = process.env.JWT_SECRET;
+  if (!fromEnv) {
+    // Avisamos UNA vez al arranque si caemos al fallback — sin esto, tokens
+    // se invalidarían silenciosamente entre restarts y los usuarios verían
+    // 401/403 sin pista.
+    console.warn("[auth] JWT_SECRET no configurado en .env — usando secret de desarrollo. Los tokens NO serán estables entre restarts.");
+  }
+  _cachedSecret = fromEnv || FALLBACK_SECRET;
+  return _cachedSecret;
+}
 
 export function signToken(payload) {
-  return jwt.sign(payload, SECRET, { expiresIn: EXPIRES_IN });
+  return jwt.sign(payload, getSecret(), { expiresIn: EXPIRES_IN });
 }
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, SECRET);
+    return jwt.verify(token, getSecret());
   } catch {
     return null;
   }
