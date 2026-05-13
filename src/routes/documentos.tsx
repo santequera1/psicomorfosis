@@ -12,6 +12,7 @@ import {
   FileCheck2, FileClock, FileWarning, FileArchive, ArrowRight, ShieldCheck,
   MoreHorizontal, X, Eye, Loader2, Trash2, Archive, FilePen, Sparkles,
   ScrollText, ClipboardList, ChevronRight, ChevronLeft, Pencil, Copy,
+  EyeOff, Share2,
 } from "lucide-react";
 import { cn, displayPatientName } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
@@ -125,6 +126,17 @@ function DocumentosPage() {
   const deleteMu = useMutation({
     mutationFn: (id: string) => api.deleteDocument(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["documents"] }); toast.success("Eliminado"); },
+  });
+  // Toggle de visibilidad en el portal del paciente. Diferente a "pedir firma":
+  // simplemente marca el doc como compartido (read-only) o lo oculta.
+  const shareMu = useMutation({
+    mutationFn: ({ id, shared }: { id: string; shared: boolean }) =>
+      api.setDocumentSharedWithPatient(id, shared),
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast.success(d.shared_with_patient ? "Compartido con el paciente" : "Acceso del paciente removido");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "No se pudo cambiar la visibilidad"),
   });
 
   // Patients para los selectores (modal de duplicar + folders)
@@ -289,6 +301,7 @@ function DocumentosPage() {
                     onDelete={() => setConfirmDelete(d)}
                     onDuplicate={() => setDuplicating(d)}
                     onPreviewImage={() => setPreviewImage(d)}
+                    onShareToggle={() => shareMu.mutate({ id: d.id, shared: !d.shared_with_patient })}
                   />
                 ))}
               </div>
@@ -313,6 +326,7 @@ function DocumentosPage() {
                     onDelete={() => setConfirmDelete(d)}
                     onDuplicate={() => setDuplicating(d)}
                     onPreviewImage={() => setPreviewImage(d)}
+                    onShareToggle={() => shareMu.mutate({ id: d.id, shared: !d.shared_with_patient })}
                   />
                 ))}
               </ul>
@@ -522,7 +536,7 @@ async function downloadDocument(doc: PsmDocument) {
   }
 }
 
-function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate, onPreviewImage }: {
+function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate, onPreviewImage, onShareToggle }: {
   doc: PsmDocument;
   menuOpen: boolean;
   onMenuToggle: () => void;
@@ -531,6 +545,7 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   onDelete: () => void;
   onDuplicate: () => void;
   onPreviewImage: () => void;
+  onShareToggle: () => void;
 }) {
   const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
@@ -609,6 +624,17 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
                 <Copy className="h-4 w-4" /> Duplicar y reasignar
               </button>
             )}
+            {doc.patient_id && !doc.signed_at && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCloseMenu(); onShareToggle(); }}
+                className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2"
+                title={doc.shared_with_patient ? "Dejará de aparecer en el portal del paciente" : "Aparecerá en el portal del paciente (solo lectura)"}
+              >
+                {doc.shared_with_patient
+                  ? (<><EyeOff className="h-4 w-4" /> Quitar acceso del paciente</>)
+                  : (<><Share2 className="h-4 w-4" /> Compartir con el paciente</>)}
+              </button>
+            )}
             <button onClick={onArchive}
               className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
               <Archive className="h-4 w-4" /> Archivar
@@ -641,6 +667,14 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
             <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500 shrink-0">
               {isFile ? "📎 Archivo" : "✍ Editor"}
             </span>
+            {doc.shared_with_patient && doc.patient_id && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800 shrink-0"
+                title="Este documento es visible para el paciente en su portal."
+              >
+                <Eye className="h-3 w-3" /> Visible
+              </span>
+            )}
           </div>
           <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
             <span>{TYPE_LABEL[doc.type] ?? doc.type}</span>
@@ -673,12 +707,13 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
 }
 
 // ─── Tarjeta de documento (vista cards) ────────────────────────────────────
-function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage }: {
+function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShareToggle }: {
   doc: PsmDocument;
   onArchive: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onPreviewImage: () => void;
+  onShareToggle: () => void;
 }) {
   const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
@@ -731,6 +766,14 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage }: {
         <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
           {isFile ? "📎 Archivo" : "✍ Editor"}
         </span>
+        {doc.shared_with_patient && doc.patient_id && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
+            title="Visible para el paciente en su portal."
+          >
+            <Eye className="h-3 w-3" /> Visible
+          </span>
+        )}
       </div>
       <div className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500 flex items-center justify-between gap-2">
         <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
@@ -763,6 +806,17 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage }: {
                 <button onClick={() => { setMenuOpen(false); onDuplicate(); }}
                   className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2">
                   <Copy className="h-4 w-4" /> Duplicar y reasignar
+                </button>
+              )}
+              {doc.patient_id && !doc.signed_at && (
+                <button
+                  onClick={() => { setMenuOpen(false); onShareToggle(); }}
+                  className="w-full text-left px-3 py-2 text-sm text-ink-700 hover:bg-bg-100 inline-flex items-center gap-2"
+                  title={doc.shared_with_patient ? "Dejará de aparecer en el portal del paciente" : "Aparecerá en el portal del paciente (solo lectura)"}
+                >
+                  {doc.shared_with_patient
+                    ? (<><EyeOff className="h-4 w-4" /> Quitar acceso del paciente</>)
+                    : (<><Share2 className="h-4 w-4" /> Compartir con el paciente</>)}
                 </button>
               )}
               <button onClick={() => { setMenuOpen(false); onArchive(); }}

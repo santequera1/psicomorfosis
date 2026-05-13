@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ChevronLeft, FileSignature, Archive, Trash2, AlertCircle, Loader2,
   Check, Lock, User, FileText, Send, MessageCircle, Copy, Download,
+  Eye, Share2,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { whatsappUrl } from "@/lib/display";
@@ -99,6 +100,17 @@ function DocumentDetailPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  // Compartir / dejar de compartir con el paciente en su portal.
+  // Es independiente de la firma: un informe puede compartirse sin pedir firma.
+  const shareMu = useMutation({
+    mutationFn: (shared: boolean) => api.setDocumentSharedWithPatient(id, shared),
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["document", id] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      toast.success(d.shared_with_patient ? "Compartido con el paciente" : "Acceso del paciente removido");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const archiveMu = useMutation({
     mutationFn: () => api.archiveDocument(id),
     onSuccess: () => {
@@ -178,7 +190,15 @@ function DocumentDetailPage() {
   }
 
   // Si es archivo subido, mostramos el viewer en una página dedicada
-  if (isFile) return <FileViewerPage doc={doc} onArchive={() => archiveMu.mutate()} onDelete={() => deleteMu.mutate()} />;
+  if (isFile) return (
+    <FileViewerPage
+      doc={doc}
+      onArchive={() => archiveMu.mutate()}
+      onDelete={() => deleteMu.mutate()}
+      onShareToggle={() => shareMu.mutate(!doc.shared_with_patient)}
+      shareLoading={shareMu.isPending}
+    />
+  );
 
   // Editor in-app
   return (
@@ -205,6 +225,28 @@ function DocumentDetailPage() {
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 <span className="hidden sm:inline">{downloadingPdf ? "Generando…" : "Descargar PDF"}</span>
               </button>
+              {!isLocked && doc.patient_id && (
+                <button
+                  type="button"
+                  onClick={() => shareMu.mutate(!doc.shared_with_patient)}
+                  disabled={shareMu.isPending}
+                  className={
+                    doc.shared_with_patient
+                      ? "h-9 px-3 rounded-md text-sm border border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100 inline-flex items-center gap-2 disabled:opacity-60"
+                      : "h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
+                  }
+                  title={
+                    doc.shared_with_patient
+                      ? "El paciente lo está viendo en su portal. Click para quitarle el acceso."
+                      : "Compartir solo lectura: aparecerá en el portal del paciente."
+                  }
+                >
+                  {doc.shared_with_patient ? <Eye className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+                  <span className="hidden sm:inline">
+                    {doc.shared_with_patient ? "Visible para paciente" : "Compartir con paciente"}
+                  </span>
+                </button>
+              )}
               {!isLocked && doc.patient_id && (
                 <button
                   type="button"
@@ -381,7 +423,13 @@ function SignRequestModal({ doc, onClose }: { doc: PsmDocument; onClose: () => v
 }
 
 // ─── File viewer (kind='file') ──────────────────────────────────────────────
-function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArchive: () => void; onDelete: () => void }) {
+function FileViewerPage({ doc, onArchive, onDelete, onShareToggle, shareLoading }: {
+  doc: PsmDocument;
+  onArchive: () => void;
+  onDelete: () => void;
+  onShareToggle: () => void;
+  shareLoading: boolean;
+}) {
   // Con token en query no hace falta blob: iframe e img cargan directo.
   const fileUrl = api.documentFileUrl(doc.id);
   const downloadUrl = api.documentFileUrl(doc.id, { download: true });
@@ -411,6 +459,28 @@ function FileViewerPage({ doc, onArchive, onDelete }: { doc: PsmDocument; onArch
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {doc.patient_id && !doc.signed_at && (
+              <button
+                type="button"
+                onClick={onShareToggle}
+                disabled={shareLoading}
+                className={
+                  doc.shared_with_patient
+                    ? "h-9 px-3 rounded-md text-sm border border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100 inline-flex items-center gap-2 disabled:opacity-60"
+                    : "h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
+                }
+                title={
+                  doc.shared_with_patient
+                    ? "El paciente lo está viendo en su portal. Click para quitarle el acceso."
+                    : "Compartir solo lectura: aparecerá en el portal del paciente."
+                }
+              >
+                {doc.shared_with_patient ? <Eye className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+                <span className="hidden sm:inline">
+                  {doc.shared_with_patient ? "Visible para paciente" : "Compartir con paciente"}
+                </span>
+              </button>
+            )}
             <a href={downloadUrl} download={`${safeName}.${ext}`}
               className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700">
               <FileText className="h-4 w-4" /> Descargar

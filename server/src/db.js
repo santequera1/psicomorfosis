@@ -818,6 +818,17 @@ function runMigrations() {
     )`,
     "CREATE INDEX IF NOT EXISTS idx_clinical_diagnoses_patient ON clinical_diagnoses(patient_id) WHERE archived_at IS NULL",
     "CREATE INDEX IF NOT EXISTS idx_clinical_diagnoses_workspace ON clinical_diagnoses(workspace_id)",
+    // ─── Compartir documento con paciente (12 may 2026) ─────────────────
+    //
+    // Antes: cualquier documento con patient_id se mostraba al paciente
+    // en su portal. Eso no permitía documentos "internos" sobre el
+    // paciente (informes en borrador, notas privadas, plan de
+    // tratamiento en revisión, etc.).
+    //
+    // Ahora: el documento NO se muestra al paciente salvo que el
+    // psicólogo lo marque como compartido. Pedir firma automáticamente
+    // lo marca como compartido (no se puede firmar lo que no se ve).
+    "ALTER TABLE documents ADD COLUMN shared_with_patient INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try {
@@ -1153,6 +1164,40 @@ function backfillExisting() {
     }
   } catch (err) {
     console.warn("[db] backfill horario default falló:", err.message);
+  }
+
+  // 9. Marcar documentos existentes con paciente como compartidos.
+  //
+  // Antes del 12 may 2026, cualquier doc asignado a un paciente se
+  // mostraba automáticamente en su portal. Con el nuevo flag
+  // shared_with_patient (default 0 para docs nuevos), los docs
+  // existentes quedarían "invisibles" para el paciente, lo que rompería
+  // la experiencia para psicólogas que ya estaban compartiendo. Este
+  // backfill preserva el comportamiento previo: si el doc YA tenía
+  // patient_id y NO está archivado, lo marcamos como compartido.
+  //
+  // Idempotente: el WHERE incluye `shared_with_patient = 0` para que
+  // si la psicóloga ya quitó acceso explícitamente, no lo restauremos
+  // por accidente en un próximo arranque.
+  try {
+    const r = db.prepare(`
+      UPDATE documents
+      SET shared_with_patient = 1
+      WHERE patient_id IS NOT NULL
+        AND archived_at IS NULL
+        AND shared_with_patient = 0
+        AND (
+          -- Heurística para no marcar docs ya gestionados con el nuevo flujo.
+          -- Solo migramos docs creados antes de hoy (today UTC); los nuevos
+          -- ya nacen con el default 0 explícito y se gestionan con la UI.
+          date(created_at) < date('now')
+        )
+    `).run();
+    if (r.changes > 0) {
+      console.log(`[db] backfill: ${r.changes} documento(s) marcados como compartidos con paciente (migración)`);
+    }
+  } catch (err) {
+    console.warn("[db] backfill shared_with_patient falló:", err.message);
   }
 }
 

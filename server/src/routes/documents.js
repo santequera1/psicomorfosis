@@ -286,6 +286,7 @@ function rowToDoc(r) {
   return {
     ...r,
     body_json: safeJSON(r.body_json),
+    shared_with_patient: !!r.shared_with_patient,
     // URL pública para imágenes (img tags no pueden mandar Authorization).
     // Solo se calcula para mime image/* — el resto debe pasar por /api/.../file.
     public_url: r.kind === "file" && r.mime?.startsWith("image/") && r.filename
@@ -921,6 +922,31 @@ router.post("/:id/sign", (req, res) => {
   res.json(rowToDoc(row));
 });
 
+/**
+ * PATCH /api/documents/:id/share — toggle visibilidad al paciente.
+ * Body: { shared: boolean }. Sólo aplica si el doc tiene patient_id.
+ * Si shared=true, el paciente lo verá en su portal; si false, deja de verlo.
+ * Nota: un doc firmado por el paciente siempre se ve en el portal aunque
+ * shared=0 (la firma implica que ya lo vio y debe poder consultarlo).
+ */
+router.patch("/:id/share", (req, res) => {
+  if (req.user.role === "paciente") return res.status(403).json({ error: "Solo staff" });
+  const d = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, ws(req));
+  if (!d) return res.status(404).json({ error: "Documento no encontrado" });
+  if (!d.patient_id) {
+    return res.status(400).json({ error: "El documento no está vinculado a un paciente" });
+  }
+  const shared = req.body?.shared ? 1 : 0;
+  db.prepare(`
+    UPDATE documents SET shared_with_patient = ?, updated_at = ?
+    WHERE id = ? AND workspace_id = ?
+  `).run(shared, now(), req.params.id, ws(req));
+  const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
+  req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:updated", rowToDoc(row));
+  res.json(rowToDoc(row));
+});
+
 router.post("/:id/archive", (req, res) => {
   const d = db.prepare("SELECT * FROM documents WHERE id = ? AND workspace_id = ?").get(req.params.id, ws(req));
   if (!d) return res.status(404).json({ error: "Documento no encontrado" });
@@ -1088,6 +1114,17 @@ router.post("/:id/sign-request", (req, res) => {
     INSERT INTO document_sign_requests (workspace_id, document_id, patient_id, token, expires_at, created_by_user_id)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(wsId(req), doc.id, doc.patient_id, token, expiresAt, req.user.id);
+
+  // Si pedimos firma, el paciente tiene que poder ver el documento en el portal.
+  // Marcamos shared_with_patient = 1 automáticamente.
+  if (!doc.shared_with_patient) {
+    db.prepare(`
+      UPDATE documents SET shared_with_patient = 1, updated_at = ?
+      WHERE id = ? AND workspace_id = ?
+    `).run(now(), doc.id, wsId(req));
+    const updated = db.prepare("SELECT * FROM documents WHERE id = ?").get(doc.id);
+    req.app.get("io")?.to(`ws-${wsId(req)}`).emit("document:updated", rowToDoc(updated));
+  }
 
   const base = req.headers["x-forwarded-host"]
     ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`

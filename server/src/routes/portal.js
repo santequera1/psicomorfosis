@@ -544,10 +544,14 @@ router.post("/portal/tests/:id/submit", requirePatient, (req, res) => {
  * botón "Firmar ahora" sin tener que hacer un fetch extra.
  */
 router.get("/portal/documents", requirePatient, (req, res) => {
+  // El paciente ve solo lo que el psicólogo decidió compartir, o lo que él
+  // mismo firmó (un doc firmado siempre debe poder consultarse aunque después
+  // se "des-comparta"). El resto queda privado del lado clínico.
   const rows = db.prepare(`
     SELECT id, name, type, kind, mime, size_kb, status, signed_at, created_at, updated_at, professional
     FROM documents
     WHERE patient_id = ? AND workspace_id = ? AND archived_at IS NULL
+      AND (shared_with_patient = 1 OR signed_at IS NOT NULL)
     ORDER BY created_at DESC
   `).all(req.user.patient_id, req.user.workspace_id);
 

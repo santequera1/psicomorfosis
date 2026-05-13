@@ -638,6 +638,8 @@ export interface PsmDocument {
   signed_by_user_id: number | null;
   // Soft delete
   archived_at: string | null;
+  /** Si true, el paciente lo ve en su portal. Un doc firmado siempre se ve. */
+  shared_with_patient?: boolean;
   // Timestamps
   size_kb: number | null;
   created_at: string;
@@ -1049,6 +1051,12 @@ export const api = {
   updateDocument: (id: string, body: Partial<PsmDocument>) =>
     request<PsmDocument>(`/api/documents/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   signDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}/sign`, { method: "POST" }),
+  /** Marcar/desmarcar documento como visible para el paciente en su portal. */
+  setDocumentSharedWithPatient: (id: string, shared: boolean) =>
+    request<PsmDocument>(`/api/documents/${id}/share`, {
+      method: "PATCH",
+      body: JSON.stringify({ shared }),
+    }),
   archiveDocument: (id: string) => request<{ ok: true }>(`/api/documents/${id}/archive`, { method: "POST" }),
   restoreDocument: (id: string) => request<PsmDocument>(`/api/documents/${id}/restore`, { method: "POST" }),
   deleteDocument: (id: string) => request<{ ok: true }>(`/api/documents/${id}`, { method: "DELETE" }),
