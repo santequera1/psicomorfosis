@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { DocumentEditor } from "@/components/documents/DocumentEditor";
 
-export const Route = createFileRoute("/p_/documentos/$id")({
+export const Route = createFileRoute("/p_/documentos_/$id")({
   head: () => ({ meta: [{ title: "Documento · Mi portal" }] }),
   component: PortalDocumentViewer,
 });
