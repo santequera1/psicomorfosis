@@ -723,6 +723,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     const msg = typeof body === "string" ? body : body.error ?? "Error en la solicitud";
     if (res.status === 401) clearSession();
+    // 403 con hint=wrong_role en endpoints del portal: el token actual no es
+    // de paciente (típicamente, staff logueado abrió el portal con su token).
+    // Limpiamos sesión para que el guard del PortalShell mande a /p/login y
+    // no quedemos en loop pidiendo /api/portal/* y recibiendo 403 forever.
+    if (
+      res.status === 403 &&
+      typeof body === "object" && body && (body as any).hint === "wrong_role" &&
+      path.startsWith("/api/portal/")
+    ) {
+      clearSession();
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/p/login")) {
+        window.location.href = "/p/login";
+      }
+    }
     throw new ApiError(res.status, msg);
   }
   return body as T;

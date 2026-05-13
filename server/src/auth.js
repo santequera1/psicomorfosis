@@ -63,7 +63,18 @@ export function requirePatient(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
   if (payload.role !== "paciente" || !payload.patient_id) {
-    return res.status(403).json({ error: "Acceso solo para pacientes" });
+    // Log estructurado: nos dice si el problema es role incorrecto (usuario
+    // logueado como staff intentando acceder al portal) o patient_id ausente
+    // (paciente mal seedado). Vital para diagnosticar 403s en producción.
+    console.warn(
+      `[auth] 403 portal: role=${JSON.stringify(payload.role)} patient_id=${JSON.stringify(payload.patient_id)} user_id=${payload.id} path=${req.path}`
+    );
+    return res.status(403).json({
+      error: "Acceso solo para pacientes",
+      // Pista para que el frontend sepa que tiene que botar el token viejo
+      // y mandar al usuario a login. Sin esto el frontend reintenta en loop.
+      hint: "wrong_role",
+    });
   }
   req.user = payload;
   next();

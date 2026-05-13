@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain, Bug } from "lucide-react";
 import { ReportProblemModal } from "@/components/app/ReportProblemModal";
 import { Logo } from "@/components/app/Logo";
-import { api, clearSession, getStoredUser, type ApiUser } from "@/lib/api";
+import { api, clearSession, getStoredUser, getToken, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type TabKey = "inicio" | "citas" | "tareas" | "tests" | "documentos" | "perfil";
@@ -34,9 +34,21 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const wasDark = document.documentElement.classList.contains("dark");
     document.documentElement.classList.remove("dark");
-    setUser(getStoredUser());
+    const stored = getStoredUser();
+    const tok = getToken();
+    // Guard: si no hay sesión o si la sesión NO es de paciente (típico
+    // caso: el usuario estaba logueado como staff en otra pestaña y abrió
+    // el portal acá; localStorage es compartido y el token de staff queda),
+    // limpiamos todo y mandamos a /p/login. Sin esto, las queries del portal
+    // bombardean al server con 403 hasta el infinito.
+    if (!tok || !stored || stored.role !== "paciente") {
+      clearSession();
+      navigate({ to: "/p/login", replace: true });
+      return;
+    }
+    setUser(stored);
     return () => { if (wasDark) document.documentElement.classList.add("dark"); };
-  }, []);
+  }, [navigate]);
 
   // Tests pendientes/en curso → badge en la pestaña "Tests" para que el
   // paciente sepa que tiene algo asignado sin tener que entrar a revisar.
