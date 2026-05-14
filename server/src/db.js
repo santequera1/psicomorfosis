@@ -1210,7 +1210,32 @@ function backfillExisting() {
     console.warn("[db] backfill shared_with_patient falló:", err.message);
   }
 
-  // 10) Seed idempotente de sedes para Nathaly (workspace 1). Ella nos
+  // 10) Backfill: docs enlazados como template/submission a una tarea deben
+  // estar accesibles para el paciente. Sin esto, el paciente recibe 403 al
+  // descargar la consigna porque el doc nació con shared_with_patient=0
+  // (default del INSERT en /api/documents/upload). El PATCH de la tarea ya
+  // los marca automáticamente desde ahora, pero ESTA query arregla las
+  // tareas que se crearon entre el deploy de la feature y el fix.
+  try {
+    const r = db.prepare(`
+      UPDATE documents
+      SET shared_with_patient = 1
+      WHERE shared_with_patient = 0
+        AND archived_at IS NULL
+        AND id IN (
+          SELECT template_document_id FROM tareas WHERE template_document_id IS NOT NULL
+          UNION
+          SELECT submission_document_id FROM tareas WHERE submission_document_id IS NOT NULL
+        )
+    `).run();
+    if (r.changes > 0) {
+      console.log(`[db] backfill: ${r.changes} doc(s) de tareas marcados como compartidos con paciente`);
+    }
+  } catch (err) {
+    console.warn("[db] backfill docs-de-tareas falló:", err.message);
+  }
+
+  // 11) Seed idempotente de sedes para Nathaly (workspace 1). Ella nos
   // confirmó que atiende en Toberín y Recreo. "Online" no es sede física —
   // se modela como `appointments.modality='tele'`. Solo agregamos si la
   // sede no existe ya (chequeo por nombre exacto en su workspace).

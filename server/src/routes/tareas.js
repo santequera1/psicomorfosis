@@ -274,6 +274,22 @@ router.patch("/:id", (req, res) => {
   }
   if (sets.length === 0) return res.json(toTask(existing));
 
+  // Side effect importante: si el psicólogo enlaza un documento como
+  // template (consigna) o submission (entrega) de una tarea visible para el
+  // paciente, ese doc DEBE quedar accesible desde el portal. Sin esto, el
+  // endpoint /api/portal/documents/:id/file rechaza con 403 porque el doc
+  // se subió a través de /api/documents/upload (que crea docs con
+  // shared_with_patient=0 por default). Lo arreglamos auto-marcando.
+  const docsToShare = [];
+  if (b.template_document_id) docsToShare.push(b.template_document_id);
+  if (b.submission_document_id) docsToShare.push(b.submission_document_id);
+  for (const docId of docsToShare) {
+    db.prepare(`
+      UPDATE documents SET shared_with_patient = 1, updated_at = ?
+      WHERE id = ? AND workspace_id = ? AND shared_with_patient = 0
+    `).run(now(), docId, wsId(req));
+  }
+
   sets.push("updated_at = ?"); params.push(now());
   params.push(req.params.id);
 
