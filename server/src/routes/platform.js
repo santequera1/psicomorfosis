@@ -44,18 +44,21 @@ router.get("/workspaces", (req, res) => {
   const rows = db.prepare(`
     SELECT
       w.id, w.name, w.mode, w.disabled_at, w.disabled_reason, w.created_at,
+      w.specialties, w.max_patients,
       (SELECT COUNT(*) FROM users WHERE workspace_id = w.id AND role != 'paciente') AS users_count,
       (SELECT COUNT(*) FROM patients WHERE workspace_id = w.id AND archived_at IS NULL) AS patients_count,
       (SELECT COUNT(*) FROM documents WHERE workspace_id = w.id AND archived_at IS NULL) AS documents_count,
       (SELECT COUNT(*) FROM documents WHERE workspace_id = w.id AND created_at >= ?) AS documents_7d,
       (SELECT COUNT(*) FROM appointments WHERE workspace_id = w.id AND date >= ?) AS appointments_30d,
+      (SELECT COUNT(*) FROM appointments WHERE workspace_id = w.id AND date >= ? AND status = 'atendida') AS sessions_30d,
+      (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE workspace_id = w.id AND status = 'pagada' AND date(COALESCE(paid_at, created_at)) >= ?) AS revenue_30d,
       (SELECT MAX(last_login_at) FROM users WHERE workspace_id = w.id AND role != 'paciente') AS last_login_at,
       (SELECT name FROM users WHERE workspace_id = w.id AND role != 'paciente' AND is_platform_admin != 1 ORDER BY id LIMIT 1) AS owner_name,
       (SELECT email FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_email,
       (SELECT username FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_username
     FROM workspaces w
     ORDER BY (w.disabled_at IS NULL) DESC, w.created_at DESC
-  `).all(since7d, since30d);
+  `).all(since7d, since30d, since30d, since30d);
 
   // Cargamos TODOS los miembros (no-paciente) de una sola pasada y los
   // agrupamos por workspace en JS. Antes solo enviábamos `owner_*` (el
@@ -85,24 +88,49 @@ router.get("/workspaces", (req, res) => {
     });
   }
 
-  res.json(rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    mode: r.mode,
-    disabledAt: r.disabled_at,
-    disabledReason: r.disabled_reason,
-    createdAt: r.created_at,
-    usersCount: r.users_count,
-    patientsCount: r.patients_count,
-    documentsCount: r.documents_count,
-    documents7d: r.documents_7d,
-    appointments30d: r.appointments_30d,
-    lastLoginAt: r.last_login_at,
-    ownerName: r.owner_name,
-    ownerEmail: r.owner_email,
-    ownerUsername: r.owner_username,
-    members: membersByWs.get(r.id) ?? [],
-  })));
+  res.json(rows.map((r) => {
+    // specialties viene como JSON-string en DB; parseamos defensivamente
+    // y caemos a [] si el contenido está corrupto (no debería pero por si).
+    let specialties = [];
+    if (r.specialties) {
+      try {
+        const parsed = JSON.parse(r.specialties);
+        if (Array.isArray(parsed)) specialties = parsed.filter((x) => typeof x === "string");
+      } catch { /* leave [] */ }
+    }
+    return {
+      id: r.id,
+      name: r.name,
+      mode: r.mode,
+      disabledAt: r.disabled_at,
+      disabledReason: r.disabled_reason,
+      createdAt: r.created_at,
+      usersCount: r.users_count,
+      patientsCount: r.patients_count,
+      documentsCount: r.documents_count,
+      documents7d: r.documents_7d,
+      appointments30d: r.appointments_30d,
+      // Sesiones efectivamente atendidas (no toda cita; solo las
+      // marcadas atendidas). KPI más fiel a la actividad clínica real.
+      sessions30d: r.sessions_30d ?? 0,
+      // Ingresos: SUM de invoices pagadas en últimos 30d. paid_at preferido,
+      // fallback a created_at si la psicóloga no marcó paid_at por separado.
+      revenue30d: r.revenue_30d ?? 0,
+      lastLoginAt: r.last_login_at,
+      // Datos del perfil del workspace, opcionales (NULL al inicio).
+      specialties,
+      maxPatients: r.max_patients ?? null,
+      // % de ocupación: solo se calcula si hay max_patients configurado.
+      // null indica "sin tope definido" — el admin no debe ver progress bar.
+      occupancyPct: r.max_patients
+        ? Math.min(100, Math.round((r.patients_count / r.max_patients) * 100))
+        : null,
+      ownerName: r.owner_name,
+      ownerEmail: r.owner_email,
+      ownerUsername: r.owner_username,
+      members: membersByWs.get(r.id) ?? [],
+    };
+  }));
 });
 
 /**
@@ -151,6 +179,62 @@ router.get("/workspaces/:id", (req, res) => {
     })),
     stats,
   });
+});
+
+/**
+ * PATCH /api/platform/workspaces/:id
+ * Body opcional: { name?, mode?, specialties?, max_patients? }
+ *
+ * Editar metadata del workspace desde el panel de admin. Útil para corregir
+ * el nombre, cambiar el mode (individual ↔ organization), o configurar
+ * especialidades/capacidad cuando el psicólogo no las ha llenado por sí
+ * mismo. Sólo platform admins (este router exige is_platform_admin).
+ *
+ * specialties: acepta array de strings o null para limpiar.
+ * max_patients: entero positivo, o null para "sin tope".
+ */
+router.patch("/workspaces/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const ws = db.prepare("SELECT id FROM workspaces WHERE id = ?").get(id);
+  if (!ws) return res.status(404).json({ error: "Workspace no encontrado" });
+
+  const body = req.body ?? {};
+  const sets = [];
+  const params = [];
+
+  if (typeof body.name === "string" && body.name.trim().length > 0) {
+    sets.push("name = ?");
+    params.push(body.name.trim().slice(0, 100));
+  }
+  if (body.mode === "individual" || body.mode === "organization") {
+    sets.push("mode = ?");
+    params.push(body.mode);
+  }
+  if (Array.isArray(body.specialties)) {
+    const cleaned = body.specialties
+      .filter((x) => typeof x === "string")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+      .slice(0, 30);
+    sets.push("specialties = ?");
+    params.push(cleaned.length ? JSON.stringify(cleaned) : null);
+  } else if (body.specialties === null) {
+    sets.push("specialties = ?");
+    params.push(null);
+  }
+  if (body.max_patients === null) {
+    sets.push("max_patients = ?");
+    params.push(null);
+  } else if (Number.isInteger(body.max_patients) && body.max_patients >= 0) {
+    sets.push("max_patients = ?");
+    params.push(body.max_patients);
+  }
+
+  if (sets.length === 0) return res.status(400).json({ error: "Nada que actualizar" });
+
+  params.push(id);
+  db.prepare(`UPDATE workspaces SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
 });
 
 /**

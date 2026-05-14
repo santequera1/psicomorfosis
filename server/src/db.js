@@ -860,6 +860,15 @@ function runMigrations() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
     "CREATE INDEX IF NOT EXISTS idx_notif_dismissals_user ON notification_dismissals(user_id)",
+    // Especialidades del workspace (14 may). JSON-string con array de
+    // strings, ej '["Depresión","Ansiedad","Parejas"]'. Si el psicólogo no
+    // las configura queda NULL y la UI muestra "Sin definir". El admin de
+    // plataforma las ve en /platform; el staff las edita en /configuracion.
+    "ALTER TABLE workspaces ADD COLUMN specialties TEXT",
+    // Capacidad máxima de pacientes activos. NULL = sin límite (default).
+    // Si el psicólogo lo define, el admin ve % de ocupación y badge
+    // "saturado" cuando se acerca al tope. Métrica para gestión de carga.
+    "ALTER TABLE workspaces ADD COLUMN max_patients INTEGER",
   ];
   for (const sql of migrations) {
     try {

@@ -59,13 +59,20 @@ export interface PlatformWorkspace {
   documentsCount: number;
   documents7d: number;
   appointments30d: number;
+  /** Citas atendidas en los últimos 30 días (vs. total programadas). KPI más fiel a la actividad clínica real. */
+  sessions30d: number;
+  /** Suma de invoices pagadas en los últimos 30 días (paid_at o created_at). */
+  revenue30d: number;
+  /** Especialidades del psicólogo. Array de strings, vacío si no las configuró. */
+  specialties: string[];
+  /** Capacidad máxima de pacientes activos. null = sin tope. */
+  maxPatients: number | null;
+  /** % de ocupación (patientsCount / maxPatients * 100). null si no hay tope. */
+  occupancyPct: number | null;
   lastLoginAt: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
   ownerUsername: string | null;
-  /** Lista completa de usuarios staff del workspace. ownerName/Email son
-   *  el primero (legacy), pero workspaces compartidos como el legal
-   *  (María + Alba) requieren ver todos los miembros. */
   members: PlatformWorkspaceMember[];
 }
 
@@ -156,6 +163,10 @@ export interface Workspace {
   id: number;
   name: string;
   mode: WorkspaceMode;
+  /** Especialidades del psicólogo. Array de strings, vacío si no las configuró. */
+  specialties?: string[];
+  /** Capacidad máxima de pacientes activos. null = sin tope. */
+  maxPatients?: number | null;
   sedes: Sede[];
   professionals: Professional[];
 }
@@ -1083,8 +1094,11 @@ export const api = {
     request<{ ok: true; signature_url: string }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ dataUrl }) }),
   clearMySignature: () =>
     request<{ ok: true; signature_url: null }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ clear: true }) }),
-  updateWorkspace: (body: { name?: string; mode?: WorkspaceMode }) =>
-    request<{ id: number; name: string; mode: WorkspaceMode }>("/api/workspace", { method: "PATCH", body: JSON.stringify(body) }),
+  updateWorkspace: (body: { name?: string; mode?: WorkspaceMode; specialties?: string[] | null; max_patients?: number | null }) =>
+    request<{ id: number; name: string; mode: WorkspaceMode; specialties: string[]; maxPatients: number | null }>(
+      "/api/workspace",
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
 
   // Sedes
   listSedes: () => request<Sede[]>("/api/workspace/sedes"),
@@ -1611,6 +1625,22 @@ export const api = {
     request<PlatformWorkspace[]>(`/api/platform/workspaces`),
   platformGetWorkspace: (id: number) =>
     request<PlatformWorkspaceDetail>(`/api/platform/workspaces/${id}`),
+  /**
+   * Editar metadata del workspace desde el panel admin (nombre, modo,
+   * especialidades, capacidad máxima). El psicólogo también puede
+   * editar estos campos desde /configuracion; este endpoint sirve para
+   * cuando el admin necesita corregir algo o configurar por ellos.
+   */
+  platformUpdateWorkspace: (id: number, body: {
+    name?: string;
+    mode?: WorkspaceMode;
+    specialties?: string[] | null;
+    max_patients?: number | null;
+  }) =>
+    request<{ ok: boolean }>(`/api/platform/workspaces/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   platformDisableWorkspace: (id: number, reason?: string) =>
     request<{ ok: boolean }>(`/api/platform/workspaces/${id}/disable`, {
       method: "POST",

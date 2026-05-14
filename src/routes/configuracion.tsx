@@ -1263,7 +1263,144 @@ function WorkspacePanel() {
       {savedAt && !pendingMode && (
         <p className="text-xs text-success flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Cambios guardados a las {savedAt}</p>
       )}
+
+      <ProfilePanelSection workspace={workspace} />
     </>
+  );
+}
+
+/**
+ * Sub-sección del WorkspacePanel: especialidades + capacidad máxima.
+ * Datos opcionales que ayudan al psicólogo (gestión de carga) y al admin
+ * de plataforma (visibilidad, identificación de saturados).
+ *
+ * Especialidades: tag input estilo chips. El backend acepta array de
+ * strings (1-30 items), o null para vaciar.
+ *
+ * Capacidad: entero >= 0 o vacío (null en backend = sin tope).
+ */
+function ProfilePanelSection({ workspace }: { workspace: { specialties?: string[]; maxPatients?: number | null } }) {
+  const qc = useQueryClient();
+  const initialSpecs = workspace.specialties ?? [];
+  const [specialties, setSpecialties] = useState<string[]>(initialSpecs);
+  const [specInput, setSpecInput] = useState("");
+  const initialMax = workspace.maxPatients != null ? String(workspace.maxPatients) : "";
+  const [maxPatientsStr, setMaxPatientsStr] = useState(initialMax);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // Sync local state si workspace cambia (típico al guardar y refetch).
+  useEffect(() => {
+    setSpecialties(workspace.specialties ?? []);
+    setMaxPatientsStr(workspace.maxPatients != null ? String(workspace.maxPatients) : "");
+  }, [workspace.specialties, workspace.maxPatients]);
+
+  function addSpecialty() {
+    const v = specInput.trim();
+    if (!v) return;
+    if (specialties.includes(v)) { setSpecInput(""); return; }
+    if (specialties.length >= 30) { toast.error("Máximo 30 especialidades"); return; }
+    setSpecialties([...specialties, v]);
+    setSpecInput("");
+  }
+
+  const mu = useMutation({
+    mutationFn: () => {
+      const body: Parameters<typeof api.updateWorkspace>[0] = {};
+      body.specialties = specialties.length ? specialties : null;
+      if (maxPatientsStr.trim() === "") {
+        body.max_patients = null;
+      } else {
+        const n = Number(maxPatientsStr);
+        if (Number.isInteger(n) && n >= 0) body.max_patients = n;
+      }
+      return api.updateWorkspace(body);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspace"] });
+      setSavedAt(new Date().toLocaleTimeString("es-CO"));
+      toast.success("Perfil actualizado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const dirty = JSON.stringify(specialties) !== JSON.stringify(initialSpecs)
+    || maxPatientsStr !== initialMax;
+
+  return (
+    <div className="mt-8 pt-6 border-t border-line-100">
+      <h4 className="text-xs uppercase tracking-widest text-brand-700 font-semibold mb-1">Perfil del consultorio</h4>
+      <p className="text-xs text-ink-500 mb-4">Información que ayuda a identificar tu práctica y gestionar tu carga.</p>
+
+      <label className="block mb-5">
+        <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+          Especialidades / temas que tratas
+        </span>
+        <p className="text-[11px] text-ink-400 mt-0.5 mb-2">Ej: Ansiedad, Depresión, Parejas, Adolescentes, Duelo. Aparecen como chips en tu perfil.</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={specInput}
+            onChange={(e) => setSpecInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSpecialty(); } }}
+            placeholder="Escribe y presiona Enter…"
+            className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+          />
+          <button
+            type="button"
+            onClick={addSpecialty}
+            className="h-10 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+          >
+            Agregar
+          </button>
+        </div>
+        {specialties.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {specialties.map((s) => (
+              <span key={s} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-lavender-100 text-lavender-500 font-medium">
+                {s}
+                <button
+                  type="button"
+                  onClick={() => setSpecialties(specialties.filter((x) => x !== s))}
+                  className="hover:text-ink-900"
+                  aria-label={`Quitar ${s}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </label>
+
+      <label className="block mb-5">
+        <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+          Capacidad máxima de pacientes activos
+        </span>
+        <p className="text-[11px] text-ink-400 mt-0.5 mb-2">Te ayuda a saber cuándo estás saturada. Déjalo vacío si no quieres tope.</p>
+        <input
+          type="number"
+          min={0}
+          value={maxPatientsStr}
+          onChange={(e) => setMaxPatientsStr(e.target.value)}
+          placeholder="Ej: 30"
+          className="w-40 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular"
+        />
+      </label>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => mu.mutate()}
+          disabled={!dirty || mu.isPending}
+          className="h-10 px-4 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-50"
+        >
+          {mu.isPending ? "Guardando…" : "Guardar cambios"}
+        </button>
+        {savedAt && !dirty && (
+          <p className="text-xs text-success flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Guardado a las {savedAt}</p>
+        )}
+      </div>
+    </div>
   );
 }
 

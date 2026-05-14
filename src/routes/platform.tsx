@@ -6,7 +6,7 @@ import {
   Shield, Users, FileText, CalendarCheck2, Activity, Plus, Power, PowerOff,
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
-  UserPlus, RefreshCw,
+  UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -67,6 +67,7 @@ function PlatformDashboard() {
   const [viewMode, setViewMode] = usePersistedViewMode("psm.platform.view", "list");
   const [disabling, setDisabling] = useState<PlatformWorkspace | null>(null);
   const [deleting, setDeleting] = useState<PlatformWorkspace | null>(null);
+  const [editing, setEditing] = useState<PlatformWorkspace | null>(null);
 
   const { data: usage } = useQuery({
     queryKey: ["platform-usage"],
@@ -118,8 +119,11 @@ function PlatformDashboard() {
     const headers = [
       "ID", "Nombre", "Modo", "Estado", "Razón deshabilitada",
       "Creada", "Último login",
-      "Usuarios staff", "Pacientes activos", "Documentos totales",
+      "Usuarios staff", "Pacientes activos", "Capacidad máx.", "% Ocupación",
+      "Documentos totales",
       "Docs últimos 7 días", "Citas últimos 30 días",
+      "Sesiones atendidas 30d", "Ingresos 30d (COP)",
+      "Especialidades",
       "Owner nombre", "Owner email", "Owner usuario",
       "Miembros (todos)",
     ];
@@ -136,8 +140,14 @@ function PlatformDashboard() {
       w.disabledReason ?? "",
       w.createdAt?.slice(0, 10) ?? "",
       w.lastLoginAt?.slice(0, 19).replace("T", " ") ?? "",
-      w.usersCount, w.patientsCount, w.documentsCount,
+      w.usersCount, w.patientsCount,
+      w.maxPatients ?? "",
+      w.occupancyPct != null ? `${w.occupancyPct}%` : "",
+      w.documentsCount,
       w.documents7d, w.appointments30d,
+      w.sessions30d ?? 0,
+      w.revenue30d ?? 0,
+      (w.specialties ?? []).join("; "),
       w.ownerName ?? "", w.ownerEmail ?? "", w.ownerUsername ?? "",
       (w.members ?? []).map((m) => `${m.name} <${m.username}>`).join("; "),
     ]);
@@ -283,6 +293,7 @@ function PlatformDashboard() {
                   ws={w}
                   onDisable={() => setDisabling(w)}
                   onDelete={() => setDeleting(w)}
+                  onEdit={() => setEditing(w)}
                 />
               ))}
             </ul>
@@ -293,12 +304,18 @@ function PlatformDashboard() {
       {createOpen && <CreateWorkspaceModal onClose={() => setCreateOpen(false)} />}
       {disabling && <DisableWorkspaceModal ws={disabling} onClose={() => setDisabling(null)} />}
       {deleting && <DeleteWorkspaceModal ws={deleting} onClose={() => setDeleting(null)} />}
+      {editing && <EditWorkspaceModal ws={editing} onClose={() => setEditing(null)} />}
     </AppShell>
   );
 }
 
 // ─── Fila por workspace ─────────────────────────────────────────────────────
-function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDisable: () => void; onDelete: () => void }) {
+function WorkspaceRow({ ws, onDisable, onDelete, onEdit }: {
+  ws: PlatformWorkspace;
+  onDisable: () => void;
+  onDelete: () => void;
+  onEdit: () => void;
+}) {
   const qc = useQueryClient();
   const enableMu = useMutation({
     mutationFn: () => api.platformEnableWorkspace(ws.id),
@@ -311,6 +328,20 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
   });
 
   const isDisabled = !!ws.disabledAt;
+  // Alertas derivadas:
+  //  - inactivo: si el último login fue hace > 30 días (o nunca y lleva > 7d creado)
+  //  - saturado: % de ocupación >= 90 cuando hay max_patients configurado
+  const inactiveDays = ws.lastLoginAt
+    ? Math.floor((Date.now() - new Date(ws.lastLoginAt).getTime()) / 86400000)
+    : null;
+  const createdDays = ws.createdAt
+    ? Math.floor((Date.now() - new Date(ws.createdAt).getTime()) / 86400000)
+    : 0;
+  const isInactive = !isDisabled && (
+    (inactiveDays != null && inactiveDays > 30)
+    || (inactiveDays == null && createdDays > 7)
+  );
+  const isSaturated = !isDisabled && ws.occupancyPct != null && ws.occupancyPct >= 90;
 
   // Fila de acciones — la renderizamos en dos ubicaciones con clases
   // responsive: arriba a la derecha en desktop, abajo de la info en mobile.
@@ -338,6 +369,13 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
           Deshabilitar
         </button>
       )}
+      <button
+        onClick={onEdit}
+        className="h-8 w-8 rounded-md border border-line-200 text-ink-700 hover:border-brand-400 flex items-center justify-center"
+        title="Editar info (nombre, especialidades, capacidad)"
+      >
+        <Edit3 className="h-3.5 w-3.5" />
+      </button>
       <button
         onClick={onDelete}
         className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
@@ -393,9 +431,20 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
               </>
             )}
             <span className="text-ink-300">·</span>
-            <span className="tabular">{ws.patientsCount} pacientes</span>
+            <span className="tabular">
+              {ws.patientsCount} paciente{ws.patientsCount === 1 ? "" : "s"}
+              {ws.maxPatients != null && (
+                <span className="text-ink-400"> / {ws.maxPatients} ({ws.occupancyPct}%)</span>
+              )}
+            </span>
             <span className="text-ink-300">·</span>
-            <span className="tabular">{ws.documentsCount} docs</span>
+            <span className="tabular">{ws.sessions30d ?? 0} sesiones 30d</span>
+            {(ws.revenue30d ?? 0) > 0 && (
+              <>
+                <span className="text-ink-300">·</span>
+                <span className="tabular">{formatCurrencyCOP(ws.revenue30d ?? 0)} 30d</span>
+              </>
+            )}
             {ws.lastLoginAt && (
               <>
                 <span className="text-ink-300 hidden sm:inline">·</span>
@@ -403,6 +452,34 @@ function WorkspaceRow({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDi
               </>
             )}
           </div>
+
+          {/* Chips de alerta + especialidades. Solo renderiza la fila si algo
+              hay para mostrar; evita un mt-2 vacío con muchos workspaces. */}
+          {(isInactive || isSaturated || (ws.specialties ?? []).length > 0) && (
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              {isInactive && (
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-warning-soft text-risk-moderate" title="Última actividad hace más de 30 días (o nunca entró)">
+                  <AlertTriangle className="h-3 w-3" />
+                  {inactiveDays != null ? `Inactivo ${inactiveDays}d` : "Sin actividad"}
+                </span>
+              )}
+              {isSaturated && (
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high" title="Cerca o por encima de la capacidad máxima">
+                  <Users className="h-3 w-3" />
+                  Saturado ({ws.occupancyPct}%)
+                </span>
+              )}
+              {(ws.specialties ?? []).slice(0, 4).map((s) => (
+                <span key={s} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500 font-medium">
+                  {s}
+                </span>
+              ))}
+              {(ws.specialties ?? []).length > 4 && (
+                <span className="text-[10px] text-ink-400">+{(ws.specialties ?? []).length - 4} más</span>
+              )}
+            </div>
+          )}
+
           {isDisabled && ws.disabledReason && (
             <div className="text-[11px] text-risk-high mt-1 italic">Motivo: {ws.disabledReason}</div>
           )}
@@ -1529,6 +1606,172 @@ function useEscToClose(onClose: () => void) {
   }, [onClose]);
 }
 
+/**
+ * Modal para editar metadata del workspace desde el panel admin. Permite
+ * cambiar nombre, modo, especialidades (chips) y capacidad máxima. Todo es
+ * opcional (los inputs vacíos no se mandan). Usado para corregir tipeo y
+ * configurar el perfil del psicólogo cuando él aún no lo ha llenado.
+ */
+function EditWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(ws.name);
+  const [mode, setMode] = useState<"individual" | "organization">(ws.mode);
+  const [specialties, setSpecialties] = useState<string[]>(ws.specialties ?? []);
+  const [specInput, setSpecInput] = useState("");
+  const [maxPatientsStr, setMaxPatientsStr] = useState(ws.maxPatients != null ? String(ws.maxPatients) : "");
+
+  function addSpecialty() {
+    const v = specInput.trim();
+    if (!v) return;
+    if (specialties.includes(v)) { setSpecInput(""); return; }
+    if (specialties.length >= 30) { toast.error("Máximo 30 especialidades"); return; }
+    setSpecialties([...specialties, v]);
+    setSpecInput("");
+  }
+
+  const mu = useMutation({
+    mutationFn: () => {
+      const body: Parameters<typeof api.platformUpdateWorkspace>[1] = {};
+      if (name.trim() && name.trim() !== ws.name) body.name = name.trim();
+      if (mode !== ws.mode) body.mode = mode;
+      // Siempre mandamos specialties (vacío = null para "sin definir").
+      body.specialties = specialties.length ? specialties : null;
+      // max_patients: vacío = null (sin tope); número válido = entero.
+      if (maxPatientsStr.trim() === "") {
+        body.max_patients = null;
+      } else {
+        const n = Number(maxPatientsStr);
+        if (Number.isInteger(n) && n >= 0) body.max_patients = n;
+      }
+      return api.platformUpdateWorkspace(ws.id, body);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      toast.success("Cuenta actualizada");
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <div className="w-full sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Editar cuenta</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">{ws.name}</h3>
+            <p className="text-xs text-ink-500 mt-1">Modifica nombre, especialidades y capacidad. La psicóloga también puede editar todo desde su configuración.</p>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md hover:bg-bg-100 text-ink-500 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">Nombre del consultorio / clínica</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={100}
+              className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">Modo</label>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as "individual" | "organization")}
+              className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900"
+            >
+              <option value="individual">Individual (un solo psicólogo)</option>
+              <option value="organization">Clínica (varios profesionales + sedes)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Especialidades <span className="text-ink-400 font-normal">(ej: Ansiedad, Depresión, Parejas)</span>
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={specInput}
+                onChange={(e) => setSpecInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSpecialty(); } }}
+                placeholder="Tema y Enter para agregar…"
+                className="flex-1 h-10 px-3 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+              />
+              <button
+                type="button"
+                onClick={addSpecialty}
+                className="h-10 px-3 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {specialties.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {specialties.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-lavender-100 text-lavender-500 font-medium">
+                    {s}
+                    <button
+                      type="button"
+                      onClick={() => setSpecialties(specialties.filter((x) => x !== s))}
+                      className="text-lavender-500 hover:text-ink-900"
+                      aria-label={`Quitar ${s}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Capacidad máxima de pacientes activos
+              <span className="text-ink-400 font-normal"> (vacío = sin tope)</span>
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={maxPatientsStr}
+              onChange={(e) => setMaxPatientsStr(e.target.value)}
+              placeholder="Ej: 30"
+              className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 tabular focus:outline-none focus:border-brand-400"
+            />
+            <p className="text-[11px] text-ink-500 mt-1">
+              Si lo defines, el panel muestra % de ocupación y un badge "Saturado" cuando se acerque al tope.
+            </p>
+          </div>
+        </div>
+
+        <footer className="px-5 py-4 border-t border-line-100 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => mu.mutate()}
+            disabled={mu.isPending}
+            className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Guardar cambios
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function formatRelative(iso: string): string {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
@@ -1537,4 +1780,15 @@ function formatRelative(iso: string): string {
   if (diff < 86_400_000) return `hace ${Math.floor(diff / 3_600_000)}h`;
   if (diff < 7 * 86_400_000) return `hace ${Math.floor(diff / 86_400_000)}d`;
   return d.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * Formato corto de moneda COP para chips en filas. Para montos grandes
+ * (> 1M) abreviamos a "1.2M" para no romper el ancho de la fila.
+ * Para montos < 1000 usamos formato exacto.
+ */
+function formatCurrencyCOP(amount: number): string {
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(0)}k`;
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(amount);
 }

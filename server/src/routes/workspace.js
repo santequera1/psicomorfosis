@@ -10,7 +10,7 @@ router.use(requireAuth);
 // Workspace actual con resumen (sedes + profesionales)
 router.get("/", (req, res) => {
   const wsId = req.user.workspace_id;
-  const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(wsId);
+  const ws = db.prepare("SELECT id, name, mode, specialties, max_patients FROM workspaces WHERE id = ?").get(wsId);
   const sedes = db.prepare("SELECT * FROM sedes WHERE workspace_id = ? ORDER BY name").all(wsId);
   const professionals = db.prepare("SELECT * FROM professionals WHERE workspace_id = ? ORDER BY name").all(wsId);
 
@@ -22,8 +22,21 @@ router.get("/", (req, res) => {
     bySedeMap.get(row.professional_id).push(row.sede_id);
   }
 
+  // specialties llega como JSON-string; parseamos defensivamente.
+  let specialties = [];
+  if (ws?.specialties) {
+    try {
+      const parsed = JSON.parse(ws.specialties);
+      if (Array.isArray(parsed)) specialties = parsed.filter((x) => typeof x === "string");
+    } catch { /* leave [] */ }
+  }
+
   res.json({
-    ...ws,
+    id: ws?.id,
+    name: ws?.name,
+    mode: ws?.mode,
+    specialties,
+    maxPatients: ws?.max_patients ?? null,
     sedes,
     professionals: professionals.map((p) => ({
       ...p,
@@ -33,10 +46,12 @@ router.get("/", (req, res) => {
   });
 });
 
-// Cambiar modo / nombre del workspace
+// Cambiar modo / nombre / especialidades / capacidad del workspace.
+// El staff edita estos campos desde /configuracion. specialties: array de
+// strings (1-30 items); max_patients: entero >=0 o null para "sin tope".
 router.patch("/", (req, res) => {
   const wsId = req.user.workspace_id;
-  const { name, mode } = req.body ?? {};
+  const { name, mode, specialties, max_patients } = req.body ?? {};
   if (mode && !["individual", "organization"].includes(mode)) {
     return res.status(400).json({ error: "mode inválido" });
   }
@@ -44,9 +59,40 @@ router.patch("/", (req, res) => {
   const args = [];
   if (name) { sql.push("name = ?"); args.push(name); }
   if (mode) { sql.push("mode = ?"); args.push(mode); }
+  if (Array.isArray(specialties)) {
+    const cleaned = specialties
+      .filter((x) => typeof x === "string")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0)
+      .slice(0, 30);
+    sql.push("specialties = ?");
+    args.push(cleaned.length ? JSON.stringify(cleaned) : null);
+  } else if (specialties === null) {
+    sql.push("specialties = ?");
+    args.push(null);
+  }
+  if (max_patients === null) {
+    sql.push("max_patients = ?");
+    args.push(null);
+  } else if (Number.isInteger(max_patients) && max_patients >= 0) {
+    sql.push("max_patients = ?");
+    args.push(max_patients);
+  }
   if (sql.length === 0) return res.status(400).json({ error: "Nada que actualizar" });
   db.prepare(`UPDATE workspaces SET ${sql.join(", ")} WHERE id = ?`).run(...args, wsId);
-  res.json(db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(wsId));
+  // Devolvemos los campos básicos refrescados para el cliente.
+  const fresh = db.prepare("SELECT id, name, mode, specialties, max_patients FROM workspaces WHERE id = ?").get(wsId);
+  let parsedSpecs = [];
+  if (fresh?.specialties) {
+    try {
+      const p = JSON.parse(fresh.specialties);
+      if (Array.isArray(p)) parsedSpecs = p;
+    } catch { /* */ }
+  }
+  res.json({
+    id: fresh.id, name: fresh.name, mode: fresh.mode,
+    specialties: parsedSpecs, maxPatients: fresh.max_patients ?? null,
+  });
 });
 
 /**
