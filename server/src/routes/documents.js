@@ -729,6 +729,23 @@ router.get("/", (req, res) => {
   if (!include_archived || include_archived === "false") {
     sql += " AND archived_at IS NULL";
   }
+  // EXCLUIMOS docs que viven dentro de una tarea (plantilla o entrega del
+  // paciente). El psicólogo los gestiona desde el modal de la tarea, no
+  // desde /documentos — sino las plantillas de autorregistro y las entregas
+  // contaminan el listado y aparecen mezcladas con consentimientos /
+  // informes / certificados. Si quiere ver TODOS los documentos físicos
+  // (auditoría), puede pasar `include_archived=true` que también levanta
+  // este filtro implícitamente.
+  if (!include_archived || include_archived === "false") {
+    sql += ` AND id NOT IN (
+      SELECT template_document_id FROM tareas
+      WHERE template_document_id IS NOT NULL AND workspace_id = ?
+      UNION
+      SELECT submission_document_id FROM tareas
+      WHERE submission_document_id IS NOT NULL AND workspace_id = ?
+    )`;
+    args.push(ws(req), ws(req));
+  }
   if (patient_id) { sql += " AND patient_id = ?"; args.push(patient_id); }
   if (type)       { sql += " AND type = ?";       args.push(type); }
   if (status)     { sql += " AND status = ?";     args.push(status); }

@@ -937,13 +937,28 @@ router.get("/portal/documents", requirePatient, (req, res) => {
   // El paciente ve solo lo que el psicólogo decidió compartir, o lo que él
   // mismo firmó (un doc firmado siempre debe poder consultarse aunque después
   // se "des-comparta"). El resto queda privado del lado clínico.
+  //
+  // EXCLUIMOS docs adjuntos a tareas (template o entrega): son conceptualmente
+  // parte de la tarea — el paciente los ve en /p/tareas con su contexto, no
+  // como documentos sueltos. Sin esta exclusión un autorregistro aparecería
+  // dos veces (en Tareas Y en Documentos), confundiendo al paciente.
   const rows = db.prepare(`
     SELECT id, name, type, kind, mime, size_kb, status, signed_at, created_at, updated_at, professional
     FROM documents
     WHERE patient_id = ? AND workspace_id = ? AND archived_at IS NULL
       AND (shared_with_patient = 1 OR signed_at IS NOT NULL)
+      AND id NOT IN (
+        SELECT template_document_id FROM tareas
+        WHERE template_document_id IS NOT NULL AND patient_id = ?
+        UNION
+        SELECT submission_document_id FROM tareas
+        WHERE submission_document_id IS NOT NULL AND patient_id = ?
+      )
     ORDER BY created_at DESC
-  `).all(req.user.patient_id, req.user.workspace_id);
+  `).all(
+    req.user.patient_id, req.user.workspace_id,
+    req.user.patient_id, req.user.patient_id,
+  );
 
   // Buscamos sign_requests abiertas (no firmadas, no expiradas) por este
   // paciente para anotar cuáles docs son "firmables desde el portal".
