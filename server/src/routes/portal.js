@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import multer from "multer";
 import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient, verifyToken } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
@@ -376,7 +377,8 @@ router.get("/portal/tasks", requirePatient, (req, res) => {
   `).all(req.user.patient_id, req.user.workspace_id);
 
   const kanban = db.prepare(`
-    SELECT id, title, description, type, status, priority, due_date, completed_at, created_at
+    SELECT id, title, description, type, status, priority, due_date, completed_at, created_at,
+           template_document_id, submission_document_id, submitted_at
     FROM tareas
     WHERE patient_id = ? AND workspace_id = ?
       AND visibility != 'private'
@@ -384,6 +386,15 @@ router.get("/portal/tasks", requirePatient, (req, res) => {
       AND deleted_at IS NULL
     ORDER BY due_date ASC, created_at DESC
   `).all(req.user.patient_id, req.user.workspace_id);
+
+  // Helper local: descriptor mínimo de un doc adjunto a una tarea — solo
+  // metadatos para que el portal sepa si hay archivo, su nombre legible y
+  // si es descargable. El binario va por GET /api/portal/documents/:id/file.
+  const docStmt = db.prepare(`
+    SELECT id, name, original_name, filename, mime, size_bytes, kind
+    FROM documents WHERE id = ?
+  `);
+  const docDesc = (docId) => (docId ? docStmt.get(docId) ?? null : null);
 
   // Mapear las kanban al shape que espera el portal.
   const kanbanMapped = kanban.map((t) => ({
@@ -397,6 +408,10 @@ router.get("/portal/tasks", requirePatient, (req, res) => {
     completed_at: t.completed_at ?? null,
     created_at: t.created_at,
     source: "team",
+    // Adjuntos del flujo Moodle (null si la tarea no usa archivos).
+    template_document: docDesc(t.template_document_id),
+    submission_document: docDesc(t.submission_document_id),
+    submitted_at: t.submitted_at ?? null,
   }));
 
   // Anotar las terapéuticas con source para que el front pueda diferenciar.
@@ -431,6 +446,167 @@ router.post("/portal/tasks/:id/complete", requirePatient, (req, res) => {
   `).run(rawId, req.user.patient_id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "Tarea no encontrada" });
   res.json({ ok: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENTREGA DE TAREAS — flujo Moodle: paciente sube archivo como respuesta
+// ════════════════════════════════════════════════════════════════════════════
+
+// Reutilizamos DOCS_DIR para que el archivo viva junto al resto de docs del
+// workspace y se sirva por el mismo endpoint /api/portal/documents/:id/file
+// que ya construimos para los compartidos. Mismas restricciones de tipo y
+// tamaño que el upload del staff — consistencia entre quien sube qué.
+const PORTAL_ALLOWED_EXTS = /\.(pdf|docx?|jpe?g|png|webp|gif|txt)$/i;
+const portalUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.join(DOCS_DIR, String(req.user.workspace_id));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const id = crypto.randomBytes(6).toString("hex");
+      cb(null, `${Date.now()}-${id}${ext}`);
+    },
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!PORTAL_ALLOWED_EXTS.test(file.originalname)) {
+      return cb(new Error("Tipo de archivo no permitido. Acepta: PDF, DOC, DOCX, JPG, PNG, WEBP, GIF, TXT."));
+    }
+    cb(null, true);
+  },
+});
+
+const newDocId = (wsId) => `D-${wsId}-${Date.now().toString(36)}-${crypto.randomBytes(2).toString("hex")}`;
+
+/**
+ * POST /api/portal/tasks/:id/submit — el paciente entrega un archivo como
+ * respuesta a una tarea con plantilla.
+ *
+ * Validaciones:
+ *  - Solo tareas con prefijo "tarea-" (las terapéuticas no aceptan archivo).
+ *  - La tarea debe pertenecer al paciente autenticado y al workspace.
+ *  - No debe estar archivada/borrada ni marcada como private.
+ *  - Si ya hay una entrega anterior, la archivamos (soft) — el psicólogo
+ *    siempre ve la última. Sin esto, perderíamos auditoría si el paciente
+ *    re-entrega por error.
+ *
+ * Comportamiento:
+ *  - Crea row en `documents` (kind='file', patient_id, workspace_id,
+ *    shared_with_patient=1 porque el paciente lo subió y debe poder verlo).
+ *  - Actualiza tareas.submission_document_id + submitted_at, y mueve el
+ *    status a 'IN_REVIEW' para que aparezca en la columna correspondiente
+ *    del kanban (las que esperan revisión del psicólogo).
+ *  - Inserta notification para el workspace ("paciente X entregó tarea Y").
+ */
+router.post("/portal/tasks/:id/submit", requirePatient, portalUpload.single("file"), (req, res) => {
+  const rawId = req.params.id;
+  if (typeof rawId !== "string" || !rawId.startsWith("tarea-")) {
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch { /* orphan ok */ } }
+    return res.status(400).json({ error: "Solo las tareas con archivo aceptan entrega" });
+  }
+  const tareaId = parseInt(rawId.slice(6), 10);
+  if (!Number.isFinite(tareaId)) {
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch { /* orphan ok */ } }
+    return res.status(400).json({ error: "ID de tarea inválido" });
+  }
+  if (!req.file) return res.status(400).json({ error: "Archivo requerido" });
+
+  const task = db.prepare(`
+    SELECT id, title, template_document_id, submission_document_id, status, patient_id, workspace_id
+    FROM tareas
+    WHERE id = ? AND patient_id = ? AND workspace_id = ?
+      AND visibility != 'private'
+      AND archived_at IS NULL AND deleted_at IS NULL
+  `).get(tareaId, req.user.patient_id, req.user.workspace_id);
+  if (!task) {
+    try { fs.unlinkSync(req.file.path); } catch { /* orphan ok */ }
+    return res.status(404).json({ error: "Tarea no encontrada o no asignada a ti" });
+  }
+
+  const patient = db.prepare("SELECT id, name, preferred_name FROM patients WHERE id = ?").get(req.user.patient_id);
+  const patientLabel = patient?.preferred_name || patient?.name || "Paciente";
+  const now = new Date().toISOString();
+  const docId = newDocId(req.user.workspace_id);
+  // Nombre legible para que el psicólogo identifique la entrega en /documentos:
+  // "<título de la tarea> — entrega de <paciente>".
+  const docName = `${task.title} — entrega de ${patientLabel}`;
+
+  const tx = db.transaction(() => {
+    // Si ya había entrega, la archivamos en lugar de borrarla (auditoría).
+    if (task.submission_document_id) {
+      db.prepare("UPDATE documents SET archived_at = ?, updated_at = ? WHERE id = ?")
+        .run(now, now, task.submission_document_id);
+    }
+
+    // Insertamos el documento que representa la entrega.
+    db.prepare(`
+      INSERT INTO documents (
+        id, workspace_id, name, type, kind,
+        patient_id, patient_name,
+        filename, original_name, mime, size_bytes, size_kb,
+        status, professional, shared_with_patient,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, 'otro', 'file', ?, ?, ?, ?, ?, ?, ?, 'firmado', ?, 1, ?, ?)
+    `).run(
+      docId, req.user.workspace_id, docName,
+      req.user.patient_id, patient?.name ?? null,
+      req.file.filename, req.file.originalname, req.file.mimetype, req.file.size,
+      Math.round(req.file.size / 1024),
+      patientLabel,
+      now, now,
+    );
+
+    // Enlazamos la tarea con la nueva entrega y la movemos a IN_REVIEW para
+    // que el psicólogo la vea en la columna de "Por revisar" del kanban.
+    db.prepare(`
+      UPDATE tareas
+      SET submission_document_id = ?, submitted_at = ?, status = 'IN_REVIEW', updated_at = ?
+      WHERE id = ?
+    `).run(docId, now, now, tareaId);
+
+    // Notificación para que el psicólogo se entere sin tener que abrir el
+    // tablero. Sigue el mismo patrón que tareas.js usa al asignar tarea.
+    db.prepare(`
+      INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'tarea_entregada', ?, ?, ?, 0, 0)
+    `).run(
+      `NTK-submit-${tareaId}-${Date.now()}`, req.user.workspace_id,
+      "Entrega de tarea recibida",
+      `${patientLabel} entregó "${task.title}".`,
+      now,
+    );
+  });
+  tx();
+
+  const submission = db.prepare("SELECT * FROM documents WHERE id = ?").get(docId);
+  const updatedTask = db.prepare("SELECT * FROM tareas WHERE id = ?").get(tareaId);
+
+  // Emit websocket para que el psicólogo refresque el kanban sin polling.
+  req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("task:submitted", {
+    task_id: tareaId,
+    submission_document_id: docId,
+    submitted_at: now,
+  });
+
+  res.status(201).json({
+    ok: true,
+    task: {
+      id: `tarea-${updatedTask.id}`,
+      status: updatedTask.status === "DONE" ? "completada" : "asignada",
+      submitted_at: updatedTask.submitted_at,
+      submission_document: {
+        id: submission.id,
+        name: submission.name,
+        original_name: submission.original_name,
+        filename: submission.filename,
+        mime: submission.mime,
+        size_bytes: submission.size_bytes,
+      },
+    },
+  });
 });
 
 /**

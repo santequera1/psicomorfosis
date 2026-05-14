@@ -77,6 +77,11 @@ function AgendaPage() {
   const [view, setView] = useState<View>("dia");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [createOpen, setCreateOpen] = useState(false);
+  // Filtros que se aplican client-side a las citas mostradas en cada vista.
+  // "" = sin filtrar. modality: individual/pareja/familiar/grupal/tele.
+  // sede_id: id numérico de la sede o "" (todas) o "0" (solo virtual / sin sede).
+  const [filterModality, setFilterModality] = useState<string>("");
+  const [filterSedeId, setFilterSedeId] = useState<string>("");
 
   function shiftDate(direction: -1 | 1) {
     setCurrentDate((d) => {
@@ -125,6 +130,22 @@ function AgendaPage() {
   const { data: testApps = [] } = useQuery({ queryKey: ["test-applications"], queryFn: () => api.listTestApplications() });
   const { data: docs = [] } = useQuery({ queryKey: ["documents"], queryFn: () => api.listDocuments() });
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: () => api.getSettings() });
+  // Sedes del workspace para el dropdown de filtro. La query se comparte con
+  // configuración y NewAppointmentModal, así que cae en el cache de TanStack.
+  const { data: sedes = [] } = useQuery({ queryKey: ["sedes"], queryFn: () => api.listSedes() });
+  const activeSedes = sedes.filter((s) => s.active !== false);
+
+  // Helper que cada vista usa para filtrar sus citas. Lo centralizamos acá
+  // para que las 3 vistas se mantengan en sincronía y el día que cambien las
+  // reglas de filtro solo haya un sitio que tocar.
+  const filterAppts = (list: any[]): any[] => list.filter((a) => {
+    if (filterModality && a.modality !== filterModality) return false;
+    if (filterSedeId !== "") {
+      const wanted = filterSedeId === "0" ? null : Number(filterSedeId);
+      if ((a.sede_id ?? null) !== wanted) return false;
+    }
+    return true;
+  });
 
   const pendingTasks = allTasks.filter((t: any) => t.status === "asignada" || t.status === "en_progreso").length;
   const overdueTasks = allTasks.filter((t: any) => t.status === "vencida").length;
@@ -246,10 +267,51 @@ function AgendaPage() {
               </div>
             </div>
 
-            {view === "dia" && <DayView date={currentDate} onPick={setDetailSlot} />}
-            {view === "semana" && <WeekView date={currentDate} onPick={(slot) => setDetailSlot(slot as any)} />}
+            {/* Filtros por modalidad y sede. Aplican a Día / Semana / Lista.
+                MonthView muestra solo conteos, así que de momento no filtra
+                (se sentiría raro ver "0" en celdas que sí tienen citas). */}
+            <div className="px-4 sm:px-5 pb-3 flex flex-wrap items-center gap-2 border-b border-line-100">
+              <span className="text-[11px] uppercase tracking-wider text-ink-500">Filtrar</span>
+              <select
+                value={filterModality}
+                onChange={(e) => setFilterModality(e.target.value)}
+                className="h-8 px-2 rounded-md border border-line-200 bg-surface text-xs text-ink-700"
+              >
+                <option value="">Todas las modalidades</option>
+                <option value="individual">Individual</option>
+                <option value="pareja">Pareja</option>
+                <option value="familiar">Familiar</option>
+                <option value="grupal">Grupal</option>
+                <option value="tele">Online (tele)</option>
+              </select>
+              {activeSedes.length > 0 && (
+                <select
+                  value={filterSedeId}
+                  onChange={(e) => setFilterSedeId(e.target.value)}
+                  className="h-8 px-2 rounded-md border border-line-200 bg-surface text-xs text-ink-700"
+                >
+                  <option value="">Todas las sedes</option>
+                  <option value="0">Sin sede (virtual)</option>
+                  {activeSedes.map((s) => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+              {(filterModality || filterSedeId) && (
+                <button
+                  type="button"
+                  onClick={() => { setFilterModality(""); setFilterSedeId(""); }}
+                  className="text-xs text-brand-700 hover:underline"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+
+            {view === "dia" && <DayView date={currentDate} onPick={setDetailSlot} filterAppts={filterAppts} />}
+            {view === "semana" && <WeekView date={currentDate} onPick={(slot) => setDetailSlot(slot as any)} filterAppts={filterAppts} />}
             {view === "mes" && <MonthView date={currentDate} />}
-            {view === "lista" && <ListView onPick={setDetailSlot} />}
+            {view === "lista" && <ListView onPick={setDetailSlot} filterAppts={filterAppts} />}
           </div>
 
           <div className="space-y-5">
@@ -327,12 +389,17 @@ function AgendaPage() {
   );
 }
 
-function DayView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
+function DayView({ date, onPick, filterAppts }: {
+  date: Date;
+  onPick: (s: any) => void;
+  filterAppts?: (list: any[]) => any[];
+}) {
   const dateIso = toIso(date);
-  const { data: appointments = [] } = useQuery({
+  const { data: rawAppointments = [] } = useQuery({
     queryKey: ["appointments", dateIso],
     queryFn: () => api.listAppointments({ date: dateIso }),
   });
+  const appointments = filterAppts ? filterAppts(rawAppointments) : rawAppointments;
   const isTodayLocal = dateIso === toIso(new Date());
   if (appointments.length === 0) {
     return (
@@ -394,7 +461,11 @@ const SETTING_DAY_TO_INDEX: Record<string, number> = {
   friday: 4, saturday: 5, sunday: 6,
 };
 
-function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
+function WeekView({ date, onPick, filterAppts }: {
+  date: Date;
+  onPick: (s: any) => void;
+  filterAppts?: (list: any[]) => any[];
+}) {
   // Semana de lunes a domingo que contiene `date`.
   const now = new Date();
   const dayOfWeek = date.getDay(); // 0=dom, 1=lun, …
@@ -407,10 +478,11 @@ function WeekView({ date, onPick }: { date: Date; onPick: (s: any) => void }) {
   const fromIso = toIso(monday);
   const untilIso = toIso(sunday);
 
-  const { data: weekAppointments = [] } = useQuery({
+  const { data: rawWeekAppointments = [] } = useQuery({
     queryKey: ["appointments", "week", fromIso],
     queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
   });
+  const weekAppointments = filterAppts ? filterAppts(rawWeekAppointments) : rawWeekAppointments;
 
   // Horario de atención del psicólogo desde settings — configurado en
   // /configuracion → Horario. Si la key no existe (workspaces viejos
@@ -621,20 +693,24 @@ function MonthView({ date }: { date: Date }) {
   );
 }
 
-function ListView({ onPick }: { onPick: (s: any) => void }) {
+function ListView({ onPick, filterAppts }: {
+  onPick: (s: any) => void;
+  filterAppts?: (list: any[]) => any[];
+}) {
   const today = new Date();
   const future = new Date();
   future.setDate(today.getDate() + 60);
   const fromIso = toIso(today);
   const untilIso = toIso(future);
 
-  const { data: appointments = [] } = useQuery({
+  const { data: rawAppointments = [] } = useQuery({
     queryKey: ["appointments", "list", fromIso],
     queryFn: () => api.listAppointments({ from: fromIso, to: untilIso }),
   });
+  const appointments = filterAppts ? filterAppts(rawAppointments) : rawAppointments;
 
   if (appointments.length === 0) {
-    return <div className="p-10 text-center text-sm text-ink-500">Sin citas programadas en los próximos 60 días.</div>;
+    return <div className="p-10 text-center text-sm text-ink-500">Sin citas programadas en los próximos 60 días con los filtros activos.</div>;
   }
 
   // Agrupar por fecha; cada grupo lleva un encabezado.

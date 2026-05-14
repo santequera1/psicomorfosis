@@ -829,6 +829,16 @@ function runMigrations() {
     // psicólogo lo marque como compartido. Pedir firma automáticamente
     // lo marca como compartido (no se puede firmar lo que no se ve).
     "ALTER TABLE documents ADD COLUMN shared_with_patient INTEGER DEFAULT 0",
+    // Tareas con archivo adjunto (flujo Moodle, 14 may): el psicólogo adjunta
+    // una plantilla (Word/PDF) y el paciente la baja, llena offline y la
+    // vuelve a subir como entrega. Ambos FKs apuntan a `documents` para
+    // reutilizar todo: subida (multer), descarga (con token), audit, archivo
+    // físico, scope por workspace. `submitted_at` se rellena cuando el
+    // paciente entrega; null = aún no entregado.
+    "ALTER TABLE tareas ADD COLUMN template_document_id TEXT REFERENCES documents(id) ON DELETE SET NULL",
+    "ALTER TABLE tareas ADD COLUMN submission_document_id TEXT REFERENCES documents(id) ON DELETE SET NULL",
+    "ALTER TABLE tareas ADD COLUMN submitted_at TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_tareas_submitted ON tareas(workspace_id, submitted_at DESC)",
   ];
   for (const sql of migrations) {
     try {
@@ -1198,6 +1208,31 @@ function backfillExisting() {
     }
   } catch (err) {
     console.warn("[db] backfill shared_with_patient falló:", err.message);
+  }
+
+  // 10) Seed idempotente de sedes para Nathaly (workspace 1). Ella nos
+  // confirmó que atiende en Toberín y Recreo. "Online" no es sede física —
+  // se modela como `appointments.modality='tele'`. Solo agregamos si la
+  // sede no existe ya (chequeo por nombre exacto en su workspace).
+  try {
+    const nathalyWs = db.prepare("SELECT id FROM workspaces WHERE id = 1").get();
+    if (nathalyWs) {
+      const seedSede = db.prepare(`
+        INSERT INTO sedes (workspace_id, name, address, phone, active)
+        SELECT 1, ?, ?, ?, 1
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sedes WHERE workspace_id = 1 AND name = ?
+        )
+      `);
+      const r1 = seedSede.run("Toberín", null, null, "Toberín");
+      const r2 = seedSede.run("Recreo", null, null, "Recreo");
+      const added = (r1.changes || 0) + (r2.changes || 0);
+      if (added > 0) {
+        console.log(`[db] backfill: seedeadas ${added} sede(s) en workspace de Nathaly (Toberín/Recreo)`);
+      }
+    }
+  } catch (err) {
+    console.warn("[db] backfill sedes Nathaly falló:", err.message);
   }
 }
 

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, Loader2, CheckCircle2, Clock } from "lucide-react";
+import { useRef, useState } from "react";
+import { ListChecks, Loader2, CheckCircle2, Clock, Download, Upload, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { api } from "@/lib/api";
@@ -23,6 +24,15 @@ function PortalTasks() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portal-tasks"] });
       toast.success("¡Tarea completada!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const submitMu = useMutation({
+    mutationFn: (vars: { id: string; file: File }) => api.portalSubmitTaskFile(vars.id, vars.file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portal-tasks"] });
+      toast.success("¡Tarea entregada! Tu psicóloga la recibió.");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -59,6 +69,8 @@ function PortalTasks() {
                 task={t}
                 onComplete={() => completeMu.mutate(t.id)}
                 completing={completeMu.isPending && completeMu.variables === t.id}
+                onSubmitFile={(file) => submitMu.mutate({ id: t.id, file })}
+                submitting={submitMu.isPending && submitMu.variables?.id === t.id}
               />
             ))}
           </ul>
@@ -82,9 +94,34 @@ function PortalTasks() {
   );
 }
 
-function TaskCard({ task, onComplete, completing }: { task: any; onComplete: () => void; completing: boolean }) {
+function TaskCard({ task, onComplete, completing, onSubmitFile, submitting }: {
+  task: any;
+  onComplete: () => void;
+  completing: boolean;
+  onSubmitFile: (file: File) => void;
+  submitting: boolean;
+}) {
   const dueDate = task.due_at ? new Date(task.due_at) : null;
   const isOverdue = dueDate && dueDate.getTime() < Date.now();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pickedName, setPickedName] = useState<string | null>(null);
+
+  // Tres estados del flujo Moodle:
+  //   - hasTemplate + !hasSubmission: el psicólogo adjuntó plantilla, falta entregar.
+  //   - hasTemplate + hasSubmission:  ya entregaste, mostramos confirmación + opción reenviar.
+  //   - !hasTemplate: tarea sin adjuntos (texto puro) → flujo original "marcar hecha".
+  const hasTemplate = !!task.template_document;
+  const hasSubmission = !!task.submission_document;
+
+  function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Confirmación visual antes de subir — el paciente ve qué eligió.
+    setPickedName(file.name);
+    onSubmitFile(file);
+    // Permitir re-elegir el mismo archivo si falla la subida.
+    e.target.value = "";
+  }
 
   return (
     <li className={cn(
@@ -123,9 +160,69 @@ function TaskCard({ task, onComplete, completing }: { task: any; onComplete: () 
               </div>
             </div>
           )}
+
+          {/* Bloque del flujo Moodle: solo cuando hay plantilla adjunta. */}
+          {hasTemplate && (
+            <div className="mt-4 rounded-lg border border-brand-200/60 bg-brand-50/40 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-brand-800 font-medium">
+                <FileText className="h-3.5 w-3.5" />
+                Tarea con archivo adjunto
+              </div>
+              <a
+                href={api.portalDocumentFileUrl(task.template_document.id)}
+                download={task.template_document.original_name ?? task.template_document.name ?? "consigna"}
+                className="inline-flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar consigna ({task.template_document.original_name ?? task.template_document.name})
+              </a>
+              {hasSubmission && task.submitted_at && (
+                <p className="text-xs text-success">
+                  ✓ Entregaste el {new Date(task.submitted_at).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+                  {task.submission_document.original_name ? ` — ${task.submission_document.original_name}` : ""}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
-      <div className="mt-4 flex justify-end">
+
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        {/* Botón "Entregar / Reenviar tarea" solo cuando hay plantilla. */}
+        {hasTemplate && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt"
+              className="sr-only"
+              onChange={handlePickFile}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={submitting}
+              className={cn(
+                "h-9 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2 disabled:opacity-50",
+                hasSubmission
+                  ? "border border-line-200 text-ink-700 hover:border-brand-400"
+                  : "bg-brand-700 text-white hover:bg-brand-800"
+              )}
+              title={hasSubmission ? "Subir una versión nueva (la anterior queda archivada)" : "Subir tu respuesta como archivo"}
+            >
+              {submitting
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Subiendo {pickedName ? `(${pickedName})` : "…"}</>
+                : hasSubmission
+                  ? <><RefreshCw className="h-4 w-4" /> Reenviar</>
+                  : <><Upload className="h-4 w-4" /> Entregar tarea</>}
+            </button>
+          </>
+        )}
+
+        {/* Botón "Marcar hecha": disponible siempre que no esté ya completada.
+            En tareas con plantilla, lo dejamos disponible POR SI el paciente
+            entregó por otro canal (ya pasa) — pero es lo de menos. El indicador
+            real es submission_document. */}
         <button
           onClick={onComplete}
           disabled={completing}

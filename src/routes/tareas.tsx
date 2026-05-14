@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Filter, Circle, Clock, AlertCircle, CheckCircle2, Check,
   CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X, UserPlus, Users,
+  Paperclip, Download, Upload, FileText, Loader2,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import {
@@ -803,14 +804,79 @@ function TareaDialog({
   const [patientId, setPatientId] = useState<string | "">(task?.patient_id ?? "");
   const [visibility, setVisibility] = useState<TareaVisibility>(task?.visibility ?? "team");
   const [dueDate, setDueDate] = useState(task?.due_date?.slice(0, 10) ?? "");
+  // Flujo Moodle: archivo de consigna que el psicólogo adjunta.
+  //   templateStaged: archivo seleccionado pero aún no subido (espera al save).
+  //   templateDoc:    descriptor del archivo YA subido (solo en edit, o tras
+  //                   subir uno nuevo). Se renderiza con link de descarga.
+  const [templateStaged, setTemplateStaged] = useState<File | null>(null);
+  const [templateDoc, setTemplateDoc] = useState(task?.template_document ?? null);
+  const [uploadingTemplate, setUploadingTemplate] = useState(false);
+  const templateInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Sube el archivo staged y enlaza el doc creado a la tarea. Llamado AFTER
+   * save (cuando ya existe taskId). Si falla, no rompemos el save — el usuario
+   * verá un toast y puede reintentar editando la tarea.
+   */
+  async function uploadAndAttachTemplate(taskId: number) {
+    if (!templateStaged) return;
+    setUploadingTemplate(true);
+    try {
+      const patient = patients.find((p) => p.id === patientId) ?? null;
+      const doc = await api.uploadDocument(templateStaged, {
+        name: `Plantilla: ${title.trim()}`,
+        type: "otro",
+        patient_id: patient?.id ?? null,
+        patient_name: patient?.name ?? null,
+      });
+      await api.updateTarea(taskId, { template_document_id: doc.id } as any);
+      setTemplateDoc({
+        id: doc.id,
+        name: doc.name,
+        original_name: doc.original_name,
+        filename: doc.filename,
+        mime: doc.mime,
+        size_bytes: doc.size_bytes,
+        kind: doc.kind,
+      });
+      setTemplateStaged(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo adjuntar la plantilla");
+    } finally {
+      setUploadingTemplate(false);
+    }
+  }
+
+  async function detachTemplate() {
+    if (!isEdit || !task) {
+      // Si aún no se ha guardado, solo limpiamos el staging.
+      setTemplateStaged(null);
+      setTemplateDoc(null);
+      return;
+    }
+    try {
+      await api.updateTarea(task.id, { template_document_id: null } as any);
+      setTemplateDoc(null);
+      setTemplateStaged(null);
+      toast.success("Plantilla desadjuntada");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo desadjuntar");
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: async (body: Partial<Tarea>) => {
       if (isEdit && task) return api.updateTarea(task.id, body);
       return api.createTarea(body);
     },
-    onSuccess: () => {
+    onSuccess: async (savedTask) => {
       queryClient.invalidateQueries({ queryKey: ["tareas"] });
+      // Si hay archivo staged (típico flujo nueva tarea con plantilla),
+      // subimos AHORA que tenemos taskId. Esto puede tardar 1-3s — mostramos
+      // toast de éxito al final, no después del save.
+      if (templateStaged && savedTask?.id) {
+        await uploadAndAttachTemplate(savedTask.id);
+      }
       toast.success(isEdit ? "Tarea actualizada" : "Tarea creada");
       onClose();
     },
@@ -836,6 +902,18 @@ function TareaDialog({
       due_date: dueDate || null,
     });
   };
+
+  function handlePickTemplate(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setTemplateStaged(file);
+    // Si estamos editando, subimos al instante (ya tenemos taskId).
+    // Si estamos creando, esperamos al save.
+    if (isEdit && task) {
+      uploadAndAttachTemplate(task.id);
+    }
+    e.target.value = "";
+  }
 
   return (
     <div
@@ -989,6 +1067,112 @@ function TareaDialog({
               />
             </Field>
           </div>
+
+          {/* Bloque "Adjuntos" — flujo Moodle: plantilla del psicólogo + entrega
+              del paciente. Solo tiene sentido si la tarea tiene paciente asignado
+              y la visibilidad no es privada (sino el paciente no ve la tarea
+              en su portal y no podría entregar). */}
+          {(patientId && visibility !== "private") && (
+            <div className="rounded-lg border border-brand-100 bg-brand-50/30 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <Paperclip className="h-4 w-4 text-brand-700" />
+                Archivo de la tarea (opcional)
+              </div>
+              <p className="text-xs text-ink-500 -mt-1">
+                Adjunta un Word/PDF para que el paciente lo descargue, llene y vuelva a subir desde su portal.
+                Útil para autorregistros, escalas, registros de pensamientos, etc.
+              </p>
+
+              {/* Plantilla: o staged (preview), o ya subida (descarga), o sin nada (botón pick). */}
+              {templateStaged ? (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-md border border-line-200 bg-surface">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-brand-700 shrink-0" />
+                    <span className="text-sm text-ink-900 truncate">{templateStaged.name}</span>
+                    <span className="text-xs text-ink-500 shrink-0">({Math.round(templateStaged.size / 1024)} KB)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTemplateStaged(null)}
+                    className="text-xs text-ink-500 hover:text-rose-700"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ) : templateDoc ? (
+                <div className="flex items-center justify-between gap-2 p-3 rounded-md border border-line-200 bg-surface">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-brand-700 shrink-0" />
+                    <a
+                      href={api.documentFileUrl(templateDoc.id)}
+                      download={templateDoc.original_name ?? templateDoc.name ?? "consigna"}
+                      className="text-sm text-brand-700 hover:underline truncate"
+                    >
+                      {templateDoc.original_name ?? templateDoc.name}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => templateInputRef.current?.click()}
+                      className="text-xs text-ink-500 hover:text-ink-700"
+                      title="Reemplazar archivo"
+                    >
+                      Cambiar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={detachTemplate}
+                      className="text-xs text-ink-500 hover:text-rose-700"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => templateInputRef.current?.click()}
+                  disabled={uploadingTemplate}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 disabled:opacity-50"
+                >
+                  {uploadingTemplate
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Subiendo…</>
+                    : <><Upload className="h-4 w-4" /> Adjuntar plantilla</>}
+                </button>
+              )}
+              <input
+                ref={templateInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt"
+                className="sr-only"
+                onChange={handlePickTemplate}
+              />
+
+              {/* Entrega del paciente: solo en edit, read-only. */}
+              {isEdit && task?.submission_document && (
+                <div className="mt-3 pt-3 border-t border-brand-200/60">
+                  <div className="flex items-center gap-2 text-xs font-medium text-success mb-2">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Entrega del paciente
+                    {task.submitted_at && (
+                      <span className="text-ink-500 font-normal">
+                        · {new Date(task.submitted_at).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                  <a
+                    href={api.documentFileUrl(task.submission_document.id)}
+                    download={task.submission_document.original_name ?? task.submission_document.name ?? "entrega"}
+                    className="inline-flex items-center gap-1.5 text-sm text-brand-700 hover:underline"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {task.submission_document.original_name ?? task.submission_document.name}
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <footer className="sticky bottom-0 bg-surface border-t border-line-200 px-5 py-4 flex items-center justify-end gap-2">

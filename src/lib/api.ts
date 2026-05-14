@@ -461,6 +461,26 @@ export interface Tarea {
   checklist?: TareaChecklistItem[];
   images?: TareaImage[];
   pomodoro_sessions?: TareaPomodoroSession[];
+  // Flujo Moodle: el psicólogo puede adjuntar una plantilla (Word/PDF) y el
+  // paciente entrega su respuesta como archivo. Ambos FKs apuntan a documents
+  // para reutilizar la infra de archivos. submitted_at es null si aún no entregó.
+  template_document_id?: string | null;
+  submission_document_id?: string | null;
+  submitted_at?: string | null;
+  template_document?: TareaDocumentDescriptor | null;
+  submission_document?: TareaDocumentDescriptor | null;
+}
+
+/** Descriptor mínimo de un archivo adjunto a una tarea (template o entrega). */
+export interface TareaDocumentDescriptor {
+  id: string;
+  name: string | null;
+  original_name: string | null;
+  filename: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  kind: "file" | "editor";
+  created_at?: string;
 }
 
 export interface TareaProject {
@@ -855,6 +875,35 @@ export const api = {
   portalAppointments: () => request<Array<Record<string, any>>>("/api/portal/appointments"),
   portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
   portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),
+  /**
+   * El paciente entrega un archivo como respuesta a una tarea con plantilla.
+   * `id` es de la forma "tarea-N" (las terapéuticas no aceptan entrega de
+   * archivo). Sube vía multipart/form-data; el server crea un documento
+   * compartido y lo enlaza como `submission_document` de la tarea.
+   */
+  portalSubmitTaskFile: async (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/portal/tasks/${id}/submit`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error ?? "No se pudo entregar la tarea");
+    }
+    return res.json() as Promise<{
+      ok: true;
+      task: {
+        id: string;
+        status: "asignada" | "completada";
+        submitted_at: string;
+        submission_document: { id: string; name: string; original_name: string; filename: string; mime: string; size_bytes: number };
+      };
+    }>;
+  },
   portalDocuments: () => request<Array<Record<string, any>>>("/api/portal/documents"),
   /**
    * Detalle de un documento compartido con el paciente, modo solo-lectura.

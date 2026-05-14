@@ -27,12 +27,28 @@ function safeJSON(s) {
   try { return JSON.parse(s); } catch { return null; }
 }
 
+/**
+ * Descriptor mínimo de un documento adjunto a una tarea (template o entrega).
+ * No incluye body_json/body_text — el cliente baja el archivo vía
+ * /api/documents/:id/file (staff) o /api/portal/documents/:id/file (paciente).
+ */
+function getDocDescriptor(docId) {
+  if (!docId) return null;
+  const d = db.prepare(`
+    SELECT id, name, original_name, filename, mime, size_bytes, kind, created_at
+    FROM documents WHERE id = ?
+  `).get(docId);
+  return d ?? null;
+}
+
 function toTask(row) {
   if (!row) return null;
   return {
     ...row,
     recurrence: row.recurrence ? safeJSON(row.recurrence) : null,
     is_recurring_instance: !!row.is_recurring_instance,
+    template_document: getDocDescriptor(row.template_document_id),
+    submission_document: getDocDescriptor(row.submission_document_id),
   };
 }
 
@@ -238,6 +254,11 @@ router.patch("/:id", (req, res) => {
     "title", "description", "type", "status", "priority",
     "assignee_id", "project_id", "patient_id", "visibility",
     "start_date", "due_date", "tracking_preset",
+    // Adjuntos del flujo Moodle: el psicólogo asigna la plantilla con
+    // PATCH { template_document_id }, y si quiere desvincular una entrega
+    // (raro) usa PATCH { submission_document_id: null }. La SUBIDA del
+    // template se hace antes via /api/documents/upload — acá solo enlazamos.
+    "template_document_id", "submission_document_id",
   ];
   const sets = [];
   const params = [];
