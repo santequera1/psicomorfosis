@@ -1477,7 +1477,7 @@ export const api = {
   // si el evento ya no aplica, la notificación desaparece sola.
   listNotifications: () => request<Array<{
     id: string;
-    type: "cita" | "mensaje" | "tarea" | "test" | "alerta" | "documento";
+    type: "cita" | "mensaje" | "tarea" | "test" | "alerta" | "documento" | "entrega";
     title: string;
     description: string;
     at: string;

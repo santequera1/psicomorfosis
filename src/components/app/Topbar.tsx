@@ -315,6 +315,7 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
       case "test": return <Brain className="h-4 w-4" />;
       case "alerta": return <AlertOctagon className="h-4 w-4" />;
       case "documento": return <FileText className="h-4 w-4" />;
+      case "entrega": return <FileText className="h-4 w-4" />;
     }
   };
 
@@ -342,6 +343,10 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
     switch (n.type) {
       case "cita":      return hasId ? { to: "/agenda", search: { appt: id } } : { to: "/agenda" };
       case "tarea":     return hasId ? { to: "/tareas", search: { id } } : { to: "/tareas" };
+      // "entrega" lleva al mismo destino que "tarea" — ambos abren el dialog
+      // de la tarea kanban, donde el psicólogo ve la entrega del paciente
+      // junto con la plantilla y puede descargar el archivo.
+      case "entrega":   return hasId ? { to: "/tareas", search: { id } } : { to: "/tareas" };
       case "test":      return hasId ? { to: "/tests", search: { app: id } } : { to: "/tests" };
       case "documento": return hasId ? { to: `/documentos/${id}` } : { to: "/documentos" };
       case "alerta":    return { to: "/platform/reportes" };

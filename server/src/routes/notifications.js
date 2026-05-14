@@ -17,6 +17,7 @@
  *  - 'cita'      → cita confirmada en las próximas 24h sin atender
  *  - 'test'      → test_application status='completado' en últimos 7d
  *  - 'tarea'     → therapy_task vencida y no completada
+ *  - 'entrega'   → paciente entregó archivo a una tarea kanban (últimos 7d)
  *  - 'documento' → documento firmado por paciente en los últimos 7d
  *  - 'reporte'   → solo platform admin: error_reports abiertos
  *
@@ -139,6 +140,39 @@ router.get("/", (req, res) => {
       at: relativeTime(t.due_at),
       raw_at: t.due_at,
       read: false,
+      urgent: false,
+    });
+  }
+
+  // ─── 3b) Entregas de tareas kanban (paciente subió archivo, últimos 7d) ─
+  // Cuando el paciente entrega vía /api/portal/tasks/:id/submit, marcamos
+  // tareas.submitted_at y status='IN_REVIEW'. Aquí derivamos la notif para
+  // que aparezca en /api/notifications sin depender de la tabla legacy.
+  const submissions = db.prepare(`
+    SELECT t.id, t.title, t.submitted_at, t.patient_id,
+           p.name AS patient_name, p.preferred_name
+    FROM tareas t
+    LEFT JOIN patients p ON t.patient_id = p.id
+    WHERE t.workspace_id = ?
+      AND t.submitted_at IS NOT NULL
+      AND date(t.submitted_at) >= date('now', '-7 days')
+      AND t.archived_at IS NULL AND t.deleted_at IS NULL
+    ORDER BY t.submitted_at DESC
+    LIMIT 8
+  `).all(wsId);
+
+  for (const s of submissions) {
+    const who = s.preferred_name || s.patient_name || "Paciente";
+    out.push({
+      id: `entrega-${s.id}`,
+      type: "entrega",
+      title: `Entrega recibida · ${who}`,
+      description: `Entregó "${s.title}"`,
+      at: relativeTime(s.submitted_at),
+      raw_at: s.submitted_at,
+      read: false,
+      // No urgente: la entrega es buena noticia, no exige acción inmediata.
+      // El psicólogo la revisa cuando pueda.
       urgent: false,
     });
   }

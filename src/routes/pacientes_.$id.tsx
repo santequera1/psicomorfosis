@@ -950,7 +950,27 @@ function TabPrescripcion({ patientId }: { patientId: string }) {
     queryKey: ["tareas"],
     queryFn: () => api.listTareas(),
   });
-  const linkedTareas = (tareas as any[]).filter((t) => t.patient_id === patientId);
+  // Filtrar por paciente y ordenar: las pendientes primero (TODO > IN_PROGRESS
+  // > IN_REVIEW > DONE), y dentro de cada grupo por due_date ASC (más urgente
+  // arriba). Las DONE quedan al final por completed_at DESC (más reciente).
+  // Antes salían en orden arbitrario (el del listado global), por eso parecía
+  // "al revés" cuando una tarea recién marcada como DONE aparecía arriba.
+  const STATUS_ORDER: Record<string, number> = { TODO: 0, IN_PROGRESS: 1, IN_REVIEW: 2, DONE: 3 };
+  const linkedTareas = (tareas as any[])
+    .filter((t) => t.patient_id === patientId)
+    .sort((a, b) => {
+      const sa = STATUS_ORDER[a.status] ?? 99;
+      const sb = STATUS_ORDER[b.status] ?? 99;
+      if (sa !== sb) return sa - sb;
+      if (a.status === "DONE") {
+        // DONE: más recientes arriba (más útil para "qué entregó esta semana").
+        return (b.completed_at ?? "").localeCompare(a.completed_at ?? "");
+      }
+      // Pendientes: por fecha de vencimiento ascendente; sin fecha al final.
+      const da = a.due_date ?? "9999-12-31";
+      const db = b.due_date ?? "9999-12-31";
+      return da.localeCompare(db);
+    });
 
   return (
     <div className="space-y-5">
@@ -1001,6 +1021,26 @@ function TabPrescripcion({ patientId }: { patientId: string }) {
                       </div>
                       <div className="text-sm font-medium text-ink-900 mt-1">{t.title}</div>
                       {t.description && <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{t.description}</p>}
+                      {/* Entrega del paciente: si subió un archivo como
+                          respuesta, lo mostramos con link de descarga directo
+                          desde acá para no obligar a entrar al kanban. */}
+                      {t.submission_document && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-success">
+                          <span>📎</span>
+                          <a
+                            href={api.documentFileUrl(t.submission_document.id)}
+                            download={t.submission_document.original_name ?? t.submission_document.name ?? "entrega"}
+                            className="hover:underline"
+                          >
+                            Entrega: {t.submission_document.original_name ?? t.submission_document.name}
+                          </a>
+                          {t.submitted_at && (
+                            <span className="text-ink-500">
+                              · {new Date(t.submitted_at).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {t.due_date && (
                       <span className={"text-[11px] inline-flex items-center gap-1 shrink-0 " + (overdueT ? "text-rose-700 font-medium" : "text-ink-500")}>
