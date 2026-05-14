@@ -881,7 +881,12 @@ router.get("/portal/documents/:id/file", requirePatientOrToken, (req, res) => {
     WHERE id = ? AND patient_id = ? AND workspace_id = ?
   `).get(req.params.id, req.user.patient_id, req.user.workspace_id);
   if (!doc || doc.archived_at) return res.status(404).json({ error: "Documento no encontrado" });
-  if (doc.kind !== "file" || !doc.filename) return res.status(404).json({ error: "Este documento no tiene archivo" });
+  // Antes exigíamos kind='file', pero los .docx que la psicóloga sube como
+  // plantilla de tarea se convierten a kind='editor' (mammoth → TipTap) y
+  // dejan el .docx original en disco. El paciente NECESITA descargar ese
+  // .docx para llenarlo. Lo único que importa para servir el archivo físico
+  // es que tenga `filename` apuntando a algo real en disco.
+  if (!doc.filename) return res.status(404).json({ error: "Este documento no tiene archivo descargable" });
   if (!doc.shared_with_patient && !doc.signed_at) return res.status(403).json({ error: "No tienes acceso a este documento" });
 
   const filePath = path.join(DOCS_DIR, String(doc.workspace_id), doc.filename);
