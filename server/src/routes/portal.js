@@ -6,10 +6,13 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import multer from "multer";
 import { db } from "../db.js";
-import { signToken, requireAuth, requirePatient, verifyToken } from "../auth.js";
+import { signToken, requireAuth, requirePatient, verifyToken, invalidateUserTokens } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
 import { sendPatientInviteEmail } from "../mailer.js";
+// Reutilizamos el mismo limiter que el login del staff — misma política
+// (10 intentos/15min por IP) es apropiada para ambos.
+import { loginLimiter } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_DIR = path.join(__dirname, "..", "..", "uploads", "documents");
@@ -250,7 +253,7 @@ router.post("/patient-invite/:token/activate", (req, res) => {
  * POST /api/auth/patient/login (montado bajo /api/auth)
  * Login del paciente. Email + password. Verifica que role='paciente'.
  */
-router.post("/auth/patient/login", (req, res) => {
+router.post("/auth/patient/login", loginLimiter, (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: "Email y contraseña requeridos" });
   const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'paciente'").get(email);
@@ -344,6 +347,180 @@ router.patch("/portal/me", requirePatient, (req, res) => {
   params.push(req.user.patient_id);
   db.prepare(`UPDATE patients SET ${fields.join(", ")} WHERE id = ?`).run(...params);
   res.json({ ok: true });
+});
+
+/**
+ * POST /api/portal/logout — invalida todos los tokens del paciente actual.
+ * Mismo mecanismo que /api/auth/logout pero para el portal. El JWT del
+ * paciente queda inválido (verifyToken revisará tokens_invalidated_at en
+ * users) → cualquier dispositivo donde estuviera la sesión queda cerrado.
+ */
+router.post("/portal/logout", requirePatient, (req, res) => {
+  invalidateUserTokens(req.user.id);
+  res.json({ ok: true });
+});
+
+/**
+ * POST /api/portal/me/delete — derecho de supresión del paciente
+ * (Ley 1581/2012 art. 8 lit. e).
+ *
+ * IMPORTANTE: este endpoint NO borra el expediente clínico. Solo elimina
+ * la CUENTA DE ACCESO AL PORTAL del paciente (la fila en `users` con
+ * role='paciente'). La historia clínica (clinical_notes, documents,
+ * appointments, test_applications, etc.) permanece archivada por
+ * imperativo de la Resolución 1995/1999 (mínimo 15 años de retención
+ * obligatoria — esto no es negociable con el titular).
+ *
+ * Si el paciente quiere ejercer derecho de supresión sobre los DATOS
+ * CLÍNICOS también, debe pedírselo directamente a su psicólog@, quien
+ * evalúa caso por caso si conserva (deber legal de custodia) o elimina
+ * (causales excepcionales). Eso se hace fuera de banda.
+ *
+ * Defensa en profundidad: exigimos password actual (no basta tener el
+ * token) + el texto literal "ELIMINAR" tipeado por el usuario (evita
+ * tap accidental).
+ */
+router.post("/portal/me/delete", requirePatient, (req, res) => {
+  const { current_password, confirm_text } = req.body ?? {};
+  if (confirm_text !== "ELIMINAR") {
+    return res.status(400).json({ error: "Para confirmar, escribe la palabra 'ELIMINAR' tal cual." });
+  }
+  if (typeof current_password !== "string" || !current_password) {
+    return res.status(400).json({ error: "Confirma tu contraseña actual" });
+  }
+
+  const user = db.prepare("SELECT id, name, password_hash, patient_id, workspace_id FROM users WHERE id = ?")
+    .get(req.user.id);
+  if (!user) return res.status(404).json({ error: "Cuenta no encontrada" });
+  if (!bcrypt.compareSync(current_password, user.password_hash)) {
+    return res.status(401).json({ error: "Contraseña incorrecta" });
+  }
+
+  const now = new Date().toISOString();
+  const patientName = user.name || "Un paciente";
+
+  const tx = db.transaction(() => {
+    // Borrar invitaciones pendientes asociadas (si las hay) — sin esto, el
+    // paciente podría volver a entrar al portal con un link viejo que aún
+    // no haya expirado, contradiciendo su deseo de salir.
+    db.prepare("DELETE FROM patient_invites WHERE patient_id = ?").run(user.patient_id);
+    // Borrar aceptaciones legales asociadas a este usuario (el paciente como
+    // titular ya no existe en términos de cuenta; el patient_id sigue ligado
+    // a aceptaciones via patient_id pero esto se conserva con el expediente).
+    db.prepare("DELETE FROM legal_acceptances WHERE user_id = ?").run(user.id);
+    // El expediente clínico (patients, clinical_notes, documents, etc.) NO
+    // se toca — Resolución 1995/1999 obliga a conservarlo 15 años mínimo.
+    // Solo borramos la cuenta de acceso digital.
+    db.prepare("DELETE FROM users WHERE id = ?").run(user.id);
+    // Notificación al workspace para que la psicóloga sepa y pueda
+    // contactar al paciente si quedaba algo pendiente.
+    db.prepare(`
+      INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'alerta', ?, ?, ?, 0, 1)
+    `).run(
+      `N-portaldel-${user.id}-${Date.now()}`, user.workspace_id,
+      "Paciente eliminó su cuenta del portal",
+      `${patientName} ejerció derecho de supresión sobre su cuenta digital (Ley 1581 art. 8e). La historia clínica se conserva según Resolución 1995/1999.`,
+      now,
+    );
+  });
+  tx();
+
+  res.json({
+    ok: true,
+    message: "Tu cuenta del portal fue eliminada. Tu historia clínica permanece archivada con tu psicólog@ por el período legal (Resolución 1995/1999).",
+  });
+});
+
+/**
+ * GET /api/portal/me/export — derecho de acceso del titular
+ * (Ley 1581/2012 art. 8 lit. b).
+ *
+ * Devuelve un JSON con TODO lo que el sistema sabe del paciente: su
+ * perfil, citas, tareas, tests respondidos, documentos compartidos,
+ * aceptaciones legales. El paciente puede guardarlo localmente como
+ * respaldo o llevarlo a otra plataforma (portabilidad).
+ *
+ * NO incluye: notas clínicas privadas de la psicóloga, diagnósticos
+ * en el expediente (esos son obra de la psicóloga sobre el paciente,
+ * no datos suministrados POR el paciente — pertenecen al expediente
+ * clínico que requiere consentimiento de la psicóloga para entregar).
+ */
+router.get("/portal/me/export", requirePatient, (req, res) => {
+  const pid = req.user.patient_id;
+  const wsid = req.user.workspace_id;
+
+  const patient = db.prepare(`
+    SELECT id, name, preferred_name, pronouns, doc, age, phone, email, address,
+           modality, status, reason, sex,
+           insurance_provider, insurance_plan, insurance_policy, insurance_valid_until,
+           legal_accepted_at, legal_accepted_version,
+           created_at, updated_at
+    FROM patients WHERE id = ? AND workspace_id = ?
+  `).get(pid, wsid);
+
+  const appointments = db.prepare(`
+    SELECT id, date, time, duration_min, modality, room, status, notes
+    FROM appointments WHERE patient_id = ? AND workspace_id = ?
+    ORDER BY date DESC, time DESC
+  `).all(pid, wsid);
+
+  const tasks = db.prepare(`
+    SELECT id, title, description, status, due_date, completed_at, submitted_at, created_at
+    FROM tareas
+    WHERE patient_id = ? AND workspace_id = ?
+      AND visibility != 'private'
+      AND archived_at IS NULL AND deleted_at IS NULL
+    ORDER BY created_at DESC
+  `).all(pid, wsid);
+
+  const tests = db.prepare(`
+    SELECT t.id, t.test_name, t.test_code, t.date, t.score, t.level, t.interpretation,
+           t.status, t.completed_at, t.answers_json
+    FROM test_applications t
+    WHERE t.patient_id = ? AND t.workspace_id = ?
+    ORDER BY t.date DESC
+  `).all(pid, wsid).map((t) => ({
+    ...t,
+    answers: t.answers_json ? safeJSON(t.answers_json) : null,
+    answers_json: undefined,
+  }));
+
+  const documents = db.prepare(`
+    SELECT id, name, type, kind, mime, size_kb, status, signed_at, professional,
+           created_at, updated_at
+    FROM documents
+    WHERE patient_id = ? AND workspace_id = ?
+      AND archived_at IS NULL
+      AND (shared_with_patient = 1 OR signed_at IS NOT NULL)
+    ORDER BY created_at DESC
+  `).all(pid, wsid);
+
+  const legalAcceptances = db.prepare(`
+    SELECT la.accepted_at, la.ip, la.user_agent,
+           lv.version_label, ld.slug, ld.title
+    FROM legal_acceptances la
+    JOIN legal_document_versions lv ON la.version_id = lv.id
+    JOIN legal_documents ld ON lv.document_id = ld.id
+    WHERE la.patient_id = ?
+    ORDER BY la.accepted_at DESC
+  `).all(pid);
+
+  const workspace = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(wsid);
+
+  res.setHeader("Content-Disposition", `attachment; filename="mis-datos-${pid}-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.json({
+    exported_at: new Date().toISOString(),
+    legal_basis: "Ley 1581/2012 art. 8 lit. b — derecho de acceso del titular",
+    note: "Este archivo contiene los datos que tú nos diste o generaste interactuando con el portal. NO incluye anotaciones clínicas de tu psicóloga sobre ti (esas son parte del expediente clínico, regulado por Resolución 1995/1999, y se solicitan a tu psicóloga directamente).",
+    clinic: workspace?.name ?? null,
+    patient,
+    appointments,
+    tasks,
+    tests,
+    documents,
+    legal_acceptances: legalAcceptances,
+  });
 });
 
 /**

@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Phone, Mail, MapPin, ShieldCheck, Pen, Trash2 } from "lucide-react";
+import { Loader2, Phone, Mail, MapPin, ShieldCheck, Pen, Trash2, Download, AlertTriangle, X } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { api } from "@/lib/api";
+import { api, clearSession } from "@/lib/api";
+import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/p_/perfil")({
   head: () => ({ meta: [{ title: "Mi perfil · Mi portal" }] }),
@@ -138,15 +139,197 @@ function PortalProfile() {
         </div>
       )}
 
+      <DataRightsSection />
+
       <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5 flex items-start gap-3">
         <ShieldCheck className="h-5 w-5 text-sage-500 shrink-0 mt-0.5" />
         <p className="text-xs text-ink-500 leading-relaxed">
           Tu información está protegida según la Ley 1581/2012 de Habeas Data.
-          Solo tú y tu psicóloga pueden ver estos datos. Puedes pedir su eliminación
-          o portabilidad en cualquier momento contactando a la clínica.
+          Solo tú y tu psicóloga pueden ver estos datos.
         </p>
       </div>
     </PortalShell>
+  );
+}
+
+/**
+ * Sección "Tus derechos sobre tus datos" — implementa los derechos del
+ * titular según Ley 1581/2012:
+ *   - art. 8 lit. b: derecho de acceso → botón "Descargar mis datos"
+ *   - art. 8 lit. e: derecho de supresión → botón "Eliminar mi cuenta"
+ *
+ * El derecho de supresión SOLO aplica a la cuenta de acceso al portal. La
+ * historia clínica está sujeta a Resolución 1995/1999 (conservación 15
+ * años obligatoria) y se solicita aparte a la psicóloga directamente.
+ */
+function DataRightsSection() {
+  const navigate = useNavigate();
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await api.portalExportMyData();
+      toast.success("Tus datos se descargaron como archivo JSON");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo exportar");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5">
+        <p className="text-xs uppercase tracking-widest text-ink-500 font-medium">Tus derechos</p>
+        <h3 className="font-serif text-lg text-ink-900 mt-1">Sobre tus datos</h3>
+        <p className="text-xs text-ink-500 mt-1 leading-relaxed">
+          La Ley 1581/2012 de Habeas Data te garantiza acceso y control sobre tu información.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="w-full inline-flex items-center justify-between gap-3 h-12 px-4 rounded-lg border border-line-200 bg-bg-50/30 hover:border-brand-400 disabled:opacity-50"
+          >
+            <span className="flex items-center gap-2 text-sm text-ink-900">
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4 text-brand-700" />}
+              Descargar mis datos
+            </span>
+            <span className="text-[11px] text-ink-500">JSON</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            className="w-full inline-flex items-center justify-between gap-3 h-12 px-4 rounded-lg border border-rose-200/60 bg-rose-50/40 hover:border-rose-400 text-rose-700"
+          >
+            <span className="flex items-center gap-2 text-sm">
+              <Trash2 className="h-4 w-4" />
+              Eliminar mi cuenta del portal
+            </span>
+            <span className="text-[11px] text-rose-700/70">Irreversible</span>
+          </button>
+        </div>
+      </div>
+
+      {deleteOpen && (
+        <DeleteAccountModal
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            // Sesión muerta server-side; limpiamos local y navegamos al login.
+            clearSession();
+            navigate({ to: "/p/login", replace: true });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDeleted: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const mu = useMutation({
+    mutationFn: () => api.portalDeleteMyAccount({
+      current_password: password,
+      confirm_text: confirm,
+    }),
+    onSuccess: (res) => {
+      toast.success(res.message ?? "Cuenta eliminada");
+      onDeleted();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canSubmit = confirm === "ELIMINAR" && password.length > 0 && !mu.isPending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-700 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-serif text-lg text-ink-900">Eliminar mi cuenta del portal</h3>
+              <p className="text-xs text-ink-500 mt-1">Esta acción es irreversible.</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-md hover:bg-bg-100 text-ink-500 flex items-center justify-center shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="px-5 py-4 space-y-4">
+          <div className="rounded-lg border border-rose-200/60 bg-rose-50/30 p-3 text-xs text-ink-700 leading-relaxed">
+            <p className="font-medium text-rose-800 mb-1">Qué pasará si confirmas:</p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Perderás acceso al portal — no podrás volver a iniciar sesión.</li>
+              <li>Cualquier invitación pendiente quedará invalidada.</li>
+              <li>Tu psicóloga será notificada de tu decisión.</li>
+            </ul>
+          </div>
+          <div className="rounded-lg border border-line-200 bg-bg-50/40 p-3 text-xs text-ink-700 leading-relaxed">
+            <p className="font-medium mb-1">Qué NO se elimina:</p>
+            <p>
+              Tu historia clínica (notas, diagnósticos, evaluaciones) permanece archivada con tu psicóloga por imperativo de la <strong>Resolución 1995/1999</strong> (mínimo 15 años de retención). Si quieres ejercer derecho de supresión sobre los datos clínicos también, pídeselo directamente a tu psicóloga.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">Tu contraseña actual</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+              placeholder="Para confirmar tu identidad"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1.5">
+              Escribe <code className="font-mono px-1.5 py-0.5 rounded bg-bg-100 text-rose-700">ELIMINAR</code> para confirmar
+            </label>
+            <input
+              type="text"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="off"
+              className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 font-mono focus:outline-none focus:border-rose-400"
+              placeholder="ELIMINAR"
+            />
+          </div>
+        </div>
+
+        <footer className="px-5 py-4 border-t border-line-100 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => mu.mutate()}
+            disabled={!canSubmit}
+            className="h-10 px-4 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 disabled:opacity-50 inline-flex items-center gap-2"
+          >
+            {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Eliminar mi cuenta
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
 

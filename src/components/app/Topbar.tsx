@@ -10,7 +10,7 @@ import { useSidebar } from "./SidebarContext";
 import {
   CRISIS_LINES, CRISIS_PROTOCOL_STEPS,
 } from "@/lib/mock-data";
-import { api, clearSession, getStoredUser } from "@/lib/api";
+import { api, getStoredUser, logoutEverywhere } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
@@ -39,8 +39,11 @@ export function Topbar() {
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
   useEffect(() => { setCurrentUser(getStoredUser()); }, []);
 
-  function handleLogout() {
-    clearSession();
+  async function handleLogout() {
+    // logoutEverywhere() avisa al server (invalida JWT) y limpia localStorage.
+    // Es async pero no esperamos antes de navegar — UX prioritaria. La promesa
+    // se resuelve en background mientras ya estamos en la pantalla de login.
+    void logoutEverywhere();
     navigate({ to: "/login" as any });
   }
 

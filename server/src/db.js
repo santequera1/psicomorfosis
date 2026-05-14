@@ -839,6 +839,15 @@ function runMigrations() {
     "ALTER TABLE tareas ADD COLUMN submission_document_id TEXT REFERENCES documents(id) ON DELETE SET NULL",
     "ALTER TABLE tareas ADD COLUMN submitted_at TEXT",
     "CREATE INDEX IF NOT EXISTS idx_tareas_submitted ON tareas(workspace_id, submitted_at DESC)",
+    // Logout server-side (14 may). El JWT es stateless: una vez emitido, vale
+    // hasta su expiración (24h) aunque el usuario haga logout. Riesgo: si el
+    // token fue interceptado (red wifi pública, exfiltración del navegador),
+    // sigue funcionando. Solución: cuando el user hace logout, ponemos un
+    // timestamp acá; verifyToken rechaza cualquier token con `iat <` este
+    // valor. Resultado: el logout invalida TODAS las sesiones de ese user
+    // (intencional: si sospechan compromise, basta con cerrar sesión).
+    // ISO 8601 string para consistencia con el resto de timestamps en la DB.
+    "ALTER TABLE users ADD COLUMN tokens_invalidated_at TEXT",
   ];
   for (const sql of migrations) {
     try {

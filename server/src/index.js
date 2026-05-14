@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:http";
@@ -49,8 +50,22 @@ const http = createServer(app);
 const io = new SocketIOServer(http, { cors: { origin: "*" } });
 app.set("io", io);
 
+// Security headers — HSTS, X-Frame-Options (clickjacking), X-Content-Type-Options
+// (no sniff), Referrer-Policy, etc. Helmet aplica defaults sanos para una API.
+// crossOriginEmbedderPolicy=false porque el portal embebe imágenes/PDFs desde
+// /api/uploads y /api/documents/:id/file, y un COEP=require-corp rompería eso.
+// contentSecurityPolicy=false porque la app principal vive en el frontend SSR
+// (TanStack Start), no en este server. Lo ideal es definir CSP en el frontend.
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: false,
+}));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "4mb" }));
+// Confiar en X-Forwarded-* de nginx para que express-rate-limit cuente IPs
+// reales (no 127.0.0.1 de todos los requests proxied). nginx en VPS marca
+// el header con la IP del cliente final.
+app.set("trust proxy", 1);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
 

@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { db } from "./db.js";
 
 const EXPIRES_IN = "24h";
 const FALLBACK_SECRET = "psicomorfosis-dev-secret-change-me";
@@ -28,10 +29,47 @@ export function signToken(payload) {
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, getSecret());
+    const payload = jwt.verify(token, getSecret());
+    // Revocación server-side via users.tokens_invalidated_at: si el usuario
+    // hizo logout (o cambió contraseña en el futuro), su timestamp queda
+    // grabado y CUALQUIER token emitido antes de ese momento se invalida.
+    //
+    // payload.iat viene en segundos (estándar JWT). Lo comparamos vs ms
+    // del timestamp en DB. Si user no existe o no tiene tokens_invalidated_at,
+    // el token sigue siendo válido (estado default).
+    //
+    // Skip para tokens sin id (no debería pasar pero defensa en profundidad).
+    if (payload?.id && typeof payload?.iat === "number") {
+      const u = db.prepare("SELECT tokens_invalidated_at FROM users WHERE id = ?")
+        .get(payload.id);
+      if (u?.tokens_invalidated_at) {
+        const invalidatedAt = new Date(u.tokens_invalidated_at).getTime();
+        const issuedAt = payload.iat * 1000;
+        if (issuedAt < invalidatedAt) return null;
+      }
+    }
+    return payload;
   } catch {
     return null;
   }
+}
+
+/**
+ * Marca todos los tokens del usuario como inválidos. Cualquier JWT emitido
+ * antes de este momento será rechazado por verifyToken. El usuario tendrá
+ * que volver a hacer login.
+ *
+ * Llamado desde el endpoint de logout. El timestamp tiene resolución de
+ * milisegundo, mientras que JWT `iat` tiene resolución de segundo — para
+ * evitar que un token emitido en el mismo segundo del logout siga válido,
+ * sumamos 1000ms al timestamp (efectivamente "redondeamos arriba al
+ * próximo segundo").
+ */
+export function invalidateUserTokens(userId) {
+  const now = new Date(Date.now() + 1000).toISOString();
+  db.prepare("UPDATE users SET tokens_invalidated_at = ? WHERE id = ?")
+    .run(now, userId);
+  return now;
 }
 
 export function requireAuth(req, res, next) {

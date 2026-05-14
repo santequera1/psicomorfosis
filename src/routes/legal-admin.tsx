@@ -21,7 +21,7 @@ import {
   CheckCircle2, Clock, ClipboardCheck, LogOut, PanelLeftClose, PanelLeftOpen,
   Settings, Sun, Moon, ArrowLeft, Bug,
 } from "lucide-react";
-import { api, getStoredUser, clearSession } from "@/lib/api";
+import { api, getStoredUser, logoutEverywhere } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
 import { ReportProblemModal } from "@/components/app/ReportProblemModal";
@@ -303,7 +303,7 @@ export function LegalAdminShell({
           </button>
           <button
             onClick={() => {
-              clearSession();
+              void logoutEverywhere();
               window.location.replace("/login");
             }}
             title="Cerrar sesión"

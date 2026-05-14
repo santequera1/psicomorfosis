@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain, Bug } from "lucide-react";
 import { ReportProblemModal } from "@/components/app/ReportProblemModal";
 import { Logo } from "@/components/app/Logo";
-import { api, clearSession, getStoredUser, getToken, type ApiUser } from "@/lib/api";
+import { api, clearSession, getStoredUser, getToken, logoutEverywhere, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type TabKey = "inicio" | "citas" | "tareas" | "tests" | "documentos" | "perfil";
@@ -65,7 +65,9 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   };
 
   function logout() {
-    clearSession();
+    // logoutEverywhere() invalida tokens server-side y limpia storage.
+    // Acción ejecutada por el paciente desde el icono "Salir" del topbar.
+    void logoutEverywhere();
     navigate({ to: "/p/login" });
   }
 

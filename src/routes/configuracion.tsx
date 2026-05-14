@@ -11,7 +11,7 @@ import {
   ShieldAlert, Clock, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession } from "@/lib/api";
+import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession, refreshToken } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
 import {
@@ -701,8 +701,12 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 
   const mu = useMutation({
     mutationFn: () => api.changePassword({ current_password: current, new_password: next }),
-    onSuccess: () => {
-      toast.success("Contraseña actualizada");
+    onSuccess: (data) => {
+      // El backend ahora invalida TODOS los tokens al cambiar contraseña y
+      // emite uno nuevo. Lo guardamos para que esta pestaña no quede
+      // deslogueada. El user object no cambió, solo refrescamos el token.
+      if (data?.token) refreshToken(data.token);
+      toast.success("Contraseña actualizada. Otras sesiones quedaron cerradas.");
       onClose();
     },
   });

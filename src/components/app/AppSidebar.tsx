@@ -8,7 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import { cn, roleLabel } from "@/lib/utils";
 import { Logo } from "./Logo";
-import { api, getStoredUser, setSession, clearSession, type ApiUser, getToken } from "@/lib/api";
+import { api, getStoredUser, setSession, logoutEverywhere, type ApiUser, getToken } from "@/lib/api";
 import { useSidebar } from "./SidebarContext";
 import { ReportProblemModal } from "./ReportProblemModal";
 
@@ -283,7 +283,7 @@ export function AppSidebar() {
           {/* Cerrar sesión */}
           <button
             onClick={() => {
-              clearSession();
+              void logoutEverywhere();
               window.location.replace("/login");
             }}
             className={cn(

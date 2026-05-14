@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ShieldCheck, LogOut, AlertTriangle } from "lucide-react";
-import { api, clearSession, getStoredUser } from "@/lib/api";
+import { api, logoutEverywhere, getStoredUser } from "@/lib/api";
 import { LegalDocumentView } from "./LegalDocumentEditor";
 
 export function PendingLegalGate() {
@@ -128,7 +128,7 @@ function BlockingModal({
         <footer className="px-6 py-4 border-t border-line-200 flex flex-wrap items-center gap-3 shrink-0">
           <button
             onClick={() => {
-              clearSession();
+              void logoutEverywhere();
               window.location.replace("/login");
             }}
             className="h-10 px-3 rounded-lg text-xs text-ink-500 hover:bg-bg-100 inline-flex items-center gap-1.5"

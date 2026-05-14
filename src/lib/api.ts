@@ -726,9 +726,43 @@ export function setSession(token: string, user: ApiUser) {
   window.localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+/**
+ * Reemplaza solo el JWT en localStorage (deja el user object intacto).
+ * Útil tras /change-password donde el backend invalida tokens previos y
+ * devuelve uno nuevo — el user es el mismo pero el token cambió.
+ */
+export function refreshToken(token: string) {
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
 export function clearSession() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
+}
+
+/**
+ * Logout completo: avisa al server para que invalide TODOS los tokens del
+ * usuario (en todos los dispositivos donde tenga sesión abierta) Y limpia el
+ * localStorage local. Si el endpoint server falla (sin red, etc.) igual
+ * limpiamos localmente — UX prioritaria; el token expira solo en 24h.
+ *
+ * Detecta si la sesión actual es de paciente o staff y llama al endpoint
+ * apropiado (los dos hacen lo mismo pero requieren middleware distinto).
+ */
+export async function logoutEverywhere(): Promise<void> {
+  const user = getStoredUser();
+  try {
+    if (user?.role === "paciente") {
+      await api.portalLogout();
+    } else if (user) {
+      await api.logout();
+    }
+  } catch {
+    // Si el server no responde, igual cerramos localmente. Mejor logout
+    // parcial que dejar al usuario con sesión activa en su pantalla.
+  } finally {
+    clearSession();
+  }
 }
 
 export class ApiError extends Error {
@@ -792,9 +826,17 @@ export const api = {
       body: JSON.stringify({ identifier, password }),
     }),
   me: () => request<{ user: ApiUser }>("/api/auth/me"),
-  /** Cambia la contraseña del usuario autenticado. Requiere la actual. */
+  /** Logout server-side: invalida TODOS los tokens del usuario actual. */
+  logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+  /** Logout del paciente — equivalente del portal. */
+  portalLogout: () => request<{ ok: true }>("/api/portal/logout", { method: "POST" }),
+  /**
+   * Cambia la contraseña del usuario autenticado. Requiere la actual.
+   * El backend invalida todos los tokens previos al hacer el cambio y
+   * devuelve un token nuevo para que la pestaña actual no quede deslogueada.
+   */
   changePassword: (body: { current_password: string; new_password: string }) =>
-    request<{ ok: true }>("/api/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
+    request<{ ok: true; token?: string }>("/api/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
 
   /**
    * Verifica si un username o email están disponibles. Endpoint público
@@ -872,6 +914,39 @@ export const api = {
     }>("/api/portal/me"),
   portalUpdateMe: (body: Partial<{ phone: string; email: string; address: string; photo_url: string; preferred_name: string; pronouns: string }>) =>
     request<{ ok: true }>("/api/portal/me", { method: "PATCH", body: JSON.stringify(body) }),
+  /**
+   * Eliminar la cuenta del portal del paciente (Ley 1581 art. 8e). NO borra
+   * la historia clínica (Resolución 1995/1999 obliga a conservarla 15 años).
+   * Solo borra el acceso digital. Exige password + el texto "ELIMINAR".
+   */
+  portalDeleteMyAccount: (body: { current_password: string; confirm_text: string }) =>
+    request<{ ok: true; message: string }>("/api/portal/me/delete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /**
+   * Descargar TODOS los datos del paciente en JSON (Ley 1581 art. 8b —
+   * derecho de acceso). Descarga directa con auth via header.
+   */
+  portalExportMyData: async (): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/portal/me/export`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new ApiError(res.status, "No se pudo exportar tus datos");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    // Nombre del archivo: el header Content-Disposition trae el sugerido,
+    // pero por simplicidad lo armamos acá también.
+    const today = new Date().toISOString().slice(0, 10);
+    a.download = `mis-datos-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   portalAppointments: () => request<Array<Record<string, any>>>("/api/portal/appointments"),
   portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
   portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),

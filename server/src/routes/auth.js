@@ -1,10 +1,35 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import { db } from "../db.js";
-import { signToken, requireAuth } from "../auth.js";
+import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
 
 const router = Router();
+
+/**
+ * Rate limiter para login. Mitiga ataques de fuerza bruta — sin esto, un
+ * atacante puede probar 1000+ contraseñas por segundo. Lo aplicamos por
+ * IP (trust proxy=1 hace que express-rate-limit lea X-Forwarded-For de
+ * nginx). 10 intentos por 15 minutos balancea: suficientes para que un
+ * usuario que se equivoca varias veces no quede bloqueado, pero detiene
+ * cualquier bruteforce automático real. El header Retry-After le dice al
+ * cliente cuándo reintentar.
+ *
+ * Nota: NO bloqueamos por username (sería trivial bloquear cuentas ajenas
+ * inyectando intentos con el username de la víctima). Solo por IP. Si una
+ * IP corporativa con NAT se ve afectada, pueden contactar a la psicóloga.
+ */
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Solo cuentan requests fallidos (skipSuccessfulRequests). Si te logueas
+  // bien y la sesión expira y vuelves a loguearte, no contamos esos.
+  skipSuccessfulRequests: true,
+  message: { error: "Demasiados intentos de login. Espera 15 minutos e intenta de nuevo." },
+});
 
 /**
  * POST /api/auth/login
@@ -18,7 +43,7 @@ const router = Router();
  * Si dos usuarios tuvieran mismo email (no debería pasar — validamos
  * unicidad al editar/crear), se prefiere el match por username.
  */
-router.post("/login", (req, res) => {
+router.post("/login", loginLimiter, (req, res) => {
   const body = req.body ?? {};
   const password = body.password;
   const rawIdentifier = body.identifier ?? body.username;
@@ -199,6 +224,42 @@ router.post("/change-password", requireAuth, (req, res) => {
   }
   const newHash = bcrypt.hashSync(new_password, 10);
   db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, user.id);
+  // Defensa en profundidad: al cambiar contraseña, invalidamos todos los
+  // tokens previos. Si alguien tenía un JWT exfiltrado, deja de servir.
+  invalidateUserTokens(user.id);
+  // Emitimos un token nuevo para no forzar re-login en el mismo browser que
+  // acaba de cambiar la contraseña — UX. El frontend debe usar este token
+  // en adelante; los viejos quedaron revocados.
+  const fresh = db.prepare(`
+    SELECT u.id, u.username, u.name, u.role, u.workspace_id,
+           u.professional_id, u.is_platform_admin, u.is_legal_admin
+    FROM users u WHERE u.id = ?
+  `).get(user.id);
+  const token = signToken({
+    id: fresh.id,
+    workspace_id: fresh.workspace_id,
+    username: fresh.username,
+    role: fresh.role,
+    name: fresh.name,
+    professional_id: fresh.professional_id ?? null,
+    is_platform_admin: !!fresh.is_platform_admin,
+    is_legal_admin: !!fresh.is_legal_admin,
+  });
+  res.json({ ok: true, token });
+});
+
+/**
+ * POST /api/auth/logout — invalida TODAS las sesiones JWT del usuario
+ * actual. El JWT es stateless, así que no podemos "borrar" un token
+ * específico; lo que hacemos es marcar un timestamp en la fila del user,
+ * y verifyToken rechaza cualquier JWT con iat < timestamp.
+ *
+ * Esto significa que logout cierra sesión en todos los dispositivos del
+ * usuario — comportamiento deseado: si un usuario sospecha que su token
+ * está comprometido, hace logout y todos los tokens quedan inválidos.
+ */
+router.post("/logout", requireAuth, (req, res) => {
+  invalidateUserTokens(req.user.id);
   res.json({ ok: true });
 });
 
@@ -264,7 +325,11 @@ router.post("/update-credentials", requireAuth, (req, res) => {
   }
 
   if (updates.length === 0) {
-    return res.json({ ok: true, noop: true, user: { ...user, username: nextUsername, email: nextEmail } });
+    // Safety: NUNCA devolver password_hash en respuestas (aunque sea bcrypt).
+    // El SELECT lo trae para verificar la contraseña actual; pero acá ya no
+    // se necesita. Antes hacíamos {...user} y se filtraba.
+    const { password_hash: _omit, ...safeUser } = user;
+    return res.json({ ok: true, noop: true, user: { ...safeUser, username: nextUsername, email: nextEmail } });
   }
   params.push(user.id);
   db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...params);
