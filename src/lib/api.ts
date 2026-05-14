@@ -1484,6 +1484,12 @@ export const api = {
     read: boolean;
     urgent?: boolean;
   }>>("/api/notifications"),
+  /** Descarta una notificación. Persistente — no vuelve a aparecer. */
+  dismissNotification: (id: string) =>
+    request<{ ok: true }>(`/api/notifications/${encodeURIComponent(id)}/dismiss`, { method: "POST" }),
+  /** Descarta todas las notificaciones visibles del usuario actual. */
+  markAllNotificationsRead: () =>
+    request<{ ok: true; dismissed: number }>("/api/notifications/mark-all-read", { method: "POST" }),
 
   // Settings
   getSettings: () => request<Record<string, string>>("/api/settings"),

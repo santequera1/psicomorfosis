@@ -848,6 +848,18 @@ function runMigrations() {
     // (intencional: si sospechan compromise, basta con cerrar sesión).
     // ISO 8601 string para consistencia con el resto de timestamps en la DB.
     "ALTER TABLE users ADD COLUMN tokens_invalidated_at TEXT",
+    // Dismissals de notificaciones (14 may). Las notifs son derivadas (se
+    // calculan en cada GET desde citas/tests/tareas/docs), no se persisten.
+    // Esta tabla guarda QUÉ notifs YA fueron descartadas por CADA user, así
+    // el panel queda limpio. PK compuesta evita duplicados (idempotente).
+    `CREATE TABLE IF NOT EXISTS notification_dismissals (
+      user_id INTEGER NOT NULL,
+      notification_id TEXT NOT NULL,
+      dismissed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, notification_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_notif_dismissals_user ON notification_dismissals(user_id)",
   ];
   for (const sql of migrations) {
     try {

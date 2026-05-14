@@ -10,8 +10,16 @@
  *  - El campo `id` es estable por evento (ej: `appt-123`) para que el
  *    frontend pueda persistir flags "ya vista" en localStorage si
  *    quiere (más adelante).
- *  - La tabla `notifications` que existía se mantiene por compatibilidad
- *    pero NO se usa: el seed antiguo se está limpiando.
+ *
+ * Dismissals (descarte por usuario):
+ *  - Tabla `notification_dismissals` (user_id, notification_id) persiste
+ *    cuáles notifs cada usuario ya descartó (botón X o "marcar todas").
+ *  - El GET filtra las dismissadas → el panel queda limpio aunque la
+ *    notif siga generándose en bruto.
+ *  - Las re-aplicaciones del mismo evento (mismo id) NO vuelven a
+ *    aparecer una vez dismissadas. Si una entrega de tarea se reenvía
+ *    con el mismo id pero distinto submitted_at, podría no aparecer
+ *    de nuevo — caso raro, lo iteramos si pasa.
  *
  * Tipos:
  *  - 'cita'      → cita confirmada en las próximas 24h sin atender
@@ -60,15 +68,18 @@ function apptInstantISO(date, time) {
   return `${date}T${time}:00`;
 }
 
-router.get("/", (req, res) => {
-  const wsId = req.user.workspace_id;
-  const isPlatformAdmin = !!req.user.is_platform_admin;
+/**
+ * Computa las notificaciones del workspace SIN aplicar dismissals.
+ * Lo extrajimos a función pura para que GET y mark-all-read compartan
+ * la misma lógica de qué notifs existen ahora mismo.
+ *
+ * Devuelve objetos con campo `raw_at` (para ordenar) que el caller debe
+ * limpiar antes de enviar al cliente.
+ */
+function computeNotifications({ wsId, isPlatformAdmin }) {
   const out = [];
 
   // ─── 1) Citas próximas (próximas 24h confirmadas, no atendidas) ─────
-  // Filtramos por status != 'atendida' y != 'cancelada'. La marca
-  // automática de atendida (lazy backfill en GET de appointments) hace
-  // que las pasadas con grace queden fuera.
   const upcoming = db.prepare(`
     SELECT id, patient_name, date, time, modality, status
     FROM appointments
@@ -88,7 +99,6 @@ router.get("/", (req, res) => {
       description: `${a.date} ${a.time} · ${a.modality}`,
       at: relativeTime(at),
       raw_at: at,
-      read: false,
       urgent: false,
     });
   }
@@ -112,8 +122,6 @@ router.get("/", (req, res) => {
       description: `${t.patient_name} · completó ${t.test_name}`,
       at: relativeTime(t.date),
       raw_at: t.date,
-      read: false,
-      // Tests con interpretación de riesgo alto/crítico marcamos como urgent.
       urgent: t.level === "high" || t.level === "critical",
     });
   }
@@ -139,15 +147,11 @@ router.get("/", (req, res) => {
       description: `${t.title} · ${adh}`,
       at: relativeTime(t.due_at),
       raw_at: t.due_at,
-      read: false,
       urgent: false,
     });
   }
 
   // ─── 3b) Entregas de tareas kanban (paciente subió archivo, últimos 7d) ─
-  // Cuando el paciente entrega vía /api/portal/tasks/:id/submit, marcamos
-  // tareas.submitted_at y status='IN_REVIEW'. Aquí derivamos la notif para
-  // que aparezca en /api/notifications sin depender de la tabla legacy.
   const submissions = db.prepare(`
     SELECT t.id, t.title, t.submitted_at, t.patient_id,
            p.name AS patient_name, p.preferred_name
@@ -170,9 +174,6 @@ router.get("/", (req, res) => {
       description: `Entregó "${s.title}"`,
       at: relativeTime(s.submitted_at),
       raw_at: s.submitted_at,
-      read: false,
-      // No urgente: la entrega es buena noticia, no exige acción inmediata.
-      // El psicólogo la revisa cuando pueda.
       urgent: false,
     });
   }
@@ -197,7 +198,6 @@ router.get("/", (req, res) => {
       description: d.name,
       at: relativeTime(d.signed_at),
       raw_at: d.signed_at,
-      read: false,
       urgent: false,
     });
   }
@@ -220,33 +220,88 @@ router.get("/", (req, res) => {
         description: (r.user_description ?? r.message ?? "").slice(0, 120),
         at: relativeTime(r.created_at),
         raw_at: r.created_at,
-        read: false,
         urgent: false,
       });
     }
   }
 
+  return out;
+}
+
+router.get("/", (req, res) => {
+  const wsId = req.user.workspace_id;
+  const isPlatformAdmin = !!req.user.is_platform_admin;
+  const userId = req.user.id;
+
+  const all = computeNotifications({ wsId, isPlatformAdmin });
+
+  // Lookup de dismissals del user actual. Una sola query → Set para O(1).
+  const dismissedRows = db.prepare(`
+    SELECT notification_id FROM notification_dismissals WHERE user_id = ?
+  `).all(userId);
+  const dismissed = new Set(dismissedRows.map((r) => r.notification_id));
+
+  // Filtramos las descartadas. El panel queda limpio una vez el user
+  // marca como leída, aunque la condición de generación siga viva.
+  const visible = all.filter((n) => !dismissed.has(n.id));
+
   // Orden final: urgentes primero, luego por raw_at descendente
   // (más reciente arriba). raw_at vacío al final.
-  out.sort((a, b) => {
+  visible.sort((a, b) => {
     if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
     if (!a.raw_at) return 1;
     if (!b.raw_at) return -1;
     return a.raw_at < b.raw_at ? 1 : -1;
   });
 
-  // Limpiamos raw_at antes de enviar — el cliente solo necesita `at`
-  // formateado y el id estable.
-  res.json(out.map(({ raw_at, ...rest }) => rest));
+  // Cliente recibe `read: false` para todo lo visible (si estuviera
+  // dismissado ya lo habríamos filtrado). Limpiamos raw_at.
+  res.json(visible.map(({ raw_at, ...rest }) => ({ ...rest, read: false })));
 });
 
 /**
- * Endpoints legacy que ya no aplican con notificaciones dinámicas:
- * un POST /:id/read no tiene a quién marcar (las notif son derivadas
- * y se regeneran en cada GET). Mantengo los routes por compatibilidad
- * pero responden 200 ok sin hacer nada — el front no debería llamarlos.
+ * POST /api/notifications/:id/dismiss — el usuario descarta UNA notif.
+ * Idempotente (INSERT OR IGNORE) — clicks repetidos no rompen nada.
+ *
+ * Alias legacy /:id/read que ya existía como no-op ahora hace lo mismo:
+ * dismissar = marcar como leída en este modelo (el panel solo muestra
+ * lo accionable, sin estado intermedio "leído pero visible").
  */
-router.post("/:id/read", (_req, res) => res.json({ ok: true }));
-router.post("/mark-all-read", (_req, res) => res.json({ ok: true }));
+function dismissOne(req, res) {
+  const userId = req.user.id;
+  const notifId = req.params.id;
+  if (!notifId) return res.status(400).json({ error: "id requerido" });
+  db.prepare(`
+    INSERT OR IGNORE INTO notification_dismissals (user_id, notification_id)
+    VALUES (?, ?)
+  `).run(userId, notifId);
+  res.json({ ok: true });
+}
+router.post("/:id/dismiss", dismissOne);
+router.post("/:id/read", dismissOne);
+
+/**
+ * POST /api/notifications/mark-all-read — descarta TODAS las notifs que el
+ * usuario ve actualmente. Computamos el conjunto en el momento (mismo
+ * código que GET) y registramos un dismissal por cada una. Las que se
+ * generen DESPUÉS (eventos nuevos) reaparecen, las actuales se silencian.
+ */
+router.post("/mark-all-read", (req, res) => {
+  const wsId = req.user.workspace_id;
+  const userId = req.user.id;
+  const isPlatformAdmin = !!req.user.is_platform_admin;
+
+  const all = computeNotifications({ wsId, isPlatformAdmin });
+  const ins = db.prepare(`
+    INSERT OR IGNORE INTO notification_dismissals (user_id, notification_id)
+    VALUES (?, ?)
+  `);
+  const tx = db.transaction((ids) => {
+    for (const id of ids) ins.run(userId, id);
+  });
+  tx(all.map((n) => n.id));
+
+  res.json({ ok: true, dismissed: all.length });
+});
 
 export default router;

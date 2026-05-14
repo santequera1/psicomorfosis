@@ -11,7 +11,7 @@ import {
   CRISIS_LINES, CRISIS_PROTOCOL_STEPS,
 } from "@/lib/mock-data";
 import { api, getStoredUser, logoutEverywhere } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
@@ -307,6 +307,40 @@ type Notification = NonNullable<Awaited<ReturnType<typeof api.listNotifications>
 
 function NotificationsPanel({ onClose, notifications }: { onClose: () => void; notifications: Notification[] }) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  // Dismissals son server-side ahora — el optimistic update borra del cache
+  // local sin esperar al server. Si falla revalida.
+  const dismissMu = useMutation({
+    mutationFn: (id: string) => api.dismissNotification(id),
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["notifications"] });
+      const prev = qc.getQueryData<Notification[]>(["notifications"]);
+      qc.setQueryData<Notification[]>(["notifications"], (old) =>
+        (old ?? []).filter((n) => n.id !== id)
+      );
+      return { prev };
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["notifications"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
+  const markAllMu = useMutation({
+    mutationFn: () => api.markAllNotificationsRead(),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["notifications"] });
+      const prev = qc.getQueryData<Notification[]>(["notifications"]);
+      qc.setQueryData<Notification[]>(["notifications"], []);
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["notifications"], ctx.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
   const iconFor = (t: Notification["type"]) => {
     switch (t) {
       case "cita": return <CalendarDays className="h-4 w-4" />;
@@ -360,8 +394,6 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
     if (dest) navigate({ to: dest.to as any, search: dest.search as any });
   }
 
-  const unread = notifications.filter((n) => !n.read).length;
-
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -371,13 +403,25 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
         Usamos right-2 sm:right-0 para que no se salga al borde de la pantalla.
       */}
       <div className="fixed sm:absolute right-2 left-2 sm:left-auto sm:right-0 top-16 sm:top-12 sm:w-[380px] rounded-xl border border-line-200 bg-surface shadow-modal z-50 max-h-[70vh] sm:max-h-[560px] flex flex-col overflow-hidden">
-        <header className="px-4 py-3 border-b border-line-100 flex items-center justify-between">
-          <div>
+        <header className="px-4 py-3 border-b border-line-100 flex items-center justify-between gap-3">
+          <div className="min-w-0">
             <h3 className="font-serif text-base text-ink-900">Notificaciones</h3>
-            <p className="text-[11px] text-ink-500">
-              {notifications.length === 0 ? "Sin pendientes" : `${unread} sin leer`}
+            <p className="text-[11px] text-ink-500 truncate">
+              {notifications.length === 0 ? "Sin pendientes" : `${notifications.length} pendiente${notifications.length === 1 ? "" : "s"}`}
             </p>
           </div>
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              onClick={() => markAllMu.mutate()}
+              disabled={markAllMu.isPending}
+              className="shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[11px] text-ink-700 hover:bg-bg-100 disabled:opacity-50"
+              title="Descartar todas las notificaciones"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Marcar todas
+            </button>
+          )}
         </header>
         {notifications.length === 0 ? (
           // Empty state amigable cuando no hay nada que mostrar — evita
@@ -399,12 +443,22 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
               return (
                 <li
                   key={n.id}
-                  className={(!n.read ? "bg-brand-50/30" : "")}
+                  className={"relative group bg-brand-50/30"}
                 >
-                  <button
-                    type="button"
-                    onClick={() => handleClickNotification(n)}
-                    disabled={!isClickable}
+                  {/* La fila es div+click handler en vez de <button> porque
+                      necesitamos un botón X anidado y los botones no se
+                      pueden anidar en HTML válido. role/tabIndex para a11y. */}
+                  <div
+                    role={isClickable ? "button" : undefined}
+                    tabIndex={isClickable ? 0 : undefined}
+                    onClick={() => isClickable && handleClickNotification(n)}
+                    onKeyDown={(e) => {
+                      if (!isClickable) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleClickNotification(n);
+                      }
+                    }}
                     className={
                       "w-full px-4 py-3 flex items-start gap-3 text-left transition-colors " +
                       (isClickable
@@ -414,22 +468,36 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
                   >
                     <div className={
                       "h-9 w-9 rounded-lg flex items-center justify-center shrink-0 " +
-                      (n.urgent ? "bg-error-soft text-risk-high" : n.read ? "bg-bg-100 text-ink-500" : "bg-brand-50 text-brand-800")
+                      (n.urgent ? "bg-error-soft text-risk-high" : "bg-brand-50 text-brand-800")
                     }>
                       {iconFor(n.type)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm text-ink-900 font-medium truncate">{n.title}</p>
-                        {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />}
+                        <span className="h-1.5 w-1.5 rounded-full bg-brand-700 shrink-0" />
                       </div>
                       <p className="text-xs text-ink-500 mt-0.5 line-clamp-2">{n.description}</p>
                       <p className="text-[10px] text-ink-400 mt-1 tabular">{n.at}</p>
                     </div>
-                    {isClickable && (
-                      <ChevronRight className="h-4 w-4 text-ink-400 shrink-0 mt-1" />
-                    )}
-                  </button>
+                    <div className="flex flex-col items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissMu.mutate(n.id);
+                        }}
+                        className="h-6 w-6 rounded-md text-ink-400 hover:text-ink-900 hover:bg-bg-100 inline-flex items-center justify-center sm:opacity-0 group-hover:opacity-100 transition-opacity focus-visible:opacity-100"
+                        title="Descartar"
+                        aria-label="Descartar notificación"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                      {isClickable && (
+                        <ChevronRight className="h-4 w-4 text-ink-400" />
+                      )}
+                    </div>
+                  </div>
                 </li>
               );
             })}
