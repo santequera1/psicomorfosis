@@ -68,28 +68,45 @@ export function AppSelect({
   const handleChange = (v: string) => onChange(v === EMPTY_SENTINEL ? "" : v);
 
   return (
-    <ShadSelect value={internalValue} onValueChange={handleChange} disabled={disabled}>
+    // modal={false} evita que Radix bloquee el scroll del body al abrir.
+    // El default (modal=true) quita el scrollbar y desplaza el contenido
+    // ~17px (ancho del scrollbar) → la web "salta" cada vez que abres un
+    // select. Con modal=false el background queda interactivo y el body
+    // no se modifica. Trade-off aceptable: el usuario puede hacer click
+    // fuera para cerrar, que es exactamente lo que esperaríamos.
+    <ShadSelect
+      value={internalValue}
+      onValueChange={handleChange}
+      disabled={disabled}
+      modal={false}
+    >
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}
         className={cn(
           // Tamaños alineados con el resto de inputs de la app.
           size === "sm" ? "h-8 text-xs px-2.5" : "h-10 text-sm px-3",
-          // Borde y bg consistentes con `<input>` custom (line-200 / bg-50/60).
-          "border-line-200 bg-bg-50/60 focus:border-brand-700 focus:ring-0 focus:ring-offset-0",
+          // bg-surface (blanco en light, surface oscuro en dark) MATCHEA
+          // exactamente el resto de inputs custom. Antes usaba bg-bg-50/60
+          // (beige) que rompía la coherencia con los <input> al lado.
+          "border-line-200 bg-surface focus:border-brand-700 focus:ring-0 focus:ring-offset-0",
           "data-placeholder:text-ink-400",
           className,
         )}
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className="border-line-200 bg-surface text-ink-900">
+      <SelectContent className="border-line-200 bg-popover text-popover-foreground">
         {options.map((o) => (
           <SelectItem
             key={o.value || "_empty"}
             value={o.value === "" ? EMPTY_SENTINEL : o.value}
             disabled={o.disabled}
-            className="text-sm focus:bg-brand-50 focus:text-brand-900"
+            // bg-accent / text-accent-foreground son los tokens shadcn que
+            // styles.css ya mapeó: en light → brand-100/brand-900, en dark
+            // → tonos brand oscuros con foreground claro. Garantiza
+            // contraste correcto en ambos temas sin hardcodear colores.
+            className="text-sm focus:bg-accent focus:text-accent-foreground"
           >
             {o.label}
           </SelectItem>
