@@ -46,7 +46,7 @@ const groups: Array<{
   },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ animateEntrance = false }: { animateEntrance?: boolean }) {
   const { open, setOpen, collapsed, setCollapsed } = useSidebar();
   const { location } = useRouterState();
   const path = location.pathname;
@@ -180,7 +180,13 @@ export function AppSidebar() {
           // Ancho desktop: 268px o 72px según collapsed
           collapsed ? "sm:w-18" : "sm:w-67",
           // Mobile: visible con translate-x
-          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
+          open ? "translate-x-0" : "-translate-x-full sm:translate-x-0",
+          // Animación de entrada — solo cuando AppShell se monta por
+          // primera vez (post-login o reload). En navegaciones siguientes
+          // animateEntrance llega en false y la clase no aplica.
+          // Solo desktop (sm+): en mobile el drawer ya tiene su propia
+          // animación de slide al abrirse, animar dos veces se sentiría raro.
+          animateEntrance && "sm:animate-in sm:slide-in-from-left-8 sm:fade-in sm:duration-500",
         )}
         aria-label="Navegación principal"
       >

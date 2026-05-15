@@ -23,6 +23,11 @@ import { PendingLegalGate } from "@/components/legal/PendingLegalGate";
 // cada page envuelve su propio AppShell) parten ya en `true` y evitan el
 // flash de pantalla en blanco entre navegaciones.
 let SESSION_CONFIRMED = false;
+// Una vez que el shell ha hecho su entrada (fade del main, slide del
+// sidebar), no queremos repetirla en cada navegación. Persistimos en
+// módulo (no en sessionStorage) para que F5 sí muestre la animación
+// otra vez — se siente como "carga inicial de la app".
+let FIRST_PAINT_DONE = false;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   // El estado inicial DEBE ser el mismo en SSR y en el primer render del cliente
@@ -30,6 +35,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // siempre es false (módulo recién cargado), igual que en el cliente la
   // primera vez. A partir de ahí queda en true y los remounts no pestañean.
   const [checked, setChecked] = useState<boolean>(SESSION_CONFIRMED);
+  // Solo animamos sidebar + main al PRIMER pintado de la app (post-login
+  // o reload). Las navegaciones internas no re-animan el sidebar para
+  // no marear; el contenido principal sí (efecto de transición de page).
+  const [firstPaint] = useState(() => !FIRST_PAINT_DONE);
 
   useEffect(() => {
     if (!getToken()) {
@@ -39,6 +48,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     SESSION_CONFIRMED = true;
     setChecked(true);
   }, []);
+
+  useEffect(() => {
+    // Marca firstPaint como consumido tras el primer commit del shell
+    // autenticado. requestAnimationFrame asegura que la marca caiga
+    // DESPUÉS de aplicar las clases de animación, no antes.
+    if (checked && firstPaint) {
+      requestAnimationFrame(() => { FIRST_PAINT_DONE = true; });
+    }
+  }, [checked, firstPaint]);
 
   if (!checked) {
     // Pantalla vacía durante la transición SSR → hidratación.
@@ -50,12 +68,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <div className="flex w-full min-h-screen bg-bg-50 text-ink-900">
-        <AppSidebar />
+        <AppSidebar animateEntrance={firstPaint} />
         <div className="flex-1 min-w-0 flex flex-col">
           <Topbar />
           {/* pb-24 reserva espacio para que el FAB (bottom-5 right-5, h-14)
               no tape los últimos elementos de la página al scrollear hasta abajo. */}
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24">
+          <main
+            // key cambia con la pathname → React remonta <main> al navegar,
+            // y la animación se vuelve a disparar (page transition feel).
+            key={typeof window !== "undefined" ? window.location.pathname : ""}
+            className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-400"
+          >
             {children}
           </main>
         </div>
