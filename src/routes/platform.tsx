@@ -7,6 +7,7 @@ import {
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
+  ArrowUpDown, Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -58,9 +59,37 @@ function PlatformPage() {
   return <PlatformDashboard />;
 }
 
+// Sort options para el listado. Etiqueta y comparator inline para mantener
+// el código en un solo lugar. Cuando el campo de comparación es null/undefined
+// caen al final del orden (independiente de asc/desc).
+type SortKey =
+  | "patients-desc" | "patients-asc"
+  | "recent" | "lastlogin"
+  | "sessions-desc" | "revenue-desc"
+  | "name-asc";
+
+const SORT_OPTIONS: { v: SortKey; label: string }[] = [
+  { v: "patients-desc", label: "Más pacientes" },
+  { v: "patients-asc",  label: "Menos pacientes" },
+  { v: "sessions-desc", label: "Más sesiones (30d)" },
+  { v: "revenue-desc",  label: "Mayor ingreso (30d)" },
+  { v: "recent",        label: "Más recientes" },
+  { v: "lastlogin",     label: "Último login" },
+  { v: "name-asc",      label: "Nombre (A→Z)" },
+];
+
+type ModeFilter = "todos" | "individual" | "organization";
+type SubFilter = "todos" | "invitado";
+
 function PlatformDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "deshabilitado">("todos");
+  // Filtros adicionales (modo + suscripción) y orden. Suscripción por ahora
+  // solo tiene "invitado" porque la app no cobra todavía — cuando exista el
+  // campo plan/tier en la API el filtro ya está cableado para crecer.
+  const [modeFilter, setModeFilter] = useState<ModeFilter>("todos");
+  const [subFilter, setSubFilter] = useState<SubFilter>("todos");
+  const [sortBy, setSortBy] = useState<SortKey>("patients-desc");
   const [createOpen, setCreateOpen] = useState(false);
   // Vista persistida del listado: 'list' (filas detalladas con botones)
   // o 'cards' (tarjetas compactas, mejor en mobile y para escanear muchas
@@ -79,23 +108,46 @@ function PlatformDashboard() {
     queryFn: () => api.platformListWorkspaces(),
   });
 
-  const filtered = useMemo(() => workspaces.filter((w) => {
-    if (statusFilter === "activo" && w.disabledAt) return false;
-    if (statusFilter === "deshabilitado" && !w.disabledAt) return false;
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      const hay = (s: string | null) => (s ?? "").toLowerCase().includes(q);
-      // Búsqueda match contra el nombre del workspace + ownerName/email/username
-      // legacy + cualquier miembro del workspace (importante para workspaces
-      // compartidos: buscar "alba" debe encontrar el legal aunque María
-      // figure como owner).
-      const matchesMember = (w.members ?? []).some((m) =>
-        hay(m.name) || hay(m.username) || hay(m.email),
-      );
-      if (!hay(w.name) && !hay(w.ownerName) && !hay(w.ownerEmail) && !hay(w.ownerUsername) && !matchesMember) return false;
+  const filtered = useMemo(() => {
+    const base = workspaces.filter((w) => {
+      if (statusFilter === "activo" && w.disabledAt) return false;
+      if (statusFilter === "deshabilitado" && !w.disabledAt) return false;
+      if (modeFilter !== "todos" && w.mode !== modeFilter) return false;
+      // Suscripción: hoy solo "invitado". El filtro queda preparado para
+      // cuando exista un campo plan/tier en PlatformWorkspace.
+      // Por ahora todos son "invitado" así que el filtro no descarta nada.
+      if (subFilter === "invitado") { /* todos pasan */ }
+      if (query.trim()) {
+        const q = query.toLowerCase();
+        const hay = (s: string | null) => (s ?? "").toLowerCase().includes(q);
+        // Búsqueda match contra el nombre del workspace + ownerName/email/username
+        // legacy + cualquier miembro del workspace (importante para workspaces
+        // compartidos: buscar "alba" debe encontrar el legal aunque María
+        // figure como owner).
+        const matchesMember = (w.members ?? []).some((m) =>
+          hay(m.name) || hay(m.username) || hay(m.email),
+        );
+        if (!hay(w.name) && !hay(w.ownerName) && !hay(w.ownerEmail) && !hay(w.ownerUsername) && !matchesMember) return false;
+      }
+      return true;
+    });
+
+    // Ordenamiento — comparators sobre nuevo array (no mutamos `workspaces`
+    // ni `base`, ya que ambos vienen del cache de React Query).
+    const sorted = [...base];
+    const num = (x: number | null | undefined) => (x ?? -Infinity);
+    const date = (s: string | null) => (s ? new Date(s).getTime() : 0);
+    switch (sortBy) {
+      case "patients-desc": sorted.sort((a, b) => b.patientsCount - a.patientsCount); break;
+      case "patients-asc":  sorted.sort((a, b) => a.patientsCount - b.patientsCount); break;
+      case "sessions-desc": sorted.sort((a, b) => num(b.sessions30d) - num(a.sessions30d)); break;
+      case "revenue-desc":  sorted.sort((a, b) => num(b.revenue30d) - num(a.revenue30d)); break;
+      case "recent":        sorted.sort((a, b) => date(b.createdAt) - date(a.createdAt)); break;
+      case "lastlogin":     sorted.sort((a, b) => date(b.lastLoginAt) - date(a.lastLoginAt)); break;
+      case "name-asc":      sorted.sort((a, b) => a.name.localeCompare(b.name, "es")); break;
     }
-    return true;
-  }), [workspaces, query, statusFilter]);
+    return sorted;
+  }, [workspaces, query, statusFilter, modeFilter, subFilter, sortBy]);
 
   const counts = useMemo(() => ({
     todos: workspaces.length,
@@ -168,9 +220,12 @@ function PlatformDashboard() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      {/* Animación de entrada del panel completo. fade-in + slide ligero
+          desde abajo para que el contenido "asiente" en lugar de aparecer
+          de golpe. Dura 400ms total. */}
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
         <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+          <div className="animate-in fade-in slide-in-from-top-1 duration-500 [animation-delay:50ms] fill-mode-backwards">
             <p className="text-sm text-ink-500 inline-flex items-center gap-1.5">
               <Shield className="h-3.5 w-3.5" /> Administración de plataforma
             </p>
@@ -198,73 +253,119 @@ function PlatformDashboard() {
           </div>
         </header>
 
-        {/* KPIs globales */}
+        {/* KPIs globales — stagger fade-in con delays escalonados de 80ms
+            por card. `fill-mode-backwards` aplica el opacity-0 inicial
+            durante el delay, sino las cards aparecen un instante a 100%
+            antes de animar. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <KpiCard
-            label="Cuentas activas"
-            value={String(usage?.workspaces_active ?? "—")}
-            hint={`${usage?.workspaces_total ?? 0} totales`}
-            icon={<Building2 className="h-4 w-4" />}
-            delta={{ neutral: true, value: "" }}
-          />
-          <KpiCard
-            label="Psicólogos activos 7d"
-            value={String(usage?.active_staff_7d ?? "—")}
-            hint={`${usage?.staff_users ?? 0} en total`}
-            icon={<Activity className="h-4 w-4" />}
-            delta={{ neutral: true, value: "" }}
-          />
-          <KpiCard
-            label="Pacientes"
-            value={String(usage?.patients_total ?? "—")}
-            hint={`+ ${usage?.patient_users ?? 0} con portal`}
-            icon={<Users className="h-4 w-4" />}
-            delta={{ neutral: true, value: "" }}
-          />
-          <KpiCard
-            label="Documentos 30d"
-            value={String(usage?.docs_30d ?? "—")}
-            hint={`${usage?.appts_30d ?? 0} citas en 30d`}
-            icon={<FileText className="h-4 w-4" />}
-            delta={{ neutral: true, value: "" }}
-          />
+          {[
+            { label: "Cuentas activas", value: String(usage?.workspaces_active ?? "—"), hint: `${usage?.workspaces_total ?? 0} totales`, icon: <Building2 className="h-4 w-4" /> },
+            { label: "Psicólogos activos 7d", value: String(usage?.active_staff_7d ?? "—"), hint: `${usage?.staff_users ?? 0} en total`, icon: <Activity className="h-4 w-4" /> },
+            { label: "Pacientes", value: String(usage?.patients_total ?? "—"), hint: `+ ${usage?.patient_users ?? 0} con portal`, icon: <Users className="h-4 w-4" /> },
+            { label: "Documentos 30d", value: String(usage?.docs_30d ?? "—"), hint: `${usage?.appts_30d ?? 0} citas en 30d`, icon: <FileText className="h-4 w-4" /> },
+          ].map((k, i) => (
+            <div
+              key={k.label}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+              style={{ animationDelay: `${100 + i * 80}ms` }}
+            >
+              <KpiCard
+                label={k.label}
+                value={k.value}
+                hint={k.hint}
+                icon={k.icon}
+                delta={{ neutral: true, value: "" }}
+              />
+            </div>
+          ))}
         </section>
 
         {/* Listado */}
-        <section className="rounded-xl border border-line-200 bg-surface">
-          <div className="p-3 sm:p-4 border-b border-line-100 flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40 flex-1 min-w-60">
-              <Search className="h-4 w-4 text-ink-400 shrink-0" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nombre, propietario, email, usuario…"
-                className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
-              />
-            </div>
-            <div className="flex gap-1 p-1 rounded-md bg-bg-100 text-xs">
-              {([
-                { v: "todos", label: "Todas", count: counts.todos },
-                { v: "activo", label: "Activas", count: counts.activo },
-                { v: "deshabilitado", label: "Deshabilitadas", count: counts.deshabilitado },
-              ] as const).map((it) => (
-                <button
-                  key={it.v}
-                  onClick={() => setStatusFilter(it.v)}
-                  className={cn(
-                    "px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1.5",
-                    statusFilter === it.v ? "bg-surface text-ink-900 font-medium shadow-xs" : "text-ink-500 hover:text-ink-900",
-                  )}
+        <section
+          className="rounded-xl border border-line-200 bg-surface animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: "420ms" }}
+        >
+          {/* Toolbar de filtros — dos filas:
+              Fila 1: search (flex-1) + sort dropdown + view toggle.
+              Fila 2: pills de estado + modo + suscripción + contador "N de M".
+              Mantenemos visualmente que la fila 1 es "input/output" (qué
+              buscar y cómo ordenar) y la fila 2 es "facets" (filtrar). */}
+          <div className="p-3 sm:p-4 border-b border-line-100 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40 flex-1 min-w-60">
+                <Search className="h-4 w-4 text-ink-400 shrink-0" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar por nombre, propietario, email, usuario…"
+                  className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
+                />
+                {query && (
+                  <button
+                    onClick={() => setQuery("")}
+                    className="text-ink-400 hover:text-ink-700"
+                    title="Limpiar búsqueda"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="relative inline-flex items-center">
+                <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  className="h-10 pl-9 pr-8 rounded-md border border-line-200 bg-surface text-sm text-ink-900 hover:border-brand-400 focus:border-brand-400 focus:outline-none appearance-none cursor-pointer"
+                  title="Ordenar listado"
                 >
-                  {it.label}
-                  <span className={cn(
-                    "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular",
-                    statusFilter === it.v ? "bg-brand-50 text-brand-800" : "bg-bg-100 text-ink-500",
-                  )}>{it.count}</span>
-                </button>
-              ))}
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.v} value={o.v}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronRight className="absolute right-2 h-4 w-4 text-ink-400 rotate-90 pointer-events-none" />
+              </div>
+              <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
             </div>
-            <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
+
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              {/* Estado */}
+              <FilterPills
+                label="Estado"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+                options={[
+                  { v: "todos", label: "Todas", count: counts.todos },
+                  { v: "activo", label: "Activas", count: counts.activo },
+                  { v: "deshabilitado", label: "Deshabilitadas", count: counts.deshabilitado },
+                ]}
+              />
+              {/* Modo */}
+              <FilterPills
+                label="Modo"
+                value={modeFilter}
+                onChange={(v) => setModeFilter(v as ModeFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "individual", label: "Individual", icon: <UserIcon className="h-3 w-3" /> },
+                  { v: "organization", label: "Clínica", icon: <Building2 className="h-3 w-3" /> },
+                ]}
+              />
+              {/* Suscripción — hoy todas son "invitado". */}
+              <FilterPills
+                label="Plan"
+                value={subFilter}
+                onChange={(v) => setSubFilter(v as SubFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "invitado", label: "Invitado", icon: <Tag className="h-3 w-3" /> },
+                ]}
+              />
+              {/* Contador de resultados visibles vs total. Se muestra a la
+                  derecha como hint persistente. */}
+              <span className="ml-auto text-[11px] text-ink-500 tabular">
+                {filtered.length} de {workspaces.length}
+              </span>
+            </div>
           </div>
 
           {isLoading ? (
@@ -277,10 +378,11 @@ function PlatformDashboard() {
             </div>
           ) : viewMode === "cards" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
-              {filtered.map((w) => (
+              {filtered.map((w, i) => (
                 <WorkspaceCard
                   key={w.id}
                   ws={w}
+                  index={i}
                   onDisable={() => setDisabling(w)}
                   onDelete={() => setDeleting(w)}
                 />
@@ -288,10 +390,11 @@ function PlatformDashboard() {
             </div>
           ) : (
             <ul className="divide-y divide-line-100">
-              {filtered.map((w) => (
+              {filtered.map((w, i) => (
                 <WorkspaceRow
                   key={w.id}
                   ws={w}
+                  index={i}
                   onDisable={() => setDisabling(w)}
                   onDelete={() => setDeleting(w)}
                   onEdit={() => setEditing(w)}
@@ -310,9 +413,61 @@ function PlatformDashboard() {
   );
 }
 
+// ─── Grupo de pills para filtros (estado, modo, plan) ──────────────────────
+// Recibe `label` (texto pequeño a la izquierda), `options` (con opcional
+// count e icon), y dispara `onChange` con el value seleccionado. Lo
+// abstraemos porque la toolbar tiene 3 grupos visualmente idénticos.
+function FilterPills<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { v: T; label: string; count?: number; icon?: React.ReactNode }[];
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium">
+        {label}
+      </span>
+      <div className="flex gap-1 p-1 rounded-md bg-bg-100">
+        {options.map((it) => {
+          const active = value === it.v;
+          return (
+            <button
+              key={it.v}
+              onClick={() => onChange(it.v)}
+              className={cn(
+                "px-2.5 py-1 rounded transition-colors inline-flex items-center gap-1.5 text-xs",
+                active
+                  ? "bg-surface text-ink-900 font-medium shadow-xs"
+                  : "text-ink-500 hover:text-ink-900",
+              )}
+            >
+              {it.icon}
+              {it.label}
+              {typeof it.count === "number" && (
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular",
+                  active ? "bg-brand-50 text-brand-800" : "bg-line-100 text-ink-500",
+                )}>{it.count}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Fila por workspace ─────────────────────────────────────────────────────
-function WorkspaceRow({ ws, onDisable, onDelete, onEdit }: {
+function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
   ws: PlatformWorkspace;
+  /** índice en la lista, usado para stagger de la animación de entrada. */
+  index?: number;
   onDisable: () => void;
   onDelete: () => void;
   onEdit: () => void;
@@ -398,106 +553,188 @@ function WorkspaceRow({ ws, onDisable, onDelete, onEdit }: {
     </>
   );
 
+  // Stagger animation — index opcional, cap 600ms para que listas largas
+  // no esperen segundos a aparecer.
+  const animDelay = typeof index === "number"
+    ? `${Math.min(index * 30, 600)}ms`
+    : "0ms";
+
+  // Display name del propietario / miembros — extraído para reusar arriba.
+  const ownerDisplay = (ws.members ?? []).length > 1
+    ? (ws.members ?? []).map((m) => m.name).join(", ")
+    : (ws.ownerName ?? "—");
+
   return (
-    <li className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors">
-      <div className="flex items-start gap-3 sm:gap-4">
+    <li
+      className="px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-brand-50/40 transition-colors animate-in fade-in slide-in-from-bottom-1 duration-400 fill-mode-backwards"
+      style={{ animationDelay: animDelay }}
+    >
+      {/* Layout grid con columnas fijas: avatar | contenido | stats |
+          badges | acciones. Hace que cada columna quede alineada
+          verticalmente entre filas, independiente del largo del nombre
+          o del nº de miembros. */}
+      <div
+        className={cn(
+          "grid items-center gap-3 sm:gap-4",
+          "grid-cols-[auto_1fr]",
+          "lg:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]",
+        )}
+      >
         <div className={cn(
           "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-          isDisabled ? "bg-bg-100 text-ink-400" : ws.mode === "organization" ? "bg-lavender-100 text-lavender-500" : "bg-brand-50 text-brand-800",
+          isDisabled ? "bg-bg-100 text-ink-400"
+            : ws.mode === "organization" ? "bg-lavender-100 text-lavender-500"
+            : "bg-brand-50 text-brand-800",
         )}>
           {ws.mode === "organization" ? <Building2 className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
         </div>
-        <Link to="/platform" search={{ ws: ws.id }} className="flex-1 min-w-0 cursor-pointer">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-ink-900 truncate">{ws.name}</span>
-            {isDisabled ? (
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high">
-                <PowerOff className="h-3 w-3" /> Deshabilitada
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
-                <Power className="h-3 w-3" /> Activa
-              </span>
-            )}
-            <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
-              {ws.mode === "organization" ? "Clínica" : "Individual"}
-            </span>
+
+        {/* Contenido — título arriba, propietario resaltado abajo. */}
+        <Link to="/platform" search={{ ws: ws.id }} className="min-w-0 cursor-pointer">
+          <div className="text-sm font-semibold text-ink-900 truncate">
+            {ws.name}
           </div>
-          <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
-            {(ws.members ?? []).length > 1 ? (
-              <span className="truncate">
-                {(ws.members ?? []).map((m) => m.name).join(", ")}
-              </span>
-            ) : (
-              <>
-                {ws.ownerName && <span>{ws.ownerName}</span>}
-                {ws.ownerEmail && <><span className="text-ink-300">·</span><span className="truncate">{ws.ownerEmail}</span></>}
-              </>
-            )}
-            <span className="text-ink-300">·</span>
-            <span className="tabular">
-              {ws.patientsCount} paciente{ws.patientsCount === 1 ? "" : "s"}
-              {ws.maxPatients != null && (
-                <span className="text-ink-400"> / {ws.maxPatients} ({ws.occupancyPct}%)</span>
-              )}
+          <div className="mt-0.5 text-xs text-ink-500 flex items-center gap-x-2 flex-wrap">
+            <span className="font-semibold text-brand-800 truncate max-w-[16rem]">
+              {ownerDisplay}
             </span>
-            <span className="text-ink-300">·</span>
-            <span className="tabular">{ws.sessions30d ?? 0} sesiones 30d</span>
-            {(ws.revenue30d ?? 0) > 0 && (
+            {ws.ownerEmail && (
               <>
-                <span className="text-ink-300">·</span>
-                <span className="tabular">{formatCurrencyCOP(ws.revenue30d ?? 0)} 30d</span>
+                <span className="text-ink-300 hidden md:inline">·</span>
+                <span className="hidden md:inline truncate max-w-[14rem]">{ws.ownerEmail}</span>
               </>
             )}
             {ws.lastLoginAt && (
               <>
-                <span className="text-ink-300 hidden sm:inline">·</span>
-                <span className="tabular hidden sm:inline">Último login: {formatRelative(ws.lastLoginAt)}</span>
+                <span className="text-ink-300 hidden lg:inline">·</span>
+                <span className="tabular hidden lg:inline">Login {formatRelative(ws.lastLoginAt)}</span>
               </>
             )}
           </div>
+        </Link>
 
-          {/* Chips de alerta + especialidades. Solo renderiza la fila si algo
-              hay para mostrar; evita un mt-2 vacío con muchos workspaces. */}
-          {(isInactive || isSaturated || (ws.specialties ?? []).length > 0) && (
-            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-              {isInactive && (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-warning-soft text-risk-moderate" title="Última actividad hace más de 30 días (o nunca entró)">
-                  <AlertTriangle className="h-3 w-3" />
-                  {inactiveDays != null ? `Inactivo ${inactiveDays}d` : "Sin actividad"}
-                </span>
-              )}
-              {isSaturated && (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high" title="Cerca o por encima de la capacidad máxima">
-                  <Users className="h-3 w-3" />
-                  Saturado ({ws.occupancyPct}%)
-                </span>
-              )}
-              {(ws.specialties ?? []).slice(0, 4).map((s) => (
-                <span key={s} className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500 font-medium">
-                  {s}
-                </span>
-              ))}
-              {(ws.specialties ?? []).length > 4 && (
-                <span className="text-[10px] text-ink-400">+{(ws.specialties ?? []).length - 4} más</span>
+        {/* Stats compactas — pacientes / sesiones 30d. Solo desktop. */}
+        <Link
+          to="/platform"
+          search={{ ws: ws.id }}
+          className="hidden lg:flex items-center gap-4 shrink-0"
+        >
+          <div className="text-right">
+            <div className="text-sm font-semibold text-ink-900 tabular leading-none">
+              {ws.patientsCount}
+              {ws.maxPatients != null && (
+                <span className="text-ink-400 font-normal text-[11px]"> / {ws.maxPatients}</span>
               )}
             </div>
-          )}
-
-          {isDisabled && ws.disabledReason && (
-            <div className="text-[11px] text-risk-high mt-1 italic">Motivo: {ws.disabledReason}</div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-500 mt-0.5">Pacientes</div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold text-ink-900 tabular leading-none">{ws.sessions30d ?? 0}</div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-500 mt-0.5">Sesiones 30d</div>
+          </div>
+          {(ws.revenue30d ?? 0) > 0 && (
+            <div className="text-right">
+              <div className="text-sm font-semibold text-ink-900 tabular leading-none">{formatCurrencyCOP(ws.revenue30d ?? 0)}</div>
+              <div className="text-[10px] uppercase tracking-wider text-ink-500 mt-0.5">Ingreso 30d</div>
+            </div>
           )}
         </Link>
-        {/* Acciones en DESKTOP: alineadas a la derecha de la info, en línea con el avatar. */}
-        <div className="hidden sm:flex items-center gap-1 shrink-0">
+
+        {/* Badges (estado + modo + plan + alertas). Columna fija a la dcha
+            en desktop para que queden alineados entre filas. */}
+        <Link
+          to="/platform"
+          search={{ ws: ws.id }}
+          className="hidden sm:flex items-center gap-1.5 shrink-0 flex-wrap justify-end max-w-[18rem]"
+        >
+          {isDisabled ? (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high">
+              <PowerOff className="h-3 w-3" /> Deshabilitada
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
+              <Power className="h-3 w-3" /> Activa
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+            {ws.mode === "organization" ? <Building2 className="h-3 w-3" /> : <UserIcon className="h-3 w-3" />}
+            {ws.mode === "organization" ? "Clínica" : "Individual"}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500"
+            title="Plan actual. La app no cobra todavía — todas las cuentas son Invitado."
+          >
+            <Tag className="h-3 w-3" /> Invitado
+          </span>
+          {isInactive && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-warning-soft text-risk-moderate" title="Última actividad hace más de 30 días (o nunca entró)">
+              <AlertTriangle className="h-3 w-3" />
+              {inactiveDays != null ? `Inactivo ${inactiveDays}d` : "Sin actividad"}
+            </span>
+          )}
+          {isSaturated && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high" title="Cerca o por encima de la capacidad máxima">
+              <Users className="h-3 w-3" />
+              Saturado ({ws.occupancyPct}%)
+            </span>
+          )}
+        </Link>
+
+        {/* Acciones — siempre visibles en lg+. */}
+        <div className="hidden lg:flex items-center gap-1 shrink-0">
           {actions}
         </div>
       </div>
-      {/* Acciones en MOBILE: fila aparte debajo, full width. El padding-left
-          alinea con el inicio del contenido (avatar 40px + gap 12px). */}
-      <div className="flex sm:hidden items-center justify-end gap-1.5 mt-3 pl-[3.25rem]">
-        {actions}
+
+      {/* Tablet / md (sm..<lg): badges debajo del contenido en su propia
+          fila para no comprimir el grid. */}
+      <div className="hidden sm:flex lg:hidden items-center gap-1.5 flex-wrap mt-2 pl-[3.25rem]">
+        {isDisabled ? (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high">
+            <PowerOff className="h-3 w-3" /> Deshabilitada
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
+            <Power className="h-3 w-3" /> Activa
+          </span>
+        )}
+        <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+          {ws.mode === "organization" ? "Clínica" : "Individual"}
+        </span>
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500">
+          <Tag className="h-3 w-3" /> Invitado
+        </span>
+        <span className="text-[11px] text-ink-500 ml-auto tabular">
+          {ws.patientsCount} pac. · {ws.sessions30d ?? 0} ses. 30d
+        </span>
+        <div className="flex items-center gap-1 ml-auto">{actions}</div>
       </div>
+
+      {/* Mobile: acciones en fila propia. */}
+      <div className="flex sm:hidden items-center gap-1.5 flex-wrap mt-2 pl-[3.25rem]">
+        {isDisabled ? (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-error-soft text-risk-high">
+            <PowerOff className="h-3 w-3" /> Deshabilitada
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
+            <Power className="h-3 w-3" /> Activa
+          </span>
+        )}
+        <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+          {ws.mode === "organization" ? "Clínica" : "Individual"}
+        </span>
+        <span className="text-[11px] text-ink-500 tabular">
+          {ws.patientsCount} pac.
+        </span>
+        <div className="flex items-center gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>{actions}</div>
+      </div>
+
+      {isDisabled && ws.disabledReason && (
+        <div className="text-[11px] text-risk-high mt-2 italic pl-[3.25rem]">
+          Motivo: {ws.disabledReason}
+        </div>
+      )}
     </li>
   );
 }
@@ -508,7 +745,7 @@ function WorkspaceRow({ ws, onDisable, onDelete, onEdit }: {
  * están todas las acciones (deshabilitar, eliminar, editar usuarios).
  * Pensado para escanear muchas cuentas de un vistazo y para mobile.
  */
-function WorkspaceCard({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onDisable: () => void; onDelete: () => void }) {
+function WorkspaceCard({ ws, index, onDisable, onDelete }: { ws: PlatformWorkspace; index?: number; onDisable: () => void; onDelete: () => void }) {
   const qc = useQueryClient();
   const enableMu = useMutation({
     mutationFn: () => api.platformEnableWorkspace(ws.id),
@@ -520,9 +757,15 @@ function WorkspaceCard({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onD
     onError: (e: Error) => toast.error(e.message),
   });
   const isDisabled = !!ws.disabledAt;
+  const animDelay = typeof index === "number"
+    ? `${Math.min(index * 35, 600)}ms`
+    : "0ms";
 
   return (
-    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
+    <div
+      className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-card transition-all relative group animate-in fade-in slide-in-from-bottom-2 duration-400 fill-mode-backwards"
+      style={{ animationDelay: animDelay }}
+    >
       <Link to="/platform" search={{ ws: ws.id }} className="block">
         <div className="flex items-start gap-3">
           <div className={cn(
@@ -532,8 +775,8 @@ function WorkspaceCard({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onD
             {ws.mode === "organization" ? <Building2 className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-ink-900 truncate">{ws.name}</div>
-            <div className="text-[11px] text-ink-500 truncate">
+            <div className="text-sm font-semibold text-ink-900 truncate">{ws.name}</div>
+            <div className="text-[11px] font-semibold text-brand-800 truncate">
               {(ws.members ?? []).length > 1
                 ? (ws.members ?? []).map((m) => m.name).join(", ")
                 : (ws.ownerName ?? "—")}
@@ -553,6 +796,9 @@ function WorkspaceCard({ ws, onDisable, onDelete }: { ws: PlatformWorkspace; onD
           )}
           <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
             {ws.mode === "organization" ? "Clínica" : "Individual"}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500">
+            <Tag className="h-3 w-3" /> Invitado
           </span>
         </div>
 
