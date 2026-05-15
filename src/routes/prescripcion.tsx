@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/app/KpiCard";
 import { TCC_TEMPLATES, type TaskType } from "@/lib/mock-data";
 import { api } from "@/lib/api";
 import { AppSelect } from "@/components/app/AppSelect";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 import {
   Pill, Plus, Search, CheckCircle2, AlertCircle, ListChecks,
   PenSquare, TrendingUp, Sparkles, Brain, Leaf, BookOpen, ClipboardList, X, Send, ChevronRight, Loader2,
@@ -391,7 +392,7 @@ function AssignTaskModal({ onClose, initialPatientId }: { onClose: () => void; i
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Vence</span>
-                  <input type="date" defaultValue="2026-04-25" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none hover:border-brand-400" />
+                  <AppDatePicker value="2026-04-25" onChange={() => { /* mock UI */ }} className="mt-1" />
                 </label>
                 <label className="block">
                   <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Recordatorio</span>

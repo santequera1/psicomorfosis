@@ -20,6 +20,7 @@ import { whatsappUrl } from "@/lib/display";
 import { displayPatientName } from "@/lib/utils";
 import { PortalStatusBadge } from "@/components/patients/PortalStatusBadge";
 import { AppSelect } from "@/components/app/AppSelect";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -763,8 +764,13 @@ function InsuranceCard({ patient }: { patient: import("@/lib/api").ApiPatient })
             className="w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500">Vigente hasta</span>
-            <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
-              className="mt-1 w-full h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+            <AppDatePicker
+              value={validUntil}
+              onChange={setValidUntil}
+              size="sm"
+              className="mt-1"
+              clearable
+            />
           </label>
           <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={cancel} disabled={mu.isPending}
@@ -1329,11 +1335,11 @@ function CertificateModal({ patientId, onClose }: { patientId: string; onClose: 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Desde</span>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700" />
+              <AppDatePicker value={from} onChange={setFrom} className="mt-1" />
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hasta</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 focus:border-brand-700" />
+              <AppDatePicker value={to} onChange={setTo} className="mt-1" />
             </label>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">

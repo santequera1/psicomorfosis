@@ -7,6 +7,7 @@ import {
   CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X, UserPlus, Users,
   Paperclip, Download, Upload, FileText, Loader2,
 } from "lucide-react";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { AppShell } from "@/components/app/AppShell";
 import {
   api, type Tarea, type TareaStatus, type TareaPriority,
@@ -1284,26 +1285,13 @@ function FormSelect({
   );
 }
 
-// Wrapper sobre <input type="date"> que llama showPicker() al click. En
-// algunos navegadores el ícono nativo del calendario es invisible o muy
-// pequeño y los usuarios no se dan cuenta de que el campo es interactivo;
-// con showPicker() basta tocar cualquier parte del input para que abra.
+// Antes era un wrapper sobre <input type="date"> con showPicker() porque
+// el icono nativo del calendario era invisible. Ahora delega en
+// AppDatePicker (shadcn Calendar + Popover) que tiene mejor UX, respeta
+// dark mode y es consistente cross-OS. Mantenemos la firma para no
+// tocar los callers.
 function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const ref = useRef<HTMLInputElement | null>(null);
-  return (
-    <div className="relative">
-      <input
-        ref={ref}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onClick={() => { try { ref.current?.showPicker?.(); } catch { /* no-op */ } }}
-        style={{ colorScheme: "light" }}
-        className="w-full h-10 pl-3 pr-9 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 cursor-pointer"
-      />
-      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
-    </div>
-  );
+  return <AppDatePicker value={value} onChange={onChange} clearable />;
 }
 
 // Combobox con búsqueda para elegir paciente. El select nativo se vuelve

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { PatientPicker } from "@/components/app/PatientPicker";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 import {
   Receipt, TrendingUp, Wallet, AlertCircle, Plus, X, Search,
   Download, CheckCircle2, Loader2, Pencil, Trash2, Settings, Eye,
@@ -551,12 +552,11 @@ export function ReceiptFormModal({
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-              <input
-                type="date"
-                required
+              <AppDatePicker
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
+                onChange={setDate}
+                className="mt-1"
+                aria-label="Fecha del recibo"
               />
             </label>
           </div>

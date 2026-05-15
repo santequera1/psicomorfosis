@@ -11,6 +11,8 @@ import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
+import { AppTimePicker } from "@/components/app/AppTimePicker";
 import { ReceiptFormModal } from "./facturacion";
 import {
   Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X,
@@ -906,13 +908,11 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
                   <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-                  <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+                  <AppDatePicker value={newDate} onChange={setNewDate} className="mt-1" />
                 </label>
                 <label className="block">
                   <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-                  <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+                  <AppTimePicker value={newTime} onChange={setNewTime} className="mt-1" />
                 </label>
               </div>
               <button

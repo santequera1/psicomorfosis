@@ -9,6 +9,7 @@ import { Search, X, Loader2, Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
+import { AppTimePicker } from "@/components/app/AppTimePicker";
 
 type Props = {
   patients: ApiPatient[];
@@ -159,16 +160,12 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-              <div className="mt-1 relative">
-                <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="w-full h-10 pl-9 pr-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 cursor-pointer"
-                />
-              </div>
+              <AppTimePicker
+                value={time}
+                onChange={setTime}
+                className="mt-1"
+                aria-label="Hora de la cita"
+              />
             </label>
           </div>
 
