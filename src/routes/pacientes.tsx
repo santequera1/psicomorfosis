@@ -14,6 +14,7 @@ import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 import { cn, displayPatientName } from "@/lib/utils";
 import { PortalStatusBadge } from "@/components/patients/PortalStatusBadge";
+import { AppSelect } from "@/components/app/AppSelect";
 import { useAutoTour, patientsTour, TOUR_NAMES } from "@/lib/tours";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { NewPatientModal } from "@/components/app/NewPatientModal";
@@ -302,46 +303,55 @@ function PatientsPage() {
                 </button>
               );
             })()}
+            {/* Filtros: el icon (Filter/Tag) ya no se renderiza junto al
+                trigger — AppSelect tiene su propio chevron y el icono visual
+                redundante en cada uno saturaba. Si extrañas el icono, lo
+                ponemos como prefix del Trigger en el wrapper. */}
             <div data-tour="pacientes-filters" className={cn("grid grid-cols-2 sm:grid-cols-4 gap-2", !filtersOpenMobile && "hidden sm:grid")}>
-              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
-                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
-                <select value={status} onChange={(e) => setStatus(e.target.value as PatientStatus | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
-                  <option value="todos">Estado</option>
-                  <option value="activo">Activo</option>
-                  <option value="pausa">Pausa</option>
-                  <option value="alta">Alta</option>
-                  <option value="derivado">Derivado</option>
-                </select>
-              </div>
-              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
-                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
-                <select value={modality} onChange={(e) => setModality(e.target.value as Modality | "todas")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
-                  <option value="todas">Modalidad</option>
-                  <option value="individual">Individual</option>
-                  <option value="pareja">Pareja</option>
-                  <option value="familiar">Familiar</option>
-                  <option value="grupal">Grupal</option>
-                  <option value="tele">Tele</option>
-                </select>
-              </div>
-              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
-                <Filter className="h-3.5 w-3.5 text-ink-400 shrink-0" />
-                <select value={riskFilter} onChange={(e) => setRiskFilter(e.target.value as Risk | "todos")} className="bg-transparent outline-none cursor-pointer capitalize min-w-0 flex-1">
-                  <option value="todos">Bandera</option>
-                  <option value="none">Sin bandera</option>
-                  <option value="low">Bajo</option>
-                  <option value="moderate">Moderado</option>
-                  <option value="high">Alto</option>
-                  <option value="critical">Crítico</option>
-                </select>
-              </div>
-              <div className="relative flex items-center gap-1.5 h-10 px-2 sm:px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 hover:border-brand-400 min-w-0">
-                <Tag className="h-3.5 w-3.5 text-ink-400 shrink-0" />
-                <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="bg-transparent outline-none cursor-pointer min-w-0 flex-1" disabled={allTags.length === 0}>
-                  <option value="todos">{allTags.length === 0 ? "Sin etiquetas" : "Etiqueta"}</option>
-                  {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
+              <AppSelect
+                value={status}
+                onChange={(v) => setStatus(v as PatientStatus | "todos")}
+                options={[
+                  { value: "todos", label: "Estado: todos" },
+                  { value: "activo", label: "Activo" },
+                  { value: "pausa", label: "Pausa" },
+                  { value: "alta", label: "Alta" },
+                  { value: "derivado", label: "Derivado" },
+                ]}
+              />
+              <AppSelect
+                value={modality}
+                onChange={(v) => setModality(v as Modality | "todas")}
+                options={[
+                  { value: "todas", label: "Modalidad: todas" },
+                  { value: "individual", label: "Individual" },
+                  { value: "pareja", label: "Pareja" },
+                  { value: "familiar", label: "Familiar" },
+                  { value: "grupal", label: "Grupal" },
+                  { value: "tele", label: "Tele" },
+                ]}
+              />
+              <AppSelect
+                value={riskFilter}
+                onChange={(v) => setRiskFilter(v as Risk | "todos")}
+                options={[
+                  { value: "todos", label: "Bandera: todas" },
+                  { value: "none", label: "Sin bandera" },
+                  { value: "low", label: "Bajo" },
+                  { value: "moderate", label: "Moderado" },
+                  { value: "high", label: "Alto" },
+                  { value: "critical", label: "Crítico" },
+                ]}
+              />
+              <AppSelect
+                value={tagFilter}
+                onChange={setTagFilter}
+                disabled={allTags.length === 0}
+                options={[
+                  { value: "todos", label: allTags.length === 0 ? "Sin etiquetas" : "Etiqueta: todas" },
+                  ...allTags.map((t) => ({ value: t, label: t })),
+                ]}
+              />
             </div>
             <div className="flex items-center justify-between gap-2 pt-1">
               <span className="text-[11px] text-ink-500 tabular">{filtered.length} paciente{filtered.length === 1 ? "" : "s"}</span>
@@ -858,9 +868,17 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               <input value={form.preferredName ?? ""} onChange={(e) => update("preferredName", e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </Labeled>
             <Labeled label="Pronombres">
-              <select value={form.pronouns ?? ""} onChange={(e) => update("pronouns", e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option>ella</option><option>él</option><option>elle</option><option>—</option>
-              </select>
+              <AppSelect
+                value={form.pronouns ?? "ella"}
+                onChange={(v) => update("pronouns", v)}
+                className="mt-1"
+                options={[
+                  { value: "ella", label: "ella" },
+                  { value: "él", label: "él" },
+                  { value: "elle", label: "elle" },
+                  { value: "—", label: "—" },
+                ]}
+              />
             </Labeled>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -884,16 +902,17 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
               <input value={form.address ?? ""} onChange={(e) => update("address", e.target.value)} placeholder="Cra 11 # 82-32, Chapinero, Bogotá" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </Labeled>
             <Labeled label="Sexo al nacer">
-              <select
+              <AppSelect
                 value={form.sex ?? ""}
-                onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value as "" | "M" | "F" }))}
-                className="mt-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
-                title="Dato clínico — separado de pronombres."
-              >
-                <option value="">—</option>
-                <option value="F">Femenino</option>
-                <option value="M">Masculino</option>
-              </select>
+                onChange={(v) => setForm((p) => ({ ...p, sex: v as "" | "M" | "F" }))}
+                className="mt-1"
+                aria-label="Sexo al nacer — dato clínico separado de pronombres"
+                options={[
+                  { value: "", label: "—" },
+                  { value: "F", label: "Femenino" },
+                  { value: "M", label: "Masculino" },
+                ]}
+              />
             </Labeled>
           </div>
           <Labeled label="Motivo de consulta">
@@ -901,14 +920,31 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
           </Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Modalidad">
-              <select value={form.modality ?? "individual"} onChange={(e) => update("modality", e.target.value as Modality)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="individual">Individual</option><option value="pareja">Pareja</option><option value="familiar">Familiar</option><option value="grupal">Grupal</option><option value="tele">Telepsicología</option>
-              </select>
+              <AppSelect
+                value={form.modality ?? "individual"}
+                onChange={(v) => update("modality", v as Modality)}
+                className="mt-1"
+                options={[
+                  { value: "individual", label: "Individual" },
+                  { value: "pareja", label: "Pareja" },
+                  { value: "familiar", label: "Familiar" },
+                  { value: "grupal", label: "Grupal" },
+                  { value: "tele", label: "Telepsicología" },
+                ]}
+              />
             </Labeled>
             <Labeled label="Estado">
-              <select value={form.status ?? "activo"} onChange={(e) => update("status", e.target.value as PatientStatus)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="activo">Activo</option><option value="pausa">Pausa</option><option value="alta">Alta</option><option value="derivado">Derivado</option>
-              </select>
+              <AppSelect
+                value={form.status ?? "activo"}
+                onChange={(v) => update("status", v as PatientStatus)}
+                className="mt-1"
+                options={[
+                  { value: "activo", label: "Activo" },
+                  { value: "pausa", label: "Pausa" },
+                  { value: "alta", label: "Alta" },
+                  { value: "derivado", label: "Derivado" },
+                ]}
+              />
             </Labeled>
           </div>
 

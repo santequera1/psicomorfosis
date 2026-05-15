@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { TCC_TEMPLATES, type TaskType } from "@/lib/mock-data";
 import { api } from "@/lib/api";
+import { AppSelect } from "@/components/app/AppSelect";
 import {
   Pill, Plus, Search, CheckCircle2, AlertCircle, ListChecks,
   PenSquare, TrendingUp, Sparkles, Brain, Leaf, BookOpen, ClipboardList, X, Send, ChevronRight, Loader2,
@@ -361,14 +362,16 @@ function AssignTaskModal({ onClose, initialPatientId }: { onClose: () => void; i
             <div className="space-y-4">
               <label className="block">
                 <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Paciente</span>
-                <select
+                <AppSelect
                   value={patient}
-                  onChange={(e) => setPatient(e.target.value)}
-                  className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none hover:border-brand-400"
-                >
-                  <option value="">Selecciona…</option>
-                  {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                  onChange={setPatient}
+                  className="mt-1"
+                  placeholder="Selecciona…"
+                  options={[
+                    { value: "", label: "Selecciona…" },
+                    ...patients.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
               </label>
               <label className="block">
                 <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Título de la tarea</span>
@@ -392,12 +395,17 @@ function AssignTaskModal({ onClose, initialPatientId }: { onClose: () => void; i
                 </label>
                 <label className="block">
                   <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Recordatorio</span>
-                  <select className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none hover:border-brand-400">
-                    <option>24 h antes</option>
-                    <option>48 h antes</option>
-                    <option>Día de vencimiento</option>
-                    <option>Sin recordatorio</option>
-                  </select>
+                  <AppSelect
+                    value="24h"
+                    onChange={() => { /* mock UI por ahora */ }}
+                    className="mt-1"
+                    options={[
+                      { value: "24h", label: "24 h antes" },
+                      { value: "48h", label: "48 h antes" },
+                      { value: "due", label: "Día de vencimiento" },
+                      { value: "none", label: "Sin recordatorio" },
+                    ]}
+                  />
                 </label>
               </div>
             </div>

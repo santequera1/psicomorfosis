@@ -17,6 +17,7 @@ import {
 import { cn, displayPatientName } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { AppSelect } from "@/components/app/AppSelect";
 import { PatientFolder, GenericFolder } from "@/components/app/PatientFolder";
 import { PatientPicker } from "@/components/app/PatientPicker";
 import { useWorkspace } from "@/lib/workspace";
@@ -227,16 +228,24 @@ function DocumentosPage() {
                 />
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <select value={type} onChange={(e) => setType(e.target.value)}
-                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0 flex-1">
-                  <option value="todos">Todos los tipos</option>
-                  {Object.keys(TYPE_LABEL).map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
-                </select>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}
-                  className="h-10 px-3 rounded-md border border-line-200 bg-surface text-xs text-ink-700 outline-none hover:border-brand-400 min-w-0 flex-1">
-                  <option value="todos">Todos los estados</option>
-                  {Object.keys(STATUS_STYLE).map((k) => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
-                </select>
+                <AppSelect
+                  value={type}
+                  onChange={setType}
+                  className="flex-1 min-w-0"
+                  options={[
+                    { value: "todos", label: "Todos los tipos" },
+                    ...Object.keys(TYPE_LABEL).map((k) => ({ value: k, label: TYPE_LABEL[k] })),
+                  ]}
+                />
+                <AppSelect
+                  value={status}
+                  onChange={setStatus}
+                  className="flex-1 min-w-0"
+                  options={[
+                    { value: "todos", label: "Todos los estados" },
+                    ...Object.keys(STATUS_STYLE).map((k) => ({ value: k, label: STATUS_STYLE[k].label })),
+                  ]}
+                />
                 <span data-tour="docs-view-toggle"><ViewToggle value={viewMode} onChange={(v) => { setViewMode(v); setOpenFolder(null); }} /></span>
               </div>
               {viewMode === "folders" && openFolderData && (
@@ -895,12 +904,12 @@ function DuplicateDocumentModal({ doc, patients, professionals, onClose }: {
           </Field>
           {professionals.length > 1 && (
             <Field label="Profesional">
-              <select value={professional} onChange={(e) => setProfessional(e.target.value)}
-                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                {professionals.map((p) => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={professional}
+                onChange={setProfessional}
+                className="mt-1"
+                options={professionals.map((p) => ({ value: p.name, label: p.name }))}
+              />
             </Field>
           )}
         </div>
@@ -1162,10 +1171,11 @@ function BlankDocForm({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Tipo">
-          <select value={type} onChange={(e) => setType(e.target.value as DocumentType)}
-            className="w-full h-10 px-3 rounded-md border border-line-200 bg-bg text-sm">
-            {Object.keys(TYPE_LABEL).filter(k => k !== "imagen").map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
-          </select>
+          <AppSelect
+            value={type}
+            onChange={(v) => setType(v as DocumentType)}
+            options={Object.keys(TYPE_LABEL).filter(k => k !== "imagen").map((k) => ({ value: k, label: TYPE_LABEL[k] }))}
+          />
         </Field>
         <PatientSelect patients={patients} value={patientId} onChange={setPatientId} preset={presetPatient} compact />
       </div>
@@ -1271,10 +1281,11 @@ function UploadForm({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Tipo">
-          <select value={type} onChange={(e) => setType(e.target.value as DocumentType)}
-            className="w-full h-10 px-3 rounded-md border border-line-200 bg-bg text-sm">
-            {Object.keys(TYPE_LABEL).map((k) => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
-          </select>
+          <AppSelect
+            value={type}
+            onChange={(v) => setType(v as DocumentType)}
+            options={Object.keys(TYPE_LABEL).map((k) => ({ value: k, label: TYPE_LABEL[k] }))}
+          />
         </Field>
         <PatientSelect patients={patients} value={patientId} onChange={setPatientId} preset={presetPatient} compact />
       </div>

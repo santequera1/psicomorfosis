@@ -19,6 +19,7 @@ import {
 import { whatsappUrl } from "@/lib/display";
 import { displayPatientName } from "@/lib/utils";
 import { PortalStatusBadge } from "@/components/patients/PortalStatusBadge";
+import { AppSelect } from "@/components/app/AppSelect";
 import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
@@ -331,15 +332,16 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium" title="Dato clínico — algunos tests usan baremos por sexo biológico.">Sexo al nacer</span>
-              <select
+              <AppSelect
                 value={form.sex}
-                onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value as "" | "M" | "F" }))}
-                className="mt-1 h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
-              >
-                <option value="">—</option>
-                <option value="F">Femenino</option>
-                <option value="M">Masculino</option>
-              </select>
+                onChange={(v) => setForm((p) => ({ ...p, sex: v as "" | "M" | "F" }))}
+                className="mt-1"
+                options={[
+                  { value: "", label: "—" },
+                  { value: "F", label: "Femenino" },
+                  { value: "M", label: "Masculino" },
+                ]}
+              />
             </label>
           </div>
           <label className="block">
@@ -349,15 +351,32 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Modalidad</span>
-              <select value={form.modality} onChange={(e) => setForm((p) => ({ ...p, modality: e.target.value as any }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="individual">Individual</option><option value="pareja">Pareja</option><option value="familiar">Familiar</option><option value="grupal">Grupal</option><option value="tele">Telepsicología</option>
-              </select>
+              <AppSelect
+                value={form.modality}
+                onChange={(v) => setForm((p) => ({ ...p, modality: v as any }))}
+                className="mt-1"
+                options={[
+                  { value: "individual", label: "Individual" },
+                  { value: "pareja", label: "Pareja" },
+                  { value: "familiar", label: "Familiar" },
+                  { value: "grupal", label: "Grupal" },
+                  { value: "tele", label: "Telepsicología" },
+                ]}
+              />
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Estado</span>
-              <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as any }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="activo">Activo</option><option value="pausa">Pausa</option><option value="alta">Alta</option><option value="derivado">Derivado</option>
-              </select>
+              <AppSelect
+                value={form.status}
+                onChange={(v) => setForm((p) => ({ ...p, status: v as any }))}
+                className="mt-1"
+                options={[
+                  { value: "activo", label: "Activo" },
+                  { value: "pausa", label: "Pausa" },
+                  { value: "alta", label: "Alta" },
+                  { value: "derivado", label: "Derivado" },
+                ]}
+              />
             </label>
           </div>
           <div className="rounded-lg border border-line-200 bg-bg-100/30 p-3.5">
@@ -655,12 +674,16 @@ function EmergencyContactForm({
       <div className="grid grid-cols-2 gap-2">
         <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+57 …"
           className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
-        <select value={priority} onChange={(e) => setPriority(Number(e.target.value))}
-          className="h-9 px-2.5 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700">
-          <option value={0}>Primer contacto</option>
-          <option value={1}>Segundo contacto</option>
-          <option value={2}>Tercer contacto</option>
-        </select>
+        <AppSelect
+          value={String(priority)}
+          onChange={(v) => setPriority(Number(v))}
+          size="sm"
+          options={[
+            { value: "0", label: "Primer contacto" },
+            { value: "1", label: "Segundo contacto" },
+            { value: "2", label: "Tercer contacto" },
+          ]}
+        />
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancel} disabled={saving}

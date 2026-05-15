@@ -11,6 +11,7 @@ import {
   CRISIS_LINES, CRISIS_PROTOCOL_STEPS,
 } from "@/lib/mock-data";
 import { api, getStoredUser, logoutEverywhere } from "@/lib/api";
+import { AppSelect } from "./AppSelect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
@@ -514,6 +515,10 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
 
 function CrisisModal({ onClose }: { onClose: () => void }) {
   const [registroOpen, setRegistroOpen] = useState(false);
+  // Mock UI por ahora (registro de incidente todavía no se procesa).
+  // Mantengo el patient seleccionado en state local por consistencia con
+  // el AppSelect controlado; cuando se construya el flujo real se hace POST.
+  const [registroPatientId, setRegistroPatientId] = useState<string>("");
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
 
   return (
@@ -583,10 +588,16 @@ function CrisisModal({ onClose }: { onClose: () => void }) {
               </button>
             ) : (
               <div className="mt-3 space-y-2">
-                <select className="w-full h-9 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none">
-                  <option>Paciente afectado…</option>
-                  {patients.map((p) => <option key={p.id}>{p.name}</option>)}
-                </select>
+                <AppSelect
+                  value={registroPatientId}
+                  onChange={setRegistroPatientId}
+                  size="sm"
+                  placeholder="Paciente afectado…"
+                  options={[
+                    { value: "", label: "Paciente afectado…" },
+                    ...patients.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
                 <textarea
                   rows={3}
                   placeholder="Descripción del incidente, evaluación de riesgo, conductas observadas…"
