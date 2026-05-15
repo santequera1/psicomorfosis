@@ -810,11 +810,11 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
           {/* Header: badge tipo (left) + icono pequeño decorativo (right).
               Tono "etiqueta" gris para no competir con el título. */}
           <div className="flex items-start justify-between gap-2 mb-3">
-            <span className="inline-flex items-center gap-1.5 text-xs text-ink-500 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-700" />
+            <span className="inline-flex items-center gap-1 text-[10px] text-ink-500 font-medium">
+              <span className="h-1 w-1 rounded-full bg-brand-700" />
               {TYPE_LABEL[doc.type] ?? doc.type}
             </span>
-            <TIcon className="h-4 w-4 text-ink-400 shrink-0" />
+            <TIcon className="h-3 w-3 text-ink-400 shrink-0" />
           </div>
 
           {/* Título — sans-serif semibold. Tamaño contenido (14/15px)
@@ -823,14 +823,14 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
               título 18px se ve gigante y se trunca a 2 palabras.
               line-clamp-2 reserva 2 líneas siempre para que el grid
               se mantenga alineado. */}
-          <h3 className="text-[14px] sm:text-[15px] leading-snug font-semibold text-ink-900 line-clamp-2 tracking-tight">
+          <h3 className="text-[12px] sm:text-[13px] leading-snug font-semibold text-ink-900 line-clamp-2 tracking-tight">
             {doc.name}
           </h3>
 
           {/* Preview del contenido. line-clamp-3 = 3 líneas máximo.
               Tono ink-700 con opacidad ligera para sentirse "secundario". */}
           {previewText && (
-            <p className="mt-2.5 text-[13px] text-ink-700/85 leading-relaxed line-clamp-3">
+            <p className="mt-2 text-[11px] text-ink-700/85 leading-relaxed line-clamp-3">
               {previewText}
             </p>
           )}
@@ -840,26 +840,26 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
           <div className="mt-auto pt-3 space-y-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className={cn(
-                "inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium",
+                "inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium",
                 s.bg, s.text,
               )}>
                 {s.label}
               </span>
               {isFile && (
-                <span className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full font-medium bg-bg-100 text-ink-700">
+                <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-bg-100 text-ink-700">
                   Archivo
                 </span>
               )}
               {doc.shared_with_patient && doc.patient_id && (
                 <span
-                  className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium bg-brand-50 text-brand-800"
+                  className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
                   title="Visible para el paciente en su portal."
                 >
-                  <Eye className="h-3 w-3" /> Visible
+                  <Eye className="h-2.5 w-2.5" /> Visible
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-ink-500 flex items-center justify-between gap-2">
+            <div className="text-[10px] text-ink-500 flex items-center justify-between gap-2">
               <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
               <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
             </div>
