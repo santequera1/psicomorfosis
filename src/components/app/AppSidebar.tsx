@@ -129,6 +129,14 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
       ? platformAdminGroups
       : groups;
 
+  // Pre-calculamos el offset acumulado de items por grupo, para que el
+  // stagger sea consecutivo a través de los grupos (no se reinicia en
+  // cada uno). Operación 4 → offset 0..3, Clínico 2 → offset 4..5, etc.
+  const groupOffsets = visibleGroups.reduce<number[]>((acc, _g, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + visibleGroups[i - 1].items.length);
+    return acc;
+  }, []);
+
   // Eventos custom para que código fuera de React (ej: el tour de
   // TourGuideJS) pueda abrir/cerrar el drawer en mobile sin acoplarse
   // al SidebarContext. Lo dispara lib/tour.ts en los pasos del tour
@@ -181,12 +189,6 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
           collapsed ? "sm:w-18" : "sm:w-67",
           // Mobile: visible con translate-x
           open ? "translate-x-0" : "-translate-x-full sm:translate-x-0",
-          // Animación de entrada — solo cuando AppShell se monta por
-          // primera vez (post-login o reload). En navegaciones siguientes
-          // animateEntrance llega en false y la clase no aplica.
-          // Solo desktop (sm+): en mobile el drawer ya tiene su propia
-          // animación de slide al abrirse, animar dos veces se sentiría raro.
-          animateEntrance && "sm:animate-in sm:slide-in-from-left-8 sm:fade-in sm:duration-500",
         )}
         aria-label="Navegación principal"
       >
@@ -212,49 +214,66 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4" data-tour="sidebar-nav">
-          {visibleGroups.map((g) => (
-            <div key={g.label} className="mb-5">
-              <div className={cn(
-                "px-5 mb-2 text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/55 font-medium",
-                collapsed && "sm:hidden"
-              )}>
-                {g.label}
-              </div>
-              <ul className="space-y-0.5 px-2">
-                {g.items.map((it) => {
-                  const active = it.to === "/" ? path === "/" : path.startsWith(it.to);
-                  const Icon = it.icon;
-                  // data-tour para que los tours puedan apuntar a links
-                  // específicos del sidebar. Convertimos "/agenda" → "agenda".
-                  const tourKey = it.to === "/" ? "inicio" : it.to.replace(/^\//, "").replace(/\//g, "-");
-                  return (
-                    <li key={it.to}>
-                      <Link
-                        to={it.to}
-                        data-tour={`sidebar-link-${tourKey}`}
-                        onClick={() => setOpen(false)}
+          {visibleGroups.map((g, gIdx) => {
+            // El primer item del grupo arranca 60ms después del label.
+            // Item i dentro del grupo: groupOffset+i, separado 45ms.
+            const labelDelay = animateEntrance ? `${60 + groupOffsets[gIdx] * 45}ms` : undefined;
+            return (
+              <div key={g.label} className="mb-5">
+                <div
+                  className={cn(
+                    "px-5 mb-2 text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/55 font-medium",
+                    collapsed && "sm:hidden",
+                    animateEntrance && "animate-in slide-in-from-left-3 fade-in duration-400 fill-mode-backwards",
+                  )}
+                  style={labelDelay ? { animationDelay: labelDelay } : undefined}
+                >
+                  {g.label}
+                </div>
+                <ul className="space-y-0.5 px-2">
+                  {g.items.map((it, iIdx) => {
+                    const active = it.to === "/" ? path === "/" : path.startsWith(it.to);
+                    const Icon = it.icon;
+                    // data-tour para que los tours puedan apuntar a links
+                    // específicos del sidebar. Convertimos "/agenda" → "agenda".
+                    const tourKey = it.to === "/" ? "inicio" : it.to.replace(/^\//, "").replace(/\//g, "-");
+                    const flatIdx = groupOffsets[gIdx] + iIdx;
+                    const itemDelay = animateEntrance ? `${120 + flatIdx * 45}ms` : undefined;
+                    return (
+                      <li
+                        key={it.to}
                         className={cn(
-                          "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
-                          // Touch target ≥44px en mobile, 40px en desktop
-                          "min-h-11 sm:min-h-10 py-2.5",
-                          // Hover: bg-accent + leve translate del ícono para feedback claro.
-                          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
-                          active
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400"
-                            : "text-sidebar-foreground/85",
-                          collapsed && "sm:justify-center sm:px-0 sm:hover:pl-0"
+                          animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
                         )}
-                        title={collapsed ? it.label : undefined}
+                        style={itemDelay ? { animationDelay: itemDelay } : undefined}
                       >
-                        <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200" />
-                        <span className={cn(collapsed && "sm:hidden")}>{it.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+                        <Link
+                          to={it.to}
+                          data-tour={`sidebar-link-${tourKey}`}
+                          onClick={() => setOpen(false)}
+                          className={cn(
+                            "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
+                            // Touch target ≥44px en mobile, 40px en desktop
+                            "min-h-11 sm:min-h-10 py-2.5",
+                            // Hover: bg-accent + leve translate del ícono para feedback claro.
+                            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
+                            active
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400"
+                              : "text-sidebar-foreground/85",
+                            collapsed && "sm:justify-center sm:px-0 sm:hover:pl-0"
+                          )}
+                          title={collapsed ? it.label : undefined}
+                        >
+                          <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200" />
+                          <span className={cn(collapsed && "sm:hidden")}>{it.label}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="border-t border-sidebar-border p-3 space-y-2">

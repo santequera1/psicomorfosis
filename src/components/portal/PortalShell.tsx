@@ -134,7 +134,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
 
       <main
         key={typeof window !== "undefined" ? window.location.pathname : ""}
-        className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 animate-in fade-in slide-in-from-bottom-2 duration-400"
+        className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 animate-in fade-in slide-in-from-bottom-2 duration-600 ease-out"
       >
         {children}
       </main>

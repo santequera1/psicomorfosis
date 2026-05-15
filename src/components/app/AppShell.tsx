@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             // key cambia con la pathname → React remonta <main> al navegar,
             // y la animación se vuelve a disparar (page transition feel).
             key={typeof window !== "undefined" ? window.location.pathname : ""}
-            className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-400"
+            className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-24 animate-in fade-in slide-in-from-bottom-2 duration-600 ease-out"
           >
             {children}
           </main>

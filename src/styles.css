@@ -493,6 +493,10 @@ html[data-theme="aurora"] .bg-card {
   }
   html {
     font-family: var(--font-sans);
+    /* Reserva siempre el ancho de la scrollbar aunque la página no
+       tenga overflow. Evita "saltos" de ~15px en X cuando entre
+       navegaciones el contenido inicial cabe y luego no (o viceversa). */
+    scrollbar-gutter: stable;
   }
   body {
     background-color: var(--color-background);
