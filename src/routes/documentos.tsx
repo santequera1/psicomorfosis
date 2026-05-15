@@ -301,7 +301,7 @@ function DocumentosPage() {
                 })}
               </div>
             ) : viewMode === "cards" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 sm:p-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4">
                 {docsToShow.map((d) => (
                   <DocCard
                     key={d.id}
@@ -771,13 +771,17 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
     for (const c of doc.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
     return h;
   })();
+  // Wash más sutil — cards predominantemente blancas con apenas un tinte
+  // de color en la esquina inferior derecha. transparent hasta 70% para
+  // que el cream/blanco domine, y alpha 0.28 para que el tinte se sienta
+  // como reflejo de luz, no como background coloreado.
   const WASHES = [
-    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 25 / 0.6) 100%)",   // rosa coral
-    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 60 / 0.6) 100%)",   // melocotón
-    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 145 / 0.6) 100%)",  // sage
-    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 220 / 0.6) 100%)",  // azul tenue
-    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 285 / 0.6) 100%)",  // lavanda
-    "linear-gradient(120deg, transparent 55%, oklch(0.93 0.03 80 / 0.6) 100%)",   // sand
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.035 25 / 0.28) 100%)",   // rosa coral
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.035 60 / 0.28) 100%)",   // melocotón
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.035 145 / 0.28) 100%)",  // sage
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.035 220 / 0.28) 100%)",  // azul tenue
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.035 285 / 0.28) 100%)",  // lavanda
+    "linear-gradient(135deg, transparent 70%, oklch(0.94 0.03 80 / 0.28) 100%)",    // sand
   ];
   const wash = WASHES[washHash % WASHES.length];
 
@@ -797,12 +801,12 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
       <div
         className="relative h-full overflow-hidden rounded-2xl border border-line-200/70 transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
         style={{
-          backgroundColor: "oklch(0.985 0.008 80)",
+          backgroundColor: "oklch(0.995 0.003 80)",
           backgroundImage: wash,
           boxShadow: "0 1px 2px rgb(31 57 63 / 0.03), 0 2px 8px rgb(31 57 63 / 0.03)",
         }}
       >
-        <div className="relative h-full flex flex-col p-5">
+        <div className="relative h-full flex flex-col p-4 sm:p-5">
           {/* Header: badge tipo (left) + icono pequeño decorativo (right).
               Tono "etiqueta" gris para no competir con el título. */}
           <div className="flex items-start justify-between gap-2 mb-3">
