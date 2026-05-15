@@ -6,6 +6,7 @@ import { RiskPicker } from "@/components/app/RiskPicker";
 import { TagEditor } from "@/components/app/TagEditor";
 import { type Patient, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
 import { X, Loader2, AlertCircle } from "lucide-react";
+import { AppSelect } from "@/components/app/AppSelect";
 
 /**
  * Modal de alta de paciente en 3 pasos. Usado desde la lista de pacientes
@@ -112,24 +113,33 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Pronombres">
-                  <select value={form.pronouns ?? "ella"} onChange={(e) => updateField("pronouns", e.target.value)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                    <option>ella</option><option>él</option><option>elle</option><option>prefiere no decir</option>
-                  </select>
+                  <AppSelect
+                    value={form.pronouns ?? "ella"}
+                    onChange={(v) => updateField("pronouns", v)}
+                    className="mt-1"
+                    options={[
+                      { value: "ella", label: "ella" },
+                      { value: "él", label: "él" },
+                      { value: "elle", label: "elle" },
+                      { value: "prefiere no decir", label: "prefiere no decir" },
+                    ]}
+                  />
                 </Labeled>
                 <Labeled label="Teléfono"><input onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Sexo asignado al nacer">
-                  <select
+                  <AppSelect
                     value={(form as any).sex ?? ""}
-                    onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value || undefined } as any))}
-                    className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
-                    title="Dato clínico — algunos tests psicométricos (ej. MCMI-II) usan baremos diferenciados por sexo biológico."
-                  >
-                    <option value="">— sin especificar —</option>
-                    <option value="F">Femenino</option>
-                    <option value="M">Masculino</option>
-                  </select>
+                    onChange={(v) => setForm((p) => ({ ...p, sex: v || undefined } as any))}
+                    className="mt-1"
+                    aria-label="Sexo asignado al nacer — dato clínico para baremos diferenciados (ej. MCMI-II)"
+                    options={[
+                      { value: "", label: "— sin especificar —" },
+                      { value: "F", label: "Femenino" },
+                      { value: "M", label: "Masculino" },
+                    ]}
+                  />
                 </Labeled>
               </div>
               <Labeled label="Correo"><input type="email" onChange={(e) => updateField("email", e.target.value)} placeholder="paciente@correo.co" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
@@ -151,22 +161,31 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
               <div className={"grid gap-3 " + (isOrg ? "grid-cols-2" : "grid-cols-1")}>
                 {isOrg && (
                   <Labeled label="Profesional asignada/o">
-                    <select
-                      value={form.professionalId ?? ""}
-                      onChange={(e) => setForm((p) => ({ ...p, professionalId: Number(e.target.value) }))}
-                      className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400"
-                    >
-                      <option value="">Selecciona…</option>
-                      {professionals.map((prof) => (
-                        <option key={prof.id} value={prof.id}>{prof.name}</option>
-                      ))}
-                    </select>
+                    <AppSelect
+                      value={form.professionalId ? String(form.professionalId) : ""}
+                      onChange={(v) => setForm((p) => ({ ...p, professionalId: v ? Number(v) : undefined }))}
+                      className="mt-1"
+                      placeholder="Selecciona…"
+                      options={[
+                        { value: "", label: "Selecciona…" },
+                        ...professionals.map((prof) => ({ value: String(prof.id), label: prof.name })),
+                      ]}
+                    />
                   </Labeled>
                 )}
                 <Labeled label="Modalidad">
-                  <select value={form.modality ?? "individual"} onChange={(e) => updateField("modality", e.target.value as Modality)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                    <option value="individual">Individual</option><option value="pareja">Pareja</option><option value="familiar">Familiar</option><option value="grupal">Grupal</option><option value="tele">Telepsicología</option>
-                  </select>
+                  <AppSelect
+                    value={form.modality ?? "individual"}
+                    onChange={(v) => updateField("modality", v as Modality)}
+                    className="mt-1"
+                    options={[
+                      { value: "individual", label: "Individual" },
+                      { value: "pareja", label: "Pareja" },
+                      { value: "familiar", label: "Familiar" },
+                      { value: "grupal", label: "Grupal" },
+                      { value: "tele", label: "Telepsicología" },
+                    ]}
+                  />
                 </Labeled>
               </div>
               {!isOrg && mainProfessional && (

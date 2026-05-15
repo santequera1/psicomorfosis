@@ -7,6 +7,7 @@ import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { Search, X, Loader2, Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { AppSelect } from "@/components/app/AppSelect";
 
 type Props = {
   patients: ApiPatient[];
@@ -177,34 +178,48 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Modalidad</span>
-              <select value={modality} onChange={(e) => setModality(e.target.value as Modality)} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="individual">Individual</option>
-                <option value="pareja">Pareja</option>
-                <option value="familiar">Familiar</option>
-                <option value="grupal">Grupal</option>
-                <option value="tele">Telepsicología</option>
-              </select>
+              <AppSelect
+                value={modality}
+                onChange={(v) => setModality(v as Modality)}
+                className="mt-1"
+                options={[
+                  { value: "individual", label: "Individual" },
+                  { value: "pareja", label: "Pareja" },
+                  { value: "familiar", label: "Familiar" },
+                  { value: "grupal", label: "Grupal" },
+                  { value: "tele", label: "Telepsicología" },
+                ]}
+              />
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Duración</span>
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value={50}>50 min</option>
-                <option value={30}>30 min</option>
-                <option value={60}>60 min</option>
-                <option value={90}>90 min</option>
-              </select>
+              <AppSelect
+                value={String(duration)}
+                onChange={(v) => setDuration(Number(v))}
+                className="mt-1"
+                options={[
+                  { value: "50", label: "50 min" },
+                  { value: "30", label: "30 min" },
+                  { value: "60", label: "60 min" },
+                  { value: "90", label: "90 min" },
+                ]}
+              />
             </label>
           </div>
 
           {isOrg && workspace && workspace.sedes.length > 0 && (
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Sede</span>
-              <select value={sedeId} onChange={(e) => setSedeId(e.target.value === "" ? "" : Number(e.target.value))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400">
-                <option value="">Sin sede asignada</option>
-                {workspace.sedes.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              <AppSelect
+                value={sedeId === "" ? "" : String(sedeId)}
+                onChange={(v) => setSedeId(v === "" ? "" : Number(v))}
+                className="mt-1"
+                placeholder="Sin sede asignada"
+                options={[
+                  { value: "", label: "Sin sede asignada" },
+                  ...workspace.sedes.map((s) => ({ value: String(s.id), label: s.name })),
+                ]}
+              />
             </label>
           )}
 
