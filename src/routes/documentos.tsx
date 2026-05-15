@@ -660,42 +660,75 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
 
   return (
     <li
-      className="px-3 sm:px-5 py-3 sm:py-4 hover:bg-brand-50/40 transition-colors group cursor-pointer"
+      className="px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-brand-50/40 transition-colors group cursor-pointer"
       onClick={goToDoc}
     >
-      <div className="flex items-start gap-3 sm:gap-4">
+      {/* Layout grid: avatar | contenido flexible | badges (col fija dcha)
+          | acciones (sólo desktop, hover). Las columnas fijas en el lado
+          derecho hacen que los badges queden alineados verticalmente
+          entre filas, independiente del largo del nombre del documento. */}
+      <div
+        className={cn(
+          "grid items-center gap-3 sm:gap-4",
+          // Mobile: avatar + contenido (los badges van debajo).
+          "grid-cols-[auto_1fr]",
+          // Desktop: avatar + contenido + badges + acciones.
+          "sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]",
+        )}
+      >
         <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
           <TIcon className="h-4 w-4" />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start sm:items-center gap-1.5 flex-col sm:flex-row sm:flex-wrap">
-            <div className="text-sm font-medium text-ink-900 line-clamp-2 sm:truncate">{doc.name}</div>
-            <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0", s.bg, s.text)}>
-              <s.Icon className="h-3 w-3" /> {s.label}
-            </span>
-            <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500 shrink-0">
-              {isFile ? "📎 Archivo" : "✍ Editor"}
-            </span>
-            {doc.shared_with_patient && doc.patient_id && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800 shrink-0"
-                title="Este documento es visible para el paciente en su portal."
-              >
-                <Eye className="h-3 w-3" /> Visible
+
+        {/* Contenido: dos líneas. Título arriba, meta con paciente
+            resaltado abajo. min-w-0 + truncate evita que un nombre largo
+            empuje las columnas de la derecha. */}
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-ink-900 truncate">{doc.name}</div>
+          <div className="mt-0.5 text-xs text-ink-500 flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+            {doc.patient_name ? (
+              <span className="font-semibold text-brand-800 truncate max-w-[14rem]">
+                {doc.patient_name}
               </span>
+            ) : (
+              <span className="italic text-ink-400">Sin paciente</span>
             )}
-          </div>
-          <div className="text-[11px] sm:text-xs text-ink-500 mt-1 flex items-center gap-x-2 sm:gap-x-3 gap-y-0.5 flex-wrap">
+            <span className="text-ink-300">·</span>
             <span>{TYPE_LABEL[doc.type] ?? doc.type}</span>
-            {doc.patient_name && <><span className="text-ink-300">·</span><span className="truncate max-w-40">{doc.patient_name}</span></>}
             <span className="text-ink-300">·</span>
             <span className="tabular">{formatRelative(doc.updated_at)}</span>
-            {doc.size_kb != null && <><span className="text-ink-300 hidden sm:inline">·</span><span className="tabular hidden sm:inline">{doc.size_kb} KB</span></>}
-            <span className="text-ink-300 hidden md:inline">·</span>
-            <span className="hidden md:inline truncate max-w-35">{doc.professional}</span>
+            {doc.size_kb != null && (
+              <>
+                <span className="text-ink-300 hidden sm:inline">·</span>
+                <span className="tabular hidden sm:inline">{doc.size_kb} KB</span>
+              </>
+            )}
+            <span className="text-ink-300 hidden lg:inline">·</span>
+            <span className="hidden lg:inline truncate max-w-[10rem]">{doc.professional}</span>
           </div>
         </div>
-        {/* Acciones en DESKTOP: a la derecha, opacity 0 hasta hover. */}
+
+        {/* Badges (DESKTOP) en columna fija — siempre a la misma X.
+            shrink-0 + items-center los mantiene alineados verticalmente
+            con el centro de la fila. */}
+        <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+          <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
+            <s.Icon className="h-3 w-3" /> {s.label}
+          </span>
+          <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+            {isFile ? "Archivo" : "Editor"}
+          </span>
+          {doc.shared_with_patient && doc.patient_id && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
+              title="Visible para el paciente en su portal."
+            >
+              <Eye className="h-3 w-3" /> Visible
+            </span>
+          )}
+        </div>
+
+        {/* Acciones (DESKTOP) — opacity 0 hasta hover. */}
         <div
           className="hidden sm:flex items-center gap-1 shrink-0 sm:opacity-0 group-hover:opacity-100 sm:transition-opacity"
           onClick={(e) => e.stopPropagation()}
@@ -703,13 +736,23 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
           {actions}
         </div>
       </div>
-      {/* Acciones en MOBILE: fila aparte abajo, siempre visibles. El
-          padding-left alinea con el inicio del contenido (avatar + gap). */}
-      <div
-        className="flex sm:hidden items-center justify-end gap-1 mt-3 pl-12"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {actions}
+
+      {/* MOBILE: badges + acciones en fila propia debajo. pl-12 alinea
+          con el inicio del contenido (avatar 36px + gap 12px). */}
+      <div className="flex sm:hidden items-center justify-between gap-2 mt-2 pl-12">
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
+            <s.Icon className="h-3 w-3" /> {s.label}
+          </span>
+          {doc.shared_with_patient && doc.patient_id && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
+              <Eye className="h-3 w-3" /> Visible
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {actions}
+        </div>
       </div>
     </li>
   );
