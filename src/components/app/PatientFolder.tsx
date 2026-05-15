@@ -1,35 +1,29 @@
 import { cn, displayPatientName } from "@/lib/utils";
 
 /**
- * Carpeta visual estilo manila folder (referencia: Reflect, Mem, apps
- * premium de notas). Se dibuja con SVG inline para tener la forma física
- * real — body cream con esquinas redondeadas + tab arriba a la izquierda
- * que se asoma como un papel doblado. NO es una franja decorativa.
+ * Carpeta estilo Apple Files / Photos: SVG de folder con tab y una "polaroid"
+ * con la foto del paciente (o sus iniciales coloreadas) sobre la solapa.
  *
- * Paleta terapéutica calmada (sage, sand, terracotta, olive, dusty blue…),
- * intencionalmente baja en chroma para sentirse mate y orgánica, sin los
- * colores saturados de productivity apps frías.
- *
- * El color de la tab se deriva del hash del nombre para que cada paciente
- * tenga identidad visual estable sin tener que persistirla.
+ * Se usa en la vista Carpetas de Documentos y donde queramos representar a
+ * un paciente como contenedor agregador. El color del folder se deriva del
+ * nombre para variedad visual sin tener que persistirlo.
  */
 
 const FOLDER_TONES = [
-  { tab: "oklch(0.74 0.045 145)" },  // sage green
-  { tab: "oklch(0.82 0.04 80)" },    // sand
-  { tab: "oklch(0.68 0.07 35)" },    // muted terracotta
-  { tab: "oklch(0.72 0.025 60)" },   // warm gray
-  { tab: "oklch(0.74 0.055 110)" },  // soft olive
-  { tab: "oklch(0.78 0.06 220)" },   // dusty blue
-  { tab: "oklch(0.72 0.05 305)" },   // muted purple
-  { tab: "oklch(0.78 0.08 85)" },    // muted mustard
+  { body: "#F4D78A", tab: "#E9C875", border: "#C8A553" }, // amarillo
+  { body: "#C8E6B7", tab: "#B8D9A6", border: "#8FB37C" }, // verde
+  { body: "#F4C7E0", tab: "#E5B5D2", border: "#C18BAA" }, // rosa
+  { body: "#C5D8F4", tab: "#B5C9E6", border: "#8AA5C8" }, // azul
+  { body: "#E5D2F4", tab: "#D6C2E6", border: "#A89BC8" }, // lavanda
+  { body: "#F4D5B7", tab: "#E5C6A8", border: "#C8A07A" }, // durazno
 ];
 
-// Body cream/off-white — un tono cálido más oscuro que blanco puro para
-// que se sienta papel mate, no plástico digital. Único valor para todas
-// las carpetas (la variación visual viene del color de la tab).
-const FOLDER_BODY = "oklch(0.985 0.008 80)";
-const FOLDER_STROKE = "oklch(0.86 0.015 80)";
+const AVATAR_TONES = [
+  "bg-brand-100 text-brand-800",
+  "bg-sage-200 text-sage-700",
+  "bg-lavender-100 text-lavender-500",
+  "bg-warning-soft text-risk-moderate",
+];
 
 function hashName(name: string): number {
   let h = 0;
@@ -56,88 +50,14 @@ export interface PatientFolderProps {
   className?: string;
 }
 
-/**
- * Forma SVG del folder. preserveAspectRatio=none para que escale al
- * tamaño del container manteniendo la silueta. El viewBox 200x200 es
- * arbitrario; lo importante son las proporciones internas.
- *
- * Estructura del SVG:
- *  - Tab (arriba a la izquierda) — dibujada PRIMERO para que el body
- *    aparezca encima de su parte inferior, creando el efecto "papel
- *    detrás del papel". La tab tiene los 2 corners superiores
- *    redondeados, el inferior recto (queda oculto bajo el body).
- *  - Body — rectángulo grande redondeado que ocupa la mayor parte. Sus
- *    bordes top tapan la base de la tab.
- *  - Stroke gris muy claro solo en el body para definir el contorno
- *    general sin que la tab tenga doble borde donde se monta.
- *  - drop-shadow muy sutil (dy=2, stdDev=3, opacity=0.06) para
- *    profundidad sin pesar visualmente.
- */
-function FolderShape({ tab }: { tab: string }) {
-  const filterId = `folder-shadow-${tab.replace(/[^a-z0-9]/gi, "")}`;
-  return (
-    <svg
-      viewBox="0 0 200 200"
-      preserveAspectRatio="none"
-      className="absolute inset-0 w-full h-full"
-      aria-hidden
-    >
-      <defs>
-        <filter id={filterId} x="-5%" y="-5%" width="110%" height="115%">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="rgb(31 57 63)" floodOpacity="0.07" />
-        </filter>
-      </defs>
-      <g filter={`url(#${filterId})`}>
-        {/* TAB — arriba a la izquierda. Las esquinas superiores tienen
-            radio 10, las inferiores son rectas (las cubre el body). El
-            ancho llega hasta el 55% del folder, posicionada desde 10% a
-            la izquierda. */}
-        <path
-          d="M 18 32
-             L 18 14
-             Q 18 4 28 4
-             L 102 4
-             Q 112 4 112 14
-             L 112 32 Z"
-          fill={tab}
-        />
-        {/* BODY — rectángulo redondeado que va por encima de la tab,
-            tapándole la base. Radio 14 en las 4 esquinas, suficiente
-            para sentirse "soft paper" sin perder la forma de folder. */}
-        <path
-          d="M 4 46
-             Q 4 32 18 32
-             L 182 32
-             Q 196 32 196 46
-             L 196 182
-             Q 196 196 182 196
-             L 18 196
-             Q 4 196 4 182 Z"
-          fill={FOLDER_BODY}
-          stroke={FOLDER_STROKE}
-          strokeWidth="1"
-        />
-        {/* Highlight sutil interno en la parte superior del body — emula
-            la luz que reflejaría un papel real. opacity muy baja para no
-            saturar. */}
-        <path
-          d="M 8 46
-             Q 8 36 18 36
-             L 182 36
-             Q 192 36 192 46
-             L 192 52
-             L 8 52 Z"
-          fill="white"
-          opacity="0.4"
-        />
-      </g>
-    </svg>
-  );
-}
-
 export function PatientFolder({ name, preferredName, photoUrl, count, onClick, className }: PatientFolderProps) {
   const h = hashName(name);
   const tone = FOLDER_TONES[h % FOLDER_TONES.length];
+  const avatarTone = AVATAR_TONES[h % AVATAR_TONES.length];
+  // displayPatientName trata "" y "   " como "no hay apodo" y cae al
+  // nombre completo. El form guarda preferredName como string vacío
+  // cuando el usuario lo borra, y un `??` antes dejaba la carpeta en
+  // blanco (incluyendo iniciales).
   const displayName = displayPatientName({ name, preferredName });
 
   return (
@@ -145,45 +65,72 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative block w-full text-left transition-transform duration-200",
-        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
-        // aspect-ratio para mantener proporciones del SVG. ~1:1.05.
-        "aspect-[1/1.05]",
+        "group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-bg-100/60 transition-colors text-left",
         className,
       )}
       title={name}
     >
-      <FolderShape tab={tone.tab} />
-      {/* Contenido encima del SVG. Padding generoso. Sin overflow del
-          área del body. pt-12 deja respirar arriba para no chocar con
-          la tab visualmente. */}
-      <div className="relative h-full flex flex-col p-5 pt-14">
-        <div className="flex items-start gap-3 min-w-0">
+      {/* Wrapper que aplica el lift + tilt al hover. transform-gpu para que la
+          animación corra suave en compositor sin repintar capas. */}
+      <div
+        className={cn(
+          "relative w-32 h-28 transform-gpu transition-transform duration-300 ease-out",
+          "origin-[50%_85%]",
+          "group-hover:-translate-y-1.5 group-hover:-rotate-3",
+          "group-active:-translate-y-0.5 group-active:rotate-[-1.5deg] group-active:duration-100",
+        )}
+      >
+        {/* SVG de la carpeta */}
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm group-hover:drop-shadow-md transition-all duration-300">
+          {/* Tab posterior (fondo) */}
+          <path
+            d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
+            fill={tone.tab}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+          {/* Cuerpo de la carpeta (más al frente) */}
+          <path
+            d="M4 36 Q4 28 12 28 L116 28 Q124 28 124 36 L124 96 Q124 104 116 104 L12 104 Q4 104 4 96 Z"
+            fill={tone.body}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+        </svg>
+
+        {/* Polaroid con foto/iniciales — se asoma un poco más al hover. */}
+        <div
+          className={cn(
+            "absolute left-1/2 top-3 bg-white p-1 pb-3 rounded-sm shadow-md",
+            "transform-gpu transition-transform duration-300 ease-out",
+            "-translate-x-1/2 -rotate-3",
+            "group-hover:-translate-y-1 group-hover:rotate-[-5deg]",
+          )}
+          style={{ width: 50, height: 56 }}
+        >
           {photoUrl ? (
             <img
               src={photoUrl}
               alt={displayName}
-              className="h-9 w-9 rounded-full object-cover shrink-0 border border-line-200/60"
+              className="w-full h-10 object-cover rounded-sm"
               draggable={false}
             />
           ) : (
-            <div
-              className="h-9 w-9 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white/95"
-              style={{ backgroundColor: tone.tab }}
-            >
+            <div className={cn("w-full h-10 rounded-sm flex items-center justify-center text-xs font-semibold", avatarTone)}>
               {initials(displayName)}
             </div>
           )}
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold text-ink-900 leading-snug line-clamp-2">
-              {displayName}
-            </div>
-          </div>
+        </div>
+      </div>
+      <div className="text-center w-full px-1">
+        {/* min-h reserva siempre 2 líneas para que las cards queden alineadas
+            entre sí: nombres cortos (apodos) y nombres largos producen la
+            misma altura, y la línea "X documentos" cae a la misma Y. */}
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-10 flex items-start justify-center">
+          <span>{displayName}</span>
         </div>
         {typeof count === "number" && (
-          <div className="mt-auto text-xs text-ink-500 tabular">
-            {count} {count === 1 ? "documento" : "documentos"}
-          </div>
+          <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
       </div>
     </button>
@@ -191,8 +138,7 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
 }
 
 /**
- * Carpeta genérica (sin foto/avatar) — para "Sin paciente vinculado",
- * "Plantillas", etc. Mismo look visual con SVG de folder, sin avatar.
+ * Carpeta genérica (sin foto) — para "Sin paciente vinculado", "Plantillas", etc.
  */
 export function GenericFolder({
   name,
@@ -213,22 +159,41 @@ export function GenericFolder({
       type="button"
       onClick={onClick}
       className={cn(
-        "group relative block w-full text-left transition-transform duration-200",
-        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
-        "aspect-[1/1.05]",
+        "group flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-bg-100/60 transition-colors text-left",
         className,
       )}
       title={name}
     >
-      <FolderShape tab={tone.tab} />
-      <div className="relative h-full flex flex-col p-5 pt-14">
-        <div className="text-[15px] font-semibold text-ink-900 leading-snug line-clamp-3">
-          {name}
+      <div
+        className={cn(
+          "relative w-32 h-28 transform-gpu transition-transform duration-300 ease-out",
+          "origin-[50%_85%]",
+          "group-hover:-translate-y-1.5 group-hover:-rotate-3",
+          "group-active:-translate-y-0.5 group-active:rotate-[-1.5deg] group-active:duration-100",
+        )}
+      >
+        <svg viewBox="0 0 128 112" className="absolute inset-0 w-full h-full drop-shadow-sm group-hover:drop-shadow-md transition-all duration-300">
+          <path
+            d="M8 18 L8 92 Q8 100 16 100 L112 100 Q120 100 120 92 L120 30 Q120 22 112 22 L60 22 L52 14 Q50 12 46 12 L16 12 Q8 12 8 20 Z"
+            fill={tone.tab}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+          <path
+            d="M4 36 Q4 28 12 28 L116 28 Q124 28 124 36 L124 96 Q124 104 116 104 L12 104 Q4 104 4 96 Z"
+            fill={tone.body}
+            stroke={tone.border}
+            strokeWidth="0.5"
+          />
+        </svg>
+      </div>
+      <div className="text-center w-full px-1">
+        {/* Misma reserva de 2 líneas que PatientFolder para alineación uniforme. */}
+        <div className="text-sm text-ink-900 font-medium leading-tight line-clamp-2 wrap-break-word min-h-10 flex items-start justify-center">
+          <span>{name}</span>
         </div>
         {typeof count === "number" && (
-          <div className="mt-auto text-xs text-ink-500 tabular">
-            {count} {count === 1 ? "documento" : "documentos"}
-          </div>
+          <div className="text-[11px] text-ink-500 tabular mt-0.5">{count} {count === 1 ? "documento" : "documentos"}</div>
         )}
       </div>
     </button>

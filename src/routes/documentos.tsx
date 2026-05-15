@@ -754,48 +754,145 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
     else navigate({ to: "/documentos/$id", params: { id: doc.id } });
   }
 
+  // Preview de las primeras palabras del cuerpo. Si es un archivo (kind=
+  // 'file') no hay body_text, mostramos el nombre original. Truncamos a
+  // ~140 chars para que line-clamp-3 funcione predecible.
+  const previewText = doc.body_text?.trim().slice(0, 160)
+    || (isFile ? doc.original_name : "")
+    || "";
+
   return (
     <div
-      className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group cursor-pointer"
       onClick={goToDoc}
+      className={cn(
+        "relative group cursor-pointer transition-transform duration-200",
+        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
+        // aspect-ratio vertical tipo media-carta para que se vea como hoja.
+        "aspect-[1/1.18]",
+      )}
     >
-      <div className="flex items-start gap-3">
-        <div className="h-11 w-11 rounded-xl bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-          <TIcon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-ink-900 line-clamp-2">{doc.name}</div>
-          <div className="text-[11px] text-ink-500 mt-0.5">{TYPE_LABEL[doc.type] ?? doc.type}</div>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-        <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
-          <s.Icon className="h-3 w-3" /> {s.label}
-        </span>
-        <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
-          {isFile ? "📎 Archivo" : "✍ Editor"}
-        </span>
-        {doc.shared_with_patient && doc.patient_id && (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
-            title="Visible para el paciente en su portal."
-          >
-            <Eye className="h-3 w-3" /> Visible
-          </span>
-        )}
-      </div>
-      <div className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500 flex items-center justify-between gap-2">
-        <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
-        <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
-      </div>
+      {/* ── HOJA: container principal estilo papel mate ──
+          - cream/off-white (no blanco puro) para sentirse papel
+          - clip-path recorta la esquina top-right para dejar espacio al doblez
+          - drop-shadow doble: una pegada (1px) para definir borde fino +
+            otra más difusa (4px) para volumen. Replica cómo una hoja real
+            descansa sobre superficie.
+          - filter:drop-shadow respeta el clip-path (vs box-shadow que
+            no se enteraría de la esquina recortada). */}
       <div
-        className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="relative h-full overflow-hidden border border-line-200/70 transition-shadow duration-200 group-hover:shadow-card"
+        style={{
+          background: "oklch(0.985 0.012 85)",
+          clipPath: "polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%)",
+          boxShadow:
+            "0 1px 2px rgb(31 57 63 / 0.04), 0 4px 12px rgb(31 57 63 / 0.04)",
+        }}
+      >
+        {/* Líneas horizontales muy tenues — efecto cuaderno rayado.
+            repeating-linear-gradient con stops a 0/1/24px = línea de 1px
+            cada 24px. opacity baja para que casi no se note. */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.18]"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(transparent, transparent 23px, oklch(0.78 0.02 80) 23px, oklch(0.78 0.02 80) 24px)",
+            backgroundPosition: "0 56px",
+          }}
+          aria-hidden
+        />
+
+        {/* Margen rojo a la izquierda — clásico de cuaderno escolar. Muy
+            sutil (opacity 0.15) y solo visible en hover para no recargar. */}
+        <div
+          className="absolute left-9 top-0 bottom-0 w-px opacity-0 group-hover:opacity-15 transition-opacity duration-300"
+          style={{ backgroundColor: "oklch(0.65 0.13 25)" }}
+          aria-hidden
+        />
+
+        {/* Contenido */}
+        <div className="relative h-full flex flex-col p-5">
+          {/* Header: tipo del doc en pequeño + acciones (hover) */}
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-7 w-7 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+                <TIcon className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium truncate">
+                {TYPE_LABEL[doc.type] ?? doc.type}
+              </span>
+            </div>
+          </div>
+
+          {/* Título — serif grande para sentirse "encabezado de hoja" */}
+          <div className="font-serif text-lg leading-tight text-ink-900 line-clamp-2">
+            {doc.name}
+          </div>
+
+          {/* Preview del contenido. Solo si hay texto real (no es archivo
+              binario sin extracción). line-clamp-3 para máximo 3 líneas. */}
+          {previewText && (
+            <p className="mt-3 text-xs text-ink-700/80 leading-relaxed line-clamp-3">
+              {previewText}
+            </p>
+          )}
+
+          {/* Tags pills — al fondo de la hoja, alineadas. mt-auto las
+              empuja al bottom independiente del largo del preview. */}
+          <div className="mt-auto pt-3 space-y-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
+                <s.Icon className="h-3 w-3" /> {s.label}
+              </span>
+              {isFile && (
+                <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
+                  📎 Archivo
+                </span>
+              )}
+              {doc.shared_with_patient && doc.patient_id && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
+                  title="Visible para el paciente en su portal."
+                >
+                  <Eye className="h-3 w-3" /> Visible
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-ink-500 flex items-center justify-between gap-2">
+              <span className="truncate">{doc.patient_name ?? "Sin paciente"}</span>
+              <span className="tabular shrink-0">{formatRelative(doc.updated_at)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── DOBLEZ: triángulo en la esquina top-right ──
+          La hoja tiene la esquina recortada por clip-path. Acá pintamos
+          un pequeño triángulo más oscuro (línea 200) que simula la cara
+          interna del doblez (lo que se ve cuando una página real se
+          dobla hacia atrás). Va FUERA del container de la hoja para no
+          ser recortado por el mismo clip-path.
+          La gradiente diagonal añade volumen sutil. */}
+      <div
+        className="absolute top-0 right-0 w-[18px] h-[18px] pointer-events-none transition-transform duration-200 group-hover:shadow-md"
+        style={{
+          background: "linear-gradient(135deg, oklch(0.92 0.015 85) 0%, oklch(0.85 0.02 85) 100%)",
+          clipPath: "polygon(100% 0, 0 100%, 100% 100%)",
+          // Pequeña sombra interna en el corner para reforzar el efecto 3D.
+          filter: "drop-shadow(-1px 1px 1px rgb(31 57 63 / 0.08))",
+        }}
+        aria-hidden
+      />
+
+      {/* Acciones en hover: arriba a la derecha. Posicionadas ABAJO del
+          doblez en términos visuales (top-7) para no chocar con él. */}
+      <div
+        className="absolute top-7 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={handleDownload}
           disabled={downloading}
-          className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50"
+          className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center disabled:opacity-50 shadow-soft"
           title={isFile ? "Descargar archivo" : "Descargar PDF"}
         >
           {downloading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
@@ -803,7 +900,7 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); e.preventDefault(); setMenuOpen((o) => !o); }}
-            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+            className="h-7 w-7 rounded-md bg-surface border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center shadow-soft"
             title="Más"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
