@@ -8,6 +8,7 @@ import { RiskBadge } from "@/components/app/RiskBadge";
 import { Search, X, Loader2, Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { AppSelect } from "@/components/app/AppSelect";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 
 type Props = {
   patients: ApiPatient[];
@@ -149,16 +150,12 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
                 Soportado en Chrome 99+, Firefox 101+, Safari 16+. */}
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Fecha</span>
-              <div className="mt-1 relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400 pointer-events-none" />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                  className="w-full h-10 pl-9 pr-3 rounded-md border border-line-200 bg-surface text-sm outline-none hover:border-brand-400 cursor-pointer"
-                />
-              </div>
+              <AppDatePicker
+                value={date}
+                onChange={setDate}
+                className="mt-1"
+                aria-label="Fecha de la cita"
+              />
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
