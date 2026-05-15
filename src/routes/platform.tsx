@@ -13,6 +13,7 @@ import { KpiCard } from "@/components/app/KpiCard";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { AppTooltip } from "@/components/app/AppTooltip";
 
 export const Route = createFileRoute("/platform")({
   head: () => ({ meta: [{ title: "Plataforma · Psicomorfosis" }] }),
@@ -369,28 +370,31 @@ function WorkspaceRow({ ws, onDisable, onDelete, onEdit }: {
           Deshabilitar
         </button>
       )}
-      <button
-        onClick={onEdit}
-        className="h-8 w-8 rounded-md border border-line-200 text-ink-700 hover:border-brand-400 flex items-center justify-center"
-        title="Editar info (nombre, especialidades, capacidad)"
-      >
-        <Edit3 className="h-3.5 w-3.5" />
-      </button>
-      <button
-        onClick={onDelete}
-        className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
-        title="Eliminar cuenta permanentemente"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-      <Link
-        to="/platform"
-        search={{ ws: ws.id }}
-        className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
-        title="Ver detalle"
-      >
-        <ChevronRight className="h-4 w-4" />
-      </Link>
+      <AppTooltip label="Editar info (nombre, especialidades, capacidad)">
+        <button
+          onClick={onEdit}
+          className="h-8 w-8 rounded-md border border-line-200 text-ink-700 hover:border-brand-400 flex items-center justify-center"
+        >
+          <Edit3 className="h-3.5 w-3.5" />
+        </button>
+      </AppTooltip>
+      <AppTooltip label="Eliminar cuenta permanentemente">
+        <button
+          onClick={onDelete}
+          className="h-8 w-8 rounded-md border border-line-200 text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 flex items-center justify-center"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </AppTooltip>
+      <AppTooltip label="Ver detalle">
+        <Link
+          to="/platform"
+          search={{ ws: ws.id }}
+          className="h-8 w-8 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      </AppTooltip>
     </>
   );
 

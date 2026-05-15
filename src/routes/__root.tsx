@@ -1,5 +1,6 @@
 ﻿import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { toggleTheme } from "@/lib/theme";
@@ -177,7 +178,15 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={client}>
-      <Outlet />
+      {/* TooltipProvider global: cualquier <Tooltip> debajo en el árbol
+          comparte el delayDuration y skipDelayDuration. Sin esto cada
+          tooltip individual tendría que crear su propio Provider, y eso
+          rompe el patrón "después de mostrar uno, los siguientes salen
+          rápido". delayDuration=300 es un buen balance: el browser nativo
+          usa ~700ms (lento), instantáneo (0ms) se siente twitchy. */}
+      <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+        <Outlet />
+      </TooltipProvider>
       <Toaster richColors position="top-right" />
     </QueryClientProvider>
   );
