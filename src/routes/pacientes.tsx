@@ -701,7 +701,7 @@ function ArchiveOrDeleteModal({ patient, onClose }: { patient: Patient; onClose:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-risk-high font-medium">Acción destructiva</p>
@@ -846,7 +846,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
       <form
         onSubmit={(e) => { e.preventDefault(); setErr(null); mu.mutate({ ...form, sex: form.sex || undefined } as any); }}
-        className="w-full max-w-xl rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">

@@ -583,7 +583,7 @@ function ChangeCredentialsModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <form
         onSubmit={submit}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
@@ -736,7 +736,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal"
+        className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal overflow-hidden"
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -1499,7 +1499,7 @@ function SedeFormModal({ sede, onClose, onSaved }: { sede: Sede | null; onClose:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Sedes</p>
@@ -2079,7 +2079,7 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-ink-900/60 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-surface rounded-xl border border-line-200 shadow-modal">
+      <div className="w-full max-w-md bg-surface rounded-xl border border-line-200 shadow-modal overflow-hidden">
         <header className="px-5 py-4 border-b border-line-200 flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-error/15 text-error flex items-center justify-center shrink-0">
             <ShieldAlert className="h-5 w-5" />

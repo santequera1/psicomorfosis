@@ -853,7 +853,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100">
           <div className="flex items-start justify-between">
             <div>

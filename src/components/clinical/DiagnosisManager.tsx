@@ -566,7 +566,7 @@ function EditNoteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4">
-      <div className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-xl border border-line-200 shadow-modal">
+      <div className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-xl border border-line-200 shadow-modal overflow-hidden">
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="font-serif text-lg text-ink-900">Nota del diagnóstico</h3>

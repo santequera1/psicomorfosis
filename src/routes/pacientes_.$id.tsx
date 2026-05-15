@@ -302,7 +302,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
   });
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); mu.mutate(); }} className="w-full max-w-xl rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <form onSubmit={(e) => { e.preventDefault(); mu.mutate(); }} className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <header className="p-5 border-b border-line-100">
           <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Pacientes · {patient.id}</p>
           <h3 className="font-serif text-xl text-ink-900 mt-0.5">Editar paciente</h3>
@@ -1318,7 +1318,7 @@ function CertificateModal({ patientId, onClose }: { patientId: string; onClose: 
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Recibos</p>

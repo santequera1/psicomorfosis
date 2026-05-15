@@ -727,7 +727,7 @@ function PublishModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="w-full max-w-lg bg-surface rounded-xl border border-line-200 shadow-modal">
+      <div className="w-full max-w-lg bg-surface rounded-xl border border-line-200 shadow-modal overflow-hidden">
         <header className="px-5 py-4 border-b border-line-200 flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
             <Send className="h-5 w-5" />

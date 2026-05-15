@@ -503,7 +503,7 @@ export function ReceiptFormModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm p-4 pt-16 overflow-y-auto">
       <form
         onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
-        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal overflow-hidden"
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -992,7 +992,7 @@ function CustomizeReceiptsModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-12 p-4 overflow-y-auto" onClick={onClose}>
       <form
         onSubmit={(e) => { e.preventDefault(); saveMu.mutate(); }}
-        className="w-full max-w-xl rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">

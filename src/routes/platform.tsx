@@ -649,7 +649,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto">
       <form
         onSubmit={(e) => { e.preventDefault(); if (!created) createMu.mutate(); }}
-        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal overflow-hidden"
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -820,7 +820,7 @@ function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); mu.mutate(); }}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden"
       >
         <header className="px-5 py-4 border-b border-line-100">
           <p className="text-[11px] uppercase tracking-widest text-risk-high font-medium">Plataforma</p>
@@ -1136,7 +1136,7 @@ function EditUserModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); if (canSubmit) mu.mutate(); }}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden"
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
@@ -1268,7 +1268,7 @@ function ResetPasswordModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4">
       <form
         onSubmit={(e) => { e.preventDefault(); if (!done) mu.mutate(); }}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden"
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>

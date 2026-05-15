@@ -511,7 +511,7 @@ function ImagePreviewModal({ doc, onClose }: { doc: PsmDocument; onClose: () => 
         src={url}
         alt={doc.name}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] max-w-[95vw] object-contain rounded-lg shadow-modal"
+        className="max-h-[90vh] max-w-[95vw] object-contain rounded-lg shadow-modal overflow-hidden"
       />
       <div className="absolute bottom-4 left-4 right-4 text-center text-white/80 text-sm">
         {doc.name}
@@ -876,7 +876,7 @@ function DuplicateDocumentModal({ doc, patients, professionals, onClose }: {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
       <form
         onSubmit={(e) => { e.preventDefault(); dupMu.mutate(); }}
-        className="w-full max-w-md rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-md rounded-2xl bg-surface shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">

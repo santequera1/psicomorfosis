@@ -82,7 +82,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <form
         onSubmit={(e) => { e.preventDefault(); if (selected) mu.mutate(); }}
-        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal"
+        className="w-full max-w-lg rounded-2xl bg-surface shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
