@@ -50,7 +50,12 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
   const { open, setOpen, collapsed, setCollapsed } = useSidebar();
   const { location } = useRouterState();
   const path = location.pathname;
-  const [user, setUser] = useState<ApiUser | null>(null);
+  // Lazy initializer: leemos getStoredUser sincrónico en el primer
+  // render del cliente para no ver el flash "Cargando…" → nombre.
+  // En SSR window no existe y getStoredUser cae a null, igual que antes.
+  const [user, setUser] = useState<ApiUser | null>(() =>
+    typeof window === "undefined" ? null : getStoredUser(),
+  );
   const [reportOpen, setReportOpen] = useState(false);
   useEffect(() => {
     const stored = getStoredUser();
@@ -136,6 +141,13 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
     acc.push(i === 0 ? 0 : acc[i - 1] + visibleGroups[i - 1].items.length);
     return acc;
   }, []);
+  // Total de items navegables, usado para calcular el delay del footer
+  // (user pill, reportar, cerrar sesión, colapsar) que arranca después
+  // del último item de navegación.
+  const totalNavItems = visibleGroups.reduce((sum, g) => sum + g.items.length, 0);
+  // Última delay de un item de nav: 120 + (n-1)*45. Footer arranca ~80ms
+  // después para que se sienta como una segunda "ola" tras el menú.
+  const footerStart = 120 + Math.max(0, totalNavItems - 1) * 45 + 80;
 
   // Eventos custom para que código fuera de React (ej: el tour de
   // TourGuideJS) pueda abrir/cerrar el drawer en mobile sin acoplarse
@@ -192,15 +204,21 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
         )}
         aria-label="Navegación principal"
       >
-        <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed && "sm:justify-center sm:px-0")}>
+        <div className={cn(
+          "flex items-center gap-3 px-4 h-16 border-b border-sidebar-border",
+          collapsed && "sm:justify-center sm:px-0",
+          // Header del sidebar entra primero en la secuencia (delay 0).
+          animateEntrance && "animate-in slide-in-from-left-3 fade-in duration-400 fill-mode-backwards",
+        )}>
           <Logo className="h-7 w-7 shrink-0 text-brand-400" />
           {/* Texto del brand: visible siempre en mobile, depende de collapsed en desktop.
-              Subtítulo viene del workspace activo del user (fallback al nombre del user
-              o al texto de marca si aún no cargó). */}
+              Subtítulo viene del workspace activo del user. Como inicializamos
+              user con getStoredUser() lazy, ya tenemos workspaceName en el
+              primer paint — no hay flash "Cargando…" → nombre. */}
           <div className={cn("flex flex-col leading-tight min-w-0", collapsed && "sm:hidden")}>
             <span className="font-serif text-[17px] font-medium text-sidebar-accent-foreground">Psicomorfosis</span>
             <span className="text-[11px] text-sidebar-foreground/70 tracking-wide truncate">
-              {user?.workspaceName ?? "Cargando…"}
+              {user?.workspaceName ?? ""}
             </span>
           </div>
           {/* Cerrar drawer en mobile */}
@@ -277,11 +295,19 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
         </nav>
 
         <div className="border-t border-sidebar-border p-3 space-y-2">
+          {/* Footer del sidebar: 4 piezas (user pill, reportar, cerrar
+              sesión, colapsar) que continúan el stagger del menú —
+              arrancan ~80ms después del último item de navegación y
+              cada una se separa 50ms. */}
           {user && (
-            <div className={cn(
-              "flex items-center gap-3 rounded-md px-2 py-2",
-              collapsed && "sm:hidden"
-            )}>
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-md px-2 py-2",
+                collapsed && "sm:hidden",
+                animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
+              )}
+              style={animateEntrance ? { animationDelay: `${footerStart}ms` } : undefined}
+            >
               <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold shrink-0">
                 {initials}
               </div>
@@ -299,7 +325,9 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
             className={cn(
               "w-full flex items-center gap-2 text-sidebar-foreground/75 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
               collapsed && "sm:justify-center sm:px-0",
+              animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
             )}
+            style={animateEntrance ? { animationDelay: `${footerStart + 50}ms` } : undefined}
             title="Reportar problema"
           >
             <Bug className="h-4 w-4 shrink-0" />
@@ -314,7 +342,9 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
             className={cn(
               "w-full flex items-center gap-2 text-sidebar-foreground/85 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
               collapsed && "sm:justify-center sm:px-0",
+              animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
             )}
+            style={animateEntrance ? { animationDelay: `${footerStart + 100}ms` } : undefined}
             title="Cerrar sesión"
           >
             <LogOut className="h-4 w-4 shrink-0" />
@@ -325,8 +355,10 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
               "hidden sm:flex w-full items-center gap-2 text-sidebar-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent rounded-md px-3 py-2 text-xs transition-colors",
-              collapsed && "justify-center"
+              collapsed && "justify-center",
+              animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
             )}
+            style={animateEntrance ? { animationDelay: `${footerStart + 150}ms` } : undefined}
           >
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <><PanelLeftClose className="h-4 w-4" /> Colapsar</>}
           </button>

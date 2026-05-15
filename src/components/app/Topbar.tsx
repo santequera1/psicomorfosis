@@ -37,7 +37,11 @@ export function Topbar() {
   const { toggle: toggleSidebar } = useSidebar();
   const pathKey = Object.keys(ROUTE_LABELS).find((k) => k === location.pathname || (k !== "/" && location.pathname.startsWith(k)));
   const label = pathKey ? ROUTE_LABELS[pathKey] : "Psicomorfosis";
-  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(null);
+  // Lazy init desde localStorage: el primer paint ya muestra las iniciales
+  // y el nombre del user en lugar del "?" placeholder.
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(() =>
+    typeof window === "undefined" ? null : getStoredUser(),
+  );
   useEffect(() => { setCurrentUser(getStoredUser()); }, []);
 
   async function handleLogout() {
@@ -119,9 +123,15 @@ export function Topbar() {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Breadcrumb: en mobile solo muestra la ruta actual, sin workspace name */}
+          {/* Breadcrumb: en mobile solo muestra la ruta actual, sin workspace name.
+              Fallback: si la query del workspace aún no resolvió, usamos el
+              workspaceName cacheado en el user del localStorage para evitar
+              que se vea "Psicomorfosis" por ~200ms y luego cambie al nombre
+              real. Solo cae a la marca cuando ni cache ni query existen. */}
           <nav className="flex items-center gap-2 text-sm text-ink-500 min-w-0 flex-1 sm:flex-initial">
-            <Link to="/" className="hidden sm:inline hover:text-ink-900 truncate max-w-[180px]">{workspace?.name ?? "Psicomorfosis"}</Link>
+            <Link to="/" className="hidden sm:inline hover:text-ink-900 truncate max-w-[180px]">
+              {workspace?.name ?? currentUser?.workspaceName ?? "Psicomorfosis"}
+            </Link>
             <span className="hidden sm:inline text-ink-300">/</span>
             <span className="text-ink-900 font-medium truncate">{label}</span>
           </nav>
