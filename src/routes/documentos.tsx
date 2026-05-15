@@ -817,10 +817,13 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
             <TIcon className="h-4 w-4 text-ink-400 shrink-0" />
           </div>
 
-          {/* Título — sans-serif grande negrita, como la referencia.
-              line-clamp-2 para que cards con títulos largos no se
-              desbalanceen del grid. */}
-          <h3 className="text-[18px] leading-tight font-bold text-ink-900 line-clamp-2 tracking-tight">
+          {/* Título — sans-serif semibold. Tamaño contenido (14/15px)
+              porque los nombres de documentos en esta app suelen ser
+              largos ("Consentimiento informado para terapia ...") y un
+              título 18px se ve gigante y se trunca a 2 palabras.
+              line-clamp-2 reserva 2 líneas siempre para que el grid
+              se mantenga alineado. */}
+          <h3 className="text-[14px] sm:text-[15px] leading-snug font-semibold text-ink-900 line-clamp-2 tracking-tight">
             {doc.name}
           </h3>
 
