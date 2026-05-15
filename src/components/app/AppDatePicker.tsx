@@ -107,8 +107,14 @@ export function AppDatePicker({
           )}
         </button>
       </PopoverTrigger>
+      {/* data-slot="popover-content" hace que el Calendar interno detecte
+          que está dentro de un popover y haga su fondo transparente
+          (regla [[data-slot=popover-content]_&]:bg-transparent en
+          calendar.tsx). Sin esto, el Calendar pinta bg-background (beige
+          en light) encima del bg-popover (blanco) del Popover. */}
       <PopoverContent
         align="start"
+        data-slot="popover-content"
         className="w-auto p-0 bg-popover border-line-200"
       >
         <Calendar
