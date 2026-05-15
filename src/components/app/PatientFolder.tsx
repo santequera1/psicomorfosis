@@ -1,34 +1,35 @@
 import { cn, displayPatientName } from "@/lib/utils";
 
 /**
- * Carpeta estilo "manila folder": cuerpo rectangular blanco con una
- * pestaña colorida sobresaliendo arriba a la izquierda. El color de la
- * pestaña se deriva del hash del nombre para que cada paciente tenga
- * una identidad visual estable sin tener que persistirla.
+ * Carpeta visual estilo manila folder (referencia: Reflect, Mem, apps
+ * premium de notas). Se dibuja con SVG inline para tener la forma física
+ * real — body cream con esquinas redondeadas + tab arriba a la izquierda
+ * que se asoma como un papel doblado. NO es una franja decorativa.
  *
- * Visual:
- *   ┌──────────┐
- *   │  ▔▔▔▔▔  │     ← pestaña arriba (colorida)
- *   │ ────────┴───┐
- *   │             │
- *   │  Título     │  ← body blanco con título + descripción
- *   │  Descripción│
- *   │             │
- *   └─────────────┘
+ * Paleta terapéutica calmada (sage, sand, terracotta, olive, dusty blue…),
+ * intencionalmente baja en chroma para sentirse mate y orgánica, sin los
+ * colores saturados de productivity apps frías.
  *
- * Usado en la vista Carpetas de Documentos para agrupar por paciente.
+ * El color de la tab se deriva del hash del nombre para que cada paciente
+ * tenga identidad visual estable sin tener que persistirla.
  */
 
 const FOLDER_TONES = [
-  { tab: "oklch(0.6 0.14 250)" },  // azul
-  { tab: "oklch(0.55 0.18 350)" }, // magenta
-  { tab: "oklch(0.68 0.16 60)" },  // naranja
-  { tab: "oklch(0.6 0.13 145)" },  // verde
-  { tab: "oklch(0.62 0.14 295)" }, // violeta
-  { tab: "oklch(0.65 0.15 30)" },  // coral
-  { tab: "oklch(0.6 0.12 195)" },  // teal
-  { tab: "oklch(0.6 0.14 100)" },  // oliva
+  { tab: "oklch(0.74 0.045 145)" },  // sage green
+  { tab: "oklch(0.82 0.04 80)" },    // sand
+  { tab: "oklch(0.68 0.07 35)" },    // muted terracotta
+  { tab: "oklch(0.72 0.025 60)" },   // warm gray
+  { tab: "oklch(0.74 0.055 110)" },  // soft olive
+  { tab: "oklch(0.78 0.06 220)" },   // dusty blue
+  { tab: "oklch(0.72 0.05 305)" },   // muted purple
+  { tab: "oklch(0.78 0.08 85)" },    // muted mustard
 ];
+
+// Body cream/off-white — un tono cálido más oscuro que blanco puro para
+// que se sienta papel mate, no plástico digital. Único valor para todas
+// las carpetas (la variación visual viene del color de la tab).
+const FOLDER_BODY = "oklch(0.985 0.008 80)";
+const FOLDER_STROKE = "oklch(0.86 0.015 80)";
 
 function hashName(name: string): number {
   let h = 0;
@@ -56,66 +57,81 @@ export interface PatientFolderProps {
 }
 
 /**
- * Bloque visual compartido entre PatientFolder y GenericFolder. Renderiza
- * la pestaña + el body. El consumer decide qué va en el body (title,
- * descripción, avatar, etc).
+ * Forma SVG del folder. preserveAspectRatio=none para que escale al
+ * tamaño del container manteniendo la silueta. El viewBox 200x200 es
+ * arbitrario; lo importante son las proporciones internas.
+ *
+ * Estructura del SVG:
+ *  - Tab (arriba a la izquierda) — dibujada PRIMERO para que el body
+ *    aparezca encima de su parte inferior, creando el efecto "papel
+ *    detrás del papel". La tab tiene los 2 corners superiores
+ *    redondeados, el inferior recto (queda oculto bajo el body).
+ *  - Body — rectángulo grande redondeado que ocupa la mayor parte. Sus
+ *    bordes top tapan la base de la tab.
+ *  - Stroke gris muy claro solo en el body para definir el contorno
+ *    general sin que la tab tenga doble borde donde se monta.
+ *  - drop-shadow muy sutil (dy=2, stdDev=3, opacity=0.06) para
+ *    profundidad sin pesar visualmente.
  */
-function FolderShell({
-  tab,
-  children,
-  onClick,
-  className,
-  title,
-}: {
-  tab: { tab: string };
-  children: React.ReactNode;
-  onClick?: () => void;
-  className?: string;
-  title?: string;
-}) {
+function FolderShape({ tab }: { tab: string }) {
+  const filterId = `folder-shadow-${tab.replace(/[^a-z0-9]/gi, "")}`;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        // Reservamos espacio arriba para que la pestaña no quede recortada
-        // por el container del grid (pt-3 = altura de la tab).
-        "group relative block w-full text-left pt-3 transition-transform duration-200",
-        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
-        className,
-      )}
-      title={title}
+    <svg
+      viewBox="0 0 200 200"
+      preserveAspectRatio="none"
+      className="absolute inset-0 w-full h-full"
+      aria-hidden
     >
-      {/* Pestaña: arriba a la izquierda, sobresale ~12px del body. El
-          ancho ~40% emula el corte de carpeta de archivo real. rounded-t
-          solo arriba para que se vea como una solapa pegada al body. */}
-      <div
-        className="absolute top-0 left-3 h-3 w-2/5 rounded-t-md"
-        style={{ backgroundColor: tab.tab }}
-        aria-hidden
-      />
-      {/* Body: blanco con borde fino y sombra sutil. La línea superior
-          izquierda usa el mismo color que la tab para que se vea como
-          si la pestaña "se mete" en el body sin discontinuidad visual.
-          group-hover:shadow-md eleva la card al hover (junto con el
-          -translate-y-1 del wrapper). */}
-      <div
-        className={cn(
-          "relative rounded-xl rounded-tl-none border border-line-200 bg-surface shadow-soft",
-          "group-hover:shadow-card group-hover:border-line-300 transition-all duration-200",
-          "p-4 min-h-32",
-        )}
-      >
-        {/* Banda superior izquierda del mismo color que la tab — crea la
-            continuidad visual con la pestaña. h-0.5 muy fino. */}
-        <div
-          className="absolute top-0 left-0 h-0.5 w-2/5 rounded-tr-md"
-          style={{ backgroundColor: tab.tab }}
-          aria-hidden
+      <defs>
+        <filter id={filterId} x="-5%" y="-5%" width="110%" height="115%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="rgb(31 57 63)" floodOpacity="0.07" />
+        </filter>
+      </defs>
+      <g filter={`url(#${filterId})`}>
+        {/* TAB — arriba a la izquierda. Las esquinas superiores tienen
+            radio 10, las inferiores son rectas (las cubre el body). El
+            ancho llega hasta el 55% del folder, posicionada desde 10% a
+            la izquierda. */}
+        <path
+          d="M 18 32
+             L 18 14
+             Q 18 4 28 4
+             L 102 4
+             Q 112 4 112 14
+             L 112 32 Z"
+          fill={tab}
         />
-        {children}
-      </div>
-    </button>
+        {/* BODY — rectángulo redondeado que va por encima de la tab,
+            tapándole la base. Radio 14 en las 4 esquinas, suficiente
+            para sentirse "soft paper" sin perder la forma de folder. */}
+        <path
+          d="M 4 46
+             Q 4 32 18 32
+             L 182 32
+             Q 196 32 196 46
+             L 196 182
+             Q 196 196 182 196
+             L 18 196
+             Q 4 196 4 182 Z"
+          fill={FOLDER_BODY}
+          stroke={FOLDER_STROKE}
+          strokeWidth="1"
+        />
+        {/* Highlight sutil interno en la parte superior del body — emula
+            la luz que reflejaría un papel real. opacity muy baja para no
+            saturar. */}
+        <path
+          d="M 8 46
+             Q 8 36 18 36
+             L 182 36
+             Q 192 36 192 46
+             L 192 52
+             L 8 52 Z"
+          fill="white"
+          opacity="0.4"
+        />
+      </g>
+    </svg>
   );
 }
 
@@ -125,44 +141,58 @@ export function PatientFolder({ name, preferredName, photoUrl, count, onClick, c
   const displayName = displayPatientName({ name, preferredName });
 
   return (
-    <FolderShell tab={tone} onClick={onClick} className={className} title={name}>
-      <div className="flex items-start gap-3">
-        {/* Avatar pequeño con foto o iniciales. Esquina superior izquierda
-            del body, no encima de la tab. Mantiene la identidad del paciente
-            sin la polaroid grande del diseño anterior. */}
-        {photoUrl ? (
-          <img
-            src={photoUrl}
-            alt={displayName}
-            className="h-10 w-10 rounded-full object-cover shrink-0 border border-line-200"
-            draggable={false}
-          />
-        ) : (
-          <div
-            className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 text-white"
-            style={{ backgroundColor: tone.tab }}
-          >
-            {initials(displayName)}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-ink-900 leading-tight line-clamp-2">
-            {displayName}
-          </div>
-          {typeof count === "number" && (
-            <div className="text-[11px] text-ink-500 tabular mt-1">
-              {count} {count === 1 ? "documento" : "documentos"}
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group relative block w-full text-left transition-transform duration-200",
+        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
+        // aspect-ratio para mantener proporciones del SVG. ~1:1.05.
+        "aspect-[1/1.05]",
+        className,
+      )}
+      title={name}
+    >
+      <FolderShape tab={tone.tab} />
+      {/* Contenido encima del SVG. Padding generoso. Sin overflow del
+          área del body. pt-12 deja respirar arriba para no chocar con
+          la tab visualmente. */}
+      <div className="relative h-full flex flex-col p-5 pt-14">
+        <div className="flex items-start gap-3 min-w-0">
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={displayName}
+              className="h-9 w-9 rounded-full object-cover shrink-0 border border-line-200/60"
+              draggable={false}
+            />
+          ) : (
+            <div
+              className="h-9 w-9 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 text-white/95"
+              style={{ backgroundColor: tone.tab }}
+            >
+              {initials(displayName)}
             </div>
           )}
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-ink-900 leading-snug line-clamp-2">
+              {displayName}
+            </div>
+          </div>
         </div>
+        {typeof count === "number" && (
+          <div className="mt-auto text-xs text-ink-500 tabular">
+            {count} {count === 1 ? "documento" : "documentos"}
+          </div>
+        )}
       </div>
-    </FolderShell>
+    </button>
   );
 }
 
 /**
- * Carpeta genérica (sin foto) — para "Sin paciente vinculado", "Plantillas", etc.
- * Mismo look que PatientFolder pero centrado, sin avatar.
+ * Carpeta genérica (sin foto/avatar) — para "Sin paciente vinculado",
+ * "Plantillas", etc. Mismo look visual con SVG de folder, sin avatar.
  */
 export function GenericFolder({
   name,
@@ -179,15 +209,28 @@ export function GenericFolder({
 }) {
   const tone = FOLDER_TONES[toneIdx % FOLDER_TONES.length];
   return (
-    <FolderShell tab={tone} onClick={onClick} className={className} title={name}>
-      <div className="text-sm font-medium text-ink-900 leading-tight line-clamp-2">
-        {name}
-      </div>
-      {typeof count === "number" && (
-        <div className="text-[11px] text-ink-500 tabular mt-1">
-          {count} {count === 1 ? "documento" : "documentos"}
-        </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group relative block w-full text-left transition-transform duration-200",
+        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
+        "aspect-[1/1.05]",
+        className,
       )}
-    </FolderShell>
+      title={name}
+    >
+      <FolderShape tab={tone.tab} />
+      <div className="relative h-full flex flex-col p-5 pt-14">
+        <div className="text-[15px] font-semibold text-ink-900 leading-snug line-clamp-3">
+          {name}
+        </div>
+        {typeof count === "number" && (
+          <div className="mt-auto text-xs text-ink-500 tabular">
+            {count} {count === 1 ? "documento" : "documentos"}
+          </div>
+        )}
+      </div>
+    </button>
   );
 }
