@@ -761,96 +761,91 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
     || (isFile ? doc.original_name : "")
     || "";
 
+  // Wash de color estable derivado del id del doc — variedad visual entre
+  // cards sin que el usuario tenga que configurarlo. 6 tonos muy sutiles
+  // (chroma 0.04, opacity baja en gradient) inspirados en la referencia:
+  // rosa, naranja, azul, verde, lavanda, melocotón. El hash sobre el id
+  // garantiza que la misma card siempre tenga el mismo wash.
+  const washHash = (() => {
+    let h = 0;
+    for (const c of doc.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return h;
+  })();
+  const WASHES = [
+    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 25 / 0.6) 100%)",   // rosa coral
+    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 60 / 0.6) 100%)",   // melocotón
+    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 145 / 0.6) 100%)",  // sage
+    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 220 / 0.6) 100%)",  // azul tenue
+    "linear-gradient(120deg, transparent 55%, oklch(0.92 0.04 285 / 0.6) 100%)",  // lavanda
+    "linear-gradient(120deg, transparent 55%, oklch(0.93 0.03 80 / 0.6) 100%)",   // sand
+  ];
+  const wash = WASHES[washHash % WASHES.length];
+
   return (
     <div
       onClick={goToDoc}
       className={cn(
         "relative group cursor-pointer transition-transform duration-200",
-        "hover:-translate-y-1 active:translate-y-0 active:duration-75",
-        // aspect-ratio vertical tipo media-carta para que se vea como hoja.
-        "aspect-[1/1.18]",
+        "hover:-translate-y-0.5 active:translate-y-0",
+        // Proporción 4:5 (ancho:alto) según referencia.
+        "aspect-[4/5]",
       )}
     >
-      {/* ── HOJA: container principal estilo papel mate ──
-          - cream/off-white (no blanco puro) para sentirse papel
-          - clip-path recorta la esquina top-right para dejar espacio al doblez
-          - drop-shadow doble: una pegada (1px) para definir borde fino +
-            otra más difusa (4px) para volumen. Replica cómo una hoja real
-            descansa sobre superficie.
-          - filter:drop-shadow respeta el clip-path (vs box-shadow que
-            no se enteraría de la esquina recortada). */}
+      {/* Card minimalista con base cream + wash sutil de color en la
+          derecha. La doble background (gradient encima del color base)
+          permite que el wash aporte tinte sin tapar el cream. */}
       <div
-        className="relative h-full overflow-hidden border border-line-200/70 transition-shadow duration-200 group-hover:shadow-card"
+        className="relative h-full overflow-hidden rounded-2xl border border-line-200/70 transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
         style={{
-          background: "oklch(0.985 0.012 85)",
-          clipPath: "polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%)",
-          boxShadow:
-            "0 1px 2px rgb(31 57 63 / 0.04), 0 4px 12px rgb(31 57 63 / 0.04)",
+          backgroundColor: "oklch(0.985 0.008 80)",
+          backgroundImage: wash,
+          boxShadow: "0 1px 2px rgb(31 57 63 / 0.03), 0 2px 8px rgb(31 57 63 / 0.03)",
         }}
       >
-        {/* Líneas horizontales muy tenues — efecto cuaderno rayado.
-            repeating-linear-gradient con stops a 0/1/24px = línea de 1px
-            cada 24px. opacity baja para que casi no se note. */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.18]"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(transparent, transparent 23px, oklch(0.78 0.02 80) 23px, oklch(0.78 0.02 80) 24px)",
-            backgroundPosition: "0 56px",
-          }}
-          aria-hidden
-        />
-
-        {/* Margen rojo a la izquierda — clásico de cuaderno escolar. Muy
-            sutil (opacity 0.15) y solo visible en hover para no recargar. */}
-        <div
-          className="absolute left-9 top-0 bottom-0 w-px opacity-0 group-hover:opacity-15 transition-opacity duration-300"
-          style={{ backgroundColor: "oklch(0.65 0.13 25)" }}
-          aria-hidden
-        />
-
-        {/* Contenido */}
         <div className="relative h-full flex flex-col p-5">
-          {/* Header: tipo del doc en pequeño + acciones (hover) */}
+          {/* Header: badge tipo (left) + icono pequeño decorativo (right).
+              Tono "etiqueta" gris para no competir con el título. */}
           <div className="flex items-start justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="h-7 w-7 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-                <TIcon className="h-3.5 w-3.5" />
-              </div>
-              <span className="text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium truncate">
-                {TYPE_LABEL[doc.type] ?? doc.type}
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink-500 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-700" />
+              {TYPE_LABEL[doc.type] ?? doc.type}
+            </span>
+            <TIcon className="h-4 w-4 text-ink-400 shrink-0" />
           </div>
 
-          {/* Título — serif grande para sentirse "encabezado de hoja" */}
-          <div className="font-serif text-lg leading-tight text-ink-900 line-clamp-2">
+          {/* Título — sans-serif grande negrita, como la referencia.
+              line-clamp-2 para que cards con títulos largos no se
+              desbalanceen del grid. */}
+          <h3 className="text-[18px] leading-tight font-bold text-ink-900 line-clamp-2 tracking-tight">
             {doc.name}
-          </div>
+          </h3>
 
-          {/* Preview del contenido. Solo si hay texto real (no es archivo
-              binario sin extracción). line-clamp-3 para máximo 3 líneas. */}
+          {/* Preview del contenido. line-clamp-3 = 3 líneas máximo.
+              Tono ink-700 con opacidad ligera para sentirse "secundario". */}
           {previewText && (
-            <p className="mt-3 text-xs text-ink-700/80 leading-relaxed line-clamp-3">
+            <p className="mt-2.5 text-[13px] text-ink-700/85 leading-relaxed line-clamp-3">
               {previewText}
             </p>
           )}
 
-          {/* Tags pills — al fondo de la hoja, alineadas. mt-auto las
-              empuja al bottom independiente del largo del preview. */}
+          {/* Tags pills + meta — al fondo de la card. mt-auto empuja al
+              bottom independiente del largo del preview. */}
           <div className="mt-auto pt-3 space-y-2">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
-                <s.Icon className="h-3 w-3" /> {s.label}
+              <span className={cn(
+                "inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium",
+                s.bg, s.text,
+              )}>
+                {s.label}
               </span>
               {isFile && (
-                <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
-                  📎 Archivo
+                <span className="inline-flex items-center text-[11px] px-2.5 py-1 rounded-full font-medium bg-bg-100 text-ink-700">
+                  Archivo
                 </span>
               )}
               {doc.shared_with_patient && doc.patient_id && (
                 <span
-                  className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"
+                  className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium bg-brand-50 text-brand-800"
                   title="Visible para el paciente en su portal."
                 >
                   <Eye className="h-3 w-3" /> Visible
@@ -865,28 +860,12 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
         </div>
       </div>
 
-      {/* ── DOBLEZ: triángulo en la esquina top-right ──
-          La hoja tiene la esquina recortada por clip-path. Acá pintamos
-          un pequeño triángulo más oscuro (línea 200) que simula la cara
-          interna del doblez (lo que se ve cuando una página real se
-          dobla hacia atrás). Va FUERA del container de la hoja para no
-          ser recortado por el mismo clip-path.
-          La gradiente diagonal añade volumen sutil. */}
+      {/* Acciones en hover: arriba a la derecha, dentro del padding de
+          la card. Aparecen al hover, no obstruyen el icono decorativo
+          porque el icono se queda quieto y los botones aparecen
+          superpuestos con fondo solid. */}
       <div
-        className="absolute top-0 right-0 w-[18px] h-[18px] pointer-events-none transition-transform duration-200 group-hover:shadow-md"
-        style={{
-          background: "linear-gradient(135deg, oklch(0.92 0.015 85) 0%, oklch(0.85 0.02 85) 100%)",
-          clipPath: "polygon(100% 0, 0 100%, 100% 100%)",
-          // Pequeña sombra interna en el corner para reforzar el efecto 3D.
-          filter: "drop-shadow(-1px 1px 1px rgb(31 57 63 / 0.08))",
-        }}
-        aria-hidden
-      />
-
-      {/* Acciones en hover: arriba a la derecha. Posicionadas ABAJO del
-          doblez en términos visuales (top-7) para no chocar con él. */}
-      <div
-        className="absolute top-7 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
         <button
