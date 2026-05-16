@@ -270,11 +270,17 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                           data-tour={`sidebar-link-${tourKey}`}
                           onClick={() => setOpen(false)}
                           className={cn(
-                            "relative flex items-center gap-3 rounded-md px-3 text-sm transition-all duration-200 ease-out",
+                            "relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors duration-200 ease-out group/sbitem",
                             // Touch target ≥44px en mobile, 40px en desktop
                             "min-h-11 sm:min-h-10 py-2.5",
-                            // Hover: bg-accent + leve translate del ícono para feedback claro.
-                            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
+                            // Hover: solo cambia bg + texto. Antes habia `hover:pl-4`
+                            // que corria el item 4px a la derecha — se sentia como
+                            // "rebote" al navegar: el remount del shell entre rutas
+                            // perdia el hover del cursor durante un frame y el item
+                            // saltaba a su padding natural. Ahora el feedback es solo
+                            // color + un translate del icono via group/sbitem (los
+                            // transforms no afectan layout, no hay rebote).
+                            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                             // Barra vertical activa (::before). Siempre presente
                             // en el DOM para poder transicionar — antes solo se
                             // creaba al activar y aparecía con un "pop" abrupto.
@@ -284,11 +290,11 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                             active
                               ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:opacity-100 before:scale-x-100"
                               : "text-sidebar-foreground/85 before:opacity-0 before:scale-x-0",
-                            collapsed && "sm:justify-center sm:px-0 sm:hover:pl-0"
+                            collapsed && "sm:justify-center sm:px-0"
                           )}
                           title={collapsed ? it.label : undefined}
                         >
-                          <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200" />
+                          <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover/sbitem:translate-x-0.5" />
                           <span className={cn(collapsed && "sm:hidden")}>{it.label}</span>
                         </Link>
                       </li>
