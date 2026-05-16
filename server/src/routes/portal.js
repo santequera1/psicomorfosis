@@ -53,8 +53,16 @@ router.post("/patients/:id/invite", requireAuth, (req, res) => {
     });
   }
 
-  // Invalidar invitaciones previas no usadas
-  db.prepare("DELETE FROM patient_invites WHERE patient_id = ? AND used_at IS NULL").run(patient.id);
+  // ANTES borrabamos las invitaciones previas no usadas con cada re-invite.
+  // Eso rompia el link del correo original cuando la psicologa reinvitaba
+  // "por si acaso" y el paciente clickeaba el primer email — veia
+  // "Invitacion no valida" (caso real: Isra Mazouz / Nathaly, 2026-05-16).
+  // Ahora NO borramos: todos los links coexisten validos hasta que el
+  // paciente active su cuenta. Al activar, marcamos todos como `used`
+  // (ver POST /activate) para que un click tardio en un link viejo
+  // muestre "Ya fue usada → ir a iniciar sesion" en lugar del welcome.
+  // Los expirados se limpian solos (expires_at + 5 dias). Si la
+  // psicologa necesita revocar especificamente, sera un boton aparte.
 
   const token = crypto.randomBytes(TOKEN_BYTES).toString("hex");
   const expiresAt = new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -217,7 +225,16 @@ router.post("/patient-invite/:token/activate", (req, res) => {
       INSERT INTO users (workspace_id, username, password_hash, name, email, role, patient_id)
       VALUES (?, ?, ?, ?, ?, 'paciente', ?)
     `).run(inv.workspace_id, patient.email, hash, patient.name, patient.email, patient.id);
-    db.prepare("UPDATE patient_invites SET used_at = ? WHERE id = ?").run(now, inv.id);
+    // Marcamos como usadas TODAS las invitaciones abiertas de este
+    // paciente — no solo la que se uso. Ya no borramos viejas al
+    // reinvitar (ver POST /invite), asi que pueden existir varias
+    // simultaneas. Al activar, todas quedan invalidadas para que
+    // clicks tardios en links viejos muestren "ya usada → ir a login"
+    // en lugar del welcome screen (que fallaria al submit con
+    // "Ya existe una cuenta con este correo").
+    db.prepare(
+      "UPDATE patient_invites SET used_at = ? WHERE patient_id = ? AND used_at IS NULL"
+    ).run(now, patient.id);
     // Auditoría del consentimiento: si la SIC pregunta, podemos probar
     // qué versión del documento aceptó y cuándo.
     db.prepare(
