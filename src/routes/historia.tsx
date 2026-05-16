@@ -190,7 +190,10 @@ function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: 
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          autoFocus
+          // autoFocus removido — en mobile dispara el teclado virtual al
+          // entrar a la vista, lo que es disruptivo (acción ejecutada
+          // sin que el usuario la pida). En desktop el usuario hace tab
+          // o click para enfocar; es preferible a una sorpresa en mobile.
           placeholder="Buscar paciente…"
           className="w-full h-12 pl-11 pr-4 rounded-xl border border-line-200 bg-surface text-sm shadow-sm focus:border-brand-700 focus:outline-none"
         />

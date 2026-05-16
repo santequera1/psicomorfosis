@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -44,6 +44,29 @@ export function AdminDashboard() {
   const [newApptOpen, setNewApptOpen] = useState(false);
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   const [newReceiptOpen, setNewReceiptOpen] = useState(false);
+  // Timestamp del primer render del dashboard. Lo usamos para decidir
+  // si una sección "tardía" (condicionada a datos del backend) debe
+  // entrar con su delay original de cascada o con un delay corto.
+  //
+  // Problema que arregla: secciones como "Por revisar" condicionan su
+  // visibilidad a totalPendingItems > 0, que solo es true cuando el
+  // query dashStats resuelve (~200-500ms en cold load). Si esa sección
+  // monta a los 400ms con animationDelay: 520ms + fill-mode-backwards,
+  // el usuario la ve invisible ~520ms y luego animarse — se siente como
+  // que "aparece, desaparece y reaparece".
+  //
+  // Solución: si más de ~600ms pasaron desde el mount, el dashboard ya
+  // terminó su cascada inicial; entonces la sección que mounte ahora
+  // usa un delay mínimo (80ms) para entrar enseguida, no esperar como
+  // si fuera el siguiente en la fila de la cascada.
+  const mountedAtRef = useRef(
+    typeof performance !== "undefined" ? performance.now() : 0,
+  );
+  function delayForSection(originalMs: number): string {
+    if (typeof performance === "undefined") return `${originalMs}ms`;
+    const elapsed = performance.now() - mountedAtRef.current;
+    return elapsed > 600 ? "80ms" : `${originalMs}ms`;
+  }
   const { data: workspace } = useWorkspace();
   const user = getStoredUser();
   const firstName = user?.name.split(" ")[0] ?? "";
@@ -190,7 +213,7 @@ export function AdminDashboard() {
       {totalPendingItems > 0 && pendingItems && (
         <section
           className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-          style={{ animationDelay: "520ms" }}
+          style={{ animationDelay: delayForSection(520) }}
         >
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -238,7 +261,7 @@ export function AdminDashboard() {
               <div
                 key={i}
                 className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-                style={{ animationDelay: `${640 + i * 70}ms` }}
+                style={{ animationDelay: delayForSection(640 + i * 70) }}
               >
                 {node}
               </div>
@@ -247,9 +270,14 @@ export function AdminDashboard() {
         </section>
       )}
 
-      {/* PRIMERO: lo urgente del día — citas + riesgo */}
+      {/* PRIMERO: lo urgente del día — citas + riesgo. Continuamos la
+          cascada después de "Por revisar". delayForSection ajusta el delay
+          si la sección llega tarde por cargas asincrónicas. */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5">
+        <div
+          className="xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: delayForSection(900) }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg text-ink-900">Próximas sesiones</h3>
@@ -266,7 +294,10 @@ export function AdminDashboard() {
           )}
         </div>
 
-        <div className="rounded-xl border border-risk-high/25 bg-surface p-5">
+        <div
+          className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: delayForSection(980) }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg text-ink-900 flex items-center gap-2">
