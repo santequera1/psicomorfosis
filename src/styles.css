@@ -495,8 +495,15 @@ html[data-theme="aurora"] .bg-card {
     font-family: var(--font-sans);
     /* Reserva siempre el ancho de la scrollbar aunque la página no
        tenga overflow. Evita "saltos" de ~15px en X cuando entre
-       navegaciones el contenido inicial cabe y luego no (o viceversa). */
+       navegaciones el contenido inicial cabe y luego no (o viceversa).
+       overflow-y: scroll es el fallback bulletproof: scrollbar siempre
+       visible (inactiva si no hace falta) — algunos browsers/contextos
+       (overlay scrollbars de macOS, animaciones con transforms que
+       causan repaints) no respetan totalmente `scrollbar-gutter` y la
+       columna saltaba al aparecer/desaparecer la barra durante la
+       animación de entrada del kanban de tareas. */
     scrollbar-gutter: stable;
+    overflow-y: scroll;
   }
   body {
     background-color: var(--color-background);
