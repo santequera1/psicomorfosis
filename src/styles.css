@@ -873,6 +873,86 @@ html[data-theme="aurora"] .bg-card {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
+ * TourGuideJS — overrides para modo oscuro.
+ *
+ * El CSS del paquete (@sjmc11/tourguidejs/dist/css/tour.min.css) tiene
+ * colores hardcoded asumiendo modo claro: dialog blanco, texto oscuro,
+ * botones blancos con borde. En modo oscuro queda un cuadro brillante
+ * que rompe el contrato del tema (justo lo que el modo oscuro busca
+ * evitar). Estos overrides hacen que el dialog se sienta nativo.
+ *
+ * Usamos `!important` porque el CSS del paquete tiene mayor especificidad
+ * por venir después en el bundle, y porque TourGuide aplica algunos
+ * estilos inline al posicionar. Targeteamos solo bajo `.dark` para no
+ * tocar el modo claro.
+ * ────────────────────────────────────────────────────────────────────── */
+.dark .tg-dialog {
+  background-color: oklch(0.24 0.022 200) !important;  /* --surface dark */
+  color: oklch(0.96 0.01 180) !important;              /* --ink-900 dark */
+  border: 1px solid oklch(1 0 0 / 0.13) !important;    /* --line-200 dark */
+  box-shadow: 0 12px 32px oklch(0 0 0 / 0.55) !important;
+}
+.dark .tg-dialog .tg-dialog-header,
+.dark .tg-dialog .tg-dialog-body,
+.dark .tg-dialog .tg-dialog-footer {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+.dark .tg-dialog .tg-dialog-header h1,
+.dark .tg-dialog .tg-dialog-header h2,
+.dark .tg-dialog .tg-dialog-header h3 {
+  color: oklch(0.96 0.01 180) !important;
+}
+.dark .tg-dialog .tg-dialog-body {
+  color: oklch(0.88 0.012 190) !important;             /* --ink-700 dark */
+}
+.dark .tg-arrow {
+  /* La flecha hereda del dialog. Pintamos sus dos triángulos (border
+     + fill) con los colores del dialog para que se vea continuo. */
+  border-color: oklch(1 0 0 / 0.13) !important;
+}
+.dark .tg-arrow::before,
+.dark .tg-arrow::after {
+  background-color: oklch(0.24 0.022 200) !important;
+  border-color: oklch(1 0 0 / 0.13) !important;
+}
+/* Botones del dialog: el secundario (cerrar / atrás) en outline sutil,
+   el primario (siguiente) usa brand-400 sólido. */
+.dark .tg-dialog .tg-dialog-btn {
+  background-color: oklch(0.27 0.022 200) !important;
+  color: oklch(0.96 0.01 180) !important;
+  border: 1px solid oklch(1 0 0 / 0.13) !important;
+}
+.dark .tg-dialog .tg-dialog-btn:hover {
+  background-color: oklch(0.3 0.025 200) !important;
+}
+.dark .tg-dialog .tg-dialog-btn-primary,
+.dark .tg-dialog .tg-dialog-btn.tg-dialog-btn-primary,
+.dark .tg-dialog button[data-action="next"] {
+  background-color: var(--brand-700) !important;
+  color: oklch(0.98 0.005 180) !important;
+  border-color: transparent !important;
+}
+.dark .tg-dialog .tg-dialog-btn-primary:hover {
+  background-color: var(--brand-800) !important;
+}
+/* X de cerrar arriba a la derecha, si el tour la usa. */
+.dark .tg-dialog .tg-close-btn,
+.dark .tg-dialog .tg-dialog-close {
+  color: oklch(0.72 0.012 200) !important;
+}
+.dark .tg-dialog .tg-close-btn:hover,
+.dark .tg-dialog .tg-dialog-close:hover {
+  color: oklch(0.96 0.01 180) !important;
+  background-color: oklch(1 0 0 / 0.06) !important;
+}
+/* Indicador de progreso (puntos / contador "1 de N"). */
+.dark .tg-dialog .tg-step-counter,
+.dark .tg-dialog .tg-progress-bar {
+  color: oklch(0.72 0.012 200) !important;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
  * Inputs nativos type="date": ocultamos el indicador del calendario que
  * Chrome/Edge dibuja por default, porque los DateInput de la app pintan
  * su propio icono Lucide (Calendar/CalendarDays) sobre el input. Sin

@@ -99,7 +99,10 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-8" data-tour="welcome-anchor">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header
+        className="flex flex-wrap items-end justify-between gap-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
+        style={{ animationDelay: "40ms" }}
+      >
         <div>
           <p className="text-sm text-ink-500">
             {getGreeting(now)}{firstName ? `, ${firstName}` : ""}. Hoy es {formatDate(now)}.
@@ -135,7 +138,11 @@ export function AdminDashboard() {
           (label oculto vía hidden sm:inline en QuickAction); en desktop se
           ven los 6 con icon + label. Una sola fila evita robar vertical entre
           saludo y KPIs y mantiene la fila como una "barra de acciones" clara. */}
-      <section className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4" data-tour="quick-actions">
+      <section
+        className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
+        style={{ animationDelay: "120ms" }}
+        data-tour="quick-actions"
+      >
         <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
           <QuickAction icon={<CalendarPlus className="h-4 w-4" />} label="Agendar cita" onClick={() => setNewApptOpen(true)} />
           <QuickAction icon={<UserPlus className="h-4 w-4" />} label="Nuevo paciente" onClick={() => setNewPatientOpen(true)} />
@@ -146,26 +153,45 @@ export function AdminDashboard() {
         </div>
       </section>
 
+      {/* KPIs — cada card hace stagger de 80ms para que entren en cascada
+          como en /platform. fill-mode-backwards aplica el estado inicial
+          (opacity-0 + transform) durante el delay, sin esto las cards
+          aparecen a 100% un frame antes de empezar a animar. */}
       <section className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiLink to="/agenda"><KpiCard label="Sesiones hoy" value={String(kpis.sessionsToday)} delta={{ neutral: true, value: "" }} hint={`${kpis.sessionsAttended} atendidas`} icon={<CalendarCheck2 className="h-4 w-4" />} /></KpiLink>
-        <KpiLink to="/pacientes"><KpiCard label="Pacientes activos" value={String(kpis.patients)} delta={{ neutral: true, value: "" }} hint={`${kpis.patientsTotal} en total`} icon={<Users className="h-4 w-4" />} /></KpiLink>
-        <KpiLink to="/facturacion"><KpiCard label="Recaudado" value={fmtCOP(kpis.revenue)} delta={{ neutral: true, value: "" }} hint={kpis.avgTicket > 0 ? `Ticket promedio ${fmtCOP(kpis.avgTicket)}` : "al día"} icon={<Wallet className="h-4 w-4" />} /></KpiLink>
-        <KpiLink to="/facturacion">
-          <KpiCard
-            label="Por cobrar"
-            value={fmtCOP(kpis.pending)}
-            emphasis={kpis.pending > 0 ? "risk" : "default"}
-            delta={{ neutral: true, value: "" }}
-            hint={kpis.pending > 0 ? "pendientes / vencidas" : "todo al día"}
-            icon={<Clock3 className="h-4 w-4" />}
-          />
-        </KpiLink>
+        {[
+          <KpiLink to="/agenda"><KpiCard label="Sesiones hoy" value={String(kpis.sessionsToday)} delta={{ neutral: true, value: "" }} hint={`${kpis.sessionsAttended} atendidas`} icon={<CalendarCheck2 className="h-4 w-4" />} /></KpiLink>,
+          <KpiLink to="/pacientes"><KpiCard label="Pacientes activos" value={String(kpis.patients)} delta={{ neutral: true, value: "" }} hint={`${kpis.patientsTotal} en total`} icon={<Users className="h-4 w-4" />} /></KpiLink>,
+          <KpiLink to="/facturacion"><KpiCard label="Recaudado" value={fmtCOP(kpis.revenue)} delta={{ neutral: true, value: "" }} hint={kpis.avgTicket > 0 ? `Ticket promedio ${fmtCOP(kpis.avgTicket)}` : "al día"} icon={<Wallet className="h-4 w-4" />} /></KpiLink>,
+          <KpiLink to="/facturacion">
+            <KpiCard
+              label="Por cobrar"
+              value={fmtCOP(kpis.pending)}
+              emphasis={kpis.pending > 0 ? "risk" : "default"}
+              delta={{ neutral: true, value: "" }}
+              hint={kpis.pending > 0 ? "pendientes / vencidas" : "todo al día"}
+              icon={<Clock3 className="h-4 w-4" />}
+            />
+          </KpiLink>,
+        ].map((node, i) => (
+          <div
+            key={i}
+            className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+            style={{ animationDelay: `${200 + i * 80}ms` }}
+          >
+            {node}
+          </div>
+        ))}
       </section>
 
       {/* Centro operativo: lo que requiere acción del psicólogo HOY. Cada
-          card es clickeable y va al módulo correspondiente con un filtro útil. */}
+          card es clickeable y va al módulo correspondiente con un filtro útil.
+          La sección y cada pending card hacen stagger continuando la cascada
+          de los KPIs (que terminan ~480ms). */}
       {totalPendingItems > 0 && pendingItems && (
-        <section className="rounded-xl border border-line-200 bg-surface p-5">
+        <section
+          className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: "520ms" }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg text-ink-900 inline-flex items-center gap-2">
@@ -175,38 +201,48 @@ export function AdminDashboard() {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <PendingCard
-              label="Tests por revisar"
-              hint="completados (7d)"
-              count={pendingItems.testsToReview}
-              icon={<Brain className="h-4 w-4" />}
-              to="/tests"
-              tone="brand"
-            />
-            <PendingCard
-              label="Tests asignados"
-              hint="paciente sin contestar"
-              count={pendingItems.testsAssignedPending}
-              icon={<ClipboardList className="h-4 w-4" />}
-              to="/tests"
-              tone="warning"
-            />
-            <PendingCard
-              label="Tareas abiertas"
-              hint="por hacer / en progreso"
-              count={pendingItems.openTasks}
-              icon={<ListTodo className="h-4 w-4" />}
-              to="/tareas"
-              tone="brand"
-            />
-            <PendingCard
-              label="Firmas abiertas"
-              hint="solicitudes vivas"
-              count={pendingItems.openSignRequests}
-              icon={<FileSignature className="h-4 w-4" />}
-              to="/documentos"
-              tone="warning"
-            />
+            {[
+              <PendingCard
+                label="Tests por revisar"
+                hint="completados (7d)"
+                count={pendingItems.testsToReview}
+                icon={<Brain className="h-4 w-4" />}
+                to="/tests"
+                tone="brand"
+              />,
+              <PendingCard
+                label="Tests asignados"
+                hint="paciente sin contestar"
+                count={pendingItems.testsAssignedPending}
+                icon={<ClipboardList className="h-4 w-4" />}
+                to="/tests"
+                tone="warning"
+              />,
+              <PendingCard
+                label="Tareas abiertas"
+                hint="por hacer / en progreso"
+                count={pendingItems.openTasks}
+                icon={<ListTodo className="h-4 w-4" />}
+                to="/tareas"
+                tone="brand"
+              />,
+              <PendingCard
+                label="Firmas abiertas"
+                hint="solicitudes vivas"
+                count={pendingItems.openSignRequests}
+                icon={<FileSignature className="h-4 w-4" />}
+                to="/documentos"
+                tone="warning"
+              />,
+            ].map((node, i) => (
+              <div
+                key={i}
+                className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+                style={{ animationDelay: `${640 + i * 70}ms` }}
+              >
+                {node}
+              </div>
+            ))}
           </div>
         </section>
       )}
