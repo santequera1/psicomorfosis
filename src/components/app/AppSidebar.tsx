@@ -275,9 +275,15 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                             "min-h-11 sm:min-h-10 py-2.5",
                             // Hover: bg-accent + leve translate del ícono para feedback claro.
                             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:pl-4",
+                            // Barra vertical activa (::before). Siempre presente
+                            // en el DOM para poder transicionar — antes solo se
+                            // creaba al activar y aparecía con un "pop" abrupto.
+                            // Crece desde la izquierda y hace fade en 250ms.
+                            "before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400",
+                            "before:origin-left before:transition-all before:duration-250 before:ease-out",
                             active
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400"
-                              : "text-sidebar-foreground/85",
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:opacity-100 before:scale-x-100"
+                              : "text-sidebar-foreground/85 before:opacity-0 before:scale-x-0",
                             collapsed && "sm:justify-center sm:px-0 sm:hover:pl-0"
                           )}
                           title={collapsed ? it.label : undefined}
