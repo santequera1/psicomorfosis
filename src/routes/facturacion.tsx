@@ -190,8 +190,13 @@ function FacturacionPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((f) => (
-                  <tr key={f.id} onClick={() => setDetail(f)} className="border-t border-line-100 hover:bg-brand-50/40 cursor-pointer transition-colors group">
+                {filtered.map((f, i) => (
+                  <tr
+                    key={f.id}
+                    onClick={() => setDetail(f)}
+                    className="border-t border-line-100 hover:bg-brand-50/40 cursor-pointer transition-colors group animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards"
+                    style={{ animationDelay: `${Math.min(i * 25, 500)}ms` }}
+                  >
                     <td className="px-5 py-3.5 font-mono text-xs text-ink-700">{f.id}</td>
                     <td className="px-5 py-3.5 text-ink-900">
                       {f.patient_name || <span className="text-ink-400 italic">Sin paciente</span>}

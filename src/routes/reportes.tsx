@@ -80,45 +80,67 @@ function ReportesPage() {
           </button>
         </header>
 
-        {/* KPIs principales */}
+        {/* KPIs principales — stagger fade + slide-up, 70ms entre cards.
+            Solo las cards de KPIs animan; el resto de la página (gráficos,
+            tablas) queda con el fade global del <main>. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
-          <KpiCard icon={<Users className="h-4 w-4" />} label="Pacientes activos" value={String(activePatients)} delta={{ neutral: true, value: "" }} hint={`${patients.length} en total`} />
-          <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones atendidas" value={String(sessionsRealized)} delta={{ neutral: true, value: "" }} hint={`${ops?.attendance_rate ?? 0}% asistencia (90d)`} />
-          <KpiCard icon={<HeartHandshake className="h-4 w-4" />} label="Adherencia tareas" value={`${avgAdherence}%`} delta={{ neutral: true, value: "" }} hint="promedio del workspace" />
-          <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Recaudado" value={COP.format(summary?.paid ?? 0)} delta={{ neutral: true, value: "" }} hint="total pagadas" />
+          {[
+            <KpiCard icon={<Users className="h-4 w-4" />} label="Pacientes activos" value={String(activePatients)} delta={{ neutral: true, value: "" }} hint={`${patients.length} en total`} />,
+            <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones atendidas" value={String(sessionsRealized)} delta={{ neutral: true, value: "" }} hint={`${ops?.attendance_rate ?? 0}% asistencia (90d)`} />,
+            <KpiCard icon={<HeartHandshake className="h-4 w-4" />} label="Adherencia tareas" value={`${avgAdherence}%`} delta={{ neutral: true, value: "" }} hint="promedio del workspace" />,
+            <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Recaudado" value={COP.format(summary?.paid ?? 0)} delta={{ neutral: true, value: "" }} hint="total pagadas" />,
+          ].map((node, i) => (
+            <div
+              key={i}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+              style={{ animationDelay: `${120 + i * 70}ms` }}
+            >
+              {node}
+            </div>
+          ))}
         </section>
 
-        {/* KPIs operativos secundarios */}
+        {/* KPIs operativos secundarios — segunda ola del stagger. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <KpiCard
-            icon={<ShieldAlert className="h-4 w-4" />}
-            label="Riesgo activo"
-            value={String(criticalPatients)}
-            emphasis={criticalPatients > 0 ? "risk" : "default"}
-            delta={{ neutral: true, value: "" }}
-            hint="alto + crítico"
-          />
-          <KpiCard
-            icon={<XCircle className="h-4 w-4" />}
-            label="Cancelaciones"
-            value={`${ops?.cancel_rate ?? 0}%`}
-            delta={{ neutral: true, value: "" }}
-            hint={`${ops?.total_last_90d ?? 0} citas en 90d`}
-          />
-          <KpiCard
-            icon={<AlertTriangle className="h-4 w-4" />}
-            label="No-show"
-            value={`${ops?.no_show_rate ?? 0}%`}
-            delta={{ neutral: true, value: "" }}
-            hint="pacientes que no llegaron"
-          />
-          <KpiCard
-            icon={<Clock className="h-4 w-4" />}
-            label="Duración promedio"
-            value={ops?.avg_duration_min ? `${ops.avg_duration_min} min` : "—"}
-            delta={{ neutral: true, value: "" }}
-            hint={ops?.avg_duration_min ? "por sesión" : "sin sesiones aún"}
-          />
+          {[
+            <KpiCard
+              icon={<ShieldAlert className="h-4 w-4" />}
+              label="Riesgo activo"
+              value={String(criticalPatients)}
+              emphasis={criticalPatients > 0 ? "risk" : "default"}
+              delta={{ neutral: true, value: "" }}
+              hint="alto + crítico"
+            />,
+            <KpiCard
+              icon={<XCircle className="h-4 w-4" />}
+              label="Cancelaciones"
+              value={`${ops?.cancel_rate ?? 0}%`}
+              delta={{ neutral: true, value: "" }}
+              hint={`${ops?.total_last_90d ?? 0} citas en 90d`}
+            />,
+            <KpiCard
+              icon={<AlertTriangle className="h-4 w-4" />}
+              label="No-show"
+              value={`${ops?.no_show_rate ?? 0}%`}
+              delta={{ neutral: true, value: "" }}
+              hint="pacientes que no llegaron"
+            />,
+            <KpiCard
+              icon={<Clock className="h-4 w-4" />}
+              label="Duración promedio"
+              value={ops?.avg_duration_min ? `${ops.avg_duration_min} min` : "—"}
+              delta={{ neutral: true, value: "" }}
+              hint={ops?.avg_duration_min ? "por sesión" : "sin sesiones aún"}
+            />,
+          ].map((node, i) => (
+            <div
+              key={i}
+              className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+              style={{ animationDelay: `${400 + i * 70}ms` }}
+            >
+              {node}
+            </div>
+          ))}
         </section>
 
         {/* Fila 1: Ingresos + Modalidades */}

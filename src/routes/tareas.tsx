@@ -482,9 +482,13 @@ function TareasPage() {
         {/* Kanban */}
         <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex gap-4 min-w-max sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
-            {columns.map((col) => (
-              <KanbanColumn
+            {columns.map((col, i) => (
+              <div
                 key={col.id}
+                className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-backwards"
+                style={{ animationDelay: `${120 + i * 90}ms` }}
+              >
+              <KanbanColumn
                 column={col}
                 tasks={filteredTasks.filter((t) => t.status === col.status).sort(sortTasks)}
                 projects={projects}
@@ -506,6 +510,7 @@ function TareasPage() {
                   moveMutation.mutate({ id: t.id, status: nextStatus, position: 0 });
                 }}
               />
+              </div>
             ))}
           </div>
         </div>

@@ -272,9 +272,9 @@ function DocumentosPage() {
             ) : viewMode === "folders" && !openFolderData ? (
               <div
                 key="folders-grid"
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4 animate-in fade-in slide-in-from-left-2 duration-200"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4"
               >
-                {folders.map((f) => {
+                {folders.map((f, i) => {
                   // Click derecho → confirmar eliminación de la carpeta y
                   // todos sus documentos. La carpeta "_general" agrupa
                   // documentos sin paciente; eliminar todo desde ahí
@@ -283,12 +283,17 @@ function DocumentosPage() {
                     e.preventDefault();
                     setConfirmDeleteFolder({ id: f.id, name: f.name, count: f.docs.length });
                   };
+                  // Animación de entrada más lenta y con stagger por carpeta
+                  // (antes era una sola transición de 200ms sobre todo el
+                  // grid, ahora cada carpeta entra una tras otra a 500ms).
+                  const wrapClass = "animate-in fade-in slide-in-from-left-2 duration-500 fill-mode-backwards";
+                  const wrapStyle = { animationDelay: `${Math.min(i * 35, 500)}ms` };
                   return f.id === "_general" ? (
-                    <div key={f.id} onContextMenu={onContextMenu}>
+                    <div key={f.id} onContextMenu={onContextMenu} className={wrapClass} style={wrapStyle}>
                       <GenericFolder name={f.name} count={f.docs.length} onClick={() => setOpenFolder(f.id)} toneIdx={5} />
                     </div>
                   ) : (
-                    <div key={f.id} onContextMenu={onContextMenu}>
+                    <div key={f.id} onContextMenu={onContextMenu} className={wrapClass} style={wrapStyle}>
                       <PatientFolder
                         name={f.name}
                         preferredName={f.preferredName}
@@ -302,32 +307,33 @@ function DocumentosPage() {
               </div>
             ) : viewMode === "cards" ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4">
-                {docsToShow.map((d) => (
-                  <DocCard
+                {docsToShow.map((d, i) => (
+                  <div
                     key={d.id}
-                    doc={d}
-                    onArchive={() => archiveMu.mutate(d.id)}
-                    onDelete={() => setConfirmDelete(d)}
-                    onDuplicate={() => setDuplicating(d)}
-                    onPreviewImage={() => setPreviewImage(d)}
-                    onShareToggle={() => shareMu.mutate({ id: d.id, shared: !d.shared_with_patient })}
-                  />
+                    className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-backwards"
+                    style={{ animationDelay: `${Math.min(i * 30, 500)}ms` }}
+                  >
+                    <DocCard
+                      doc={d}
+                      onArchive={() => archiveMu.mutate(d.id)}
+                      onDelete={() => setConfirmDelete(d)}
+                      onDuplicate={() => setDuplicating(d)}
+                      onPreviewImage={() => setPreviewImage(d)}
+                      onShareToggle={() => shareMu.mutate({ id: d.id, shared: !d.shared_with_patient })}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (
               <ul
                 key={openFolderData ? `folder-${openFolderData.id}` : "all-list"}
-                className={cn(
-                  "divide-y divide-line-100",
-                  openFolderData
-                    ? "animate-in fade-in slide-in-from-right-3 duration-250"
-                    : "animate-in fade-in duration-150",
-                )}
+                className="divide-y divide-line-100"
               >
-                {docsToShow.map((d) => (
+                {docsToShow.map((d, i) => (
                   <DocRow
                     key={d.id}
                     doc={d}
+                    animateIndex={i}
                     menuOpen={menuId === d.id}
                     onMenuToggle={() => setMenuId(menuId === d.id ? null : d.id)}
                     onCloseMenu={() => setMenuId(null)}
@@ -545,7 +551,7 @@ async function downloadDocument(doc: PsmDocument) {
   }
 }
 
-function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate, onPreviewImage, onShareToggle }: {
+function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete, onDuplicate, onPreviewImage, onShareToggle, animateIndex }: {
   doc: PsmDocument;
   menuOpen: boolean;
   onMenuToggle: () => void;
@@ -555,6 +561,8 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   onDuplicate: () => void;
   onPreviewImage: () => void;
   onShareToggle: () => void;
+  /** Índice para stagger de entrada (bottom-up). Cap a 500ms. */
+  animateIndex?: number;
 }) {
   const navigate = useNavigate();
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
@@ -658,9 +666,17 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
     </>
   );
 
+  const animDelay = typeof animateIndex === "number"
+    ? `${Math.min(animateIndex * 25, 500)}ms`
+    : undefined;
+
   return (
     <li
-      className="px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-brand-50/40 transition-colors group cursor-pointer"
+      className={cn(
+        "px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-brand-50/40 transition-colors group cursor-pointer",
+        typeof animateIndex === "number" && "animate-in fade-in slide-in-from-bottom-2 duration-400 fill-mode-backwards",
+      )}
+      style={animDelay ? { animationDelay: animDelay } : undefined}
       onClick={goToDoc}
     >
       {/* Layout grid: avatar | contenido flexible | badges (col fija dcha)

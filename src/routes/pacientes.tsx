@@ -363,8 +363,12 @@ function PatientsPage() {
             <>
           {/* Vista de cards en mobile */}
           <ul className="md:hidden divide-y divide-line-100">
-            {filtered.map((p) => (
-              <li key={p.id} className="relative">
+            {filtered.map((p, i) => (
+              <li
+                key={p.id}
+                className="relative animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards"
+                style={{ animationDelay: `${Math.min(i * 25, 500)}ms` }}
+              >
                 <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-start gap-3 p-3 hover:bg-brand-50/60 transition-colors">
                   <div className={`h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${avatarTone(p.name)}`}>
                     {initials(displayPatientName(p))}
@@ -431,11 +435,12 @@ function PatientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
+                {filtered.map((p, i) => (
                   <tr
                     key={p.id}
                     onClick={() => navigate({ to: "/pacientes/$id", params: { id: p.id } })}
-                    className="border-b border-line-100 last:border-0 hover:bg-brand-50/60 transition-colors group cursor-pointer"
+                    className="border-b border-line-100 last:border-0 hover:bg-brand-50/60 transition-colors group cursor-pointer animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards"
+                    style={{ animationDelay: `${Math.min(i * 25, 500)}ms` }}
                   >
                     <td className="px-5 py-3.5">
                       <Link to="/pacientes/$id" params={{ id: p.id }} className="flex items-center gap-3">
@@ -518,14 +523,19 @@ function PatientsPage() {
             <div className="p-3 sm:p-4">
               {filtered.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {filtered.map((p) => (
-                    <PatientCard
+                  {filtered.map((p, i) => (
+                    <div
                       key={p.id}
-                      patient={p}
-                      onEdit={() => setEditing(p)}
-                      onRemove={() => setRemoving(p)}
-                      onSchedule={() => setApptFor(p)}
-                    />
+                      className="animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards"
+                      style={{ animationDelay: `${Math.min(i * 30, 500)}ms` }}
+                    >
+                      <PatientCard
+                        patient={p}
+                        onEdit={() => setEditing(p)}
+                        onRemove={() => setRemoving(p)}
+                        onSchedule={() => setApptFor(p)}
+                      />
+                    </div>
                   ))}
                 </div>
               )}

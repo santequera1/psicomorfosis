@@ -186,6 +186,7 @@ function TestsPage() {
                       <CatalogRow
                         key={t.id}
                         test={t}
+                        animateIndex={i}
                         onApply={() => setApplyContext({ test: t })}
                         onAssign={() => setAssignContext(t)}
                         onView={() => setActiveTest(t)}
@@ -219,10 +220,11 @@ function TestsPage() {
                   </div>
                 ) : (
                   <ul className="divide-y divide-line-100">
-                    {customForms.map((t) => (
+                    {customForms.map((t, i) => (
                       <CatalogRow
                         key={t.id}
                         test={t}
+                        animateIndex={officialTests.length + i}
                         onApply={() => setApplyContext({ test: t })}
                         onAssign={() => setAssignContext(t)}
                         onView={() => setActiveTest(t)}
@@ -323,7 +325,7 @@ function CatalogSectionHeader({ icon, title, subtitle }: {
 
 // ─── Componentes ───────────────────────────────────────────────────────────
 
-function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTour }: {
+function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTour, animateIndex }: {
   test: PsychTest;
   onApply: () => void;
   onAssign: () => void;
@@ -331,11 +333,24 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
   onEdit?: () => void;
   onDelete?: () => void;
   dataTour?: string;
+  /** Índice global en el catálogo, usado para el stagger de entrada
+      (slide desde la izquierda). Cap a 500ms para listas largas. */
+  animateIndex?: number;
 }) {
   const ready = !!test.definition?.questions?.length;
   const isCustom = !!test.isCustom;
+  const animDelay = typeof animateIndex === "number"
+    ? `${Math.min(animateIndex * 30, 500)}ms`
+    : undefined;
   return (
-    <li data-tour={dataTour} className="px-5 py-4 hover:bg-brand-50/40 transition-colors group">
+    <li
+      data-tour={dataTour}
+      className={cn(
+        "px-5 py-4 hover:bg-brand-50/40 transition-colors group",
+        typeof animateIndex === "number" && "animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards",
+      )}
+      style={animDelay ? { animationDelay: animDelay } : undefined}
+    >
       <div className="flex items-start gap-3">
         <div className={cn(
           "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
