@@ -270,16 +270,14 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                           data-tour={`sidebar-link-${tourKey}`}
                           onClick={() => setOpen(false)}
                           className={cn(
-                            "relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors duration-200 ease-out group/sbitem",
+                            "relative flex items-center gap-3 rounded-md px-3 text-sm transition-colors duration-200 ease-out",
                             // Touch target ≥44px en mobile, 40px en desktop
                             "min-h-11 sm:min-h-10 py-2.5",
-                            // Hover: solo cambia bg + texto. Antes habia `hover:pl-4`
-                            // que corria el item 4px a la derecha — se sentia como
-                            // "rebote" al navegar: el remount del shell entre rutas
-                            // perdia el hover del cursor durante un frame y el item
-                            // saltaba a su padding natural. Ahora el feedback es solo
-                            // color + un translate del icono via group/sbitem (los
-                            // transforms no afectan layout, no hay rebote).
+                            // Hover: solo cambia bg + texto. Sin ningun shift
+                            // de layout ni transform — cualquier movimiento al
+                            // hover producia "rebote" al navegar porque el
+                            // shell se remonta entre rutas y el cursor pierde
+                            // el hover durante un frame.
                             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                             // Barra vertical activa (::before). Siempre presente
                             // en el DOM para poder transicionar — antes solo se
@@ -294,7 +292,7 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                           )}
                           title={collapsed ? it.label : undefined}
                         >
-                          <Icon className="h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover/sbitem:translate-x-0.5" />
+                          <Icon className="h-[18px] w-[18px] shrink-0" />
                           <span className={cn(collapsed && "sm:hidden")}>{it.label}</span>
                         </Link>
                       </li>
