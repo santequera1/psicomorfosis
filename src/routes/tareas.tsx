@@ -479,13 +479,17 @@ function TareasPage() {
           </div>
         </div>
 
-        {/* Kanban */}
-        <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+        {/* Kanban. overflow-x-auto solo en mobile — en desktop el grid
+            calza exacto, no necesita scroll horizontal, y `overflow-x: auto`
+            implícitamente activa `overflow-y: auto` en el spec CSS, lo
+            que producía una scrollbar fantasma dentro del contenedor
+            cuando las queries de tareas llegaban a mitad de la cascada. */}
+        <div className="overflow-x-auto sm:overflow-x-visible -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex gap-4 min-w-max sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
             {columns.map((col, i) => (
               <div
                 key={col.id}
-                className="animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-backwards"
+                className="animate-in fade-in duration-500 fill-mode-backwards"
                 style={{ animationDelay: `${120 + i * 90}ms` }}
               >
               <KanbanColumn
