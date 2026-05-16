@@ -1089,8 +1089,13 @@ export function applyPatientSignature({
     signRequest.id,
   );
 
-  db.prepare("UPDATE documents SET status = 'firmado', updated_at = ? WHERE id = ?")
-    .run(signedAt, doc.id);
+  // OJO: además de status y updated_at, también pobla `signed_at` —
+  // es la columna que el endpoint de notificaciones consulta
+  // (notifications.js sección 4) para mostrar "Documento firmado por
+  // paciente" al psicólogo. Sin esto el doc quedaba como firmado pero
+  // la notificación nunca aparecía en el panel de la psicóloga.
+  db.prepare("UPDATE documents SET status = 'firmado', signed_at = ?, updated_at = ? WHERE id = ?")
+    .run(signedAt, signedAt, doc.id);
 
   if (doc.workspace_id) {
     db.prepare(`INSERT INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
