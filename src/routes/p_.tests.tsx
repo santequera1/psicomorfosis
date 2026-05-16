@@ -132,7 +132,9 @@ function PortalTestsPage() {
         </p>
       </header>
 
-      {isLoading && <Loader2 className="h-5 w-5 mx-auto animate-spin text-ink-400" />}
+      {isLoading && (
+        <div className="text-center py-10 text-ink-500"><Loader2 className="h-5 w-5 mx-auto animate-spin" /></div>
+      )}
 
       {!isLoading && tests.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line-200 bg-surface p-12 text-center">
@@ -196,7 +198,12 @@ function PortalTestsPage() {
                         {inProgress ? "Continuar" : "Comenzar"}
                       </button>
                     ) : (
-                      <span className="text-xs text-ink-500 shrink-0">No disponible</span>
+                      <span
+                        className="text-xs text-ink-500 shrink-0 cursor-help underline decoration-dotted underline-offset-2"
+                        title="Este test todavía no tiene preguntas configuradas. Tu psicóloga lo activará pronto."
+                      >
+                        No disponible
+                      </span>
                     )}
                   </div>
                 </li>

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, FileCheck2, FileClock, ShieldCheck, Pen, ChevronRight } from "lucide-react";
+import { FileText, Loader2, FileCheck2, FileClock, ShieldCheck, Pen, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/p_/documentos")({
 });
 
 function PortalDocuments() {
-  const { data: docs = [], isLoading } = useQuery({
+  const { data: docs = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["portal-documents"],
     queryFn: () => api.portalDocuments(),
   });
@@ -26,9 +26,25 @@ function PortalDocuments() {
         </p>
       </header>
 
-      {isLoading && <Loader2 className="h-5 w-5 mx-auto animate-spin text-ink-400" />}
+      {isLoading && (
+        <div className="text-center py-10 text-ink-500"><Loader2 className="h-5 w-5 mx-auto animate-spin" /></div>
+      )}
 
-      {!isLoading && docs.length === 0 && (
+      {isError && (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-50/40 p-8 text-center">
+          <AlertCircle className="h-8 w-8 mx-auto text-rose-600 mb-3" />
+          <p className="text-sm text-ink-900 font-medium">No pudimos cargar tus documentos</p>
+          <p className="text-xs text-ink-500 mt-1 mb-4">Verifica tu conexión e inténtalo de nuevo.</p>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Reintentar
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !isError && docs.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line-200 bg-surface p-12 text-center">
           <FileText className="h-8 w-8 mx-auto text-ink-300 mb-3" />
           <p className="text-sm text-ink-500">Aún no tienes documentos compartidos.</p>

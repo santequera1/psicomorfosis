@@ -91,10 +91,14 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 onClick={logout}
                 className="h-9 w-9 rounded-md text-ink-500 hover:text-ink-900 hover:bg-bg-100 inline-flex items-center justify-center"
                 title="Cerrar sesión"
+                aria-label="Cerrar sesión"
               >
                 <LogOut className="h-4 w-4" />
               </button>
-              <div className="h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold flex items-center justify-center border border-brand-100">
+              <div
+                className="h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold flex items-center justify-center border border-brand-100"
+                aria-label={`Avatar de ${firstName}`}
+              >
                 {initials}
               </div>
             </div>
@@ -110,10 +114,16 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                   key={t.to}
                   to={t.to}
                   className={cn(
-                    "relative px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5",
+                    "relative px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 border-transparent transition-colors duration-250 whitespace-nowrap inline-flex items-center gap-1.5",
+                    // Indicador inferior siempre presente (::after) — escala
+                    // desde el centro al activarse. Antes la barra activa
+                    // aparecia de golpe via border-color; ahora hace un
+                    // slide suave de 300ms desde el centro hacia los
+                    // bordes, igual de armonioso que el del staff sidebar.
+                    "after:absolute after:-bottom-0.5 after:left-2 after:right-2 after:h-0.5 after:rounded-full after:bg-brand-700 after:origin-center after:transition-transform after:duration-300 after:ease-out",
                     active
-                      ? "border-brand-700 text-brand-700"
-                      : "border-transparent text-ink-500 hover:text-ink-900"
+                      ? "text-brand-700 after:scale-x-100"
+                      : "text-ink-500 hover:text-ink-900 after:scale-x-0"
                   )}
                 >
                   <Icon className="h-4 w-4" /> {t.label}

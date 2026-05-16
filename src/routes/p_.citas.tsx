@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, MapPin, Video, Clock, Loader2 } from "lucide-react";
+import { Calendar, MapPin, Video, Clock, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ const STATUS_STYLE: Record<string, { label: string; bg: string }> = {
 };
 
 function PortalAppointments() {
-  const { data: appointments = [], isLoading } = useQuery({
+  const { data: appointments = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["portal-appointments"],
     queryFn: () => api.portalAppointments(),
   });
@@ -40,7 +40,21 @@ function PortalAppointments() {
         <div className="text-center py-10 text-ink-500"><Loader2 className="h-5 w-5 mx-auto animate-spin" /></div>
       )}
 
-      {!isLoading && appointments.length === 0 && (
+      {isError && (
+        <div className="rounded-2xl border border-rose-500/20 bg-rose-50/40 p-8 text-center">
+          <AlertCircle className="h-8 w-8 mx-auto text-rose-600 mb-3" />
+          <p className="text-sm text-ink-900 font-medium">No pudimos cargar tus citas</p>
+          <p className="text-xs text-ink-500 mt-1 mb-4">Verifica tu conexión e inténtalo de nuevo.</p>
+          <button
+            onClick={() => refetch()}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Reintentar
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !isError && appointments.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line-200 bg-surface p-12 text-center">
           <Calendar className="h-8 w-8 mx-auto text-ink-300 mb-3" />
           <p className="text-sm text-ink-500">Aún no tienes citas agendadas.</p>

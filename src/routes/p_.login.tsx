@@ -49,7 +49,8 @@ function PortalLoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoFocus
+              // autoFocus removido: en mobile dispara el teclado virtual
+              // al entrar a la vista (acción no pedida por el usuario).
               required
               placeholder="tucorreo@ejemplo.com"
               className="w-full h-11 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"

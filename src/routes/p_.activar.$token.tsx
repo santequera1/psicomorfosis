@@ -142,7 +142,8 @@ function ActivatePage() {
                 type={showPwd ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoFocus
+                // autoFocus removido: en mobile dispara el teclado virtual
+                // al entrar a la vista (acción no pedida por el usuario).
                 minLength={8}
                 placeholder="Mínimo 8 caracteres"
                 className="w-full h-11 px-3 pr-10 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
