@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Phone, Mail, MapPin, ShieldCheck, Pen, Trash2, Download, AlertTriangle, X } from "lucide-react";
+import { Loader2, Phone, Mail, MapPin, ShieldCheck, Pen, Trash2, Download, AlertTriangle, X, KeyRound, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { api, clearSession } from "@/lib/api";
+import { api, clearSession, refreshToken } from "@/lib/api";
 import { useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/p_/perfil")({
@@ -130,6 +130,8 @@ function PortalProfile() {
       </form>
 
       <SignatureSection />
+
+      <ChangePasswordSection />
 
       {me.professional && (
         <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5">
@@ -341,6 +343,148 @@ function Field({ label, icon, children }: { label: string; icon?: React.ReactNod
       </span>
       {children}
     </label>
+  );
+}
+
+/**
+ * Sección "Cambiar contraseña": permite al paciente cambiar su propia
+ * contraseña sin pasar por el flujo de reset del psicólogo. Requiere la
+ * contraseña actual para evitar que un token comprometido la cambie sin
+ * conocer la actual. El endpoint /api/auth/change-password ya soporta
+ * pacientes (usa requireAuth genérico).
+ *
+ * Tras el cambio el backend invalida los tokens viejos y emite uno nuevo
+ * para que el mismo browser no necesite re-login.
+ */
+function ChangePasswordSection() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const matches = next.length > 0 && next === confirm;
+  const canSubmit = current.length > 0 && next.length >= 8 && matches && next !== current;
+
+  const mu = useMutation({
+    mutationFn: () => api.changePassword({ current_password: current, new_password: next }),
+    onSuccess: (res) => {
+      if (res.token) refreshToken(res.token);
+      setCurrent(""); setNext(""); setConfirm("");
+      setDone(true);
+      toast.success("Contraseña actualizada");
+      setTimeout(() => setDone(false), 4000);
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "No se pudo cambiar la contraseña");
+    },
+  });
+
+  return (
+    <div className="mt-6 rounded-xl border border-line-200 bg-surface p-5">
+      <div className="flex items-start gap-3">
+        <KeyRound className="h-5 w-5 text-brand-700 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <h3 className="font-serif text-lg text-ink-900">Cambiar contraseña</h3>
+          <p className="text-xs text-ink-500 mt-0.5 leading-relaxed">
+            Usa una contraseña que solo tú conozcas. Mínimo 8 caracteres.
+          </p>
+
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (canSubmit) mu.mutate(); }}
+            className="mt-4 space-y-3"
+          >
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">Contraseña actual</label>
+              <div className="relative">
+                <input
+                  type={showCurrent ? "text" : "password"}
+                  value={current}
+                  onChange={(e) => setCurrent(e.target.value)}
+                  className="w-full h-10 px-3 pr-10 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrent((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center"
+                  tabIndex={-1}
+                  aria-label={showCurrent ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">Contraseña nueva</label>
+              <div className="relative">
+                <input
+                  type={showNext ? "text" : "password"}
+                  value={next}
+                  onChange={(e) => setNext(e.target.value)}
+                  minLength={8}
+                  placeholder="Mínimo 8 caracteres"
+                  className="w-full h-10 px-3 pr-10 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+                  required
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNext((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded text-ink-500 hover:bg-bg-100 inline-flex items-center justify-center"
+                  tabIndex={-1}
+                  aria-label={showNext ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showNext ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">Confirma la nueva</label>
+              <input
+                type={showNext ? "text" : "password"}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                minLength={8}
+                className={
+                  "w-full h-10 px-3 rounded-lg border bg-bg text-sm text-ink-900 focus:outline-none " +
+                  (confirm.length > 0 && !matches
+                    ? "border-rose-400 focus:border-rose-500"
+                    : "border-line-200 focus:border-brand-400")
+                }
+                required
+                autoComplete="new-password"
+              />
+              {confirm.length > 0 && !matches && (
+                <p className="text-xs text-rose-700 mt-1">Las contraseñas no coinciden.</p>
+              )}
+              {next.length > 0 && next === current && (
+                <p className="text-xs text-rose-700 mt-1">La nueva debe ser distinta de la actual.</p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={!canSubmit || mu.isPending}
+              className="h-10 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {mu.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Actualizar contraseña
+            </button>
+
+            {done && (
+              <p className="inline-flex items-center gap-1.5 text-xs text-success font-medium mt-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Contraseña actualizada correctamente
+              </p>
+            )}
+          </form>
+        </div>
+      </div>
+    </div>
   );
 }
 
