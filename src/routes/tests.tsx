@@ -360,7 +360,12 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-serif text-base text-ink-900">{test.code}</span>
+            {/* Antes era font-serif text-base — los códigos de tests
+                ("AUDIT", "PHQ-9") se veían raros en serif (la serif
+                funciona mejor para palabras/títulos largos). Pasamos
+                a sans-serif bold tracking ajustado, mismo lenguaje
+                tipográfico que el resto de la app para nombres clínicos. */}
+            <span className="text-base font-semibold tracking-tight text-ink-900">{test.code}</span>
             <span className="text-xs text-ink-500">{test.shortName}</span>
             <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-bg-100 text-ink-500 font-medium">{test.category}</span>
             {isCustom && (

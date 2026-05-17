@@ -82,9 +82,11 @@ export function BankCard({
     );
   }
 
-  // Variante mini: compacta para listas / KPI cards. Layout simple
-  // sin chip ni NFC (no caben bien). Banco arriba, holder o label en
-  // medio, last4 abajo izquierda, brand abajo derecha.
+  // Variante mini: compacta para listas / KPI cards. Banco arriba,
+  // chip EMV pequeño en el centro (le da la lectura de "tarjeta
+  // física" — sin él se sentía más como un pin de aplicación que
+  // como una tarjeta), holder + last4 abajo izquierda, brand abajo
+  // derecha.
   if (size === "mini") {
     const Comp = (onClick ? "button" : "div") as "button" | "div";
     return (
@@ -108,6 +110,12 @@ export function BankCard({
             {s.logoText.toUpperCase()}
           </div>
           {actionsSlot}
+        </div>
+        {/* Chip EMV mini — apenas un poco más pequeño que el chip real,
+            le da la lectura inmediata de "tarjeta de débito" sin robar
+            espacio al holder/last4 de abajo. */}
+        <div className="relative">
+          <ChipIcon className={cn("h-4 w-6", s.textColor)} />
         </div>
         <div className="relative flex items-end justify-between gap-2">
           <div className="flex flex-col gap-0.5 min-w-0">
