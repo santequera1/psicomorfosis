@@ -1068,7 +1068,13 @@ export function applyPatientSignature({
         type: "paragraph",
         content: [{
           type: "text",
-          text: `Firmado electrónicamente por ${patient?.name ?? "el paciente"} · IP ${ip} · ${new Date(signedAt).toLocaleString("es-CO")} · Cert SHA-256: ${certHash.slice(0, 16)}…`,
+          // toLocaleString("es-CO") usa el LOCALE (formato), pero el
+          // timeZone es el del servidor (UTC, VPS en Europa). Sin
+          // pasarlo explícito, las firmas mostraban hora UTC (~5h
+          // adelantada respecto a Colombia). Forzamos America/Bogota
+          // para que el texto embebido coincida con la hora real
+          // a la que firmó la paciente.
+          text: `Firmado electrónicamente por ${patient?.name ?? "el paciente"} · IP ${ip} · ${new Date(signedAt).toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" })} · Cert SHA-256: ${certHash.slice(0, 16)}…`,
           marks: [{ type: "italic" }],
         }],
       }

@@ -889,6 +889,19 @@ export const api = {
       `/api/patients/${patientId}/invite`,
       { method: "POST" }
     ),
+  /**
+   * Restablece la contraseña del portal de un paciente. Genera una
+   * contraseña temporal segura, la guarda hasheada en el servidor y
+   * la devuelve UNA SOLA VEZ para que el psicólogo la comparta con el
+   * paciente. Después el paciente puede cambiarla desde /p/perfil.
+   */
+  resetPatientPassword: (patientId: string) =>
+    request<{
+      ok: true;
+      username: string;
+      new_password: string;
+      message: string;
+    }>(`/api/patients/${patientId}/reset-password`, { method: "POST" }),
   validatePatientInvite: (token: string) =>
     request<{
       valid: boolean;

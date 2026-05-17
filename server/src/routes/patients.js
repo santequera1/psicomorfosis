@@ -1,4 +1,6 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 
@@ -450,6 +452,63 @@ router.delete("/emergency-contacts/:id", (req, res) => {
   ).run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "Contacto no encontrado" });
   res.status(204).end();
+});
+
+/**
+ * POST /api/patients/:id/reset-password
+ *
+ * Restablece la contraseña del portal del paciente.
+ * Permitido para:
+ *   - Cualquier staff con acceso al workspace del paciente (uso típico
+ *     cuando un paciente llama porque olvidó su contraseña).
+ *   - Platform admin desde cualquier workspace.
+ *
+ * Comportamiento: genera una contraseña temporal segura (12 chars
+ * alfanuméricos, sin caracteres confusos como 0/O/l/I), actualiza el
+ * hash, y la devuelve UNA SOLA VEZ al staff que lo pidió para que
+ * pueda compartirla con el paciente (WhatsApp/SMS/in person).
+ *
+ * NO se envía email automático para evitar dependencia de SMTP y para
+ * que el psicólogo controle el canal por donde se comparte.
+ *
+ * El paciente puede cambiarla después desde /p/perfil.
+ */
+router.post("/:id/reset-password", (req, res) => {
+  if (req.user.role === "paciente") {
+    return res.status(403).json({ error: "Solo staff puede restablecer contraseñas" });
+  }
+  // Buscar paciente — platform admin puede actuar sobre cualquier workspace.
+  const patient = req.user.is_platform_admin
+    ? db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id)
+    : db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
+  if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
+
+  const user = db.prepare(
+    "SELECT id, username FROM users WHERE patient_id = ? AND workspace_id = ? AND role = 'paciente'"
+  ).get(patient.id, patient.workspace_id);
+  if (!user) {
+    return res.status(400).json({
+      error: "Este paciente no tiene cuenta activa en el portal. Usa el flujo de invitación.",
+    });
+  }
+
+  // Generador de contraseña temporal: 12 chars del alfabeto
+  // alfanumérico SIN caracteres confusos (0/O, 1/l/I). Evita errores
+  // al dictarla por WhatsApp/llamada.
+  const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const tempPassword = Array.from(crypto.randomBytes(12))
+    .map((b) => ALPHABET[b % ALPHABET.length])
+    .join("");
+
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+    .run(bcrypt.hashSync(tempPassword, 10), user.id);
+
+  res.json({
+    ok: true,
+    username: user.username,
+    new_password: tempPassword,
+    message: "Contraseña temporal generada. Compártela con el paciente; podrá cambiarla después.",
+  });
 });
 
 export default router;

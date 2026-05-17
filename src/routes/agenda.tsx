@@ -186,40 +186,58 @@ function AgendaPage() {
           </div>
         </header>
 
+        {/* KPIs — stagger left-to-right (slide-in-from-left + fade)
+            con 80ms entre cada card. Más vistoso que el fade plano
+            anterior y consistente con el dashboard de inicio. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KpiCard
-            label={isOrg ? "Pacientes activos" : "Mis pacientes"}
-            value={String(patients.filter((p) => p.status === "activo").length)}
-            delta={{ neutral: true, value: "" }}
-            hint={`${patients.length} en total`}
-            icon={<ClipboardList className="h-4 w-4" />}
-          />
-          <KpiCard
-            label="Sesiones hoy"
-            value={String(todayAppointments.length)}
-            delta={{ neutral: true, value: "" }}
-            hint={`${todayAppointments.filter((a: any) => a.status === "atendida").length} atendidas`}
-            icon={<Calendar className="h-4 w-4" />}
-          />
-          <KpiCard
-            label="Tareas activas"
-            value={String(pendingTasks)}
-            delta={{ neutral: true, value: "" }}
-            hint={overdueTasks > 0 ? `${overdueTasks} vencidas` : "sin vencer"}
-            icon={<Brain className="h-4 w-4" />}
-            emphasis={overdueTasks > 0 ? "risk" : "default"}
-          />
-          <KpiCard
-            label="Docs por firmar"
-            value={String(pendingDocs)}
-            delta={{ neutral: true, value: "" }}
-            hint="pendiente firma"
-            icon={<FileSignature className="h-4 w-4" />}
-          />
+          {[
+            <KpiCard
+              label={isOrg ? "Pacientes activos" : "Mis pacientes"}
+              value={String(patients.filter((p) => p.status === "activo").length)}
+              delta={{ neutral: true, value: "" }}
+              hint={`${patients.length} en total`}
+              icon={<ClipboardList className="h-4 w-4" />}
+            />,
+            <KpiCard
+              label="Sesiones hoy"
+              value={String(todayAppointments.length)}
+              delta={{ neutral: true, value: "" }}
+              hint={`${todayAppointments.filter((a: any) => a.status === "atendida").length} atendidas`}
+              icon={<Calendar className="h-4 w-4" />}
+            />,
+            <KpiCard
+              label="Tareas activas"
+              value={String(pendingTasks)}
+              delta={{ neutral: true, value: "" }}
+              hint={overdueTasks > 0 ? `${overdueTasks} vencidas` : "sin vencer"}
+              icon={<Brain className="h-4 w-4" />}
+              emphasis={overdueTasks > 0 ? "risk" : "default"}
+            />,
+            <KpiCard
+              label="Docs por firmar"
+              value={String(pendingDocs)}
+              delta={{ neutral: true, value: "" }}
+              hint="pendiente firma"
+              icon={<FileSignature className="h-4 w-4" />}
+            />,
+          ].map((node, i) => (
+            <div
+              key={i}
+              className="animate-in fade-in slide-in-from-left-3 duration-500 fill-mode-backwards"
+              style={{ animationDelay: `${120 + i * 80}ms` }}
+            >
+              {node}
+            </div>
+          ))}
         </section>
 
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <div className="xl:col-span-2 rounded-xl border border-line-200 bg-surface">
+          {/* Calendario principal: arranca el slide-in apenas terminan los
+              KPIs (último delay = 120 + 3*80 = 360ms). */}
+          <div
+            className="xl:col-span-2 rounded-xl border border-line-200 bg-surface animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+            style={{ animationDelay: "440ms" }}
+          >
             <div className="p-5 flex items-center justify-between gap-4 border-b border-line-100 flex-wrap">
               <div className="flex items-center gap-3">
                 {view !== "lista" && (
@@ -317,8 +335,16 @@ function AgendaPage() {
           </div>
 
           <div className="space-y-5">
+            {/* Sidebar derecho: cada card entra slide-from-right en
+                secuencia (520ms, 600ms, 680ms) — el calendario principal
+                ya entró a 440ms, así que el sidebar continúa el ritmo
+                desde el lado opuesto, dando un efecto "abanico" que se
+                cierra hacia el centro. */}
             {nextAppt && (
-              <div className="rounded-xl border border-brand-700/20 bg-brand-50/60 p-5">
+              <div
+                className="rounded-xl border border-brand-700/20 bg-brand-50/60 p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
+                style={{ animationDelay: "520ms" }}
+              >
                 <div className="text-[11px] uppercase tracking-widest text-brand-800 font-medium mb-2">Próximo paciente</div>
                 <h4 className="font-serif text-xl text-ink-900">{nextPatient?.name ?? nextAppt.patient_name}</h4>
                 <p className="text-xs text-ink-500 mt-1">
@@ -353,12 +379,19 @@ function AgendaPage() {
               </div>
             )}
 
-            <div className="rounded-xl border border-risk-high/25 bg-surface p-5">
+            <div
+              className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
+              style={{ animationDelay: "600ms" }}
+            >
               <h3 className="font-serif text-base text-ink-900 mb-1">Lista de riesgo</h3>
               <p className="text-xs text-ink-500 mb-3">Pacientes con bandera alta o crítica</p>
               <ul className="space-y-2.5">
-                {myPatientsRisk.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                {myPatientsRisk.map((p, i) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 text-sm animate-in fade-in slide-in-from-right-2 duration-400 fill-mode-backwards"
+                    style={{ animationDelay: `${720 + i * 40}ms` }}
+                  >
                     <button
                       onClick={() => navigate({ to: "/pacientes/$id", params: { id: p.id } })}
                       className="text-ink-900 truncate hover:text-brand-700 text-left"
@@ -372,7 +405,10 @@ function AgendaPage() {
               </ul>
             </div>
 
-            <div className="rounded-xl border border-line-200 bg-surface p-5">
+            <div
+              className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
+              style={{ animationDelay: "680ms" }}
+            >
               <h3 className="font-serif text-base text-ink-900 mb-3">Pendientes</h3>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center justify-between text-ink-700"><span>Tareas por revisar</span><span className="tabular text-ink-500">{pendingTasks}</span></li>

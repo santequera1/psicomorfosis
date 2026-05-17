@@ -278,6 +278,14 @@ router.post("/auth/patient/login", loginLimiter, (req, res) => {
   if (!bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: "Credenciales inválidas" });
   }
+  // Tracking de uso para que el psicólogo vea actividad reciente del
+  // paciente en su panel (campo lastLoginAt en /api/patients).
+  // El login de staff (auth.js) ya hace esto; el de paciente lo había
+  // omitido y el portal mostraba siempre el last_login viejo (típicamente
+  // el de la activación), causando confusión en el psicólogo.
+  try {
+    db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
+  } catch { /* no bloquear login si falla tracking */ }
   const token = signToken({
     id: user.id,
     workspace_id: user.workspace_id,
