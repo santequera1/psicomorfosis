@@ -234,11 +234,21 @@ function TareasPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   // Indicador visual del slot donde se insertará la tarea arrastrada.
-  // Se actualiza en dragover (sobre cards o sobre el área vacía de la
-  // columna) y se limpia en drop/dragend. La columna renderiza un
-  // placeholder dashed en ese índice para que el usuario vea
-  // exactamente dónde caerá la card antes de soltar.
   const [dragOverGap, setDragOverGap] = useState<{ status: TareaStatus; index: number } | null>(null);
+  // Cache de los midpoints Y originales de cada card por columna,
+  // capturado al iniciar el drag. Necesario para evitar un loop de
+  // retroalimentación: si calculáramos el gap contra las posiciones
+  // ACTUALES de las cards (que se mueven con translateY cuando
+  // shouldShift), entonces:
+  //   1. cursor en card N → gap = N → card N shiftea down
+  //   2. card N en su nueva posición ya no está bajo el cursor
+  //   3. evento dragover de la columna fija gap diferente
+  //   4. cards re-shiftean → cursor vuelve a estar sobre card N
+  //   5. loop infinito de parpadeo
+  // Con posiciones cacheadas el gap se calcula contra el layout
+  // ESTÁTICO original — todas las cards pueden moverse a placer sin
+  // afectar el cálculo del gap.
+  const cardMidpointsRef = useRef<Map<TareaStatus, number[]>>(new Map());
 
   // Deeplink desde notificaciones: si la URL trae ?id=N, abrir el modal
   // de edición de esa tarea. Limpiamos el search-param después para que
@@ -302,11 +312,27 @@ function TareasPage() {
   const handleDragStart = (e: React.DragEvent, taskId: number) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(taskId));
+    // ANTES de modificar cualquier estado, capturamos los midpoints Y
+    // de cada card por columna. Estos quedan inmutables durante todo
+    // el drag y son la base para calcular el gap en cada movimiento
+    // del cursor, evitando el loop de retroalimentación.
+    const snapshot = new Map<TareaStatus, number[]>();
+    for (const colEl of document.querySelectorAll<HTMLElement>("[data-tarea-column]")) {
+      const status = colEl.dataset.tareaColumn as TareaStatus | undefined;
+      if (!status) continue;
+      const mids: number[] = [];
+      for (const cardEl of colEl.querySelectorAll<HTMLElement>("[data-tarea-card]")) {
+        const r = cardEl.getBoundingClientRect();
+        mids.push(r.top + r.height / 2);
+      }
+      snapshot.set(status, mids);
+    }
+    cardMidpointsRef.current = snapshot;
     // setTimeout 0: diferimos el set del draggedId hasta el siguiente
     // tick para que el browser ya haya capturado el ghost del source
     // a su tamaño completo. Si seteamos sincronicamente, React
     // re-renderiza inmediato → el source colapsa a max-height 0 →
-    // el browser cancela el drag (no hay nada que arrastrar).
+    // el browser cancela el drag.
     setTimeout(() => setDraggedId(taskId), 0);
   };
   // dragEnd dispara siempre que termina el drag (drop o cancel) — limpia
@@ -314,29 +340,34 @@ function TareasPage() {
   const handleDragEnd = () => {
     setDraggedId(null);
     setDragOverGap(null);
+    cardMidpointsRef.current.clear();
   };
-  // dragOver a nivel de columna (sobre el área vacía). Si no estamos
-  // sobre una card, el placeholder se va al final.
+  // dragOver a nivel de columna: calcula gap usando los midpoints
+  // cacheados al iniciar el drag. NO usa posiciones actuales (que se
+  // mueven con translateY) — eso es lo que evita el parpadeo.
+  // Sin card-level dragover separado: la columna captura todo, el
+  // cursor pasa de una card a otra sin "salir" del column container.
   const handleColumnDragOver = (e: React.DragEvent, status: TareaStatus) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const colTasks = filteredTasks.filter((x) => x.status === status);
-    setDragOverGap({ status, index: colTasks.length });
-  };
-  // dragOver sobre una card específica. Calcula gap = idx (mitad sup)
-  // o idx + 1 (mitad inf). Stop propagation para que no se sobreescriba
-  // con el handler de la columna.
-  const handleCardDragOver = (e: React.DragEvent, status: TareaStatus, idx: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = "move";
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const isTopHalf = e.clientY < rect.top + rect.height / 2;
-    const gap = isTopHalf ? idx : idx + 1;
+    const mids = cardMidpointsRef.current.get(status) ?? [];
+    const y = e.clientY;
+    let gap = mids.length; // por default al final
+    for (let i = 0; i < mids.length; i++) {
+      if (y < mids[i]) { gap = i; break; }
+    }
     setDragOverGap((prev) => {
       if (prev?.status === status && prev.index === gap) return prev;
       return { status, index: gap };
     });
+  };
+  // Drop a nivel de columna: usa el gap ya calculado en el último
+  // dragover. No hace falta recalcular.
+  const handleColumnDrop = (e: React.DragEvent, status: TareaStatus) => {
+    const gap = dragOverGap?.status === status
+      ? dragOverGap.index
+      : (cardMidpointsRef.current.get(status)?.length ?? 0);
+    handleDropAtGap(e, status, gap);
   };
   /**
    * Drop sobre una columna con un gap index específico.
@@ -369,12 +400,6 @@ function TareasPage() {
       if (position === currentIdx) return; // mismo slot, no-op
     }
     moveMutation.mutate({ id: taskId, status, position });
-  };
-  // Drop sobre el área vacía de la columna (no sobre una card) →
-  // insertar al final.
-  const handleDropAtEnd = (e: React.DragEvent, status: TareaStatus) => {
-    const colTasks = filteredTasks.filter((x) => x.status === status);
-    handleDropAtGap(e, status, colTasks.length);
   };
 
   // Acciones rápidas
@@ -561,9 +586,7 @@ function TareasPage() {
                 professionals={professionals}
                 patients={patients}
                 onDragOver={(e) => handleColumnDragOver(e, col.status)}
-                onCardDragOver={(e, idx) => handleCardDragOver(e, col.status, idx)}
-                onDrop={(e) => handleDropAtEnd(e, col.status)}
-                onDropAtGap={(e, gap) => handleDropAtGap(e, col.status, gap)}
+                onDrop={(e) => handleColumnDrop(e, col.status)}
                 onTaskDragStart={handleDragStart}
                 onTaskDragEnd={handleDragEnd}
                 draggedId={draggedId}
@@ -655,7 +678,7 @@ function Select({
 
 function KanbanColumn({
   column, tasks, projects, professionals, patients,
-  onDragOver, onCardDragOver, onDrop, onDropAtGap, onTaskDragStart, onTaskDragEnd, draggedId, dragOverGap,
+  onDragOver, onDrop, onTaskDragStart, onTaskDragEnd, draggedId, dragOverGap,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
   animateIndex,
 }: {
@@ -664,13 +687,10 @@ function KanbanColumn({
   projects: TareaProject[];
   professionals: Professional[];
   patients: ApiPatient[];
+  /** Dragover en la columna: el padre computa gap usando midpoints
+      cacheados. Drop también va al padre con el gap actual. */
   onDragOver: (e: React.DragEvent) => void;
-  /** Dragover sobre una card específica (la columna pasa idx, la card calcula top/bottom). */
-  onCardDragOver: (e: React.DragEvent, idx: number) => void;
-  /** Drop sobre el área vacía de la columna (no sobre una card) → insertar al final. */
   onDrop: (e: React.DragEvent) => void;
-  /** Drop sobre una card específica con su gap index calculado por la card. */
-  onDropAtGap: (e: React.DragEvent, gapIndex: number) => void;
   onTaskDragStart: (e: React.DragEvent, id: number) => void;
   onTaskDragEnd: () => void;
   draggedId: number | null;
@@ -696,6 +716,7 @@ function KanbanColumn({
     : undefined;
   return (
     <div
+      data-tarea-column={column.status}
       onDragOver={onDragOver}
       onDrop={onDrop}
       className={cn(
@@ -780,12 +801,6 @@ function KanbanColumn({
                   style={cardStyle}
                   onDragStart={(e) => onTaskDragStart(e, t.id)}
                   onDragEnd={onTaskDragEnd}
-                  onCardDragOver={(e) => onCardDragOver(e, idx)}
-                  onCardDrop={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const isTopHalf = e.clientY < rect.top + rect.height / 2;
-                    onDropAtGap(e, isTopHalf ? idx : idx + 1);
-                  }}
                   onClick={() => onTaskClick(t)}
                   onDelete={() => onTaskDelete(t.id)}
                   onArchive={() => onTaskArchive(t.id)}
@@ -810,7 +825,7 @@ const DRAG_SHIFT_PX = 88;
 
 function TareaCard({
   task, project, assignee, patient, dragging,
-  onDragStart, onDragEnd, onCardDragOver, onCardDrop, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
+  onDragStart, onDragEnd, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
   style,
 }: {
   task: Tarea;
@@ -822,11 +837,6 @@ function TareaCard({
   /** dragend siempre dispara (drop o cancelado). Limpia el placeholder por si
       el usuario soltó fuera de cualquier zona válida. */
   onDragEnd?: () => void;
-  /** dragover sobre esta card — calcula gap y actualiza el placeholder. */
-  onCardDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
-  /** Drop sobre esta card. Recibe el evento para que la card calcule
-      si fue en su mitad superior o inferior y reporte el gap correcto. */
-  onCardDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   onClick: () => void;
   onDelete: () => void;
   onArchive: () => void;
@@ -844,14 +854,14 @@ function TareaCard({
 
   return (
     <div
+      data-tarea-card={task.id}
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      // dragover sobre la card: si el parent provee handler usa ese
-      // (calcula gap + actualiza placeholder); si no, fallback a un
-      // simple preventDefault para aceptar drops.
-      onDragOver={onCardDragOver ?? (onCardDrop ? (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; } : undefined)}
-      onDrop={onCardDrop}
+      // SIN onDragOver/onDrop a nivel de card: el handler vive en la
+      // columna (calcula gap contra midpoints cacheados al inicio del
+      // drag, evita el loop de retroalimentación). Los eventos
+      // bubblean naturalmente desde la card a la columna.
       onClick={onClick}
       style={style}
       className={cn(
