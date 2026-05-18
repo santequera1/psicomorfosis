@@ -1,5 +1,5 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -706,39 +706,74 @@ function KanbanColumn({
           <span className="text-xs text-ink-500">{tasks.length}</span>
         </div>
       </div>
+      {/* Índice de la card arrastrada DENTRO de esta columna (-1 si
+          está en otra columna o no hay drag). Lo usamos para calcular
+          la posición visual de cada card excluyendo el slot de la
+          dragged — eso permite shiftear las que quedan abajo del slot
+          de inserción. */}
       <div className="flex-1 flex flex-col gap-2">
         {tasks.length === 0 ? (
           // Empty state: si el drag está sobre esta columna mostramos
-          // un placeholder; si no, el mensaje "Sin tareas".
+          // un slot vacío (espacio reservado) en lugar del mensaje.
+          // La altura indica al usuario "aquí cabe la card".
           dragOverGap !== null ? (
-            <DropPlaceholder />
+            <div
+              aria-hidden
+              className="rounded-lg border-2 border-dashed border-brand-400/40 bg-brand-50/20 transition-all duration-200"
+              style={{ height: DRAG_SHIFT_PX - 8 }}
+            />
           ) : (
             <div className="text-xs text-ink-400 px-2 py-6 text-center border border-dashed border-line-200 rounded-lg">
               Sin tareas
             </div>
           )
         ) : (
-          tasks.map((t, idx) => {
-            // ¿La card actual es la que estamos arrastrando? Si sí, no
-            // mostramos placeholder en su slot original (sería redundante:
-            // el slot del placeholder es donde irá DESPUÉS, no donde está).
-            const isBeingDragged = draggedId === t.id;
-            const showPlaceholderBefore = dragOverGap === idx && !isBeingDragged;
-            return (
-              <Fragment key={t.id}>
-                {showPlaceholderBefore && <DropPlaceholder />}
+          (() => {
+            const draggedIdxInCol = draggedId
+              ? tasks.findIndex((x) => x.id === draggedId)
+              : -1;
+            return tasks.map((t, idx) => {
+              const isBeingDragged = draggedId === t.id;
+              // Posición visual en la lista SIN contar la dragged
+              // (porque la dragged está "colapsada" mientras se arrastra).
+              const visualIdx = isBeingDragged
+                ? -1
+                : (draggedIdxInCol >= 0 && draggedIdxInCol < idx ? idx - 1 : idx);
+              // Esta card debe desplazarse hacia abajo para abrir
+              // espacio en el slot donde caerá la dragged.
+              const shouldShift =
+                !isBeingDragged && dragOverGap !== null && visualIdx >= dragOverGap;
+              // Estilo combinado: si dragged, colapsa altura+opacity;
+              // si shift, translateY; transición suave para que todo
+              // se sienta como "abriendo paso", no como flash.
+              const cardStyle: React.CSSProperties = {
+                transition:
+                  "transform 220ms ease-out, max-height 220ms ease-out, opacity 150ms ease-out, margin 220ms ease-out",
+                ...(isBeingDragged
+                  ? {
+                      maxHeight: 0,
+                      opacity: 0,
+                      marginTop: 0,
+                      marginBottom: 0,
+                      overflow: "hidden",
+                      pointerEvents: "none",
+                    }
+                  : shouldShift
+                  ? { transform: `translateY(${DRAG_SHIFT_PX}px)` }
+                  : {}),
+              };
+              return (
                 <TareaCard
+                  key={t.id}
                   task={t}
                   project={projects.find((p) => p.id === t.project_id) ?? null}
                   assignee={professionals.find((p) => p.id === t.assignee_id) ?? null}
                   patient={patients.find((p) => p.id === t.patient_id) ?? null}
                   dragging={isBeingDragged}
+                  style={cardStyle}
                   onDragStart={(e) => onTaskDragStart(e, t.id)}
                   onDragEnd={onTaskDragEnd}
                   onCardDragOver={(e) => onCardDragOver(e, idx)}
-                  // Cada card es drop zone. Reporta gap = idx (mitad superior)
-                  // o idx + 1 (mitad inferior), calculado contra la mitad de
-                  // su altura. El parent traduce gap → backend position.
                   onCardDrop={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const isTopHalf = e.clientY < rect.top + rect.height / 2;
@@ -750,40 +785,26 @@ function KanbanColumn({
                   onDuplicate={() => onTaskDuplicate(t.id)}
                   onToggleDone={() => onTaskToggleDone(t)}
                 />
-              </Fragment>
-            );
-          })
-        )}
-        {/* Placeholder al FINAL: aparece cuando el drag se posiciona
-            después de la última card (o sobre el área vacía de la
-            columna). Lo mostramos siempre que dragOverGap === length,
-            excepto si la única card es la dragged. */}
-        {dragOverGap !== null && dragOverGap === tasks.length && tasks.length > 0 && (
-          <DropPlaceholder />
+              );
+            });
+          })()
         )}
       </div>
     </div>
   );
 }
 
-/**
- * Placeholder visual donde caerá la card arrastrada. Visualiza el slot
- * para que el usuario sepa exactamente dónde va a soltar antes de soltar.
- * Misma altura aproximada que una TareaCard típica para que no haya
- * salto visual entre el placeholder y la card real cuando se suelta.
- */
-function DropPlaceholder() {
-  return (
-    <div
-      aria-hidden
-      className="h-20 rounded-lg border-2 border-dashed border-brand-400 bg-brand-50/40 pointer-events-none animate-in fade-in zoom-in-95 duration-150"
-    />
-  );
-}
+// Altura aproximada de una TareaCard (px). Se usa para calcular cuánto
+// desplazar las cards inferiores cuando se arrastra una encima para
+// "abrir espacio". Es un estimado: cards muy altas o muy bajas pueden
+// dejar un gap visual un poco off, pero es lo suficientemente bueno
+// para que el efecto se sienta natural sin medir el DOM dinámicamente.
+const DRAG_SHIFT_PX = 88;
 
 function TareaCard({
   task, project, assignee, patient, dragging,
   onDragStart, onDragEnd, onCardDragOver, onCardDrop, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
+  style,
 }: {
   task: Tarea;
   project: TareaProject | null;
@@ -804,6 +825,9 @@ function TareaCard({
   onArchive: () => void;
   onDuplicate: () => void;
   onToggleDone: () => void;
+  /** style override desde el padre — usado por KanbanColumn para aplicar
+      transform/maxHeight durante drag y crear el efecto de "abrir espacio". */
+  style?: React.CSSProperties;
 }) {
   const overdue = isOverdue(task.due_date) && task.status !== "DONE";
   const isDone = task.status === "DONE";
@@ -822,6 +846,7 @@ function TareaCard({
       onDragOver={onCardDragOver ?? (onCardDrop ? (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; } : undefined)}
       onDrop={onCardDrop}
       onClick={onClick}
+      style={style}
       className={cn(
         "group rounded-lg bg-surface border border-line-200 p-3 cursor-grab active:cursor-grabbing",
         // Tilt sutil en hover: rotación de -1.5° + lift de 2px da la
