@@ -302,14 +302,42 @@ function TareasPage() {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
-  const handleDrop = (e: React.DragEvent, status: TareaStatus) => {
+  /**
+   * Drop sobre una columna con un gap index específico.
+   * `gapIndex` = posición en la lista visual donde se quiere insertar
+   * (0 = al inicio, N = al final). Cada TareaCard reporta su propio
+   * gap calculando si el cursor cayó en su mitad superior (gap = index)
+   * o inferior (gap = index + 1). Drop sobre el área vacía de la
+   * columna (debajo de todas las cards) cae al final.
+   *
+   * Para el backend la "position" final depende de si es mismo-columna
+   * (hay que ajustar por la auto-remoción del dragged) o cross-columna
+   * (es directa). El endpoint /tareas/:id/move ya maneja los shifts.
+   */
+  const handleDropAtGap = (e: React.DragEvent, status: TareaStatus, gapIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     const taskId = Number(e.dataTransfer.getData("text/plain"));
-    const t = tasks.find((x) => x.id === taskId);
     setDraggedId(null);
-    if (!t || t.status === status) return;
-    const tasksInColumn = filteredTasks.filter((x) => x.status === status);
-    moveMutation.mutate({ id: taskId, status, position: tasksInColumn.length });
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    const colTasks = filteredTasks.filter((x) => x.status === status).sort(sortTasks);
+    let position = gapIndex;
+    if (t.status === status) {
+      // Mismo columna: el dragged contaba en la lista visible, hay que
+      // restar 1 al gap si el destino está debajo de su posición actual
+      // (porque al "salir" desplaza todo arriba un slot visualmente).
+      const currentIdx = colTasks.findIndex((x) => x.id === taskId);
+      if (currentIdx >= 0 && currentIdx < gapIndex) position = gapIndex - 1;
+      if (position === currentIdx) return; // mismo slot, no-op
+    }
+    moveMutation.mutate({ id: taskId, status, position });
+  };
+  // Drop sobre el área vacía de la columna (no sobre una card) →
+  // insertar al final.
+  const handleDropAtEnd = (e: React.DragEvent, status: TareaStatus) => {
+    const colTasks = filteredTasks.filter((x) => x.status === status);
+    handleDropAtGap(e, status, colTasks.length);
   };
 
   // Acciones rápidas
@@ -496,7 +524,8 @@ function TareasPage() {
                 professionals={professionals}
                 patients={patients}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, col.status)}
+                onDrop={(e) => handleDropAtEnd(e, col.status)}
+                onDropAtGap={(e, gap) => handleDropAtGap(e, col.status, gap)}
                 onTaskDragStart={handleDragStart}
                 draggedId={draggedId}
                 onTaskClick={(t) => { setEditing(t); setDialogOpen(true); }}
@@ -586,7 +615,7 @@ function Select({
 
 function KanbanColumn({
   column, tasks, projects, professionals, patients,
-  onDragOver, onDrop, onTaskDragStart, draggedId,
+  onDragOver, onDrop, onDropAtGap, onTaskDragStart, draggedId,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
   animateIndex,
 }: {
@@ -596,7 +625,10 @@ function KanbanColumn({
   professionals: Professional[];
   patients: ApiPatient[];
   onDragOver: (e: React.DragEvent) => void;
+  /** Drop sobre el área vacía de la columna (no sobre una card) → insertar al final. */
   onDrop: (e: React.DragEvent) => void;
+  /** Drop sobre una card específica con su gap index calculado por la card. */
+  onDropAtGap: (e: React.DragEvent, gapIndex: number) => void;
   onTaskDragStart: (e: React.DragEvent, id: number) => void;
   draggedId: number | null;
   onTaskClick: (t: Tarea) => void;
@@ -639,7 +671,7 @@ function KanbanColumn({
             Sin tareas
           </div>
         ) : (
-          tasks.map((t) => (
+          tasks.map((t, idx) => (
             <TareaCard
               key={t.id}
               task={t}
@@ -648,6 +680,14 @@ function KanbanColumn({
               patient={patients.find((p) => p.id === t.patient_id) ?? null}
               dragging={draggedId === t.id}
               onDragStart={(e) => onTaskDragStart(e, t.id)}
+              // Cada card es drop zone. Reporta gap = idx (mitad superior)
+              // o idx + 1 (mitad inferior), calculado contra la mitad de
+              // su altura. El parent traduce gap → backend position.
+              onCardDrop={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const isTopHalf = e.clientY < rect.top + rect.height / 2;
+                onDropAtGap(e, isTopHalf ? idx : idx + 1);
+              }}
               onClick={() => onTaskClick(t)}
               onDelete={() => onTaskDelete(t.id)}
               onArchive={() => onTaskArchive(t.id)}
@@ -663,7 +703,7 @@ function KanbanColumn({
 
 function TareaCard({
   task, project, assignee, patient, dragging,
-  onDragStart, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
+  onDragStart, onCardDrop, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
 }: {
   task: Tarea;
   project: TareaProject | null;
@@ -671,6 +711,9 @@ function TareaCard({
   patient: ApiPatient | null;
   dragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
+  /** Drop sobre esta card. Recibe el evento para que la card calcule
+      si fue en su mitad superior o inferior y reporte el gap correcto. */
+  onCardDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   onClick: () => void;
   onDelete: () => void;
   onArchive: () => void;
@@ -687,6 +730,12 @@ function TareaCard({
     <div
       draggable
       onDragStart={onDragStart}
+      // dragOver con preventDefault es necesario para que el browser
+      // acepte drops sobre esta card. stopPropagation impide que el
+      // dragover bubblee a la columna (que también lo escucha) — no
+      // hace daño pero evita duplicación de cálculos.
+      onDragOver={onCardDrop ? (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; } : undefined}
+      onDrop={onCardDrop}
       onClick={onClick}
       className={cn(
         "group rounded-lg bg-surface border border-line-200 p-3 cursor-grab active:cursor-grabbing",
