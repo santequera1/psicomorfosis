@@ -302,7 +302,12 @@ function TareasPage() {
   const handleDragStart = (e: React.DragEvent, taskId: number) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(taskId));
-    setDraggedId(taskId);
+    // setTimeout 0: diferimos el set del draggedId hasta el siguiente
+    // tick para que el browser ya haya capturado el ghost del source
+    // a su tamaño completo. Si seteamos sincronicamente, React
+    // re-renderiza inmediato → el source colapsa a max-height 0 →
+    // el browser cancela el drag (no hay nada que arrastrar).
+    setTimeout(() => setDraggedId(taskId), 0);
   };
   // dragEnd dispara siempre que termina el drag (drop o cancel) — limpia
   // el ghost por si el usuario soltó fuera de cualquier zona válida.
@@ -751,12 +756,14 @@ function KanbanColumn({
                   "transform 220ms ease-out, max-height 220ms ease-out, opacity 150ms ease-out, margin 220ms ease-out",
                 ...(isBeingDragged
                   ? {
+                      // OJO: NO usamos pointerEvents:none porque cortaba el
+                      // dragend; HTML5 DnD necesita que el source siga
+                      // pudiendo recibir eventos durante el drag.
                       maxHeight: 0,
                       opacity: 0,
                       marginTop: 0,
                       marginBottom: 0,
                       overflow: "hidden",
-                      pointerEvents: "none",
                     }
                   : shouldShift
                   ? { transform: `translateY(${DRAG_SHIFT_PX}px)` }
