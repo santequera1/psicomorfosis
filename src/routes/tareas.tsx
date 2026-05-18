@@ -1,5 +1,5 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -233,6 +233,12 @@ function TareasPage() {
   const [editing, setEditing] = useState<Tarea | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draggedId, setDraggedId] = useState<number | null>(null);
+  // Indicador visual del slot donde se insertará la tarea arrastrada.
+  // Se actualiza en dragover (sobre cards o sobre el área vacía de la
+  // columna) y se limpia en drop/dragend. La columna renderiza un
+  // placeholder dashed en ese índice para que el usuario vea
+  // exactamente dónde caerá la card antes de soltar.
+  const [dragOverGap, setDragOverGap] = useState<{ status: TareaStatus; index: number } | null>(null);
 
   // Deeplink desde notificaciones: si la URL trae ?id=N, abrir el modal
   // de edición de esa tarea. Limpiamos el search-param después para que
@@ -298,9 +304,34 @@ function TareasPage() {
     e.dataTransfer.setData("text/plain", String(taskId));
     setDraggedId(taskId);
   };
-  const handleDragOver = (e: React.DragEvent) => {
+  // dragEnd dispara siempre que termina el drag (drop o cancel) — limpia
+  // el ghost por si el usuario soltó fuera de cualquier zona válida.
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverGap(null);
+  };
+  // dragOver a nivel de columna (sobre el área vacía). Si no estamos
+  // sobre una card, el placeholder se va al final.
+  const handleColumnDragOver = (e: React.DragEvent, status: TareaStatus) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    const colTasks = filteredTasks.filter((x) => x.status === status);
+    setDragOverGap({ status, index: colTasks.length });
+  };
+  // dragOver sobre una card específica. Calcula gap = idx (mitad sup)
+  // o idx + 1 (mitad inf). Stop propagation para que no se sobreescriba
+  // con el handler de la columna.
+  const handleCardDragOver = (e: React.DragEvent, status: TareaStatus, idx: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const isTopHalf = e.clientY < rect.top + rect.height / 2;
+    const gap = isTopHalf ? idx : idx + 1;
+    setDragOverGap((prev) => {
+      if (prev?.status === status && prev.index === gap) return prev;
+      return { status, index: gap };
+    });
   };
   /**
    * Drop sobre una columna con un gap index específico.
@@ -319,6 +350,7 @@ function TareasPage() {
     e.stopPropagation();
     const taskId = Number(e.dataTransfer.getData("text/plain"));
     setDraggedId(null);
+    setDragOverGap(null);
     const t = tasks.find((x) => x.id === taskId);
     if (!t) return;
     const colTasks = filteredTasks.filter((x) => x.status === status).sort(sortTasks);
@@ -523,11 +555,14 @@ function TareasPage() {
                 projects={projects}
                 professionals={professionals}
                 patients={patients}
-                onDragOver={handleDragOver}
+                onDragOver={(e) => handleColumnDragOver(e, col.status)}
+                onCardDragOver={(e, idx) => handleCardDragOver(e, col.status, idx)}
                 onDrop={(e) => handleDropAtEnd(e, col.status)}
                 onDropAtGap={(e, gap) => handleDropAtGap(e, col.status, gap)}
                 onTaskDragStart={handleDragStart}
+                onTaskDragEnd={handleDragEnd}
                 draggedId={draggedId}
+                dragOverGap={dragOverGap?.status === col.status ? dragOverGap.index : null}
                 onTaskClick={(t) => { setEditing(t); setDialogOpen(true); }}
                 onTaskDelete={(id) => deleteMutation.mutate(id)}
                 onTaskArchive={(id) => archiveMutation.mutate(id)}
@@ -615,7 +650,7 @@ function Select({
 
 function KanbanColumn({
   column, tasks, projects, professionals, patients,
-  onDragOver, onDrop, onDropAtGap, onTaskDragStart, draggedId,
+  onDragOver, onCardDragOver, onDrop, onDropAtGap, onTaskDragStart, onTaskDragEnd, draggedId, dragOverGap,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
   animateIndex,
 }: {
@@ -625,12 +660,18 @@ function KanbanColumn({
   professionals: Professional[];
   patients: ApiPatient[];
   onDragOver: (e: React.DragEvent) => void;
+  /** Dragover sobre una card específica (la columna pasa idx, la card calcula top/bottom). */
+  onCardDragOver: (e: React.DragEvent, idx: number) => void;
   /** Drop sobre el área vacía de la columna (no sobre una card) → insertar al final. */
   onDrop: (e: React.DragEvent) => void;
   /** Drop sobre una card específica con su gap index calculado por la card. */
   onDropAtGap: (e: React.DragEvent, gapIndex: number) => void;
   onTaskDragStart: (e: React.DragEvent, id: number) => void;
+  onTaskDragEnd: () => void;
   draggedId: number | null;
+  /** Si esta columna es el target del drag actual, índice del gap donde
+      caerá la card. null si el drag no está sobre esta columna. */
+  dragOverGap: number | null;
   onTaskClick: (t: Tarea) => void;
   onTaskDelete: (id: number) => void;
   onTaskArchive: (id: number) => void;
@@ -667,43 +708,82 @@ function KanbanColumn({
       </div>
       <div className="flex-1 flex flex-col gap-2">
         {tasks.length === 0 ? (
-          <div className="text-xs text-ink-400 px-2 py-6 text-center border border-dashed border-line-200 rounded-lg">
-            Sin tareas
-          </div>
+          // Empty state: si el drag está sobre esta columna mostramos
+          // un placeholder; si no, el mensaje "Sin tareas".
+          dragOverGap !== null ? (
+            <DropPlaceholder />
+          ) : (
+            <div className="text-xs text-ink-400 px-2 py-6 text-center border border-dashed border-line-200 rounded-lg">
+              Sin tareas
+            </div>
+          )
         ) : (
-          tasks.map((t, idx) => (
-            <TareaCard
-              key={t.id}
-              task={t}
-              project={projects.find((p) => p.id === t.project_id) ?? null}
-              assignee={professionals.find((p) => p.id === t.assignee_id) ?? null}
-              patient={patients.find((p) => p.id === t.patient_id) ?? null}
-              dragging={draggedId === t.id}
-              onDragStart={(e) => onTaskDragStart(e, t.id)}
-              // Cada card es drop zone. Reporta gap = idx (mitad superior)
-              // o idx + 1 (mitad inferior), calculado contra la mitad de
-              // su altura. El parent traduce gap → backend position.
-              onCardDrop={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const isTopHalf = e.clientY < rect.top + rect.height / 2;
-                onDropAtGap(e, isTopHalf ? idx : idx + 1);
-              }}
-              onClick={() => onTaskClick(t)}
-              onDelete={() => onTaskDelete(t.id)}
-              onArchive={() => onTaskArchive(t.id)}
-              onDuplicate={() => onTaskDuplicate(t.id)}
-              onToggleDone={() => onTaskToggleDone(t)}
-            />
-          ))
+          tasks.map((t, idx) => {
+            // ¿La card actual es la que estamos arrastrando? Si sí, no
+            // mostramos placeholder en su slot original (sería redundante:
+            // el slot del placeholder es donde irá DESPUÉS, no donde está).
+            const isBeingDragged = draggedId === t.id;
+            const showPlaceholderBefore = dragOverGap === idx && !isBeingDragged;
+            return (
+              <Fragment key={t.id}>
+                {showPlaceholderBefore && <DropPlaceholder />}
+                <TareaCard
+                  task={t}
+                  project={projects.find((p) => p.id === t.project_id) ?? null}
+                  assignee={professionals.find((p) => p.id === t.assignee_id) ?? null}
+                  patient={patients.find((p) => p.id === t.patient_id) ?? null}
+                  dragging={isBeingDragged}
+                  onDragStart={(e) => onTaskDragStart(e, t.id)}
+                  onDragEnd={onTaskDragEnd}
+                  onCardDragOver={(e) => onCardDragOver(e, idx)}
+                  // Cada card es drop zone. Reporta gap = idx (mitad superior)
+                  // o idx + 1 (mitad inferior), calculado contra la mitad de
+                  // su altura. El parent traduce gap → backend position.
+                  onCardDrop={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const isTopHalf = e.clientY < rect.top + rect.height / 2;
+                    onDropAtGap(e, isTopHalf ? idx : idx + 1);
+                  }}
+                  onClick={() => onTaskClick(t)}
+                  onDelete={() => onTaskDelete(t.id)}
+                  onArchive={() => onTaskArchive(t.id)}
+                  onDuplicate={() => onTaskDuplicate(t.id)}
+                  onToggleDone={() => onTaskToggleDone(t)}
+                />
+              </Fragment>
+            );
+          })
+        )}
+        {/* Placeholder al FINAL: aparece cuando el drag se posiciona
+            después de la última card (o sobre el área vacía de la
+            columna). Lo mostramos siempre que dragOverGap === length,
+            excepto si la única card es la dragged. */}
+        {dragOverGap !== null && dragOverGap === tasks.length && tasks.length > 0 && (
+          <DropPlaceholder />
         )}
       </div>
     </div>
   );
 }
 
+/**
+ * Placeholder visual donde caerá la card arrastrada. Visualiza el slot
+ * para que el usuario sepa exactamente dónde va a soltar antes de soltar.
+ * Misma altura aproximada que una TareaCard típica para que no haya
+ * salto visual entre el placeholder y la card real cuando se suelta.
+ */
+function DropPlaceholder() {
+  return (
+    <div
+      aria-hidden
+      className="h-20 rounded-lg border-2 border-dashed border-brand-400 bg-brand-50/40 pointer-events-none animate-in fade-in zoom-in-95 duration-150"
+    />
+  );
+}
+
 function TareaCard({
   task, project, assignee, patient, dragging,
-  onDragStart, onCardDrop, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
+  onDragStart, onDragEnd, onCardDragOver, onCardDrop, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
 }: {
   task: Tarea;
   project: TareaProject | null;
@@ -711,6 +791,11 @@ function TareaCard({
   patient: ApiPatient | null;
   dragging: boolean;
   onDragStart: (e: React.DragEvent) => void;
+  /** dragend siempre dispara (drop o cancelado). Limpia el placeholder por si
+      el usuario soltó fuera de cualquier zona válida. */
+  onDragEnd?: () => void;
+  /** dragover sobre esta card — calcula gap y actualiza el placeholder. */
+  onCardDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
   /** Drop sobre esta card. Recibe el evento para que la card calcule
       si fue en su mitad superior o inferior y reporte el gap correcto. */
   onCardDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -730,11 +815,11 @@ function TareaCard({
     <div
       draggable
       onDragStart={onDragStart}
-      // dragOver con preventDefault es necesario para que el browser
-      // acepte drops sobre esta card. stopPropagation impide que el
-      // dragover bubblee a la columna (que también lo escucha) — no
-      // hace daño pero evita duplicación de cálculos.
-      onDragOver={onCardDrop ? (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; } : undefined}
+      onDragEnd={onDragEnd}
+      // dragover sobre la card: si el parent provee handler usa ese
+      // (calcula gap + actualiza placeholder); si no, fallback a un
+      // simple preventDefault para aceptar drops.
+      onDragOver={onCardDragOver ?? (onCardDrop ? (e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; } : undefined)}
       onDrop={onCardDrop}
       onClick={onClick}
       className={cn(
