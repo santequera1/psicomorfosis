@@ -858,7 +858,7 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
           derecha. La doble background (gradient encima del color base)
           permite que el wash aporte tinte sin tapar el cream. */}
       <div
-        className="relative h-full overflow-hidden rounded-2xl border border-line-200/70 transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
+        className="relative h-full overflow-hidden rounded-md border border-line-200/70 transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
         style={{
           backgroundColor: "oklch(0.995 0.003 80)",
           backgroundImage: wash,

@@ -240,8 +240,21 @@ export function setTheme(pref: ThemePreference): void {
 }
 
 export function setThemeFamily(family: ThemeFamily): void {
+  // Si saliendo de un tema dark-only (Aurora) hacia uno que sí soporta
+  // modo claro: forzamos mode="claro" porque el usuario quedaba atrapado
+  // en oscuro. Al elegir Aurora habíamos forzado mode=oscuro (porque
+  // Aurora no tiene claro). Al volver a otra familia, esa fuerza
+  // persistía y la nueva familia se mostraba en su tono oscuro — no
+  // era lo esperado por el usuario que solo cambió de familia.
+  const prev = getThemeFamily();
+  const wasDarkOnly = DARK_ONLY_THEMES.has(prev) && !DARK_ONLY_THEMES.has(family);
   if (typeof window !== "undefined") window.localStorage.setItem(KEY_FAMILY, family);
-  applyTheme(getTheme(), family, getFontFamily());
+  let nextMode = getTheme();
+  if (wasDarkOnly && typeof window !== "undefined") {
+    nextMode = "claro";
+    window.localStorage.setItem(KEY_MODE, "claro");
+  }
+  applyTheme(nextMode, family, getFontFamily());
 }
 
 export function setFontFamily(font: FontFamily): void {
@@ -257,8 +270,13 @@ export function setFontFamily(font: FontFamily): void {
 export function toggleTheme(): ThemePreference {
   const current = getTheme();
   const family = getThemeFamily();
-  // Para temas dark-only, el toggle no tiene sentido — ignorar.
-  if (DARK_ONLY_THEMES.has(family)) return "oscuro";
+  // En temas dark-only (Aurora), el toggle hace de "reset": vuelve a
+  // la familia default (clinico) en modo claro. Antes el botón quedaba
+  // sin acción y confundía. Ahora actúa como "salir de este tema dark".
+  if (DARK_ONLY_THEMES.has(family)) {
+    setThemeFamily("clinico"); // ya resetea mode a claro internamente
+    return "claro";
+  }
 
   let effectiveDark = false;
   if (current === "oscuro") effectiveDark = true;

@@ -690,8 +690,15 @@ function TareaCard({
       onClick={onClick}
       className={cn(
         "group rounded-lg bg-surface border border-line-200 p-3 cursor-grab active:cursor-grabbing",
-        "hover:border-brand-400 hover:shadow-soft transition-all",
-        dragging && "opacity-50 ring-2 ring-brand-400"
+        // Tilt sutil en hover: rotación de -1.5° + lift de 2px da la
+        // sensación de "card despegándose para ser agarrada". transform
+        // no afecta layout (no rompe drag-and-drop como pasaba con
+        // wrappers o cambios de padding). Vuelve a 0 al active para
+        // emular "ya la agarraste".
+        "transform-gpu transition-all duration-200 ease-out",
+        "hover:border-brand-400 hover:shadow-card hover:-translate-y-0.5 hover:-rotate-[1.5deg]",
+        "active:rotate-0 active:translate-y-0 active:duration-75",
+        dragging && "opacity-50 ring-2 ring-brand-400 rotate-0"
       )}
     >
       <div className="flex items-start gap-2 mb-2">

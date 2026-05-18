@@ -836,6 +836,14 @@ function AparienciaPanel() {
     if (family === "aurora" && mode !== "oscuro") {
       setMode("oscuro");
     }
+    // Inverso: si salimos de Aurora (u otro dark-only), setThemeFamily
+    // ya resetea mode a "claro" en localStorage internamente. Sincronizamos
+    // el state local para que la UI del selector de modo refleje el cambio
+    // (antes el botón seguía mostrando "oscuro" como seleccionado).
+    if (family !== "aurora" && mode === "oscuro") {
+      const persisted = getThemeMode();
+      if (persisted !== mode) setMode(persisted);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family]);
   useEffect(() => {
