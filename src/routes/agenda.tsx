@@ -330,7 +330,18 @@ function AgendaPage() {
 
             {view === "dia" && <DayView date={currentDate} onPick={setDetailSlot} filterAppts={filterAppts} />}
             {view === "semana" && <WeekView date={currentDate} onPick={(slot) => setDetailSlot(slot as any)} filterAppts={filterAppts} />}
-            {view === "mes" && <MonthView date={currentDate} />}
+            {view === "mes" && (
+              <MonthView
+                date={currentDate}
+                onPickDay={(d) => {
+                  // Click en un día del mes → cambiar a vista Día con esa
+                  // fecha seleccionada. Más ágil que tener que cambiar
+                  // manualmente el vista + navegar.
+                  setCurrentDate(d);
+                  setView("dia");
+                }}
+              />
+            )}
             {view === "lista" && <ListView onPick={setDetailSlot} filterAppts={filterAppts} />}
           </div>
 
@@ -659,7 +670,7 @@ function WeekView({ date, onPick, filterAppts }: {
   );
 }
 
-function MonthView({ date }: { date: Date }) {
+function MonthView({ date, onPickDay }: { date: Date; onPickDay?: (d: Date) => void }) {
   const year = date.getFullYear();
   const month = date.getMonth();
   const firstDay = new Date(year, month, 1);
@@ -698,21 +709,26 @@ function MonthView({ date }: { date: Date }) {
         {cells.map((d, i) => {
           const isToday = d === todayDay;
           const count = d ? byDay[d] ?? 0 : 0;
+          // Días con número son clickeables (navegan al Día). Días
+          // null (relleno antes del 1) renderizan como div estático.
+          const Cell = d && onPickDay ? "button" : "div";
           return (
-            <div
+            <Cell
               key={i}
+              type={d && onPickDay ? "button" : undefined}
+              onClick={d && onPickDay ? () => onPickDay(new Date(year, month, d)) : undefined}
               className={
-                "relative aspect-square rounded-md border p-1.5 text-xs transition-colors " +
+                "relative aspect-square rounded-md border p-1.5 text-xs transition-all text-left " +
                 (!d ? "border-transparent" :
-                 isToday ? "border-brand-700 bg-brand-50 text-ink-900 font-medium" :
-                 "border-line-200 hover:border-brand-400 bg-surface text-ink-700")
+                 isToday ? "border-brand-700 bg-brand-50 text-ink-900 font-medium hover:bg-brand-50/80 cursor-pointer" :
+                 "border-line-200 hover:border-brand-400 hover:bg-bg-100/40 bg-surface text-ink-700 cursor-pointer")
               }
             >
               {d && (
                 <>
                   <div className="tabular">{d}</div>
                   {count > 0 && (
-                    <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between">
+                    <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between pointer-events-none">
                       <span className="text-[10px] tabular text-ink-500">{count}</span>
                       <div className="flex gap-0.5">
                         {Array.from({ length: Math.min(count, 3) }).map((_, k) => (
@@ -723,7 +739,7 @@ function MonthView({ date }: { date: Date }) {
                   )}
                 </>
               )}
-            </div>
+            </Cell>
           );
         })}
       </div>

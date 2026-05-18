@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useWorkspace } from "@/lib/workspace";
 import { api, type ApiPatient } from "@/lib/api";
 import { displayPatientName } from "@/lib/utils";
@@ -22,6 +23,7 @@ type Props = {
 
 export function NewAppointmentModal({ patients, prefilledPatient = null, onClose, onCreated }: Props) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
@@ -46,7 +48,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
     : [];
 
   const mu = useMutation({
-    mutationFn: () => api.createAppointment({
+    mutationFn: (): Promise<{ id?: number }> => api.createAppointment({
       patient_id: selected?.id ?? null,
       patient_name: selected?.name ?? "",
       professional: selected?.professional ?? "",
@@ -59,12 +61,22 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
       room: modality === "tele" ? "Telepsicología" : "",
       status: "confirmada",
       notes,
-    } as any),
-    onSuccess: () => {
+    } as any) as Promise<{ id?: number }>,
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.invalidateQueries({ queryKey: ["all-appointments"] });
       qc.invalidateQueries({ queryKey: ["patients"] });
-      toast.success("Cita agendada");
+      // Toast con botón "Ver" que lleva a la cita recién creada en
+      // /agenda. Útil cuando el psicólogo agenda desde otro lugar
+      // (FAB, ficha del paciente, comando rápido) y quiere ir al
+      // contexto de la cita sin tener que navegar manualmente.
+      const apptId = data?.id;
+      toast.success("Cita agendada", apptId ? {
+        action: {
+          label: "Ver",
+          onClick: () => navigate({ to: "/agenda", search: { appt: apptId } as any }),
+        },
+      } : undefined);
       onCreated?.();
       onClose();
     },

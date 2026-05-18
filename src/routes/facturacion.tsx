@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,8 +18,17 @@ import { BankAccountModal } from "@/components/wallet/BankAccountModal";
 import { WalletKpiCard } from "@/components/wallet/WalletKpiCard";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
+// Deeplink: /facturacion?id=R-9-2026-0001 abre directo el detalle de
+// ese recibo. Lo usa el toast "Recibo creado · Ver" para llevar al
+// psicólogo al recibo recién generado.
+type FacturacionSearch = { id?: string };
+
 export const Route = createFileRoute("/facturacion")({
   head: () => ({ meta: [{ title: "Recibos — Psicomorfosis" }] }),
+  validateSearch: (s): FacturacionSearch => {
+    const v = typeof s.id === "string" ? s.id : undefined;
+    return v && v.trim() ? { id: v } : {};
+  },
   component: FacturacionPage,
 });
 
@@ -69,6 +78,24 @@ function FacturacionPage() {
     queryKey: ["invoices"],
     queryFn: () => api.listInvoices(),
   });
+
+  // Deeplink: si llegamos a /facturacion?id=R-X-… abrimos el detalle
+  // del recibo apenas el listado resuelva. Limpiamos el param para que
+  // un reload no reabra el modal automáticamente.
+  const search = useSearch({ from: "/facturacion" });
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!search.id || invoices.length === 0) return;
+    const found = invoices.find((inv) => inv.id === search.id);
+    if (found) {
+      setDetail(found);
+      navigate({
+        to: "/facturacion",
+        search: (prev: FacturacionSearch) => ({ ...prev, id: undefined }),
+        replace: true,
+      });
+    }
+  }, [search.id, invoices, navigate]);
   const { data: summary } = useQuery({
     queryKey: ["invoices-summary"],
     queryFn: () => api.invoicesSummary(),
@@ -418,6 +445,7 @@ export function ReceiptFormModal({
   presetDate?: string;
 }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [patientId, setPatientId] = useState<string | null>(invoice?.patient_id ?? presetPatientId ?? null);
   const [patientName, setPatientName] = useState<string>(invoice?.patient_name ?? presetPatientName ?? "");
   const [concept, setConcept] = useState(invoice?.concept ?? presetConcept ?? "Sesión individual");
@@ -485,10 +513,23 @@ export function ReceiptFormModal({
         ? api.createInvoice(body)
         : api.updateInvoice(invoice!.id, body);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       qc.invalidateQueries({ queryKey: ["invoices-summary"] });
-      toast.success(mode === "create" ? "Recibo creado" : "Recibo actualizado");
+      // En "create" mostramos botón "Ver" en el toast que lleva al
+      // recibo recién generado (via deeplink ?id=…). Útil cuando se
+      // crea desde el FAB o el dashboard — el psicólogo no tiene que
+      // navegar a /facturacion y buscar el recibo en la tabla.
+      if (mode === "create" && data?.id) {
+        toast.success("Recibo creado", {
+          action: {
+            label: "Ver",
+            onClick: () => navigate({ to: "/facturacion", search: { id: data.id } as any }),
+          },
+        });
+      } else {
+        toast.success(mode === "create" ? "Recibo creado" : "Recibo actualizado");
+      }
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),

@@ -206,14 +206,89 @@ export function AdminDashboard() {
         ))}
       </section>
 
-      {/* Centro operativo: lo que requiere acción del psicólogo HOY. Cada
-          card es clickeable y va al módulo correspondiente con un filtro útil.
-          La sección y cada pending card hacen stagger continuando la cascada
-          de los KPIs (que terminan ~480ms). */}
+      {/* PRIMERO en el flujo visual: citas del día + pacientes en riesgo —
+          son piezas que SIEMPRE se renderizan (no dependen de un boolean
+          que pueda cambiar mid-load). Antes "Por revisar" iba arriba y
+          eso causaba layout shift en cold load: la sección era
+          condicional a totalPendingItems > 0 (que solo es true cuando
+          dashStats resuelve), así que mountaba tarde y empujaba todo
+          abajo. Ahora va al final, donde su aparición tardía no afecta
+          a estas dos cards. */}
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div
+          className="xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: delayForSection(520) }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-serif text-lg text-ink-900">Próximas sesiones</h3>
+              <p className="text-xs text-ink-500">Hoy · {todayAppointments.length} cita{todayAppointments.length === 1 ? "" : "s"}</p>
+            </div>
+            <Link to="/agenda" className="text-xs text-brand-700 font-medium hover:underline">Ver agenda</Link>
+          </div>
+          {todayAppointments.length === 0 ? (
+            <div className="py-8 text-center text-xs text-ink-500">Sin citas para hoy.</div>
+          ) : (
+            <ul className="space-y-2 max-h-95 overflow-y-auto pr-1">
+              {todayAppointments.map((s: any) => <UpcomingSessionRow key={s.id} session={s} />)}
+            </ul>
+          )}
+        </div>
+
+        <div
+          className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          style={{ animationDelay: delayForSection(600) }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-serif text-lg text-ink-900 flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-risk-high" />
+                Riesgo activo
+              </h3>
+              <p className="text-xs text-ink-500">{riskActive.length} paciente{riskActive.length === 1 ? "" : "s"} · seguimiento</p>
+            </div>
+          </div>
+          {riskActive.length === 0 ? (
+            <div className="py-8 text-center text-xs text-ink-500">Ningún paciente con riesgo alto/crítico.</div>
+          ) : (
+            <>
+              <ul className="space-y-3">
+                {riskActive.map((p) => (
+                  <li key={p.id}>
+                    <Link to="/pacientes/$id" params={{ id: p.id }} className="block rounded-lg border border-line-200 p-3 hover:border-risk-high/30 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-ink-900 truncate">{displayPatientName(p)}</div>
+                          <div className="text-xs text-ink-500 truncate">{p.reason}</div>
+                        </div>
+                        <RiskBadge risk={p.risk} types={p.riskTypes} compact />
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
+                        <span>{p.professional}</span>
+                        <span className="text-brand-700 font-medium">{p.nextSession ?? "Sin próxima cita"}</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <button onClick={openCrisis} className="mt-4 w-full text-xs text-risk-high font-medium hover:underline">
+                Abrir protocolo de seguimiento →
+              </button>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* "Por revisar": cola operativa del psicólogo. Sigue siendo
+          condicional a totalPendingItems > 0; al estar AL FINAL del
+          flujo visual (no entre KPIs y Próximas sesiones), su mount
+          tardío ya no empuja a esos elementos hacia abajo, solo a las
+          secciones de contexto clínico que vienen después — esas
+          también renderizan empty states así que el shift es mínimo. */}
       {totalPendingItems > 0 && pendingItems && (
         <section
           className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-          style={{ animationDelay: delayForSection(520) }}
+          style={{ animationDelay: delayForSection(680) }}
         >
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -261,7 +336,7 @@ export function AdminDashboard() {
               <div
                 key={i}
                 className="animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-                style={{ animationDelay: delayForSection(640 + i * 70) }}
+                style={{ animationDelay: delayForSection(760 + i * 70) }}
               >
                 {node}
               </div>
@@ -269,74 +344,6 @@ export function AdminDashboard() {
           </div>
         </section>
       )}
-
-      {/* PRIMERO: lo urgente del día — citas + riesgo. Continuamos la
-          cascada después de "Por revisar". delayForSection ajusta el delay
-          si la sección llega tarde por cargas asincrónicas. */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div
-          className="xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-          style={{ animationDelay: delayForSection(900) }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-serif text-lg text-ink-900">Próximas sesiones</h3>
-              <p className="text-xs text-ink-500">Hoy · {todayAppointments.length} cita{todayAppointments.length === 1 ? "" : "s"}</p>
-            </div>
-            <Link to="/agenda" className="text-xs text-brand-700 font-medium hover:underline">Ver agenda</Link>
-          </div>
-          {todayAppointments.length === 0 ? (
-            <div className="py-8 text-center text-xs text-ink-500">Sin citas para hoy.</div>
-          ) : (
-            <ul className="space-y-2 max-h-95 overflow-y-auto pr-1">
-              {todayAppointments.map((s: any) => <UpcomingSessionRow key={s.id} session={s} />)}
-            </ul>
-          )}
-        </div>
-
-        <div
-          className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
-          style={{ animationDelay: delayForSection(980) }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-serif text-lg text-ink-900 flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-risk-high" />
-                Riesgo activo
-              </h3>
-              <p className="text-xs text-ink-500">{riskActive.length} paciente{riskActive.length === 1 ? "" : "s"} · seguimiento</p>
-            </div>
-          </div>
-          {riskActive.length === 0 ? (
-            <div className="py-8 text-center text-xs text-ink-500">Ningún paciente con riesgo alto/crítico.</div>
-          ) : (
-            <>
-              <ul className="space-y-3">
-                {riskActive.map((p) => (
-                  <li key={p.id}>
-                    <Link to="/pacientes/$id" params={{ id: p.id }} className="block rounded-lg border border-line-200 p-3 hover:border-risk-high/30 transition-colors">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-ink-900 truncate">{displayPatientName(p)}</div>
-                          <div className="text-xs text-ink-500 truncate">{p.reason}</div>
-                        </div>
-                        <RiskBadge risk={p.risk} types={p.riskTypes} compact />
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-ink-500">
-                        <span>{p.professional}</span>
-                        <span className="text-brand-700 font-medium">{p.nextSession ?? "Sin próxima cita"}</span>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <button onClick={openCrisis} className="mt-4 w-full text-xs text-risk-high font-medium hover:underline">
-                Abrir protocolo de seguimiento →
-              </button>
-            </>
-          )}
-        </div>
-      </section>
 
       {/* DESPUÉS: distribuciones / contexto clínico */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
