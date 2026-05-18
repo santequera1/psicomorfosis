@@ -487,13 +487,10 @@ function TareasPage() {
         <div className="overflow-x-auto sm:overflow-x-visible -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex gap-4 min-w-max sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
             {columns.map((col, i) => (
-              <div
-                key={col.id}
-                className="animate-in fade-in duration-500 fill-mode-backwards"
-                style={{ animationDelay: `${120 + i * 90}ms` }}
-              >
               <KanbanColumn
+                key={col.id}
                 column={col}
+                animateIndex={i}
                 tasks={filteredTasks.filter((t) => t.status === col.status).sort(sortTasks)}
                 projects={projects}
                 professionals={professionals}
@@ -514,7 +511,6 @@ function TareasPage() {
                   moveMutation.mutate({ id: t.id, status: nextStatus, position: 0 });
                 }}
               />
-              </div>
             ))}
           </div>
         </div>
@@ -592,6 +588,7 @@ function KanbanColumn({
   column, tasks, projects, professionals, patients,
   onDragOver, onDrop, onTaskDragStart, draggedId,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
+  animateIndex,
 }: {
   column: TareaColumn;
   tasks: Tarea[];
@@ -607,13 +604,27 @@ function KanbanColumn({
   onTaskArchive: (id: number) => void;
   onTaskDuplicate: (id: number) => void;
   onTaskToggleDone: (t: Tarea) => void;
+  /** Índice para stagger de entrada. Aplicamos las clases de animación
+      DIRECTO sobre el div de la columna (no en un wrapper) porque envolver
+      la columna rompía el drag-and-drop: el grid alargaba la fila a la
+      altura de la columna más alta, el wrapper quedaba con espacio vacío
+      debajo, y al arrastrar sobre ese espacio los eventos onDragOver/Drop
+      no llegaban a la columna interna. */
+  animateIndex?: number;
 }) {
   const Icon = column.icon ? COLUMN_ICONS[column.icon] ?? Circle : Circle;
+  const animDelay = typeof animateIndex === "number"
+    ? `${120 + animateIndex * 90}ms`
+    : undefined;
   return (
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className="w-70 sm:w-auto shrink-0 flex flex-col rounded-xl bg-bg border border-line-200 p-3 min-h-75"
+      className={cn(
+        "w-70 sm:w-auto shrink-0 flex flex-col rounded-xl bg-bg border border-line-200 p-3 min-h-75",
+        typeof animateIndex === "number" && "animate-in fade-in duration-500 fill-mode-backwards",
+      )}
+      style={animDelay ? { animationDelay: animDelay } : undefined}
     >
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
