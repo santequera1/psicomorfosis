@@ -1784,6 +1784,13 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+  /** Crea una tarea en /tareas del platform admin con la info de la
+   *  solicitud (status TODO) y cierra la solicitud. Devuelve el id de
+   *  la tarea creada para que el frontend pueda hacer deeplink. */
+  platformTestRequestToTask: (id: number) =>
+    request<{ ok: true; task_id: number }>(`/api/platform/test-requests/${id}/to-task`, {
+      method: "POST",
+    }),
 
   // ─── Wallet de cuentas bancarias ────────────────────────────────────
   listBankAccounts: (params: { includeArchived?: boolean } = {}) =>

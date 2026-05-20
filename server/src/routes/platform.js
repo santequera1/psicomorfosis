@@ -736,4 +736,67 @@ router.patch("/test-requests/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * POST /api/platform/test-requests/:id/to-task
+ * Crea una tarea en /tareas del platform admin con la info de la
+ * solicitud y la cierra como "atendida". Permite organizar las
+ * solicitudes pendientes de implementación dentro del kanban
+ * personal del admin (Por hacer → En progreso → Revisión → Hecho).
+ *
+ * El status queda en TODO (Por hacer). El admin la mueve manualmente
+ * según el avance.
+ */
+router.post("/test-requests/:id/to-task", (req, res) => {
+  const r = db.prepare(`
+    SELECT tr.*, w.name AS workspace_name
+    FROM test_requests tr
+    LEFT JOIN workspaces w ON w.id = tr.workspace_id
+    WHERE tr.id = ?
+  `).get(req.params.id);
+  if (!r) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+  const adminWsId = req.user.workspace_id;
+  const now = new Date().toISOString();
+
+  // Cuerpo de la tarea: incluye contexto del solicitante para que el
+  // admin tenga toda la info al abrir la tarea, sin necesidad de
+  // volver a /platform/test-requests.
+  const descLines = [
+    r.reason ? `Solicitud: ${r.reason}` : null,
+    `Solicitado por: ${r.requester_name ?? "Psicólogo/a"}${r.workspace_name ? ` (${r.workspace_name})` : ""}`,
+    `Fecha de solicitud: ${r.created_at}`,
+    `Test request #${r.id}`,
+  ].filter(Boolean);
+  const description = descLines.join("\n");
+
+  const tx = db.transaction(() => {
+    const maxPos = db.prepare(
+      "SELECT COALESCE(MAX(position), -1) AS m FROM tareas WHERE workspace_id = ? AND status = 'TODO'"
+    ).get(adminWsId).m;
+    const ins = db.prepare(`
+      INSERT INTO tareas (
+        workspace_id, title, description, type, status, priority,
+        assignee_id, creator_id, project_id, patient_id, visibility,
+        position, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'TODO', 'MEDIUM', ?, ?, NULL, NULL, 'team', ?, ?, ?)
+    `).run(
+      adminWsId,
+      `Implementar test: ${r.test_name}`,
+      description,
+      null,
+      req.user.professional_id ?? null,
+      req.user.id,
+      maxPos + 1,
+      now, now,
+    );
+    // Cierra la solicitud (ya está en la cola de tareas del admin)
+    db.prepare("UPDATE test_requests SET status = 'closed' WHERE id = ?")
+      .run(req.params.id);
+    return ins.lastInsertRowid;
+  });
+  const taskId = tx();
+
+  res.status(201).json({ ok: true, task_id: taskId });
+});
+
 export default router;

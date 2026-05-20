@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Brain, CheckCircle2, Clock, Loader2, RotateCw, Building2, Mail,
+  Brain, CheckCircle2, Clock, Loader2, RotateCw, Building2, Mail, ListTodo,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { api, getStoredUser } from "@/lib/api";
@@ -51,6 +51,7 @@ function PlatformTestRequestsPage() {
 
 function TestRequestsView() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<StatusFilter>("open");
 
   const { data: items = [], isLoading, refetch, isFetching } = useQuery({
@@ -64,6 +65,22 @@ function TestRequestsView() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["platform-test-requests"] });
       toast.success("Estado actualizado");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const toTaskMu = useMutation({
+    mutationFn: (id: number) => api.platformTestRequestToTask(id),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["platform-test-requests"] });
+      qc.invalidateQueries({ queryKey: ["tareas"] });
+      // Toast con botón "Ver tarea" que deeplinka a /tareas?id=N para
+      // abrir el detalle de la tarea recién creada.
+      toast.success("Solicitud movida a Tareas (Por hacer)", {
+        action: data.task_id ? {
+          label: "Ver tarea",
+          onClick: () => navigate({ to: "/tareas", search: { id: data.task_id } as any }),
+        } : undefined,
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -186,13 +203,26 @@ function TestRequestsView() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    {r.status === "open" && (
+                      <button
+                        onClick={() => toTaskMu.mutate(r.id)}
+                        disabled={toTaskMu.isPending || resolveMu.isPending}
+                        className="h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        title="Crear una tarea en Por hacer con esta solicitud y cerrarla acá"
+                      >
+                        {toTaskMu.isPending && toTaskMu.variables === r.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <ListTodo className="h-3.5 w-3.5" />}
+                        Enviar a Tareas
+                      </button>
+                    )}
                     {r.status === "open" ? (
                       <button
                         onClick={() => resolveMu.mutate({ id: r.id, status: "closed" })}
-                        disabled={resolveMu.isPending}
-                        className="h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 disabled:opacity-50"
-                        title="Marcar como cerrada"
+                        disabled={resolveMu.isPending || toTaskMu.isPending}
+                        className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        title="Cerrar sin crear tarea"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" /> Cerrar
                       </button>
