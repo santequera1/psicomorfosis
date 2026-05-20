@@ -27,6 +27,7 @@ import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlatformTestRequestsRouteImport } from './routes/platform_.test-requests'
 import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as PTestsRouteImport } from './routes/p_.tests'
@@ -133,6 +134,11 @@ const AgendaRoute = AgendaRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformTestRequestsRoute = PlatformTestRequestsRouteImport.update({
+  id: '/platform_/test-requests',
+  path: '/platform/test-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlatformReportesRoute = PlatformReportesRouteImport.update({
@@ -253,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/platform/reportes': typeof PlatformReportesRoute
+  '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
@@ -290,6 +297,7 @@ export interface FileRoutesByTo {
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
   '/platform/reportes': typeof PlatformReportesRoute
+  '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
@@ -328,6 +336,7 @@ export interface FileRoutesById {
   '/p_/tests': typeof PTestsRoute
   '/pacientes_/$id': typeof PacientesIdRoute
   '/platform_/reportes': typeof PlatformReportesRoute
+  '/platform_/test-requests': typeof PlatformTestRequestsRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
   '/p_/documentos_/$id': typeof PDocumentosIdRoute
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | '/p/tests'
     | '/pacientes/$id'
     | '/platform/reportes'
+    | '/platform/test-requests'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/documentos/$id'
@@ -404,6 +414,7 @@ export interface FileRouteTypes {
     | '/p/tests'
     | '/pacientes/$id'
     | '/platform/reportes'
+    | '/platform/test-requests'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/documentos/$id'
@@ -441,6 +452,7 @@ export interface FileRouteTypes {
     | '/p_/tests'
     | '/pacientes_/$id'
     | '/platform_/reportes'
+    | '/platform_/test-requests'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
     | '/p_/documentos_/$id'
@@ -479,6 +491,7 @@ export interface RootRouteChildren {
   PTestsRoute: typeof PTestsRoute
   PacientesIdRoute: typeof PacientesIdRoute
   PlatformReportesRoute: typeof PlatformReportesRoute
+  PlatformTestRequestsRoute: typeof PlatformTestRequestsRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
   PActivarTokenRoute: typeof PActivarTokenRoute
   PDocumentosIdRoute: typeof PDocumentosIdRoute
@@ -611,6 +624,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform_/test-requests': {
+      id: '/platform_/test-requests'
+      path: '/platform/test-requests'
+      fullPath: '/platform/test-requests'
+      preLoaderRoute: typeof PlatformTestRequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/platform_/reportes': {
@@ -767,6 +787,7 @@ const rootRouteChildren: RootRouteChildren = {
   PTestsRoute: PTestsRoute,
   PacientesIdRoute: PacientesIdRoute,
   PlatformReportesRoute: PlatformReportesRoute,
+  PlatformTestRequestsRoute: PlatformTestRequestsRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
   PActivarTokenRoute: PActivarTokenRoute,
   PDocumentosIdRoute: PDocumentosIdRoute,

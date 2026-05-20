@@ -394,7 +394,11 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
       case "entrega":   return hasId ? { to: "/tareas", search: { id } } : { to: "/tareas" };
       case "test":      return hasId ? { to: "/tests", search: { app: id } } : { to: "/tests" };
       case "documento": return hasId ? { to: `/documentos/${id}` } : { to: "/documentos" };
-      case "alerta":    return { to: "/platform/reportes" };
+      // Las "alerta" para platform admin pueden ser reportes de error o
+      // solicitudes de tests. Distinguimos por el prefijo del id.
+      case "alerta":
+        if (n.id.startsWith("test-request-")) return { to: "/platform/test-requests" };
+        return { to: "/platform/reportes" };
       case "mensaje":   return null;
     }
   }

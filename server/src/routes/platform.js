@@ -687,4 +687,53 @@ router.patch("/error-reports/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * GET /api/platform/test-requests
+ * Lista TODAS las solicitudes de tests de TODOS los workspaces.
+ * El endpoint regular GET /api/tests/requests está scoped al workspace
+ * del que pide; para platform admin necesitamos verlas todas porque
+ * el equipo es quien implementa los tests solicitados.
+ *
+ * Query: ?status=open|closed|all (default open).
+ */
+router.get("/test-requests", (req, res) => {
+  const status = (req.query.status === "closed" || req.query.status === "all")
+    ? req.query.status
+    : "open";
+  let sql = `
+    SELECT tr.id, tr.workspace_id, tr.test_name, tr.reason, tr.status,
+           tr.created_at, tr.requester_name, tr.requested_by,
+           w.name AS workspace_name,
+           u.email AS requester_email
+    FROM test_requests tr
+    LEFT JOIN workspaces w ON w.id = tr.workspace_id
+    LEFT JOIN users u ON u.id = tr.requested_by
+  `;
+  const params = [];
+  if (status !== "all") {
+    sql += " WHERE tr.status = ?";
+    params.push(status);
+  }
+  sql += " ORDER BY tr.created_at DESC";
+  const rows = db.prepare(sql).all(...params);
+  res.json(rows);
+});
+
+/**
+ * PATCH /api/platform/test-requests/:id
+ * Marca como atendida (closed) o reabre (open). Sin tracking de
+ * resolver_id por ahora — el "estado" simple es suficiente para
+ * el flow del equipo Psicomorfosis.
+ */
+router.patch("/test-requests/:id", (req, res) => {
+  const { status } = req.body ?? {};
+  if (status !== "open" && status !== "closed") {
+    return res.status(400).json({ error: "status debe ser 'open' o 'closed'" });
+  }
+  const r = db.prepare("UPDATE test_requests SET status = ? WHERE id = ?")
+    .run(status, req.params.id);
+  if (r.changes === 0) return res.status(404).json({ error: "Solicitud no encontrada" });
+  res.json({ ok: true });
+});
+
 export default router;

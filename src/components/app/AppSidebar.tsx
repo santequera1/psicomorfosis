@@ -92,6 +92,7 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
       items: [
         { to: "/platform", label: "Cuentas y uso", icon: Shield },
         { to: "/platform/reportes", label: "Reportes", icon: Bug },
+        { to: "/platform/test-requests", label: "Tests solicitados", icon: Brain },
       ],
     },
     {

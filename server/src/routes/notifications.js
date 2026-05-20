@@ -223,6 +223,31 @@ function computeNotifications({ wsId, isPlatformAdmin }) {
         urgent: false,
       });
     }
+
+    // ─── 6) Solo platform admin: solicitudes de tests abiertas ───────
+    // Caso real: Nathaly solicitó 7 tests entre 2026-05-12 y 2026-05-19
+    // y no había notificación ni vista para que el equipo las viera.
+    const testReqs = db.prepare(`
+      SELECT tr.id, tr.test_name, tr.created_at, tr.requester_name,
+             w.name AS workspace_name
+      FROM test_requests tr
+      LEFT JOIN workspaces w ON w.id = tr.workspace_id
+      WHERE tr.status = 'open'
+      ORDER BY tr.created_at DESC
+      LIMIT 5
+    `).all();
+
+    for (const r of testReqs) {
+      out.push({
+        id: `test-request-${r.id}`,
+        type: "alerta",
+        title: `Test solicitado · ${r.test_name}`,
+        description: `${r.requester_name ?? "Un psicólogo"}${r.workspace_name ? ` (${r.workspace_name})` : ""}`,
+        at: relativeTime(r.created_at),
+        raw_at: r.created_at,
+        urgent: false,
+      });
+    }
   }
 
   return out;

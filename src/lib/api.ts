@@ -1765,6 +1765,26 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
 
+  // ─── Test requests (platform admin: ve todos los workspaces) ─────────
+  platformListTestRequests: (status: "open" | "closed" | "all" = "open") =>
+    request<Array<{
+      id: number;
+      workspace_id: number;
+      workspace_name: string | null;
+      test_name: string;
+      reason: string | null;
+      status: "open" | "closed";
+      created_at: string;
+      requester_name: string | null;
+      requested_by: number | null;
+      requester_email: string | null;
+    }>>(`/api/platform/test-requests?status=${status}`),
+  platformResolveTestRequest: (id: number, status: "open" | "closed") =>
+    request<{ ok: boolean }>(`/api/platform/test-requests/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+
   // ─── Wallet de cuentas bancarias ────────────────────────────────────
   listBankAccounts: (params: { includeArchived?: boolean } = {}) =>
     request<BankAccount[]>(
