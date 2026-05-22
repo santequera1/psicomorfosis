@@ -1,9 +1,11 @@
 import { useState, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, type ApiPatient } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskPicker } from "@/components/app/RiskPicker";
 import { TagEditor } from "@/components/app/TagEditor";
+import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { type Patient, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { AppSelect } from "@/components/app/AppSelect";
@@ -25,6 +27,17 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Checkboxes del paso 3. Antes eran puramente decorativos (defaultChecked
+  // sin onChange y sin lectura en submit) → la psicóloga marcaba "agendar
+  // primera cita" y nada pasaba. Ahora están en state y se procesan al
+  // crear el paciente.
+  const [optInvite, setOptInvite] = useState(true);    // crear acceso al portal (incluye consentimiento por email)
+  const [optConsent, setOptConsent] = useState(true);  // enviar consentimiento por correo (mismo email del invite)
+  const [optScheduleFirst, setOptScheduleFirst] = useState(false);
+  // Si optScheduleFirst está activo, después de crear el paciente
+  // abrimos el modal de nueva cita preseleccionándolo.
+  const [pendingApptPatient, setPendingApptPatient] = useState<ApiPatient | null>(null);
+
   // Sugerencias de etiquetas: tags ya usadas en otros pacientes del workspace.
   const { data: existingPatients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const tagSuggestions = useMemo(() => {
@@ -35,7 +48,7 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
 
   const createMutation = useMutation({
     mutationFn: (body: Partial<Patient> & { professionalId?: number }) => api.createPatient(body),
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       qc.setQueryData<Patient[]>(["patients"], (old = []) => {
         if (old.some((p) => p.id === created.id)) return old;
         return [...old, created].sort((a, b) => a.name.localeCompare(b.name));
@@ -43,7 +56,40 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ["patients"] });
       qc.invalidateQueries({ queryKey: ["workspace"] });
       qc.invalidateQueries({ queryKey: ["appointments"] });
-      onClose();
+      // Procesa las opciones del paso 3.
+      //   - optInvite || optConsent → generar invitación al portal
+      //     (el email del invite ya incluye el consentimiento informado,
+      //     son la misma acción en backend; ambos checks llevan a invitar
+      //     una sola vez).
+      //   - optScheduleFirst → abrir modal de nueva cita preseleccionando
+      //     al paciente recién creado. NO cerramos este modal hasta que
+      //     el de cita se cierre — el cliente se queda con un contexto
+      //     claro y el modal de cita puede pre-seleccionar.
+      if ((optInvite || optConsent) && created.email) {
+        try {
+          const res = await api.invitePatient(created.id);
+          if (res.email_status === "queued") {
+            toast.success("Invitación al portal enviada por email");
+          } else {
+            toast.success("Invitación generada. Compártela manualmente desde la ficha del paciente.");
+          }
+        } catch (e: any) {
+          // No reventamos el flow si el invite falla (puede que no tenga
+          // email, etc.). Avisamos para que la psicóloga lo pueda reintentar.
+          toast.error(`Invitación al portal: ${e?.message ?? "error desconocido"}`);
+        }
+      } else if ((optInvite || optConsent) && !created.email) {
+        toast.message("Sin email — no se envió invitación al portal. Edita el paciente para añadirlo.");
+      }
+      if (optScheduleFirst) {
+        // Mantenemos el modal de paciente "abierto" en background hasta
+        // que se cierre el de cita; en realidad lo cerramos visualmente
+        // mostrando solo el modal de appointment encima.
+        setPendingApptPatient(created as ApiPatient);
+        setSaving(false);
+      } else {
+        onClose();
+      }
     },
     onError: (e: Error) => { setErr(e.message); setSaving(false); },
   });
@@ -220,15 +266,30 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
                 Se enviará por correo el consentimiento informado y el enlace del portal del paciente. Podrás firmar digitalmente en la siguiente sesión.
               </div>
               <label className="flex items-start gap-2 mt-3 text-sm text-ink-700">
-                <input type="checkbox" defaultChecked className="mt-1" />
+                <input
+                  type="checkbox"
+                  checked={optConsent}
+                  onChange={(e) => setOptConsent(e.target.checked)}
+                  className="mt-1"
+                />
                 <span>Enviar consentimiento informado por correo</span>
               </label>
               <label className="flex items-start gap-2 text-sm text-ink-700">
-                <input type="checkbox" defaultChecked className="mt-1" />
+                <input
+                  type="checkbox"
+                  checked={optInvite}
+                  onChange={(e) => setOptInvite(e.target.checked)}
+                  className="mt-1"
+                />
                 <span>Crear acceso al portal del paciente</span>
               </label>
               <label className="flex items-start gap-2 text-sm text-ink-700">
-                <input type="checkbox" className="mt-1" />
+                <input
+                  type="checkbox"
+                  checked={optScheduleFirst}
+                  onChange={(e) => setOptScheduleFirst(e.target.checked)}
+                  className="mt-1"
+                />
                 <span>Agendar primera cita inmediatamente</span>
               </label>
             </>
@@ -258,6 +319,23 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
           </button>
         </footer>
       </div>
+
+      {/* Modal de nueva cita encadenado: aparece si el usuario marcó
+          "Agendar primera cita inmediatamente". Lo renderizamos al
+          mismo nivel del modal de paciente (no anidado dentro del
+          contenido) para que el backdrop no se duplique. Al cerrarlo
+          cerramos también el modal de paciente — el flow completo
+          termina. */}
+      {pendingApptPatient && (
+        <NewAppointmentModal
+          patients={[pendingApptPatient]}
+          prefilledPatient={pendingApptPatient}
+          onClose={() => {
+            setPendingApptPatient(null);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

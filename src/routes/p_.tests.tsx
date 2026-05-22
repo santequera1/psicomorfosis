@@ -127,8 +127,8 @@ function PortalTestsPage() {
       <header className="mb-8">
         <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">Evaluaciones</p>
         <h1 className="font-serif text-3xl text-ink-900 mt-1">Mis tests</h1>
-        <p className="text-sm text-ink-500 mt-2 max-w-xl">
-          Tu psicóloga te ha asignado estos tests para conocerte mejor. Tómate tu tiempo, sé honesto(a) — esto es para ti.
+        <p className="text-sm text-ink-500 mt-2 max-w-xl leading-relaxed">
+          Tu terapeuta te ha asignado estos cuestionarios con la finalidad de enriquecer la evaluación terapéutica. Tómate tu tiempo, sé honesto(a), recuerda que no hay respuestas buenas ni malas, simplemente son respuestas.
         </p>
       </header>
 
