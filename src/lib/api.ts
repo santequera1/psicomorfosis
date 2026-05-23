@@ -1216,6 +1216,28 @@ export const api = {
     }
     return r.blob();
   },
+  /** Descarga el Excel oficial del MCMI-II con las respuestas inyectadas
+   *  en la plantilla (varones/mujeres según sexo del paciente). Las
+   *  fórmulas de las 4 hojas calculan automáticamente raw scores, BR e
+   *  interpretación al abrirlo. Devuelve {blob, filename} para que el
+   *  caller pueda usar el filename sugerido por el servidor en el
+   *  Content-Disposition. */
+  exportTestApplicationXlsx: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+    const token = localStorage.getItem("psm.token");
+    const r = await fetch(`${API_BASE}/api/tests/applications/${id}/export.xlsx`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo exportar el Excel");
+    }
+    // Filename sugerido por el server vía Content-Disposition; si no
+    // viene, default razonable.
+    const cd = r.headers.get("Content-Disposition") ?? "";
+    const m = cd.match(/filename="?([^";]+)"?/i);
+    const filename = m?.[1] ?? `MCMI-II.xlsx`;
+    return { blob: await r.blob(), filename };
+  },
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
   /** Setea/actualiza la nota clínica del psicólogo sobre el resultado del test. */
   setTestApplicationNotes: (id: string, notes: string | null) =>

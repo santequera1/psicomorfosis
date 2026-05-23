@@ -20,6 +20,7 @@
     "multer": "^2.1.1",
     "nodemailer": "^8.0.7",
     "pdfmake": "^0.2.23",
-    "socket.io": "^4.8.0"
+    "socket.io": "^4.8.0",
+    "xlsx": "^0.18.5"
   }
 }

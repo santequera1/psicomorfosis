@@ -103,17 +103,20 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
   };
   for (const sc of MILLON_SCALES) groups[sc.group].push(sc);
 
-  async function downloadCsv() {
+  async function downloadXlsx() {
     setExporting(true);
     try {
-      const blob = await api.exportTestApplicationCsv(result.id);
+      // El server inyecta las respuestas en la plantilla oficial (varones
+      // o mujeres según el sexo registrado). Al abrir el archivo, Excel
+      // recalcula automáticamente raw scores, BR e interpretación.
+      const { blob, filename } = await api.exportTestApplicationXlsx(result.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${result.test_code}_${(result.patient_name ?? "paciente").replace(/\s+/g, "_")}.csv`;
+      a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      toast.success("CSV descargado");
+      toast.success("Excel descargado · ábrelo para ver resultados completos");
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudo exportar");
     } finally {
@@ -179,7 +182,7 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
       </div>
 
       <div className="mt-5 rounded-lg bg-bg-100/50 border border-line-100 p-3 text-xs text-ink-500 leading-relaxed">
-        <strong className="text-ink-700">Nota:</strong> los rangos <em>bajo / medio / alto</em> son una lectura rápida basada en el porcentaje de la puntuación máxima posible de cada escala — <strong>no son la Tasa Base (BR)</strong>. Para la interpretación clínica final, exporta las respuestas y úsalas en el Excel oficial del MCMI-II ajustado por sexo del paciente.
+        <strong className="text-ink-700">Nota:</strong> los rangos <em>bajo / medio / alto</em> son una lectura rápida basada en el porcentaje de la puntuación máxima posible de cada escala — <strong>no son la Tasa Base (BR)</strong>. Para la interpretación clínica final, descarga el Excel oficial — las fórmulas calculan automáticamente BR e interpretación según el sexo del paciente.
       </div>
 
       {/* Notas clínicas del psicólogo */}
@@ -187,15 +190,15 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
 
       <div className="mt-5 flex justify-between gap-3 flex-wrap">
         <button
-          onClick={downloadCsv}
+          onClick={downloadXlsx}
           disabled={exporting}
-          title="CSV con las 175 respuestas (1=V, 2=F, 0=Sin respuesta) listo para pegar en el Excel oficial."
-          className="h-10 px-4 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 disabled:opacity-60"
+          title="Excel oficial del MCMI-II con las 175 respuestas ya inyectadas. Al abrir, Excel calcula BR e interpretación según el sexo del paciente."
+          className="h-10 px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 disabled:opacity-60"
         >
           {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Exportar respuestas (CSV)
+          Descargar Excel oficial
         </button>
-        <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+        <button onClick={onClose} className="h-10 px-5 rounded-md border border-line-200 text-sm text-ink-700 hover:border-brand-400">
           Cerrar
         </button>
       </div>

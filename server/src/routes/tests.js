@@ -548,6 +548,51 @@ router.get("/applications/:id/export.csv", (req, res) => {
   res.send(csv);
 });
 
+/**
+ * GET /api/tests/applications/:id/export.xlsx
+ * Exporta una aplicación de MCMI-II como Excel oficial usando la
+ * plantilla de "corrección mecanizada" (varones / mujeres según el
+ * sexo registrado del paciente). El archivo tiene 4 hojas con todas
+ * las fórmulas originales — al abrirlo, Excel calcula automáticamente
+ * raw scores, BR y la interpretación. El psicólogo no tiene que
+ * pegar nada manualmente.
+ *
+ * Solo aplica al MCMI-II. Para otros tests usar export.csv.
+ */
+router.get("/applications/:id/export.xlsx", async (req, res) => {
+  const app = db.prepare("SELECT * FROM test_applications WHERE id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.workspace_id);
+  if (!app) return res.status(404).json({ error: "Aplicación no encontrada" });
+  if (app.test_code !== "MCMI-II") {
+    return res.status(400).json({ error: "El export Excel solo aplica al MCMI-II por ahora" });
+  }
+  // Sexo viene de patients.sex (M/F/NULL). Si no hay registro, default varones.
+  const patient = app.patient_id
+    ? db.prepare("SELECT sex, age FROM patients WHERE id = ?").get(app.patient_id)
+    : null;
+  const answers = app.answers_json ? safeJSON(app.answers_json) : {};
+
+  // Lazy import — el módulo carga xlsx que es ~6MB, no queremos
+  // pagarlo al boot si nadie usa esta función todavía.
+  const { buildMillonExcel, suggestMillonFilename } = await import("./tests-millon-export.js");
+  let buf;
+  try {
+    buf = buildMillonExcel({
+      patientName: app.patient_name ?? "",
+      age: patient?.age ?? null,
+      sex: patient?.sex ?? null,
+      answers,
+    });
+  } catch (e) {
+    console.error("[millon-xlsx]", e);
+    return res.status(500).json({ error: "No se pudo generar el Excel: " + e.message });
+  }
+  const filename = suggestMillonFilename(app.patient_name, patient?.sex);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send(buf);
+});
+
 router.delete("/applications/:id", (req, res) => {
   const r = db.prepare("DELETE FROM test_applications WHERE id = ? AND workspace_id = ?")
     .run(req.params.id, req.user.workspace_id);
