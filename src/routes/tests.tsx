@@ -6,6 +6,8 @@ import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { TestRunner } from "@/components/tests/TestRunner";
 import { ApplicationDetailModal, MillonResultView, QualitativeResultView } from "@/components/tests/ApplicationDetailModal";
+import { SubscaleBreakdown } from "@/components/tests/SubscaleBreakdown";
+import { NotesEditor } from "@/components/tests/NotesEditor";
 import { FormBuilderModal } from "@/components/tests/FormBuilderModal";
 import { RequestTestModal } from "@/components/tests/RequestTestModal";
 import { api, type ApiPatient, type PsychTest, type TestApplication, type AnswersMap } from "@/lib/api";
@@ -622,26 +624,45 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
         ) : isUnscored ? (
           <QualitativeResultView result={result} onClose={onClose} />
         ) : (
-          <div className="p-6 text-center">
-            <div className="h-16 w-16 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-7 w-7 text-sage-700" />
-            </div>
-            <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code}</p>
-            <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {result.score}</h3>
-            {lvl && (
-              <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
-                {result.interpretation}
-              </span>
-            )}
-            {result.alerts_json?.critical_response && (
-              <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
-                <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+          <div className="p-6">
+            <div className="text-center">
+              <div className="h-16 w-16 mx-auto rounded-full bg-sage-200/40 flex items-center justify-center mb-4">
+                <CheckCircle2 className="h-7 w-7 text-sage-700" />
               </div>
+              <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{result.test_code}</p>
+              <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {result.score}</h3>
+              {lvl && (
+                <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
+                  {result.interpretation}
+                </span>
+              )}
+              {result.alerts_json?.critical_response && (
+                <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
+                  <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Subescalas (BIS-11) + Notas clínicas, igual que en
+                ApplicationDetailModal — mismas vistas reusables. */}
+            {result.alerts_json?.subscales && result.alerts_json.subscales.length > 0 && (
+              <SubscaleBreakdown
+                subscales={result.alerts_json.subscales}
+                scaleMax={result.test_code?.toUpperCase().startsWith("BIS")
+                  ? 4
+                  : result.test_code === "PHQ-9" || result.test_code === "GAD-7"
+                    ? 3
+                    : 4}
+              />
             )}
-            <button onClick={onClose} className="mt-6 h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
-              Cerrar
-            </button>
+            <NotesEditor applicationId={result.id} initialNotes={result.notes} />
+
+            <div className="mt-6 text-center">
+              <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+                Cerrar
+              </button>
+            </div>
           </div>
         )}
       </Modal>

@@ -869,6 +869,11 @@ function runMigrations() {
     // Si el psicólogo lo define, el admin ve % de ocupación y badge
     // "saturado" cuando se acerca al tope. Métrica para gestión de carga.
     "ALTER TABLE workspaces ADD COLUMN max_patients INTEGER",
+    // Notas/comentarios clínicos sobre el resultado de un test. Pedido
+    // por Nathaly: algunos tests tienen interpretaciones predeterminadas
+    // pero el psicólogo quiere anotar observaciones cualitativas
+    // (contexto, dudas, hipótesis) que el score no captura.
+    "ALTER TABLE test_applications ADD COLUMN notes TEXT",
   ];
   for (const sql of migrations) {
     try {

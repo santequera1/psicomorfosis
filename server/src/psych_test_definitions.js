@@ -490,6 +490,95 @@ export const PSYCH_TEST_DEFINITIONS = [
     ranges: [{ min: -1, max: 999999, label: "Ver detalle por escala", level: "none" }],
     alerts: null,
   },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // BIS-11 (Barratt Impulsiveness Scale, versión 11)
+  // Adaptación española de Oquendo et al. (2001), estructura Patton (1995).
+  // 30 ítems, 4 opciones Likert (1=Raramente/Nunca .. 4=Siempre/Casi siempre),
+  // 12 ítems inversos, 3 subescalas (atencional, motora, no planeada).
+  // Pedido por Nathaly (test_request #6, 12-may-2026).
+  {
+    id: "bis11",
+    code: "BIS-11",
+    name: "Barratt Impulsiveness Scale",
+    short_name: "BIS-11",
+    items: 30,
+    minutes: 10,
+    category: "Impulsividad",
+    age_range: "≥ 18 años",
+    description: "Mide impulsividad rasgo en adultos. Tres subescalas: atencional/cognitiva, motora y no planeada.",
+    instructions: "Marca la opción que mejor describa cómo actúas o piensas habitualmente. No hay respuestas buenas o malas; responde con honestidad.",
+    scale: [
+      { value: 1, label: "Raramente o nunca" },
+      { value: 2, label: "Ocasionalmente" },
+      { value: 3, label: "A menudo" },
+      { value: 4, label: "Siempre o casi siempre" },
+    ],
+    scoring: { type: "sum_reversed" },
+    // Rangos de interpretación (Patton, 1995) — 30 ítems × 4 = 120 máx, 30 mín.
+    // El propio Patton recomienda interpretar junto a entrevista clínica.
+    ranges: [
+      { min: 30,  max: 51,  label: "Baja impulsividad",                  level: "none" },
+      { min: 52,  max: 71,  label: "Impulsividad moderada (normal)",     level: "low" },
+      { min: 72,  max: 120, label: "Alta impulsividad — revisar clínicamente", level: "moderate" },
+    ],
+    // Reverse items según Oquendo (Sp) — preserva la lógica de Patton
+    // pero adaptado al fraseo en español.
+    questions: [
+      { id: "q1",  text: "Planeo mis tareas con cuidado.", reverse: true },
+      { id: "q2",  text: "Hago las cosas sin pensarlas." },
+      { id: "q3",  text: "Casi nunca me preocupo." },
+      { id: "q4",  text: "Mis pensamientos pueden ser muy rápidos." },
+      { id: "q5",  text: "Planeo mis viajes con bastante anticipación.", reverse: true },
+      { id: "q6",  text: "Soy una persona con autocontrol.", reverse: true },
+      { id: "q7",  text: "Me concentro con facilidad.", reverse: true },
+      { id: "q8",  text: "Ahorro con regularidad.", reverse: true },
+      { id: "q9",  text: "Se me hace difícil estar quieto(a) por largos periodos de tiempo." },
+      { id: "q10", text: "Pienso las cosas cuidadosamente.", reverse: true },
+      { id: "q11", text: "Planifico mi futuro económico (trabajo fijo, ahorros).", reverse: true },
+      { id: "q12", text: "Digo las cosas sin pensar." },
+      { id: "q13", text: "Me gusta pensar acerca de problemas complicados.", reverse: true },
+      { id: "q14", text: "Cambio de trabajo con frecuencia." },
+      { id: "q15", text: "Actúo impulsivamente." },
+      { id: "q16", text: "Me aburro con facilidad tratando de resolver problemas en mi mente." },
+      { id: "q17", text: "Visito al médico y al dentista regularmente.", reverse: true },
+      { id: "q18", text: "Hago las cosas en el momento en que se me ocurren." },
+      { id: "q19", text: "Soy una persona que piensa sin distraerse, que puede enfocar su mente en una sola cosa por mucho tiempo.", reverse: true },
+      { id: "q20", text: "Cambio de vivienda con frecuencia." },
+      { id: "q21", text: "Compro cosas impulsivamente." },
+      { id: "q22", text: "Termino lo que empiezo.", reverse: true },
+      { id: "q23", text: "Camino y me muevo con rapidez." },
+      { id: "q24", text: "Resuelvo los problemas experimentando." },
+      { id: "q25", text: "Gasto en efectivo o a crédito más de lo que gano." },
+      { id: "q26", text: "Hablo rápido." },
+      { id: "q27", text: "Tengo pensamientos extraños cuando estoy pensando." },
+      { id: "q28", text: "Me intereso más por el presente que por el futuro." },
+      { id: "q29", text: "Me siento inquieto(a) en clases o charlas." },
+      { id: "q30", text: "Planifico el futuro.", reverse: true },
+    ],
+    // Subescalas Patton (1995). Cada ítem suma con la misma regla del
+    // total (respeta reverse). El score por subescala da una lectura
+    // más granular que el total — útil para identificar qué tipo de
+    // impulsividad predomina.
+    subscales: [
+      {
+        key: "atencional",
+        label: "Atencional / Cognitiva",
+        items: ["q5", "q6", "q9", "q11", "q20", "q24", "q26", "q28"],
+      },
+      {
+        key: "motora",
+        label: "Motora",
+        items: ["q2", "q3", "q4", "q16", "q17", "q19", "q21", "q22", "q23", "q25", "q30"],
+      },
+      {
+        key: "no_planeada",
+        label: "No planeada",
+        items: ["q1", "q7", "q8", "q10", "q12", "q13", "q14", "q15", "q18", "q27", "q29"],
+      },
+    ],
+    alerts: null,
+  },
 ];
 
 /**
@@ -545,6 +634,9 @@ export function seedTestDefinitions(db) {
       scoring: t.scoring,
       ranges: t.ranges,
       alerts: t.alerts ?? null,
+      // Subescalas opcionales (BIS-11 las usa). El motor de scoring
+      // las lee desde questions_json y devuelve breakdown en alerts.
+      subscales: t.subscales ?? null,
     });
     insert.run({
       id: t.id,
@@ -704,6 +796,38 @@ export function calculateScore(testDef, answers) {
       alerts.critical_question_id = testDef.alerts.critical_question_id;
       alerts.critical_value = Number(cv);
     }
+  }
+
+  // Subescalas (opt-in): si testDef.subscales está definido como
+  //   [{ key: "atencional", label: "Atencional", items: ["q5","q6",...] }, ...]
+  // calculamos un score por cada subescala respetando reverse del mismo
+  // modo que el score total. Lo devolvemos en alerts.subscales para que
+  // la UI lo muestre como breakdown debajo del total. No reemplaza el
+  // total — es información adicional.
+  if (Array.isArray(testDef.subscales) && testDef.subscales.length > 0) {
+    const max = scaleMaxValue(testDef.scale);
+    const min = testDef.scale ? Math.min(...testDef.scale.map((o) => o.value)) : 0;
+    const questionsById = new Map((testDef.questions ?? []).map((q) => [q.id, q]));
+    const subs = testDef.subscales.map((sub) => {
+      let s = 0;
+      let answered = 0;
+      for (const qid of (sub.items ?? [])) {
+        const v = answers[qid];
+        if (v == null) continue;
+        const q = questionsById.get(qid);
+        const isReversed = testDef.scoring?.type === "sum_reversed" && q?.reverse;
+        s += isReversed ? (max + min) - Number(v) : Number(v);
+        answered++;
+      }
+      return {
+        key: sub.key,
+        label: sub.label,
+        score: s,
+        items_count: (sub.items ?? []).length,
+        answered_count: answered,
+      };
+    });
+    alerts.subscales = subs;
   }
 
   return { score, level, label, alerts };

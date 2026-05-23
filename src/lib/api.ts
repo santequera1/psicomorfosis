@@ -623,6 +623,16 @@ export interface TestApplication {
     critical_value?: number;
     /** Para tests con scoring por escalas múltiples (MCMI-II): raw scores por escala. */
     scales_raw?: Record<string, number | null>;
+    /** Subescalas opt-in (BIS-11, etc): breakdown del score total por subescala.
+     *  Calculado por el motor de scoring; el frontend lo renderiza bajo el score
+     *  total como tabla/barras. */
+    subscales?: Array<{
+      key: string;
+      label: string;
+      score: number;
+      items_count: number;
+      answered_count: number;
+    }>;
     /** Metadata adicional del scoring: tipo de test, advertencias de validez, etc. */
     meta?: {
       type?: string;
@@ -640,6 +650,10 @@ export interface TestApplication {
       }>;
     };
   } | null;
+  /** Observaciones clínicas del psicólogo sobre el resultado del test
+   *  (texto libre). NULL si no hay nota. Pedido por Nathaly: complementa
+   *  el score automático con contexto cualitativo. */
+  notes?: string | null;
   total_items?: number | null;
   answered_items?: number | null;
   started_at?: string | null;
@@ -1203,6 +1217,12 @@ export const api = {
     return r.blob();
   },
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
+  /** Setea/actualiza la nota clínica del psicólogo sobre el resultado del test. */
+  setTestApplicationNotes: (id: string, notes: string | null) =>
+    request<{ ok: true; notes: string | null }>(`/api/tests/applications/${id}/notes`, {
+      method: "PATCH",
+      body: JSON.stringify({ notes }),
+    }),
 
   // Formularios personalizados del consultorio (workspace-scoped)
   createTestForm: (body: CreateFormBody) =>

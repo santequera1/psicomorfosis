@@ -555,4 +555,25 @@ router.delete("/applications/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * PATCH /api/tests/applications/:id/notes
+ * Setea/actualiza el campo notes (observaciones clínicas del psicólogo
+ * sobre el resultado del test). Pedido por Nathaly: el score automático
+ * no captura el contexto cualitativo que ella quiere anotar.
+ *
+ * Body: { notes: string | null }  — null o "" borra la nota.
+ */
+router.patch("/applications/:id/notes", (req, res) => {
+  const notes = req.body?.notes;
+  if (notes != null && typeof notes !== "string") {
+    return res.status(400).json({ error: "notes debe ser string o null" });
+  }
+  const value = notes && notes.trim() ? notes.trim() : null;
+  const r = db.prepare(
+    "UPDATE test_applications SET notes = ? WHERE id = ? AND workspace_id = ?"
+  ).run(value, req.params.id, req.user.workspace_id);
+  if (r.changes === 0) return res.status(404).json({ error: "No encontrado" });
+  res.json({ ok: true, notes: value });
+});
+
 export default router;

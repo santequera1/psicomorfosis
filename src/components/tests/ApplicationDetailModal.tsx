@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { AlertOctagon, Download, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type TestApplication } from "@/lib/api";
+import { SubscaleBreakdown } from "./SubscaleBreakdown";
+import { NotesEditor } from "./NotesEditor";
 
 const LEVEL_STYLE: Record<string, { bg: string; text: string }> = {
   none:     { bg: "bg-success-soft", text: "text-success" },
@@ -180,6 +182,9 @@ export function MillonResultView({ result, onClose }: { result: TestApplication;
         <strong className="text-ink-700">Nota:</strong> los rangos <em>bajo / medio / alto</em> son una lectura rápida basada en el porcentaje de la puntuación máxima posible de cada escala — <strong>no son la Tasa Base (BR)</strong>. Para la interpretación clínica final, exporta las respuestas y úsalas en el Excel oficial del MCMI-II ajustado por sexo del paciente.
       </div>
 
+      {/* Notas clínicas del psicólogo */}
+      <NotesEditor applicationId={result.id} initialNotes={result.notes} />
+
       <div className="mt-5 flex justify-between gap-3 flex-wrap">
         <button
           onClick={downloadCsv}
@@ -305,29 +310,67 @@ export function ApplicationDetailModal({ app, onClose }: { app: TestApplication;
       ) : isUnscored ? (
         <QualitativeResultView result={app} onClose={onClose} />
       ) : (
-        <div className="p-6 text-center">
-          <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{app.test_code}</p>
-          <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {app.score ?? "—"}</h3>
-          {lvl && app.interpretation && (
-            <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
-              {app.interpretation}
-            </span>
+        <div className="p-6">
+          <div className="text-center">
+            <p className="text-[11px] uppercase tracking-widest text-ink-500 font-medium">{app.test_code}</p>
+            <h3 className="font-serif text-3xl text-ink-900 mt-1">Score {app.score ?? "—"}</h3>
+            {lvl && app.interpretation && (
+              <span className={cn("inline-block mt-3 text-sm font-medium px-3 py-1 rounded-full", lvl.bg, lvl.text)}>
+                {app.interpretation}
+              </span>
+            )}
+            {app.alerts_json?.critical_response && (
+              <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
+                <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
+              </div>
+            )}
+            <p className="text-xs text-ink-500 mt-4">
+              Completado el {app.completed_at ? new Date(app.completed_at).toLocaleString("es-CO", { timeZone: "America/Bogota" }) : "—"}
+              {app.applied_by === "paciente" && " · auto-aplicado"}
+            </p>
+          </div>
+
+          {/* Breakdown por subescala (BIS-11 y otros): se renderiza solo si
+              el motor de scoring devolvió subscales en alerts_json. */}
+          {app.alerts_json?.subscales && app.alerts_json.subscales.length > 0 && (
+            <SubscaleBreakdown
+              subscales={app.alerts_json.subscales}
+              scaleMax={inferScaleMaxFromApp(app)}
+            />
           )}
-          {app.alerts_json?.critical_response && (
-            <div className="mt-4 rounded-lg border border-rose-300/50 bg-rose-500/5 p-3 text-sm text-rose-700 inline-flex items-start gap-2 text-left">
-              <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>El paciente marcó una respuesta clínicamente significativa. Activa el protocolo de evaluación de riesgo.</span>
-            </div>
-          )}
-          <p className="text-xs text-ink-500 mt-4">
-            Completado el {app.completed_at ? new Date(app.completed_at).toLocaleString("es-CO") : "—"}
-            {app.applied_by === "paciente" && " · auto-aplicado"}
-          </p>
-          <button onClick={onClose} className="mt-6 h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
-            Cerrar
-          </button>
+
+          {/* Notas clínicas del psicólogo */}
+          <NotesEditor applicationId={app.id} initialNotes={app.notes} />
+
+          <div className="mt-6 text-center">
+            <button onClick={onClose} className="h-10 px-5 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800">
+              Cerrar
+            </button>
+          </div>
         </div>
       )}
     </Modal>
   );
+}
+
+/**
+ * Heurística para inferir el valor máximo de la escala Likert a partir
+ * del score total y la cantidad de ítems. Sirve para que SubscaleBreakdown
+ * pueda calcular % relativo sin pedirnos el definition completo.
+ *
+ * Si total_items y score están disponibles: scaleMax ≈ ceil(score / items)
+ * pero ese cálculo es ruidoso. Mejor caemos a defaults conocidos por test:
+ *   - BIS-11 → 4
+ *   - PHQ/GAD/PCL → 3 / 4
+ * Si no reconocemos el código, default 4 (Likert estándar).
+ */
+function inferScaleMaxFromApp(app: TestApplication): number {
+  const code = (app.test_code ?? "").toUpperCase();
+  if (code === "BIS-11" || code === "BIS11") return 4;
+  if (code === "PHQ-9" || code === "GAD-7") return 3;
+  if (code === "PCL-5") return 4;
+  if (code === "RSES" || code === "ROSENBERG") return 4;
+  if (code === "BAI" || code === "BDI" || code === "BDI-II") return 3;
+  return 4;
 }
