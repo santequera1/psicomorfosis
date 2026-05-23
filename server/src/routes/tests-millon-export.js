@@ -49,10 +49,10 @@ function jsDateToExcelSerial(d) {
  * los datos del paciente y las 175 respuestas, devuelve un Buffer
  * XLSX listo para servir.
  *
- * @param {{ patientName: string; age: number | null; sex: string | null; answers: Record<string, number> }} args
+ * @param {{ patientName: string; age: number | null; sex: string | null; answers: Record<string, number>; evaluator?: string | null }} args
  * @returns {Buffer} XLSX buffer
  */
-export function buildMillonExcel({ patientName, age, sex, answers }) {
+export function buildMillonExcel({ patientName, age, sex, answers, evaluator }) {
   const tplPath = sex === "F" ? TEMPLATE_MUJERES : TEMPLATE_VARONES;
   // SheetJS lee BIFF (.xls) y luego lo escribimos como .xlsx (formato
   // moderno). Las fórmulas IF() simples sobreviven la conversión bien.
@@ -73,6 +73,19 @@ export function buildMillonExcel({ patientName, age, sex, answers }) {
     sheet["AA4"] = { t: "n", v: Number(age) };
   }
   sheet["AE4"] = { t: "n", v: jsDateToExcelSerial(new Date()) };
+
+  // ── Evaluador en hoja Resultados ─────────────────────────────
+  // La plantilla viene con "José Alberto Sotelo Martín" hardcoded
+  // (autor original de la corrección mecanizada). Lo reemplazamos
+  // con el nombre del psicólogo que está usando la app. La hoja
+  // Interpretación tiene D20 = `=Resultados!B4` así que se actualiza
+  // automáticamente — solo seteamos la celda fuente.
+  if (evaluator && evaluator.trim()) {
+    const resultados = wb.Sheets["Resultados"];
+    if (resultados) {
+      resultados["B4"] = { t: "s", v: evaluator.trim() };
+    }
+  }
 
   // ── Respuestas 1..175 en B5..B179 ────────────────────────────
   // answers viene como { "1": 1, "2": 2, ... } (1=V, 2=F). Si falta

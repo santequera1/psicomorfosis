@@ -572,6 +572,13 @@ router.get("/applications/:id/export.xlsx", async (req, res) => {
     : null;
   const answers = app.answers_json ? safeJSON(app.answers_json) : {};
 
+  // Evaluador: preferimos quien aplicó el test (app.professional), si
+  // falta usamos el usuario actual que está descargando. Así el Excel
+  // queda firmado por la persona correcta, no por el autor original
+  // de la corrección mecanizada (José Alberto Sotelo Martín en la
+  // plantilla).
+  const evaluator = app.professional || req.user.name || null;
+
   // Lazy import — el módulo carga xlsx que es ~6MB, no queremos
   // pagarlo al boot si nadie usa esta función todavía.
   const { buildMillonExcel, suggestMillonFilename } = await import("./tests-millon-export.js");
@@ -582,6 +589,7 @@ router.get("/applications/:id/export.xlsx", async (req, res) => {
       age: patient?.age ?? null,
       sex: patient?.sex ?? null,
       answers,
+      evaluator,
     });
   } catch (e) {
     console.error("[millon-xlsx]", e);
