@@ -141,7 +141,7 @@ export function Hero() {
             className="relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-surface"
           >
             <video
-              src="/landing/video-demo2.mp4"
+              src="/landing/Demo1.mp4"
               autoPlay
               loop
               muted
