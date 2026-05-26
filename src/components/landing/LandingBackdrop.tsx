@@ -22,38 +22,42 @@ export function LandingBackdrop() {
       // el frame del video se funda sin borde visible con la página.
       style={{ backgroundColor: "#F9F7F3" }}
     >
-      {/* Blob 1 — verde marca desaturado, esquina superior izquierda */}
+      {/* Blobs muy sutiles — solo dan vida al fondo. Opacity baja
+          (0.12-0.15) y empujados a los bordes con top/left negativos
+          para que el centro del viewport (donde vive el video del hero
+          y los screenshots) quede con el #F9F7F3 casi puro. */}
+      {/* Blob 1 — verde marca, esquina superior izquierda */}
       <motion.div
-        className="absolute h-[60vmax] w-[60vmax] rounded-full blur-[120px]"
+        className="absolute h-[50vmax] w-[50vmax] rounded-full blur-[140px]"
         style={{
-          top: "-15%",
-          left: "-10%",
+          top: "-25%",
+          left: "-20%",
           background:
-            "radial-gradient(circle, oklch(0.86 0.05 175 / 0.45), transparent 70%)",
+            "radial-gradient(circle, oklch(0.86 0.04 175 / 0.15), transparent 65%)",
         }}
         animate={{ x: [0, 40, -20, 0], y: [0, 30, -10, 0] }}
         transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
       />
       {/* Blob 2 — beige cálido, derecha-centro */}
       <motion.div
-        className="absolute h-[55vmax] w-[55vmax] rounded-full blur-[120px]"
+        className="absolute h-[50vmax] w-[50vmax] rounded-full blur-[140px]"
         style={{
-          top: "30%",
-          right: "-15%",
+          top: "40%",
+          right: "-25%",
           background:
-            "radial-gradient(circle, oklch(0.93 0.025 80 / 0.5), transparent 70%)",
+            "radial-gradient(circle, oklch(0.93 0.02 80 / 0.18), transparent 65%)",
         }}
         animate={{ x: [0, -30, 20, 0], y: [0, -20, 30, 0] }}
         transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
       />
       {/* Blob 3 — gris-violeta muy tenue, fondo abajo */}
       <motion.div
-        className="absolute h-[50vmax] w-[50vmax] rounded-full blur-[120px]"
+        className="absolute h-[45vmax] w-[45vmax] rounded-full blur-[140px]"
         style={{
-          bottom: "-10%",
-          left: "20%",
+          bottom: "-20%",
+          left: "10%",
           background:
-            "radial-gradient(circle, oklch(0.9 0.02 280 / 0.35), transparent 70%)",
+            "radial-gradient(circle, oklch(0.9 0.015 280 / 0.12), transparent 65%)",
         }}
         animate={{ x: [0, 50, -30, 0], y: [0, -25, 15, 0] }}
         transition={{ duration: 32, repeat: Infinity, ease: "easeInOut" }}
