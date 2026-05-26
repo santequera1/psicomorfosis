@@ -74,8 +74,8 @@ const CAPABILITIES: Capability[] = [
     title: "Plantillas, firmas y biblioteca clínica",
     description:
       "Consentimientos, certificados y alta terapéutica con plantillas listas para Colombia. El paciente firma desde el portal con sello de hora, IP y verificación. Sin imprimir.",
-    image: "/landing/carpeta-documentos.png",
-    alt: "Biblioteca documental por paciente y plantillas clínicas",
+    image: "/landing/documentos.png",
+    alt: "Editor de concepto psicológico con datos del paciente y motivo de consulta",
     align: "right",
     badges: [
       { icon: FileSignature, label: "Firma realizada", tone: "success", position: { top: "-1rem", right: "1.5rem" } },
@@ -237,11 +237,11 @@ function ExtraGrid() {
         alt="Modal para agregar diagnóstico DSM-5"
       />
       <ExtraCard
-        eyebrow="Editor clínico"
-        title="Notas y conceptos con formato real"
-        description="Editor rico para conceptos psicológicos, redacción guiada y compartir con el paciente o pedir firma electrónica."
-        image="/landing/documentos.png"
-        alt="Editor de concepto psicológico clínico"
+        eyebrow="Biblioteca clínica"
+        title="Documentos organizados por paciente"
+        description="Vista por paciente con total, pendientes de firma, firmados y borradores. Plantillas listas a la derecha para reutilizar."
+        image="/landing/carpeta-documentos.png"
+        alt="Biblioteca documental por paciente y plantillas clínicas"
       />
     </motion.div>
   );

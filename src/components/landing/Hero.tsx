@@ -23,7 +23,7 @@ export function Hero() {
   return (
     <section
       id="hero"
-      className="relative pt-32 pb-16 sm:pt-40 sm:pb-24 overflow-hidden"
+      className="relative pt-24 pb-16 sm:pt-28 sm:pb-24 overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         {/* Badge */}
@@ -115,7 +115,7 @@ export function Hero() {
       </div>
 
       {/* Video frame — scale-in con dissolve, después flota infinito */}
-      <div className="mt-12 sm:mt-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mt-10 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}

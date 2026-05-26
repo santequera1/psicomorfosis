@@ -8,6 +8,7 @@ import { Features } from "@/components/landing/Features";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { WhyUs } from "@/components/landing/WhyUs";
 import { FinalCTA } from "@/components/landing/FinalCTA";
+import { Developers } from "@/components/landing/Developers";
 import { DemoForm } from "@/components/landing/DemoForm";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
@@ -66,6 +67,7 @@ function InicioPage() {
         <ThemeShowcase />
         <WhyUs />
         <FinalCTA />
+        <Developers />
         <DemoForm />
       </main>
       <LandingFooter />

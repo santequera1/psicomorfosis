@@ -18,7 +18,7 @@ export function FinalCTA() {
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 1, ease: easeOutExpo }}
-          className="relative rounded-3xl overflow-hidden border border-brand-900/20 bg-gradient-to-br from-[oklch(0.28_0.04_175)] via-[oklch(0.32_0.05_175)] to-[oklch(0.25_0.05_185)] px-6 sm:px-12 lg:px-20 py-20 sm:py-28 text-center"
+          className="relative rounded-3xl overflow-hidden border border-brand-900/20 bg-linear-to-br from-[oklch(0.28_0.04_175)] via-[oklch(0.32_0.05_175)] to-[oklch(0.25_0.05_185)] px-6 sm:px-12 lg:px-20 py-20 sm:py-28 text-center"
         >
           {/* Glow respirante */}
           <motion.div
@@ -84,12 +84,12 @@ export function FinalCTA() {
                 Quiero acceso <ArrowRight className="h-4 w-4" />
               </motion.a>
               <motion.a
-                href="mailto:stivenantequera@gmail.com"
+                href="#developers"
                 whileHover={{ y: -2 }}
                 transition={{ duration: 0.3, ease: easeOutExpo }}
                 className="h-12 px-6 rounded-lg border border-white/20 bg-white/5 text-white text-sm font-medium inline-flex items-center gap-2 hover:bg-white/10 transition-colors"
               >
-                <MessageCircle className="h-4 w-4" /> Hablar con un humano
+                <MessageCircle className="h-4 w-4" /> Contáctanos
               </motion.a>
             </motion.div>
 
