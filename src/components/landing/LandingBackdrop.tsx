@@ -13,7 +13,13 @@ export function LandingBackdrop() {
   return (
     <div
       aria-hidden
-      className="fixed inset-0 -z-10 pointer-events-none overflow-hidden bg-bg"
+      className="fixed inset-0 -z-10 pointer-events-none overflow-hidden"
+      // Color literal en hex que coincide EXACTO con el fondo del video del
+      // hero. El video se exportó con #F8F7F2 pero el codec yuv420p con
+      // color_range=tv lo decodifica como #F7F5F1 en el browser. Usar este
+      // hex literal (en vez de bg-bg / --bg-50) garantiza que el frame del
+      // video se funda sin borde visible con la página.
+      style={{ backgroundColor: "#F7F5F1" }}
     >
       {/* Blob 1 — verde marca desaturado, esquina superior izquierda */}
       <motion.div
