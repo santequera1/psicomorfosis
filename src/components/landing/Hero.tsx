@@ -114,8 +114,10 @@ export function Hero() {
         </motion.div>
       </div>
 
-      {/* Video frame — scale-in con dissolve, después flota infinito */}
-      <div className="mt-12 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Video frame — scale-in con dissolve, después flota infinito.
+          Más ancho que el resto del hero (7xl vs 6xl) para que el video
+          se sienta integrado a la página, no contenido en una card. */}
+      <div className="mt-12 sm:mt-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
@@ -135,10 +137,13 @@ export function Hero() {
           />
 
           {/* Floating wrapper — solo el frame interno flota, los badges
-              tienen su propia oscilación con fase distinta */}
+              tienen su propia oscilación con fase distinta. Sin shadow
+              ni background: el video viene exportado con fondo #F8F7F2
+              que coincide con la página, así se mezcla como si fuera
+              una ventana embebida en la web. */}
           <motion.div
             animate={floating}
-            className="relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-surface"
+            className="relative overflow-hidden"
           >
             <video
               src="/landing/Video-Dashboard-Psic.mp4"
