@@ -48,17 +48,64 @@ function getTransport() {
   if (!smtpConfigured()) return null;
   const c = getSmtpConfig();
   _transport = nodemailer.createTransport({
+    pool: true,             // pool de conexiones reutilizables
+    maxConnections: 3,      // max sockets concurrentes — wailus es chico
+    maxMessages: 50,        // recicla la conexión cada 50 mensajes para evitar
+                            // que el server SMTP la corte por idle/timeout
     host: c.host,
     port: c.port,
-    secure: c.secure, // true para puerto 465 (SSL), false para 587 (STARTTLS)
+    secure: c.secure,       // true para puerto 465 (SSL), false para 587 (STARTTLS)
     auth: { user: c.user, pass: c.pass },
     // Timeouts conservadores: si SMTP cae, no queremos bloquear 30s la
-    // creación de citas. 8s es suficiente para una sesión normal.
-    connectionTimeout: 8_000,
-    greetingTimeout: 8_000,
-    socketTimeout: 8_000,
+    // creación de citas. 10s para handshake, 15s para envío grande.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+    tls: {
+      // SNI explícito — algunos servidores con multi-tenant rechazan
+      // conexiones sin servername correcto.
+      servername: c.host,
+    },
   });
   return _transport;
+}
+
+/**
+ * Envía con retry para errores transitorios de red. ECONNRESET es muy
+ * común con mail.wailus.co cuando el socket del pool quedó zombie —
+ * el primer envío rebota, el segundo (con pool reseteado) funciona.
+ *
+ * Solo reintenta errores transitorios (ECONNRESET, ETIMEDOUT, ESOCKET).
+ * Errores de auth o de dirección inválida se propagan sin retry.
+ */
+async function sendMailWithRetry(mail, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const transport = getTransport();
+      if (!transport) throw new Error("SMTP no configurado");
+      return await transport.sendMail(mail);
+    } catch (err) {
+      lastErr = err;
+      const code = err?.code || "";
+      const msg = String(err?.message || "");
+      const retriable =
+        code === "ECONNRESET" || code === "ETIMEDOUT" ||
+        code === "ESOCKET" || code === "EAI_AGAIN" ||
+        msg.includes("ECONNRESET");
+      if (!retriable || i === attempts - 1) throw err;
+
+      console.warn(`[mailer] reintento ${i + 1}/${attempts} tras ${code || msg.slice(0, 80)}`);
+      // Cerrar pool y forzar reconexión: si quedaron sockets muertos,
+      // el siguiente getTransport() crea uno nuevo limpio.
+      try { _transport?.close?.(); } catch { /* noop */ }
+      _transport = null;
+
+      // Backoff exponencial: 300ms, 900ms
+      await new Promise((r) => setTimeout(r, 300 * Math.pow(3, i)));
+    }
+  }
+  throw lastErr;
 }
 
 // ─── Helpers de formato ───────────────────────────────────────────────
@@ -354,7 +401,6 @@ export async function sendAppointmentEmail(opts) {
   }
 
   try {
-    const transport = getTransport();
     const c = getSmtpConfig();
     const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
     const fromAddress = `${profDisplay} <${c.user}>`;
@@ -374,7 +420,7 @@ export async function sendAppointmentEmail(opts) {
       status: kind === "appointment_cancelled" ? "CANCELLED" : "CONFIRMED",
     });
 
-    await transport.sendMail({
+    await sendMailWithRetry({
       from: fromAddress,
       to: patient.email,
       replyTo: replyTo || undefined,
@@ -513,13 +559,12 @@ export async function sendPatientInviteEmail(opts) {
   }
 
   try {
-    const transport = getTransport();
     const c = getSmtpConfig();
     const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
     const fromAddress = `${profDisplay} <${c.user}>`;
     const html = templatePatientInvite({ patient, professional, workspaceName, url, daysValid });
 
-    await transport.sendMail({
+    await sendMailWithRetry({
       from: fromAddress,
       to: patient.email,
       replyTo: replyTo || undefined,
@@ -569,7 +614,6 @@ export async function sendDemoRequestEmail(opts) {
   }
 
   try {
-    const transport = getTransport();
     const c = getSmtpConfig();
     const fromAddress = `${c.fromName} <${c.user}>`;
     const safeName = String(name).slice(0, 100);
@@ -597,7 +641,7 @@ export async function sendDemoRequestEmail(opts) {
       </div>
     `;
 
-    await transport.sendMail({
+    await sendMailWithRetry({
       from: fromAddress,
       to: toEmail,
       replyTo: safeEmail,
