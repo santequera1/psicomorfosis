@@ -38,6 +38,7 @@ import errorReportsRoutes from "./routes/errorReports.js";
 import legalRoutes from "./routes/legal.js";
 import bankAccountsRoutes from "./routes/bankAccounts.js";
 import diagnosesRoutes from "./routes/diagnoses.js";
+import landingRoutes from "./routes/landing.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -83,6 +84,8 @@ app.use("/api/uploads", express.static(UPLOADS_DIR, {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/platform", platformRoutes);
+// Landing pública (/api/landing/demo-request) — sin auth, con rate limit.
+app.use("/api", landingRoutes);
 // Documentos legales: rutas públicas (/public/*), del usuario (/me/*) y
 // del asesor legal (/admin/*). Cada banda aplica su propio middleware
 // de auth interno; aquí solo lo montamos en el prefijo.

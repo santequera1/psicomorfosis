@@ -67,3 +67,6 @@ verify_admin.py
 # Los datos extraídos consumibles por la app viven en server/src/data/ y SÍ se commitean.
 notas_claude/
 test-millon/
+
+# Video pesado de la landing — se sube manual al VPS (31MB no va a git).
+public/landing/*.mp4

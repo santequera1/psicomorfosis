@@ -537,3 +537,90 @@ export async function sendPatientInviteEmail(opts) {
   logEmail(result);
   return result;
 }
+
+/**
+ * Envía un email a la bandeja interna (Stiven) cuando alguien llena el
+ * form de "Solicitar demo" en la landing pública (/inicio). El lead
+ * SIEMPRE se persiste en demo_requests aunque el email falle — esta
+ * función es notificación, no canal único.
+ *
+ * @param {{ name:string; email:string; phone?:string; message?:string; toEmail:string }} opts
+ * @returns {Promise<{status:'sent'|'skipped_no_smtp'|'failed', error?:string}>}
+ */
+export async function sendDemoRequestEmail(opts) {
+  const start = Date.now();
+  const { name, email, phone, message, toEmail } = opts;
+  const result = {
+    workspace_id: null,
+    appointment_id: null,
+    to_email: toEmail,
+    kind: "demo_request",
+    status: "failed",
+    error: null,
+    ms: 0,
+  };
+
+  if (!smtpConfigured()) {
+    result.status = "skipped_no_smtp";
+    result.error = "SMTP no configurado";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+
+  try {
+    const transport = getTransport();
+    const c = getSmtpConfig();
+    const fromAddress = `${c.fromName} <${c.user}>`;
+    const safeName = String(name).slice(0, 100);
+    const safeEmail = String(email).slice(0, 200);
+    const safePhone = phone ? String(phone).slice(0, 50) : "";
+    const safeMessage = message ? String(message).slice(0, 2000) : "";
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
+        <div style="border-left: 3px solid #1f6f6b; padding-left: 16px; margin-bottom: 24px;">
+          <p style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280;">Psicomorfosis · Landing</p>
+          <h1 style="margin: 4px 0 0; font-size: 22px; color: #111827;">Nueva solicitud de demo</h1>
+        </div>
+        <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr><td style="padding: 8px 0; color: #6b7280; width: 110px;">Nombre</td><td style="padding: 8px 0; color: #111827; font-weight: 500;">${escapeHtmlMail(safeName)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280;">Email</td><td style="padding: 8px 0;"><a href="mailto:${escapeHtmlMail(safeEmail)}" style="color: #1f6f6b; text-decoration: none;">${escapeHtmlMail(safeEmail)}</a></td></tr>
+          ${safePhone ? `<tr><td style="padding: 8px 0; color: #6b7280;">Teléfono</td><td style="padding: 8px 0;"><a href="tel:${escapeHtmlMail(safePhone)}" style="color: #1f6f6b; text-decoration: none;">${escapeHtmlMail(safePhone)}</a></td></tr>` : ""}
+        </table>
+        ${safeMessage ? `
+          <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <p style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280;">Mensaje</p>
+            <p style="margin: 0; white-space: pre-wrap; line-height: 1.55;">${escapeHtmlMail(safeMessage)}</p>
+          </div>` : ""}
+        <p style="margin: 24px 0 0; font-size: 12px; color: #9ca3af;">Llegó desde https://psico.wailus.co/inicio · responde directo a este correo para contactar al lead.</p>
+      </div>
+    `;
+
+    await transport.sendMail({
+      from: fromAddress,
+      to: toEmail,
+      replyTo: safeEmail,
+      subject: `Demo Psicomorfosis · ${safeName}`,
+      html,
+    });
+
+    result.status = "sent";
+  } catch (err) {
+    result.error = String(err?.message ?? err).slice(0, 500);
+    console.warn(`[mailer] demo request email falló: ${result.error}`);
+  }
+
+  result.ms = Date.now() - start;
+  logEmail(result);
+  return result;
+}
+
+function escapeHtmlMail(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

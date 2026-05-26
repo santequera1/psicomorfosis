@@ -1239,6 +1239,14 @@ export const api = {
     return { blob: await r.blob(), filename };
   },
   deleteTestApplication: (id: string) => request<{ ok: true }>(`/api/tests/applications/${id}`, { method: "DELETE" }),
+  /** POST público desde la landing (/inicio) — solicitud de demo.
+   *  El backend persiste el lead y envía email a Stiven. Sin auth.
+   *  Rate-limited a 5/15min por IP. */
+  submitDemoRequest: (body: { name: string; email: string; phone?: string; message?: string }) =>
+    request<{ ok: true; id: number }>("/api/landing/demo-request", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** Setea/actualiza la nota clínica del psicólogo sobre el resultado del test. */
   setTestApplicationNotes: (id: string, notes: string | null) =>
     request<{ ok: true; notes: string | null }>(`/api/tests/applications/${id}/notes`, {

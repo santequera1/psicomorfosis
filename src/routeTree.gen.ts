@@ -20,6 +20,7 @@ import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LegalAdminRouteImport } from './routes/legal-admin'
+import { Route as InicioRouteImport } from './routes/inicio'
 import { Route as HistoriaClinicaRouteImport } from './routes/historia-clinica'
 import { Route as HistoriaRouteImport } from './routes/historia'
 import { Route as FacturacionRouteImport } from './routes/facturacion'
@@ -99,6 +100,11 @@ const LoginRoute = LoginRouteImport.update({
 const LegalAdminRoute = LegalAdminRouteImport.update({
   id: '/legal-admin',
   path: '/legal-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InicioRoute = InicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoriaClinicaRoute = HistoriaClinicaRouteImport.update({
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
@@ -312,6 +320,7 @@ export interface FileRoutesById {
   '/facturacion': typeof FacturacionRoute
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
+  '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/pacientes': typeof PacientesRoute
@@ -352,6 +361,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/inicio'
     | '/legal-admin'
     | '/login'
     | '/pacientes'
@@ -390,6 +400,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/inicio'
     | '/legal-admin'
     | '/login'
     | '/pacientes'
@@ -428,6 +439,7 @@ export interface FileRouteTypes {
     | '/facturacion'
     | '/historia'
     | '/historia-clinica'
+    | '/inicio'
     | '/legal-admin'
     | '/login'
     | '/pacientes'
@@ -467,6 +479,7 @@ export interface RootRouteChildren {
   FacturacionRoute: typeof FacturacionRoute
   HistoriaRoute: typeof HistoriaRoute
   HistoriaClinicaRoute: typeof HistoriaClinicaRoute
+  InicioRoute: typeof InicioRoute
   LegalAdminRoute: typeof LegalAdminRoute
   LoginRoute: typeof LoginRoute
   PacientesRoute: typeof PacientesRoute
@@ -575,6 +588,13 @@ declare module '@tanstack/react-router' {
       path: '/legal-admin'
       fullPath: '/legal-admin'
       preLoaderRoute: typeof LegalAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inicio': {
+      id: '/inicio'
+      path: '/inicio'
+      fullPath: '/inicio'
+      preLoaderRoute: typeof InicioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/historia-clinica': {
@@ -763,6 +783,7 @@ const rootRouteChildren: RootRouteChildren = {
   FacturacionRoute: FacturacionRoute,
   HistoriaRoute: HistoriaRoute,
   HistoriaClinicaRoute: HistoriaClinicaRoute,
+  InicioRoute: InicioRoute,
   LegalAdminRoute: LegalAdminRoute,
   LoginRoute: LoginRoute,
   PacientesRoute: PacientesRoute,

@@ -874,6 +874,21 @@ function runMigrations() {
     // pero el psicólogo quiere anotar observaciones cualitativas
     // (contexto, dudas, hipótesis) que el score no captura.
     "ALTER TABLE test_applications ADD COLUMN notes TEXT",
+    // Solicitudes de demo recibidas desde la landing pública (/inicio).
+    // Capturamos también IP y user_agent para debug. status pasa de
+    // 'nuevo' a 'contactado' cuando atendemos el lead.
+    `CREATE TABLE IF NOT EXISTS demo_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      message TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      status TEXT DEFAULT 'nuevo',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_demo_requests_created ON demo_requests(created_at DESC)",
   ];
   for (const sql of migrations) {
     try {
