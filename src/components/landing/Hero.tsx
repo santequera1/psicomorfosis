@@ -99,23 +99,23 @@ export function Hero() {
             whileHover={{ y: -2, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="flex-1 sm:flex-initial h-11 sm:h-12 px-4 sm:px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 shadow-lg shadow-brand-700/20"
+            className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg bg-brand-700 text-white text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-brand-700/20 whitespace-nowrap"
           >
-            Quiero acceso <ArrowRight className="h-4 w-4" />
+            Quiero acceso <ArrowRight className="h-4 w-4 shrink-0" />
           </motion.a>
           <motion.a
             href="#capabilities"
             whileHover={{ y: -2 }}
             transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="flex-1 sm:flex-initial h-11 sm:h-12 px-4 sm:px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-2"
+            className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
           >
-            <Play className="h-4 w-4" /> Ver plataforma
+            <Play className="h-4 w-4 shrink-0" /> Ver plataforma
           </motion.a>
         </motion.div>
       </div>
 
       {/* Video frame — scale-in con dissolve, después flota infinito */}
-      <div className="mt-6 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mt-12 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}

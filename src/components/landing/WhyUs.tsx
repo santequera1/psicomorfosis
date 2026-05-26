@@ -58,7 +58,7 @@ export function WhyUs() {
           >
             <MessageSquareQuote className="h-7 w-7 text-brand-700" />
             <p className="mt-4 font-serif text-xl text-ink-900 leading-relaxed">
-              "Antes pasaba dos horas al día solo gestionando WhatsApps, agendando citas y pasando tests al Excel. Ahora todo está aquí — y mis pacientes también."
+              "El MCMI lo corregía a mano con la tabla del libro y eran 90 minutos extra por paciente. Ahora el paciente lo responde desde su portal, me llega con el perfil corregido y exportado al Excel oficial. Recuperé mis tardes."
             </p>
             <div className="mt-6 flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 flex items-center justify-center text-sm font-semibold">

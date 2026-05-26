@@ -2,6 +2,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import {
   Users, Calendar, FileSignature, MonitorSmartphone, ClipboardCheck, BarChart3,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fadeUp, scaleIn, staggerParent, easeOutExpo } from "./motion";
@@ -143,7 +144,19 @@ export function Features() {
 
 function MobileCarousel() {
   return (
-    <div className="lg:hidden mt-12">
+    <div className="lg:hidden mt-10">
+      {/* Indicador de scroll horizontal — chevron animado */}
+      <div className="flex items-center justify-center gap-2 text-xs text-brand-700 font-medium mb-4">
+        <span>Desliza para ver las 6 capacidades</span>
+        <motion.span
+          animate={{ x: [0, 6, 0] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+          className="inline-flex"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </motion.span>
+      </div>
+
       <div
         className="flex overflow-x-auto snap-x snap-mandatory gap-4 -mx-4 px-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
@@ -151,14 +164,15 @@ function MobileCarousel() {
           <MobileCard key={c.title} capability={c} index={i} />
         ))}
       </div>
-      <p className="text-center text-xs text-ink-400 inline-flex items-center justify-center gap-1.5 w-full">
-        <span className="h-px w-6 bg-line-200" />
-        Desliza para ver las 6 capacidades
-        <span className="h-px w-6 bg-line-200" />
-      </p>
     </div>
   );
 }
+
+const BADGE_TONE: Record<"brand" | "success" | "neutral", string> = {
+  brand: "bg-brand-50 text-brand-800 border-brand-200/70",
+  success: "bg-emerald-50 text-emerald-800 border-emerald-200/70",
+  neutral: "bg-bg-50 text-ink-700 border-line-200",
+};
 
 function MobileCard({ capability, index }: { capability: Capability; index: number }) {
   return (
@@ -169,25 +183,36 @@ function MobileCard({ capability, index }: { capability: Capability; index: numb
       transition={{ duration: 0.6, ease: easeOutExpo }}
       className="snap-start shrink-0 w-[86%] sm:w-[60%] rounded-xl border border-line-200 bg-surface/70 backdrop-blur-sm overflow-hidden shadow-lg shadow-brand-700/5"
     >
-      <div className="relative">
-        <img
-          src={capability.image}
-          alt={capability.alt}
-          loading="lazy"
-          className="w-full h-auto block"
-        />
-        {capability.badges?.slice(0, 1).map((b) => (
-          <FloatingBadge
-            key={b.label}
-            icon={b.icon}
-            label={b.label}
-            tone={b.tone}
-            position={b.position}
-            delay={0.3}
-            floatPhase={0}
-          />
-        ))}
-      </div>
+      <img
+        src={capability.image}
+        alt={capability.alt}
+        loading="lazy"
+        className="w-full h-auto block"
+      />
+
+      {/* Badges estáticos entre imagen y texto. En mobile carousel los
+          floating absolute se salían de la tarjeta — aquí van como pills
+          horizontales dentro del flow, siempre visibles. */}
+      {capability.badges && capability.badges.length > 0 && (
+        <div className="px-5 pt-4 flex flex-wrap gap-1.5">
+          {capability.badges.map((b) => {
+            const Icon = b.icon;
+            return (
+              <span
+                key={b.label}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-medium",
+                  BADGE_TONE[b.tone ?? "brand"],
+                )}
+              >
+                <Icon className="h-3 w-3" />
+                {b.label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       <div className="p-5">
         <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">
           {capability.eyebrow} · #{String(index + 1).padStart(2, "0")}
@@ -335,7 +360,7 @@ const INTEGRATIONS: {
   { Icon: GoogleCalendarIcon, label: "Google Calendar", color: "#4285F4" },
   { Icon: ZoomIcon, label: "Zoom", color: "#2D8CFF" },
   { Icon: GoogleMeetIcon, label: "Google Meet", color: "#00897B" },
-  { Icon: WhatsAppIcon, label: "WhatsApp", color: "#25D366" },
+  { Icon: WhatsAppIcon, label: "Recordatorios WhatsApp", color: "#25D366" },
   { Icon: CalendlyIcon, label: "Calendly", color: "#006BFF" },
   { Icon: ILovePDFIcon, label: "iLovePDF", color: "#E5322D" },
 ];
@@ -392,7 +417,10 @@ function IntegrationsCard() {
           Conecta tus herramientas favoritas
         </h4>
         <p className="mt-2 text-sm text-ink-500 leading-relaxed">
-          Google Calendar, Zoom, Google Meet, WhatsApp Business, Calendly e iLovePDF — más exportar a PDF y Excel, ya disponibles en la app.
+          Google Calendar, Zoom, Google Meet, Calendly e iLovePDF, más recordatorios y confirmaciones automáticas por WhatsApp Business. Exportar a PDF y Excel ya están disponibles.
+        </p>
+        <p className="mt-3 text-[11px] text-ink-400 italic leading-relaxed">
+          *No somos enemigos de WhatsApp. La plataforma lo usa por ti para recordar citas, no para que respondas pacientes a las 11pm.
         </p>
       </div>
     </motion.div>

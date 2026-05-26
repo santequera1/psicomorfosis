@@ -11,8 +11,8 @@ export function LandingFooter() {
   return (
     <footer className="border-t border-line-100 bg-bg-50 pb-24 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
-        {/* Mobile layout */}
-        <div className="md:hidden space-y-7">
+        {/* Mobile layout — todo apilado vertical, alineado a la izquierda */}
+        <div className="md:hidden flex flex-col items-start gap-6 text-left">
           <div className="flex items-center gap-3">
             <Logo className="h-7 w-7 text-brand-700" />
             <div>
@@ -21,7 +21,8 @@ export function LandingFooter() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+          <nav className="flex flex-col items-start gap-3 text-sm">
+            <a href="#hero" className="text-ink-700 hover:text-brand-700 transition-colors">Inicio</a>
             <a href="#capabilities" className="text-ink-700 hover:text-brand-700 transition-colors">Plataforma</a>
             <a href="#estilo" className="text-ink-700 hover:text-brand-700 transition-colors">Estilo</a>
             <a href="#why" className="text-ink-700 hover:text-brand-700 transition-colors">Por qué</a>
@@ -33,15 +34,15 @@ export function LandingFooter() {
             >
               <Mail className="h-3.5 w-3.5" /> Contacto
             </a>
-          </div>
+          </nav>
 
-          <div className="flex items-center gap-4 text-xs text-ink-500">
+          <div className="flex items-center gap-3 text-xs text-ink-500">
             <Link to="/privacidad" className="hover:text-ink-900 transition-colors">Privacidad</Link>
             <span className="h-3 w-px bg-line-200" />
             <Link to="/terminos" className="hover:text-ink-900 transition-colors">Términos</Link>
           </div>
 
-          <div className="pt-5 border-t border-line-100 space-y-2 text-xs text-ink-400">
+          <div className="w-full pt-5 border-t border-line-100 space-y-2 text-xs text-ink-400">
             <p>© {new Date().getFullYear()} Psicomorfosis</p>
             <p className="inline-flex items-center gap-1.5">
               Hecho con <Heart className="h-3 w-3 text-brand-700" /> en Cartagena
