@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import { MobileBottomNav } from "@/components/landing/MobileBottomNav";
 import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
 import { Hero } from "@/components/landing/Hero";
 import { BeforeAfter } from "@/components/landing/BeforeAfter";
@@ -60,6 +61,7 @@ function InicioPage() {
     <div className="min-h-screen text-ink-900 relative">
       <LandingBackdrop />
       <LandingHeader />
+      <MobileBottomNav />
       <main>
         <Hero />
         <BeforeAfter />

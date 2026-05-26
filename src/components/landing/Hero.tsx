@@ -23,7 +23,7 @@ export function Hero() {
   return (
     <section
       id="hero"
-      className="relative pt-24 pb-16 sm:pt-28 sm:pb-24 overflow-hidden"
+      className="relative pt-20 pb-10 sm:pt-28 sm:pb-24 overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         {/* Badge */}
@@ -38,7 +38,7 @@ export function Hero() {
         </motion.div>
 
         {/* Headline — palabra por palabra */}
-        <h1 className="mt-6 font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
+        <h1 className="mt-5 sm:mt-6 font-serif text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
           <div className="overflow-hidden">
             {HEADLINE_LINE_1.map((word, i) => (
               <motion.span
@@ -80,7 +80,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: easeOutExpo, delay: 0.95 }}
-          className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-ink-500 leading-relaxed"
+          className="mt-4 sm:mt-6 max-w-2xl mx-auto text-sm sm:text-lg text-ink-500 leading-relaxed px-2"
         >
           Menos tiempo administrando. Más tiempo atendiendo pacientes.
           Organiza sesiones, historia clínica y seguimiento terapéutico
@@ -92,14 +92,14 @@ export function Hero() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: easeOutExpo, delay: 1.1 }}
-          className="mt-9 flex items-center justify-center gap-3 flex-wrap"
+          className="mt-6 sm:mt-9 flex items-stretch sm:items-center justify-center gap-2 sm:gap-3 px-2"
         >
           <motion.a
             href="#demo"
             whileHover={{ y: -2, scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shadow-lg shadow-brand-700/20"
+            className="flex-1 sm:flex-initial h-11 sm:h-12 px-4 sm:px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 shadow-lg shadow-brand-700/20"
           >
             Quiero acceso <ArrowRight className="h-4 w-4" />
           </motion.a>
@@ -107,15 +107,15 @@ export function Hero() {
             href="#capabilities"
             whileHover={{ y: -2 }}
             transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center gap-2"
+            className="flex-1 sm:flex-initial h-11 sm:h-12 px-4 sm:px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-2"
           >
-            <Play className="h-4 w-4" /> Ver la plataforma
+            <Play className="h-4 w-4" /> Ver plataforma
           </motion.a>
         </motion.div>
       </div>
 
       {/* Video frame — scale-in con dissolve, después flota infinito */}
-      <div className="mt-10 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mt-6 sm:mt-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}

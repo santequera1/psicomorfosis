@@ -23,7 +23,7 @@ const AFTER = [
 
 export function BeforeAfter() {
   return (
-    <section id="antes-despues" className="py-20 sm:py-28 relative">
+    <section id="antes-despues" className="py-12 sm:py-20 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="El cambio"
@@ -36,7 +36,7 @@ export function BeforeAfter() {
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8"
+          className="mt-10 sm:mt-14 grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-8"
         >
           {/* Antes — apagado, sutilmente inquieto */}
           <motion.div

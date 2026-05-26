@@ -123,8 +123,8 @@ export function ThemeShowcase() {
             </AnimatePresence>
           </div>
 
-          {/* Controles */}
-          <div className="mt-8 flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+          {/* Controles — siempre en una sola línea */}
+          <div className="mt-8 flex items-center justify-center gap-1.5 sm:gap-3 px-2">
             {MODES.map((m) => {
               const Icon = m.icon;
               const isActive = active === m.id;
@@ -136,14 +136,14 @@ export function ThemeShowcase() {
                   whileTap={{ scale: 0.96 }}
                   transition={{ duration: 0.3, ease: easeOutExpo }}
                   className={cn(
-                    "inline-flex items-center gap-2 h-11 px-5 rounded-full text-sm font-medium transition-all duration-500",
+                    "inline-flex items-center gap-1.5 sm:gap-2 h-10 sm:h-11 px-3 sm:px-5 rounded-full text-xs sm:text-sm font-medium transition-all duration-500 whitespace-nowrap",
                     isActive
                       ? "bg-brand-700 text-white shadow-lg shadow-brand-700/25 scale-105"
                       : "bg-bg-50 text-ink-700 border border-line-200 hover:border-brand-400",
                   )}
                   aria-pressed={isActive}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   {m.label}
                 </motion.button>
               );

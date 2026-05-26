@@ -2,11 +2,14 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import {
   Users, Calendar, FileSignature, MonitorSmartphone, ClipboardCheck, BarChart3,
-  Mail, FileText, FileSpreadsheet, FileSignature as Signature, Globe, FileType,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fadeUp, scaleIn, staggerParent, easeOutExpo } from "./motion";
 import { FloatingBadge, type FloatingBadgePosition } from "./FloatingBadge";
+import {
+  GoogleCalendarIcon, ZoomIcon, GoogleMeetIcon, WhatsAppIcon,
+  CalendlyIcon, ILovePDFIcon,
+} from "./BrandIcons";
 
 /**
  * Showcase de capacidades. Cada bloque es un "momento" editorial:
@@ -112,7 +115,7 @@ const CAPABILITIES: Capability[] = [
 
 export function Features() {
   return (
-    <section id="capabilities" className="py-20 sm:py-28 relative">
+    <section id="capabilities" className="py-14 sm:py-24 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="La plataforma"
@@ -120,7 +123,13 @@ export function Features() {
           subtitle="Cada sección nació de una conversación con psicólogas reales en Colombia. Esto es lo que ves desde el primer día."
         />
 
-        <div className="mt-20 space-y-28 sm:space-y-36">
+        {/* Mobile: carousel horizontal scroll-snap. Evita que la
+            página se vuelva interminable cuando 6 zig-zags se apilan
+            verticalmente en pantallas pequeñas. */}
+        <MobileCarousel />
+
+        {/* Desktop: zig-zag editorial con parallax */}
+        <div className="hidden lg:block mt-20 space-y-36">
           {CAPABILITIES.map((c, i) => (
             <CapabilityRow key={c.title} capability={c} index={i} />
           ))}
@@ -129,6 +138,68 @@ export function Features() {
         <ExtraGrid />
       </div>
     </section>
+  );
+}
+
+function MobileCarousel() {
+  return (
+    <div className="lg:hidden mt-12">
+      <div
+        className="flex overflow-x-auto snap-x snap-mandatory gap-4 -mx-4 px-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {CAPABILITIES.map((c, i) => (
+          <MobileCard key={c.title} capability={c} index={i} />
+        ))}
+      </div>
+      <p className="text-center text-xs text-ink-400 inline-flex items-center justify-center gap-1.5 w-full">
+        <span className="h-px w-6 bg-line-200" />
+        Desliza para ver las 6 capacidades
+        <span className="h-px w-6 bg-line-200" />
+      </p>
+    </div>
+  );
+}
+
+function MobileCard({ capability, index }: { capability: Capability; index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.6, ease: easeOutExpo }}
+      className="snap-start shrink-0 w-[86%] sm:w-[60%] rounded-xl border border-line-200 bg-surface/70 backdrop-blur-sm overflow-hidden shadow-lg shadow-brand-700/5"
+    >
+      <div className="relative">
+        <img
+          src={capability.image}
+          alt={capability.alt}
+          loading="lazy"
+          className="w-full h-auto block"
+        />
+        {capability.badges?.slice(0, 1).map((b) => (
+          <FloatingBadge
+            key={b.label}
+            icon={b.icon}
+            label={b.label}
+            tone={b.tone}
+            position={b.position}
+            delay={0.3}
+            floatPhase={0}
+          />
+        ))}
+      </div>
+      <div className="p-5">
+        <p className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold">
+          {capability.eyebrow} · #{String(index + 1).padStart(2, "0")}
+        </p>
+        <h3 className="mt-2 font-serif text-xl text-ink-900 leading-tight">
+          {capability.title}
+        </h3>
+        <p className="mt-2 text-sm text-ink-500 leading-relaxed">
+          {capability.description}
+        </p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -252,18 +323,21 @@ function ExtraGrid() {
 }
 
 /**
- * Card especial: en lugar de un screenshot, muestra un grid de íconos
- * con las integraciones reales que la app usa. Cada ícono es una
- * pieza del stack que el psicólogo no tiene que configurar — viene
- * lista para Colombia.
+ * Card especial: integraciones planeadas (próximamente) que viven en
+ * Configuración → Integraciones dentro de la app. Cada una con su
+ * logo de marca real (SVG inline en BrandIcons) y color oficial.
  */
-const INTEGRATIONS: { icon: typeof Mail; label: string }[] = [
-  { icon: Mail, label: "Email · SMTP" },
-  { icon: FileText, label: "PDF" },
-  { icon: FileSpreadsheet, label: "Excel" },
-  { icon: Globe, label: "CIE-11 OMS" },
-  { icon: Signature, label: "Firma" },
-  { icon: FileType, label: "Word" },
+const INTEGRATIONS: {
+  Icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  color: string;
+}[] = [
+  { Icon: GoogleCalendarIcon, label: "Google Calendar", color: "#4285F4" },
+  { Icon: ZoomIcon, label: "Zoom", color: "#2D8CFF" },
+  { Icon: GoogleMeetIcon, label: "Google Meet", color: "#00897B" },
+  { Icon: WhatsAppIcon, label: "WhatsApp", color: "#25D366" },
+  { Icon: CalendlyIcon, label: "Calendly", color: "#006BFF" },
+  { Icon: ILovePDFIcon, label: "iLovePDF", color: "#E5322D" },
 ];
 
 function IntegrationsCard() {
@@ -274,7 +348,6 @@ function IntegrationsCard() {
       transition={{ duration: 0.5, ease: easeOutExpo }}
       className="rounded-xl border border-line-200 bg-surface/60 backdrop-blur-sm overflow-hidden group relative"
     >
-      {/* Glow muy sutil */}
       <motion.div
         className="absolute -top-16 -right-16 h-40 w-40 rounded-full blur-2xl pointer-events-none"
         style={{
@@ -286,7 +359,7 @@ function IntegrationsCard() {
       />
 
       <div className="aspect-16/10 bg-bg/40 flex items-center justify-center p-4 relative">
-        <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+        <div className="grid grid-cols-3 gap-2.5 w-full max-w-xs">
           {INTEGRATIONS.map((it, i) => (
             <motion.div
               key={it.label}
@@ -295,9 +368,10 @@ function IntegrationsCard() {
               viewport={{ once: true, margin: "-40px" }}
               transition={{ duration: 0.5, ease: easeOutExpo, delay: i * 0.08 }}
               className="aspect-square rounded-xl border border-line-200 bg-surface shadow-sm flex flex-col items-center justify-center gap-1 hover:border-brand-400 hover:shadow-md transition-all"
+              title={it.label}
             >
-              <it.icon className="h-5 w-5 text-brand-700" />
-              <span className="text-[10px] text-ink-700 font-medium leading-tight text-center px-1">
+              <it.Icon className="h-5 w-5" style={{ color: it.color } as React.CSSProperties} />
+              <span className="text-[9px] text-ink-700 font-medium leading-tight text-center px-1 truncate w-full">
                 {it.label}
               </span>
             </motion.div>
@@ -305,14 +379,20 @@ function IntegrationsCard() {
         </div>
       </div>
       <div className="p-6 relative">
-        <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">
-          Integraciones
-        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">
+            Integraciones
+          </p>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] text-amber-800 font-medium">
+            <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+            Próximamente
+          </span>
+        </div>
         <h4 className="mt-2 font-serif text-xl text-ink-900 leading-tight">
-          Todo conectado, sin configurar nada
+          Conecta tus herramientas favoritas
         </h4>
         <p className="mt-2 text-sm text-ink-500 leading-relaxed">
-          Email automático, PDF de consentimientos y recibos, exportación a Excel oficial, catálogo CIE-11 desde la OMS, firma electrónica y plantillas Word — todo viene listo.
+          Google Calendar, Zoom, Google Meet, WhatsApp Business, Calendly e iLovePDF — más exportar a PDF y Excel, ya disponibles en la app.
         </p>
       </div>
     </motion.div>

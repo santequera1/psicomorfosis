@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { ArrowRight, MessageCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { easeOutExpo, fadeUp, staggerParent } from "./motion";
+import { WhatsAppIcon } from "./BrandIcons";
 
 /**
  * Cierre cinematográfico. Va después de WhyUs y antes del DemoForm.
@@ -89,7 +90,7 @@ export function FinalCTA() {
                 transition={{ duration: 0.3, ease: easeOutExpo }}
                 className="h-12 px-6 rounded-lg border border-white/20 bg-white/5 text-white text-sm font-medium inline-flex items-center gap-2 hover:bg-white/10 transition-colors"
               >
-                <MessageCircle className="h-4 w-4" /> Contáctanos
+                <WhatsAppIcon className="h-4 w-4" /> Contáctanos
               </motion.a>
             </motion.div>
 
