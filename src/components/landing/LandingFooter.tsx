@@ -15,8 +15,8 @@ export function LandingFooter() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-            <a href="#features" className="text-ink-500 hover:text-ink-900 transition-colors">Funciones</a>
-            <a href="#demo" className="text-ink-500 hover:text-ink-900 transition-colors">Solicitar demo</a>
+            <a href="#capabilities" className="text-ink-500 hover:text-ink-900 transition-colors">Plataforma</a>
+            <a href="#demo" className="text-ink-500 hover:text-ink-900 transition-colors">Quiero acceso</a>
             <Link to="/privacidad" className="text-ink-500 hover:text-ink-900 transition-colors">Privacidad</Link>
             <Link to="/terminos" className="text-ink-500 hover:text-ink-900 transition-colors">Términos</Link>
             <a

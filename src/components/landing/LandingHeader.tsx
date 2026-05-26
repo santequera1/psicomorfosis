@@ -29,9 +29,10 @@ export function LandingHeader() {
           <span className="font-serif text-lg">Psicomorfosis</span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm text-ink-700">
-          <a href="#features" className="hover:text-brand-700 transition-colors">Funciones</a>
+          <a href="#capabilities" className="hover:text-brand-700 transition-colors">Plataforma</a>
+          <a href="#estilo" className="hover:text-brand-700 transition-colors">Estilo</a>
           <a href="#why" className="hover:text-brand-700 transition-colors">Por qué</a>
-          <a href="#demo" className="hover:text-brand-700 transition-colors">Solicitar demo</a>
+          <a href="#demo" className="hover:text-brand-700 transition-colors">Acceso</a>
         </nav>
         <div className="flex items-center gap-2">
           <Link
@@ -44,7 +45,7 @@ export function LandingHeader() {
             href="#demo"
             className="h-9 px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 transition-colors"
           >
-            Solicitar demo
+            Quiero acceso
           </a>
         </div>
       </div>

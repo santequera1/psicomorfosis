@@ -2,28 +2,36 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { Hero } from "@/components/landing/Hero";
+import { BeforeAfter } from "@/components/landing/BeforeAfter";
 import { Features } from "@/components/landing/Features";
+import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { WhyUs } from "@/components/landing/WhyUs";
 import { DemoForm } from "@/components/landing/DemoForm";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
- * Landing page pública. Sin auth, sin AppShell. La usa marketing
- * para presentar la plataforma (rifa de mayo 26 y siguientes).
+ * Landing pública. Forzamos tema claro y mostramos en este orden:
+ *  Hero → Antes/Después → Capacidades (showcase) → Estilo (modos)
+ *  → Manifiesto/Por qué → Formulario.
  *
- * Diseño:
- *  - Tema claro forzado (no respetamos preferencia de usuario para
- *    no romper la estética curada de la landing).
- *  - Animaciones con CSS + Intersection Observer (sin GSAP).
- *  - Hero con video en bucle. Resto stagger en scroll.
+ * Antes/Después va arriba a propósito: conecta emocional antes de
+ * mostrar pantallas. El usuario llega ya con apetito por la solución.
  */
 export const Route = createFileRoute("/inicio")({
   head: () => ({
     meta: [
       { title: "Psicomorfosis · La consulta clínica sin WhatsApp ni Excel" },
-      { name: "description", content: "Plataforma clínica integral para psicólogas colombianas: agenda, historia clínica, tests psicométricos, firma electrónica y portal del paciente." },
-      { property: "og:title", content: "Psicomorfosis · Plataforma clínica para psicólogas" },
-      { property: "og:description", content: "Agenda, historia, tests, firma, portal del paciente. Hecha con psicólogas reales en Colombia." },
+      {
+        name: "description",
+        content:
+          "Menos tiempo administrando. Más tiempo atendiendo pacientes. La nueva generación de herramientas clínicas para psicólogos en Colombia.",
+      },
+      { property: "og:title", content: "Psicomorfosis · Plataforma clínica para psicólogos" },
+      {
+        property: "og:description",
+        content:
+          "Organiza pacientes, sesiones, historia clínica y seguimiento terapéutico desde un solo lugar. Hecha con psicólogas reales en Colombia.",
+      },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://psico.wailus.co/inicio" },
     ],
@@ -32,8 +40,6 @@ export const Route = createFileRoute("/inicio")({
 });
 
 function InicioPage() {
-  // Forzamos tema claro para la landing — la mezcla de dark + dashboards
-  // se ve confusa en una página comercial. Limpiamos al desmontar.
   useEffect(() => {
     const root = document.documentElement;
     const hadDark = root.classList.contains("dark");
@@ -48,7 +54,9 @@ function InicioPage() {
       <LandingHeader />
       <main>
         <Hero />
+        <BeforeAfter />
         <Features />
+        <ThemeShowcase />
         <WhyUs />
         <DemoForm />
       </main>

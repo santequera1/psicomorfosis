@@ -46,8 +46,8 @@ export function DemoForm() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="Empieza aquí"
-          title="Solicita una demo"
-          subtitle="Te contactamos en menos de 24 horas para mostrarte la plataforma en vivo con tu propio workspace."
+          title="Queremos conocer tu consulta"
+          subtitle="Te mostramos la plataforma en vivo con tu propio workspace y escuchamos cómo organizas hoy tus pacientes. Te contactamos en menos de 24 horas."
         />
 
         <div
@@ -117,7 +117,7 @@ export function DemoForm() {
                 >
                   {mu.isPending
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</>
-                    : <><Send className="h-4 w-4" /> Solicitar demo</>}
+                    : <><Send className="h-4 w-4" /> Quiero acceso</>}
                 </button>
                 <p className="mt-3 text-[11px] text-ink-500 text-center">
                   Tus datos solo los usamos para contactarte. No vendemos información ni hacemos spam.

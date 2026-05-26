@@ -84,8 +84,9 @@ export function Hero() {
           )}
           style={{ transitionDelay: "380ms" }}
         >
-          Agenda, historia clínica, tests psicométricos, firma electrónica y portal del paciente.
-          Todo en un solo lugar, hecho para psicólogas que ya están cansadas de pegar todo manual.
+          Menos tiempo administrando. Más tiempo atendiendo pacientes.
+          Organiza sesiones, historia clínica y seguimiento terapéutico
+          desde un solo lugar pensado para psicólogos en Colombia.
         </p>
 
         <div
@@ -100,13 +101,13 @@ export function Hero() {
             href="#demo"
             className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shadow-lg shadow-brand-700/20 transition-all hover:-translate-y-0.5"
           >
-            Solicitar demo <ArrowRight className="h-4 w-4" />
+            Quiero acceso <ArrowRight className="h-4 w-4" />
           </a>
           <a
-            href="#features"
+            href="#capabilities"
             className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center gap-2 transition-colors"
           >
-            <Play className="h-4 w-4" /> Ver funciones
+            <Play className="h-4 w-4" /> Ver la plataforma
           </a>
         </div>
       </div>
