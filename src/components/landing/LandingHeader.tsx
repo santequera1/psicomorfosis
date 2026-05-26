@@ -20,14 +20,14 @@ export function LandingHeader() {
       )}
     >
       <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-        <a
-          href="#hero"
-          className="inline-flex items-center gap-2 text-ink-900"
+        <Link
+          to="/inicio"
+          className="inline-flex items-center gap-2 text-ink-900 -m-2 p-2 rounded-md"
           aria-label="Ir al inicio"
         >
           <Logo className="h-7 w-7 text-brand-700" />
           <span className="font-serif text-lg">Psicomorfosis</span>
-        </a>
+        </Link>
         <nav className="hidden md:flex items-center text-sm text-ink-700">
           <a href="#capabilities" className="px-4 hover:text-brand-700 transition-colors">Plataforma</a>
           <span className="h-3 w-px bg-line-200" aria-hidden />

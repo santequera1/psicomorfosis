@@ -647,7 +647,9 @@ const ROUTE_ITEMS: CmdItem[] = [
   { kind: "ruta", label: "Agenda", to: "/agenda", icon: CalendarDays, description: "Citas" },
   { kind: "ruta", label: "Pacientes", to: "/pacientes", icon: Users, description: "Lista" },
   { kind: "ruta", label: "Tests psicométricos", to: "/tests", icon: Brain },
-  { kind: "ruta", label: "Prescripción", to: "/prescripcion", icon: Pill },
+  // Prescripción oculta — la vista existe pero el feature es solo para
+  // psiquiatras, no para psicólogos. Si en el futuro volvemos a abrirla
+  // restauramos esta entrada.
   { kind: "ruta", label: "Documentos", to: "/documentos", icon: FileText },
 ];
 
