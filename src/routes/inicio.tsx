@@ -1,21 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
+import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
 import { Hero } from "@/components/landing/Hero";
 import { BeforeAfter } from "@/components/landing/BeforeAfter";
 import { Features } from "@/components/landing/Features";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { WhyUs } from "@/components/landing/WhyUs";
+import { FinalCTA } from "@/components/landing/FinalCTA";
 import { DemoForm } from "@/components/landing/DemoForm";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
- * Landing pública. Forzamos tema claro y mostramos en este orden:
- *  Hero → Antes/Después → Capacidades (showcase) → Estilo (modos)
- *  → Manifiesto/Por qué → Formulario.
+ * Landing pública. Forzamos tema claro + smooth scroll mientras
+ * esté montada. Orden de secciones:
+ *   Hero → Antes/Después → Capacidades → Estilo → Por qué → Final CTA → Form.
  *
- * Antes/Después va arriba a propósito: conecta emocional antes de
- * mostrar pantallas. El usuario llega ya con apetito por la solución.
+ * El LandingBackdrop vive detrás de todo (position fixed) con blobs
+ * de gradiente animados muy desaturados. El resto de secciones usa
+ * fondos transparentes para que esos blobs respiren.
  */
 export const Route = createFileRoute("/inicio")({
   head: () => ({
@@ -43,14 +46,18 @@ function InicioPage() {
   useEffect(() => {
     const root = document.documentElement;
     const hadDark = root.classList.contains("dark");
+    const prevScrollBehavior = root.style.scrollBehavior;
     root.classList.remove("dark");
+    root.style.scrollBehavior = "smooth";
     return () => {
       if (hadDark) root.classList.add("dark");
+      root.style.scrollBehavior = prevScrollBehavior;
     };
   }, []);
 
   return (
-    <div className="bg-bg min-h-screen text-ink-900">
+    <div className="min-h-screen text-ink-900 relative">
+      <LandingBackdrop />
       <LandingHeader />
       <main>
         <Hero />
@@ -58,6 +65,7 @@ function InicioPage() {
         <Features />
         <ThemeShowcase />
         <WhyUs />
+        <FinalCTA />
         <DemoForm />
       </main>
       <LandingFooter />

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Send } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { useScrollReveal } from "./useScrollReveal";
+import { easeOutExpo } from "./motion";
 import { SectionHeader } from "./Features";
 
 /**
@@ -16,7 +16,6 @@ import { SectionHeader } from "./Features";
  * para feedback claro y para evitar que el usuario envíe dos veces.
  */
 export function DemoForm() {
-  const { ref, revealed } = useScrollReveal<HTMLDivElement>();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -42,7 +41,7 @@ export function DemoForm() {
     !mu.isPending;
 
   return (
-    <section id="demo" className="py-20 sm:py-28 bg-surface">
+    <section id="demo" className="py-20 sm:py-28 relative">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="Empieza aquí"
@@ -50,12 +49,12 @@ export function DemoForm() {
           subtitle="Te mostramos la plataforma en vivo con tu propio workspace y escuchamos cómo organizas hoy tus pacientes. Te contactamos en menos de 24 horas."
         />
 
-        <div
-          ref={ref}
-          className={cn(
-            "mt-12 rounded-2xl border border-line-200 bg-bg-50/40 p-6 sm:p-10 transition-all duration-700 ease-out",
-            revealed ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
-          )}
+        <motion.div
+          initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.9, ease: easeOutExpo }}
+          className="mt-12 rounded-2xl border border-line-200 bg-surface/70 backdrop-blur-sm p-6 sm:p-10 shadow-lg shadow-brand-700/5"
         >
           {sent ? (
             <ThankYou />
@@ -125,7 +124,7 @@ export function DemoForm() {
               </div>
             </form>
           )}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

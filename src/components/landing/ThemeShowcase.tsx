@@ -1,39 +1,48 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Sun, Moon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useScrollReveal } from "./useScrollReveal";
+import { easeOutExpo } from "./motion";
 import { SectionHeader } from "./Features";
 
 /**
- * Crossfade entre los 3 modos de la app (claro / oscuro / aurora).
- * Las 3 imágenes son exactamente del mismo screen (Configuración →
- * Apariencia), así que al alternar dan la sensación de "antes/después"
- * sin que se mueva nada del layout.
+ * Crossfade entre los 3 modos (claro / oscuro / aurora). AnimatePresence
+ * permite la transición cruzada elegante con opacity + scale sutil.
  *
- * Auto-rotación cada 4s. Cuando el usuario toca un botón, pausamos
- * el ciclo (respeto a su intención).
+ * Auto-rotación cada 4s. Al click el usuario pasa a mandar y no
+ * reanudamos el ciclo.
  */
 type Mode = "claro" | "oscuro" | "aurora";
 
-const MODES: { id: Mode; label: string; icon: typeof Sun; src: string; tint: string }[] = [
-  { id: "claro", label: "Claro", icon: Sun, src: "/landing/modo-claro.png", tint: "from-amber-100 to-transparent" },
-  { id: "oscuro", label: "Oscuro", icon: Moon, src: "/landing/modo-oscuro.png", tint: "from-slate-900/40 to-transparent" },
-  { id: "aurora", label: "Aurora", icon: Sparkles, src: "/landing/modo-aurora.png", tint: "from-violet-400/30 to-transparent" },
+const MODES: { id: Mode; label: string; icon: typeof Sun; src: string }[] = [
+  { id: "claro", label: "Claro", icon: Sun, src: "/landing/modo-claro.png" },
+  { id: "oscuro", label: "Oscuro", icon: Moon, src: "/landing/modo-oscuro.png" },
+  { id: "aurora", label: "Aurora", icon: Sparkles, src: "/landing/modo-aurora.png" },
 ];
 
 const AUTOPLAY_MS = 4000;
 
 export function ThemeShowcase() {
-  const { ref, revealed } = useScrollReveal<HTMLDivElement>();
   const [active, setActive] = useState<Mode>("claro");
   const [paused, setPaused] = useState(false);
+  const [inView, setInView] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-cycle solo si no está pausado por click del usuario.
-  // Lo arrancamos cuando el bloque ya entró en viewport para que
-  // no consuma CPU mientras la sección no se ve.
+  // Observer ligero para arrancar el ciclo solo al ver la sección.
   useEffect(() => {
-    if (paused || !revealed) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.3 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (paused || !inView) return;
     timerRef.current = setInterval(() => {
       setActive((prev) => {
         const idx = MODES.findIndex((m) => m.id === prev);
@@ -43,15 +52,17 @@ export function ThemeShowcase() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [paused, revealed]);
+  }, [paused, inView]);
 
   const handleClick = (id: Mode) => {
     setActive(id);
-    setPaused(true); // Al primer click el usuario manda. Nunca reanudamos.
+    setPaused(true);
   };
 
+  const activeMode = MODES.find((m) => m.id === active)!;
+
   return (
-    <section id="estilo" className="py-20 sm:py-28 bg-surface">
+    <section ref={sectionRef} id="estilo" className="py-20 sm:py-28 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="Tu plataforma, tu estilo"
@@ -59,18 +70,15 @@ export function ThemeShowcase() {
           subtitle="Tres modos pensados para distintos momentos del día. Claro para mañanas frescas, oscuro para sesiones nocturnas, aurora cuando quieres sentir que tu consulta es de otra liga."
         />
 
-        <div
-          ref={ref}
-          className={cn(
-            "mt-14 transition-all duration-700 ease-out",
-            revealed ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
-          )}
+        <motion.div
+          initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.9, ease: easeOutExpo }}
+          className="mt-14"
         >
-          {/* Stack de imágenes con crossfade. Todas absolutas excepto el
-              wrapper que define la altura (usa la primera como referencia
-              con un img invisible para mantener aspect ratio). */}
           <div className="relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-bg">
-            {/* Spacer para mantener aspect ratio sin que el SSR colapse */}
+            {/* Spacer invisible para mantener aspect ratio del frame */}
             <img
               src={MODES[0].src}
               alt=""
@@ -78,40 +86,35 @@ export function ThemeShowcase() {
               className="w-full h-auto block opacity-0 pointer-events-none"
             />
 
-            {MODES.map((m) => (
-              <img
-                key={m.id}
-                src={m.src}
-                alt={`Psicomorfosis en modo ${m.label}`}
+            <AnimatePresence mode="sync">
+              <motion.img
+                key={activeMode.id}
+                src={activeMode.src}
+                alt={`Psicomorfosis en modo ${activeMode.label}`}
                 loading="lazy"
-                className={cn(
-                  "absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-1000 ease-in-out",
-                  active === m.id ? "opacity-100" : "opacity-0",
-                )}
+                className="absolute inset-0 w-full h-full object-cover object-top"
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.99 }}
+                transition={{ duration: 1, ease: easeOutExpo }}
               />
-            ))}
-
-            {/* Glow tint según modo activo — capa decorativa muy sutil */}
-            <div
-              className={cn(
-                "absolute inset-x-0 top-0 h-24 bg-linear-to-b pointer-events-none transition-opacity duration-1000",
-                "from-current/0 to-transparent",
-              )}
-              aria-hidden
-            />
+            </AnimatePresence>
           </div>
 
-          {/* Controles abajo del frame — pills grandes y claras */}
+          {/* Controles */}
           <div className="mt-8 flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
             {MODES.map((m) => {
               const Icon = m.icon;
               const isActive = active === m.id;
               return (
-                <button
+                <motion.button
                   key={m.id}
                   onClick={() => handleClick(m.id)}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ duration: 0.3, ease: easeOutExpo }}
                   className={cn(
-                    "inline-flex items-center gap-2 h-11 px-5 rounded-full text-sm font-medium transition-all duration-300",
+                    "inline-flex items-center gap-2 h-11 px-5 rounded-full text-sm font-medium transition-all duration-500",
                     isActive
                       ? "bg-brand-700 text-white shadow-lg shadow-brand-700/25 scale-105"
                       : "bg-bg-50 text-ink-700 border border-line-200 hover:border-brand-400",
@@ -120,18 +123,22 @@ export function ThemeShowcase() {
                 >
                   <Icon className="h-4 w-4" />
                   {m.label}
-                </button>
+                </motion.button>
               );
             })}
           </div>
 
-          {/* Indicador de auto-cycle (sutil, solo si sigue activo) */}
           {!paused && (
-            <p className="mt-4 text-center text-xs text-ink-400">
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="mt-4 text-center text-xs text-ink-400"
+            >
               Cambia solo cada 4 segundos · toca uno para fijarlo
-            </p>
+            </motion.p>
           )}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

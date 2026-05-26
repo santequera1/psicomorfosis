@@ -1,149 +1,183 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, Play } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { ArrowRight, Play, BellRing, CheckCircle2, CalendarCheck } from "lucide-react";
+import { easeOutExpo, floating } from "./motion";
+import { FloatingBadge } from "./FloatingBadge";
 
 /**
- * Hero de la landing. Texto stagger fade-in, video debajo en bucle
- * (loop muted autoplay para que arranque sin click — política de
- * autoplay del browser permite con muted). preload="metadata" para
- * no descargar los 31MB hasta que el usuario realmente lo necesite
- * (al menos no en el primer paint).
+ * Hero cinematográfico. Secuencia de entrada:
+ *   1. Badge fade in
+ *   2. Headline palabra por palabra
+ *   3. Subheadline
+ *   4. CTAs
+ *   5. Video frame escala desde 0.96 → 1.0 con blur dissolve
  *
- * El gradient de fondo es sutil (off-white → blanco). Sin imagen
- * de fondo pesada — la atención debe ir al video.
+ * Después del entrance:
+ *   - El frame del video flota infinito (-8/+8 px, 6s)
+ *   - 3 badges flotantes sobre el video sugieren actividad real
+ *   - Glow radial detrás del frame respira lentamente
  */
-export function Hero() {
-  // Marcamos `mounted` después del primer paint para disparar las
-  // animaciones del lado cliente. Evita que el SSR sirva HTML con
-  // opacity-0 que parpadee si JS tarda.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    // requestAnimationFrame asegura que la transición de
-    // mounted=false → true se renderice como animación, no como
-    // instantáneo (React batches sino).
-    const id = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+const HEADLINE_LINE_1 = ["La", "consulta", "clínica"];
+const HEADLINE_LINE_2 = ["sin", "WhatsApp", "ni", "Excel."];
 
+export function Hero() {
   return (
     <section
       id="hero"
       className="relative pt-32 pb-16 sm:pt-40 sm:pb-24 overflow-hidden"
     >
-      {/* Fondo decorativo — gradiente radial muy sutil + ruido implícito
-          via off-white. Sin imagen para no robar protagonismo al video. */}
-      <div
-        className="absolute inset-0 -z-10 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 50% -20%, oklch(0.94 0.04 175 / 0.4), transparent 70%), linear-gradient(180deg, oklch(0.985 0.005 90), oklch(0.99 0.003 90))",
-        }}
-        aria-hidden
-      />
-
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        {/* Tag pill */}
-        <div
-          className={cn(
-            "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs text-brand-800 font-medium",
-            "transition-all duration-700 ease-out",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2",
-          )}
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: easeOutExpo, delay: 0.1 }}
+          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs text-brand-800 font-medium"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-pulse" />
           Construida con psicólogas colombianas
-        </div>
+        </motion.div>
 
-        {/* Title — stagger por línea */}
+        {/* Headline — palabra por palabra */}
         <h1 className="mt-6 font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
-          <span
-            className={cn(
-              "block transition-all duration-700 ease-out",
-              mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-            )}
-            style={{ transitionDelay: "120ms" }}
-          >
-            La consulta clínica
-          </span>
-          <span
-            className={cn(
-              "block transition-all duration-700 ease-out text-brand-700",
-              mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-            )}
-            style={{ transitionDelay: "240ms" }}
-          >
-            sin WhatsApp ni Excel.
-          </span>
+          <div className="overflow-hidden">
+            {HEADLINE_LINE_1.map((word, i) => (
+              <motion.span
+                key={word}
+                initial={{ opacity: 0, y: "100%" }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.8,
+                  ease: easeOutExpo,
+                  delay: 0.25 + i * 0.08,
+                }}
+                className="inline-block mr-3"
+              >
+                {word}
+              </motion.span>
+            ))}
+          </div>
+          <div className="overflow-hidden">
+            {HEADLINE_LINE_2.map((word, i) => (
+              <motion.span
+                key={word}
+                initial={{ opacity: 0, y: "100%" }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.8,
+                  ease: easeOutExpo,
+                  delay: 0.55 + i * 0.08,
+                }}
+                className="inline-block mr-3 text-brand-700"
+              >
+                {word}
+              </motion.span>
+            ))}
+          </div>
         </h1>
 
-        <p
-          className={cn(
-            "mt-6 max-w-2xl mx-auto text-base sm:text-lg text-ink-500 leading-relaxed",
-            "transition-all duration-700 ease-out",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
-          )}
-          style={{ transitionDelay: "380ms" }}
+        {/* Subheadline */}
+        <motion.p
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: easeOutExpo, delay: 0.95 }}
+          className="mt-6 max-w-2xl mx-auto text-base sm:text-lg text-ink-500 leading-relaxed"
         >
           Menos tiempo administrando. Más tiempo atendiendo pacientes.
           Organiza sesiones, historia clínica y seguimiento terapéutico
           desde un solo lugar pensado para psicólogos en Colombia.
-        </p>
+        </motion.p>
 
-        <div
-          className={cn(
-            "mt-9 flex items-center justify-center gap-3 flex-wrap",
-            "transition-all duration-700 ease-out",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
-          )}
-          style={{ transitionDelay: "520ms" }}
+        {/* CTAs */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: easeOutExpo, delay: 1.1 }}
+          className="mt-9 flex items-center justify-center gap-3 flex-wrap"
         >
-          <a
+          <motion.a
             href="#demo"
-            className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shadow-lg shadow-brand-700/20 transition-all hover:-translate-y-0.5"
+            whileHover={{ y: -2, scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.3, ease: easeOutExpo }}
+            className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shadow-lg shadow-brand-700/20"
           >
             Quiero acceso <ArrowRight className="h-4 w-4" />
-          </a>
-          <a
+          </motion.a>
+          <motion.a
             href="#capabilities"
-            className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center gap-2 transition-colors"
+            whileHover={{ y: -2 }}
+            transition={{ duration: 0.3, ease: easeOutExpo }}
+            className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center gap-2"
           >
             <Play className="h-4 w-4" /> Ver la plataforma
-          </a>
-        </div>
+          </motion.a>
+        </motion.div>
       </div>
 
-      {/* Video frame — slide-in-from-bottom con la entrada más dramática */}
+      {/* Video frame — scale-in con dissolve, después flota infinito */}
       <div className="mt-12 sm:mt-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div
-          className={cn(
-            "relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-surface",
-            "transition-all duration-1000 ease-out",
-            mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12",
-          )}
-          style={{ transitionDelay: "700ms" }}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
+          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 1.2, ease: easeOutExpo, delay: 1.3 }}
+          className="relative"
         >
-          {/* Loop muted autoplay — única forma de que arranque sin
-              click en mobile/desktop modernos. playsInline para iOS. */}
-          <video
-            src="/landing/video-demo2.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="metadata"
-            className="w-full h-auto block"
-            aria-label="Demo de Psicomorfosis"
-          />
-          {/* Glow alrededor */}
-          <div
-            className="absolute -inset-x-20 -top-20 -bottom-20 -z-10 pointer-events-none opacity-40 blur-3xl"
+          {/* Glow respirante detrás del frame */}
+          <motion.div
+            className="absolute -inset-x-20 -top-20 -bottom-20 -z-10 pointer-events-none blur-3xl"
             style={{
               background:
-                "radial-gradient(ellipse at center, oklch(0.7 0.12 175 / 0.4), transparent 60%)",
+                "radial-gradient(ellipse at center, oklch(0.7 0.12 175 / 0.35), transparent 65%)",
             }}
+            animate={{ opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
             aria-hidden
           />
-        </div>
+
+          {/* Floating wrapper — solo el frame interno flota, los badges
+              tienen su propia oscilación con fase distinta */}
+          <motion.div
+            animate={floating}
+            className="relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-surface"
+          >
+            <video
+              src="/landing/video-demo2.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              className="w-full h-auto block"
+              aria-label="Demo de Psicomorfosis"
+            />
+          </motion.div>
+
+          {/* Badges flotantes — sugieren actividad real */}
+          <FloatingBadge
+            icon={CalendarCheck}
+            label="Sesión agendada"
+            tone="brand"
+            position={{ top: "-1.5rem", left: "-0.5rem" }}
+            delay={1.8}
+            floatPhase={0}
+          />
+          <FloatingBadge
+            icon={BellRing}
+            label="Recordatorio enviado"
+            tone="neutral"
+            position={{ top: "30%", right: "-1rem" }}
+            delay={2.1}
+            floatPhase={1}
+          />
+          <FloatingBadge
+            icon={CheckCircle2}
+            label="PHQ-9 completado"
+            tone="success"
+            position={{ bottom: "-1rem", left: "8%" }}
+            delay={2.4}
+            floatPhase={2}
+          />
+        </motion.div>
       </div>
     </section>
   );
