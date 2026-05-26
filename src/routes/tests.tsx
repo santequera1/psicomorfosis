@@ -361,14 +361,23 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
           {isCustom ? <FileText className="h-5 w-5" /> : <Brain className="h-5 w-5" />}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-baseline gap-2">
-            {/* Antes era font-serif text-base — los códigos de tests
-                ("AUDIT", "PHQ-9") se veían raros en serif (la serif
-                funciona mejor para palabras/títulos largos). Pasamos
-                a sans-serif bold tracking ajustado, mismo lenguaje
-                tipográfico que el resto de la app para nombres clínicos. */}
+          {/* Layout: código a la izquierda (clave para reconocer el test
+              rápido) + nombre completo en la misma línea cuando hay espacio,
+              o debajo en mobile. Los psicólogos memorizan los códigos
+              ("AUDIT", "PHQ-9") pero los nombres completos ayudan a quien
+              no los conoce — sobre todo a tests menos universales como
+              "BIS-11" → "Barratt Impulsiveness Scale". */}
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="text-base font-semibold tracking-tight text-ink-900">{test.code}</span>
-            <span className="text-xs text-ink-500">{test.shortName}</span>
+            {/* shortName se omite si es igual al código (ruido). */}
+            {test.shortName && test.shortName !== test.code && (
+              <span className="text-xs text-ink-500">{test.shortName}</span>
+            )}
+            {/* Nombre completo — más prominente que antes para que el
+                psicólogo identifique el test sin pasar al description. */}
+            {test.name && test.name !== test.code && test.name !== test.shortName && (
+              <span className="text-sm text-ink-700">· {test.name}</span>
+            )}
             <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-bg-100 text-ink-500 font-medium">{test.category}</span>
             {isCustom && (
               <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium border border-brand-100">

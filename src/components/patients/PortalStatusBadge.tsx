@@ -32,13 +32,22 @@ export function PortalStatusBadge({
     : "text-xs px-2 py-1";
 
   if (status === "active") {
+    // Última entrada visible inline (no solo en tooltip). El psicólogo
+    // quiere ver de un vistazo si el paciente está usando el portal o
+    // no, sin tener que pasar el mouse encima. Si nunca entró, mostramos
+    // un sutil "sin entrar aún". Tooltip se mantiene para más contexto.
+    const lastLoginRel = patient.portalLastLoginAt
+      ? formatRelative(patient.portalLastLoginAt)
+      : null;
     const tooltip = patient.portalLastLoginAt
-      ? `Portal activo. Última entrada: ${formatRelative(patient.portalLastLoginAt)}`
+      ? `Portal activo. Última entrada: ${lastLoginRel}`
       : "Portal activo. Aún no ha entrado desde que activó la cuenta.";
     return (
       <span className={cn(base, sizing, "bg-success-soft text-success border-success/20", className)} title={tooltip}>
         <CheckCircle2 className={size === "sm" ? "h-3 w-3" : "h-3.5 w-3.5"} />
-        {size === "sm" ? "Activo" : "Portal activo"}
+        {size === "sm"
+          ? (lastLoginRel ? `Activo · ${lastLoginRel}` : "Activo")
+          : (lastLoginRel ? `Portal activo · ${lastLoginRel}` : "Portal activo · sin entrar")}
       </span>
     );
   }

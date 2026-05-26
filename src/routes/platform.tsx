@@ -12,6 +12,7 @@ import {
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
+import { AppSelect } from "@/components/app/AppSelect";
 import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AppTooltip } from "@/components/app/AppTooltip";
@@ -310,19 +311,20 @@ function PlatformDashboard() {
                   </button>
                 )}
               </div>
+              {/* Sort: antes era <select> nativo (se veía diferente al
+                  resto de la app — bordes del SO, fondo blanco crudo,
+                  no respetaba tokens del tema). Pasamos a AppSelect
+                  (Radix con estilos del DS) para coherencia visual.
+                  Icono ArrowUpDown delante via wrapper relative. */}
               <div className="relative inline-flex items-center">
-                <ArrowUpDown className="absolute left-3 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
-                <select
+                <ArrowUpDown className="absolute left-3 z-10 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
+                <AppSelect
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortKey)}
-                  className="h-10 pl-9 pr-8 rounded-md border border-line-200 bg-surface text-sm text-ink-900 hover:border-brand-400 focus:border-brand-400 focus:outline-none appearance-none cursor-pointer"
-                  title="Ordenar listado"
-                >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.v} value={o.v}>{o.label}</option>
-                  ))}
-                </select>
-                <ChevronRight className="absolute right-2 h-4 w-4 text-ink-400 rotate-90 pointer-events-none" />
+                  onChange={(v) => setSortBy(v as SortKey)}
+                  options={SORT_OPTIONS.map((o) => ({ value: o.v, label: o.label }))}
+                  className="pl-7 min-w-44"
+                  aria-label="Ordenar listado de cuentas"
+                />
               </div>
               <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
             </div>

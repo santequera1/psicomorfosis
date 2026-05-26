@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/app/AppShell";
@@ -186,18 +186,22 @@ function AgendaPage() {
           </div>
         </header>
 
-        {/* KPIs — stagger left-to-right (slide-in-from-left + fade)
-            con 80ms entre cada card. Más vistoso que el fade plano
-            anterior y consistente con el dashboard de inicio. */}
+        {/* KPIs — stagger left-to-right. Pacientes y Tareas son
+            clickables (links a sus módulos respectivos). Sesiones y
+            Docs no lo son aún — la primera se entiende contextualmente
+            con el calendario debajo, la segunda iría a /documentos
+            con filtro que aún no tenemos. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            <KpiCard
-              label={isOrg ? "Pacientes activos" : "Mis pacientes"}
-              value={String(patients.filter((p) => p.status === "activo").length)}
-              delta={{ neutral: true, value: "" }}
-              hint={`${patients.length} en total`}
-              icon={<ClipboardList className="h-4 w-4" />}
-            />,
+            <Link to="/pacientes" className="block hover:opacity-90 transition-opacity" title="Ver lista de pacientes">
+              <KpiCard
+                label={isOrg ? "Pacientes activos" : "Mis pacientes"}
+                value={String(patients.filter((p) => p.status === "activo").length)}
+                delta={{ neutral: true, value: "" }}
+                hint={`${patients.length} en total`}
+                icon={<ClipboardList className="h-4 w-4" />}
+              />
+            </Link>,
             <KpiCard
               label="Sesiones hoy"
               value={String(todayAppointments.length)}
@@ -205,14 +209,16 @@ function AgendaPage() {
               hint={`${todayAppointments.filter((a: any) => a.status === "atendida").length} atendidas`}
               icon={<Calendar className="h-4 w-4" />}
             />,
-            <KpiCard
-              label="Tareas activas"
-              value={String(pendingTasks)}
-              delta={{ neutral: true, value: "" }}
-              hint={overdueTasks > 0 ? `${overdueTasks} vencidas` : "sin vencer"}
-              icon={<Brain className="h-4 w-4" />}
-              emphasis={overdueTasks > 0 ? "risk" : "default"}
-            />,
+            <Link to="/tareas" className="block hover:opacity-90 transition-opacity" title="Ver tareas">
+              <KpiCard
+                label="Tareas activas"
+                value={String(pendingTasks)}
+                delta={{ neutral: true, value: "" }}
+                hint={overdueTasks > 0 ? `${overdueTasks} vencidas` : "sin vencer"}
+                icon={<Brain className="h-4 w-4" />}
+                emphasis={overdueTasks > 0 ? "risk" : "default"}
+              />
+            </Link>,
             <KpiCard
               label="Docs por firmar"
               value={String(pendingDocs)}
