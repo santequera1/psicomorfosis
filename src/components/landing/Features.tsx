@@ -1,6 +1,9 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { Users, Calendar, FileSignature, MonitorSmartphone, ClipboardCheck, BarChart3 } from "lucide-react";
+import {
+  Users, Calendar, FileSignature, MonitorSmartphone, ClipboardCheck, BarChart3,
+  Mail, FileText, FileSpreadsheet, FileSignature as Signature, Globe, FileType,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fadeUp, scaleIn, staggerParent, easeOutExpo } from "./motion";
 import { FloatingBadge, type FloatingBadgePosition } from "./FloatingBadge";
@@ -227,7 +230,7 @@ function ExtraGrid() {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: "-80px" }}
-      className="mt-28 sm:mt-36 grid grid-cols-1 md:grid-cols-2 gap-6"
+      className="mt-28 sm:mt-36 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
     >
       <ExtraCard
         eyebrow="Diagnóstico"
@@ -243,6 +246,75 @@ function ExtraGrid() {
         image="/landing/carpeta-documentos.png"
         alt="Biblioteca documental por paciente y plantillas clínicas"
       />
+      <IntegrationsCard />
+    </motion.div>
+  );
+}
+
+/**
+ * Card especial: en lugar de un screenshot, muestra un grid de íconos
+ * con las integraciones reales que la app usa. Cada ícono es una
+ * pieza del stack que el psicólogo no tiene que configurar — viene
+ * lista para Colombia.
+ */
+const INTEGRATIONS: { icon: typeof Mail; label: string }[] = [
+  { icon: Mail, label: "Email · SMTP" },
+  { icon: FileText, label: "PDF" },
+  { icon: FileSpreadsheet, label: "Excel" },
+  { icon: Globe, label: "CIE-11 OMS" },
+  { icon: Signature, label: "Firma" },
+  { icon: FileType, label: "Word" },
+];
+
+function IntegrationsCard() {
+  return (
+    <motion.div
+      variants={fadeUp}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.5, ease: easeOutExpo }}
+      className="rounded-xl border border-line-200 bg-surface/60 backdrop-blur-sm overflow-hidden group relative"
+    >
+      {/* Glow muy sutil */}
+      <motion.div
+        className="absolute -top-16 -right-16 h-40 w-40 rounded-full blur-2xl pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, oklch(0.7 0.12 175 / 0.25), transparent 70%)",
+        }}
+        animate={{ opacity: [0.4, 0.7, 0.4] }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        aria-hidden
+      />
+
+      <div className="aspect-16/10 bg-bg/40 flex items-center justify-center p-4 relative">
+        <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
+          {INTEGRATIONS.map((it, i) => (
+            <motion.div
+              key={it.label}
+              initial={{ opacity: 0, y: 12, scale: 0.9 }}
+              whileInView={{ opacity: 1, y: 0, scale: 1 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.5, ease: easeOutExpo, delay: i * 0.08 }}
+              className="aspect-square rounded-xl border border-line-200 bg-surface shadow-sm flex flex-col items-center justify-center gap-1 hover:border-brand-400 hover:shadow-md transition-all"
+            >
+              <it.icon className="h-5 w-5 text-brand-700" />
+              <span className="text-[10px] text-ink-700 font-medium leading-tight text-center px-1">
+                {it.label}
+              </span>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+      <div className="p-6 relative">
+        <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">
+          Integraciones
+        </p>
+        <h4 className="mt-2 font-serif text-xl text-ink-900 leading-tight">
+          Todo conectado, sin configurar nada
+        </h4>
+        <p className="mt-2 text-sm text-ink-500 leading-relaxed">
+          Email automático, PDF de consentimientos y recibos, exportación a Excel oficial, catálogo CIE-11 desde la OMS, firma electrónica y plantillas Word — todo viene listo.
+        </p>
+      </div>
     </motion.div>
   );
 }
@@ -303,7 +375,7 @@ export function SectionHeader({
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: "-80px" }}
-      className="text-center max-w-2xl mx-auto"
+      className="text-center max-w-4xl mx-auto"
     >
       <motion.p
         variants={fadeUp}
@@ -313,7 +385,7 @@ export function SectionHeader({
       </motion.p>
       <motion.h2
         variants={fadeUp}
-        className="mt-3 font-serif text-3xl sm:text-4xl text-ink-900 leading-tight tracking-tight"
+        className="mt-3 font-serif text-3xl sm:text-4xl text-ink-900 leading-tight tracking-tight text-balance"
       >
         {title}
       </motion.h2>

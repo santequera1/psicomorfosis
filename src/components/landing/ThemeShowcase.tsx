@@ -41,6 +41,28 @@ export function ThemeShowcase() {
     return () => obs.disconnect();
   }, []);
 
+  // Precarga las 3 imágenes apenas la sección entra en el rango cercano
+  // (rootMargin generoso). Así, al hacer click en otro modo, la imagen
+  // ya está en caché del navegador y el crossfade es instantáneo.
+  // Antes esto se notaba como "lag" al cambiar de modo.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        MODES.forEach((m) => {
+          const img = new Image();
+          img.src = m.src;
+        });
+        obs.disconnect();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   useEffect(() => {
     if (paused || !inView) return;
     timerRef.current = setInterval(() => {

@@ -11,14 +11,14 @@ import { easeOutExpo, fadeUp, staggerParent } from "./motion";
  */
 export function FinalCTA() {
   return (
-    <section id="cierre" className="py-24 sm:py-36 relative">
+    <section id="cierre" className="py-16 sm:py-20 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 40, filter: "blur(12px)" }}
           whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 1, ease: easeOutExpo }}
-          className="relative rounded-3xl overflow-hidden border border-brand-900/20 bg-linear-to-br from-[oklch(0.28_0.04_175)] via-[oklch(0.32_0.05_175)] to-[oklch(0.25_0.05_185)] px-6 sm:px-12 lg:px-20 py-20 sm:py-28 text-center"
+          className="relative rounded-3xl overflow-hidden border border-brand-900/20 bg-linear-to-br from-[oklch(0.28_0.04_175)] via-[oklch(0.32_0.05_175)] to-[oklch(0.25_0.05_185)] px-6 sm:px-12 lg:px-20 py-14 sm:py-20 text-center"
         >
           {/* Glow respirante */}
           <motion.div
@@ -52,7 +52,7 @@ export function FinalCTA() {
           >
             <motion.p
               variants={fadeUp}
-              className="text-xs uppercase tracking-widest text-brand-200 font-semibold"
+              className="text-xs uppercase tracking-widest text-white font-semibold"
             >
               Es momento
             </motion.p>
