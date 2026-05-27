@@ -68,5 +68,6 @@ verify_admin.py
 notas_claude/
 test-millon/
 
-# Video pesado de la landing — se sube manual al VPS (31MB no va a git).
+# Videos pesados de la landing — se suben manual al VPS, no van a git.
 public/landing/*.mp4
+public/landing/*.webm
