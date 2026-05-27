@@ -27,7 +27,7 @@ export interface BankCardProps {
   holderName?: string | null;
   accountType?: string | null;
   brand?: CardBrand | null;
-  size?: "xs" | "mini" | "sm" | "md";
+  size?: "xs" | "strip" | "mini" | "sm" | "md";
   /** Click sobre la tarjeta entera. */
   onClick?: () => void;
   /** Slot superior derecho — para acciones (editar/eliminar) sobre la tarjeta. */
@@ -79,6 +79,41 @@ export function BankCard({
         <span className="truncate opacity-90">{label}</span>
         {last4 && <span className="opacity-70 tabular ml-1">··{last4}</span>}
       </span>
+    );
+  }
+
+  // Variante strip: franja horizontal compacta (full-width, ~48px alto).
+  // Para listas de cuentas donde una tarjeta visual robaría demasiado
+  // espacio vertical. Muestra "Banco · Label ··last4" sobre el color
+  // del banco. Ahorra ~60% de altura vs la tarjeta visual.
+  if (size === "strip") {
+    const Comp = (onClick ? "button" : "div") as "button" | "div";
+    return (
+      <Comp
+        type={onClick ? "button" : undefined}
+        onClick={onClick}
+        className={cn(
+          "relative w-full text-left overflow-hidden flex items-center gap-2 h-12 px-3 rounded-lg",
+          s.cardBg, s.textColor,
+          onClick && "hover:shadow-card cursor-pointer transition-shadow",
+          selected && "ring-2 ring-offset-1 ring-brand-700",
+          className,
+        )}
+        title={`${s.name} · ${label}`}
+      >
+        {s.decorative && s.decorativeStrokes && (
+          <DecoStrokes colors={s.decorativeStrokes} />
+        )}
+        <span className={cn("relative font-semibold tracking-tight shrink-0 text-sm", logoFontClass(s.logoFont))}>
+          {s.logoText}
+        </span>
+        <span className="relative opacity-50 shrink-0">·</span>
+        <span className="relative truncate opacity-90 flex-1 min-w-0 text-sm">{label}</span>
+        {last4 && (
+          <span className="relative tabular text-xs font-medium opacity-80 shrink-0">··{last4}</span>
+        )}
+        {actionsSlot && <span className="relative shrink-0">{actionsSlot}</span>}
+      </Comp>
     );
   }
 

@@ -624,6 +624,7 @@ router.get("/reports-stats", (req, res) => {
     testsByMonth: statsTestsByMonth(ws, 6),
     topPatients: statsTopPatientsBySessions(ws),
     revenueByMethod: statsRevenueByMethod(ws),
+    revenueByAccount: statsRevenueByAccount(ws),
     operational: statsOperationalKpis(ws),
   });
 });
@@ -745,6 +746,74 @@ function statsRevenueByMethod(ws) {
     GROUP BY method
     ORDER BY value DESC
   `).all(ws);
+}
+
+/**
+ * Desglose de ingresos por cuenta bancaria (90d). Responde a "¿en qué
+ * cuenta me pagan más?". Los pagos en efectivo (o sin cuenta vinculada)
+ * se agrupan bajo una fila sintética con bankId='efectivo' para que el
+ * frontend los muestre con un chip distinto.
+ *
+ * LEFT JOIN porque un invoice puede tener method='transferencia' pero
+ * sin bank_account_id (cuenta borrada, o registrado antes del wallet).
+ * Esos caen al grupo "Sin cuenta asignada".
+ */
+function statsRevenueByAccount(ws) {
+  const rows = db.prepare(`
+    SELECT
+      i.bank_account_id          AS accountId,
+      ba.bank_id                 AS bankId,
+      ba.label                   AS label,
+      ba.last4                   AS last4,
+      ba.account_type            AS accountType,
+      ba.brand                   AS brand,
+      i.method                   AS method,
+      SUM(i.amount)              AS value,
+      COUNT(*)                   AS count
+    FROM invoices i
+    LEFT JOIN bank_accounts ba ON ba.id = i.bank_account_id
+    WHERE i.workspace_id = ? AND i.status = 'pagada'
+      AND i.date >= date('now', '-90 days')
+    GROUP BY
+      CASE
+        WHEN i.bank_account_id IS NOT NULL THEN 'acc:' || i.bank_account_id
+        WHEN lower(i.method) = 'efectivo'  THEN 'cash'
+        ELSE 'none'
+      END
+    ORDER BY value DESC
+  `).all(ws);
+
+  // Normalizamos a una forma que el frontend pinta directo: cada fila
+  // sabe si es una cuenta real (con bankId para el chip), efectivo, o
+  // "sin cuenta". El bucket lo decide el backend para no duplicar la
+  // lógica del CASE en el cliente.
+  return rows.map((r) => {
+    if (r.accountId) {
+      return {
+        bucket: "account",
+        accountId: r.accountId,
+        bankId: r.bankId,
+        label: r.label,
+        last4: r.last4,
+        accountType: r.accountType,
+        brand: r.brand ?? "none",
+        value: r.value ?? 0,
+        count: r.count ?? 0,
+      };
+    }
+    const isCash = (r.method ?? "").toLowerCase() === "efectivo";
+    return {
+      bucket: isCash ? "cash" : "none",
+      accountId: null,
+      bankId: isCash ? "efectivo" : null,
+      label: isCash ? "Efectivo" : "Sin cuenta asignada",
+      last4: null,
+      accountType: null,
+      brand: "none",
+      value: r.value ?? 0,
+      count: r.count ?? 0,
+    };
+  });
 }
 
 /** KPIs operativos derivados: tasa de asistencia/cancelación, duración promedio. */

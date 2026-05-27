@@ -8,6 +8,7 @@ import {
   Paperclip, Download, Upload, FileText, Loader2,
 } from "lucide-react";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
+import { AppSelect } from "@/components/app/AppSelect";
 import { AppShell } from "@/components/app/AppShell";
 import {
   api, type Tarea, type TareaStatus, type TareaPriority,
@@ -648,6 +649,11 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
+// Filtros del Kanban. Antes era <select> nativo (el dropdown salía con
+// el estilo del SO — fondo blanco crudo, highlight azul, no respetaba
+// el tema). Ahora delega en AppSelect (Radix) para coherencia con el
+// resto de la app. El icono va absoluto encima del trigger, igual que
+// en el sort de /platform.
 function Select({
   value, onChange, options, icon,
 }: {
@@ -657,21 +663,19 @@ function Select({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="relative">
-      {icon && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400">{icon}</span>}
-      <select
+    <div className="relative inline-flex items-center">
+      {icon && (
+        <span className="absolute left-2.5 z-10 text-ink-400 pointer-events-none">
+          {icon}
+        </span>
+      )}
+      <AppSelect
         value={String(value)}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "h-9 pr-8 rounded-lg border border-line-200 bg-bg text-xs text-ink-700",
-          "focus:outline-none focus:border-brand-400 cursor-pointer",
-          icon ? "pl-7" : "pl-3"
-        )}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+        onChange={onChange}
+        options={options}
+        size="sm"
+        className={cn("min-w-40", icon ? "pl-7" : undefined)}
+      />
     </div>
   );
 }
@@ -1476,15 +1480,12 @@ function FormSelect({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <select
+    <AppSelect
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 cursor-pointer"
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>{o.label}</option>
-      ))}
-    </select>
+      onChange={onChange}
+      options={options}
+      className="w-full"
+    />
   );
 }
 

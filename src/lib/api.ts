@@ -1107,6 +1107,17 @@ export const api = {
     testsByMonth: Array<{ mes: string; value: number }>;
     topPatients: Array<{ id: string; name: string; sessions: number }>;
     revenueByMethod: Array<{ method: string; value: number; count: number }>;
+    revenueByAccount: Array<{
+      bucket: "account" | "cash" | "none";
+      accountId: number | null;
+      bankId: string | null;
+      label: string;
+      last4: string | null;
+      accountType: string | null;
+      brand: string;
+      value: number;
+      count: number;
+    }>;
     operational: {
       attendance_rate: number;
       cancel_rate: number;

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { BankCard } from "@/components/wallet/BankCard";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip,
   BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid,
@@ -47,6 +48,8 @@ function ReportesPage() {
   const testsByMonth = reportsStats?.testsByMonth ?? [];
   const topPatients = reportsStats?.topPatients ?? [];
   const revenueByMethod = reportsStats?.revenueByMethod ?? [];
+  const revenueByAccount = reportsStats?.revenueByAccount ?? [];
+  const revenueByAccountTotal = revenueByAccount.reduce((sum, r) => sum + r.value, 0);
   const ops = reportsStats?.operational;
   const revenueHasData = revenue7d.some((r) => r.value > 0);
 
@@ -348,6 +351,61 @@ function ReportesPage() {
             )}
           </Card>
         </div>
+
+        {/* Fila 5b: Ingresos por cuenta bancaria (90d) — responde a
+            "¿en qué cuenta me pagan más?" con desglose por cuenta +
+            efectivo, usando los chips de cuenta del wallet. */}
+        <Card title="Ingresos por cuenta" subtitle="Dónde recibes tus pagos (90d)" className="mb-5">
+          {revenueByAccount.length === 0 ? (
+            <div className="py-10 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6 text-ink-300 mr-2" />
+              <p className="text-xs text-ink-400 italic">Sin pagos registrados en los últimos 90 días.</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {revenueByAccount.map((r, i) => {
+                const pct = revenueByAccountTotal > 0
+                  ? Math.round((r.value / revenueByAccountTotal) * 100)
+                  : 0;
+                return (
+                  <li key={r.accountId ?? r.bucket + i} className="flex items-center gap-3">
+                    <div className="w-44 shrink-0">
+                      {r.bucket === "none" ? (
+                        <span className="inline-flex items-center h-12 px-3 rounded-lg bg-bg-100 text-ink-500 text-sm w-full">
+                          Sin cuenta asignada
+                        </span>
+                      ) : (
+                        <BankCard
+                          size="strip"
+                          bankId={r.bankId ?? "efectivo"}
+                          label={r.label}
+                          last4={r.last4}
+                          accountType={r.accountType}
+                          brand={r.brand as any}
+                        />
+                      )}
+                    </div>
+                    {/* Barra de proporción + montos */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-sm font-semibold text-ink-900 tabular">{COP.format(r.value)}</span>
+                        <span className="text-[11px] text-ink-500 tabular shrink-0">
+                          {pct}% · {r.count} recibo{r.count === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-bg-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-brand-700 transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
 
         {/* Fila 6: Top pacientes */}
         <Card title="Pacientes más activos" subtitle="Top 5 por sesiones atendidas (90d)">

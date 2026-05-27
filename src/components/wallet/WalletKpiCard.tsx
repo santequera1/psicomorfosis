@@ -18,7 +18,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CreditCard, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CreditCard, Plus } from "lucide-react";
 import { api, type BankAccount } from "@/lib/api";
 import { BankCard } from "./BankCard";
 import { BankAccountModal } from "./BankAccountModal";
@@ -36,18 +36,6 @@ export function WalletKpiCard({ className }: Props) {
   });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<BankAccount | null>(null);
-  const [activeIdx, setActiveIdx] = useState(0);
-
-  const safeIdx = accounts.length > 0
-    ? Math.min(activeIdx, accounts.length - 1)
-    : 0;
-
-  const goPrev = () => setActiveIdx((i) =>
-    accounts.length === 0 ? 0 : (i - 1 + accounts.length) % accounts.length,
-  );
-  const goNext = () => setActiveIdx((i) =>
-    accounts.length === 0 ? 0 : (i + 1) % accounts.length,
-  );
 
   return (
     <>
@@ -74,103 +62,39 @@ export function WalletKpiCard({ className }: Props) {
         </div>
 
         {isLoading ? (
-          <div className="rounded-lg bg-bg-100 aspect-video w-full animate-pulse" />
+          <div className="space-y-1.5">
+            <div className="h-12 rounded-lg bg-bg-100 w-full animate-pulse" />
+            <div className="h-12 rounded-lg bg-bg-100 w-full animate-pulse" />
+          </div>
         ) : accounts.length === 0 ? (
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg border border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 aspect-video w-full flex flex-col items-center justify-center gap-1 text-ink-500 transition-colors"
+            className="rounded-lg border border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 h-12 w-full flex items-center justify-center gap-1.5 text-ink-500 transition-colors"
           >
             <Plus className="h-4 w-4" />
-            <span className="text-[11px] font-medium text-center px-3">Agrega tu primera cuenta</span>
+            <span className="text-[11px] font-medium">Agrega tu primera cuenta</span>
           </button>
         ) : (
-          <>
-            {/* ── Mobile/tablet: grid horizontal con tarjetas pequeñas
-                (~120px ancho). El wallet no debe ser protagonista en
-                mobile — los recibos son lo principal. snap-mandatory
-                para que el scroll quede limpio. */}
-            <div className="lg:hidden grid grid-flow-col auto-cols-[120px] gap-2 overflow-x-auto -mx-1 px-1 pb-1 snap-x snap-mandatory">
-              {accounts.map((acc) => (
-                <div key={acc.id} className="snap-start">
-                  <BankCard
-                    size="mini"
-                    bankId={acc.bankId}
-                    label={acc.label}
-                    last4={acc.last4}
-                    holderName={acc.holderName}
-                    accountType={acc.accountType}
-                    brand={acc.brand}
-                    onClick={() => setEditing(acc)}
-                    className="shadow-card"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* ── Desktop: carrusel de una sola tarjeta con flechas y
-                dots. La tarjeta tiene aspect 8/5 (~1.6) — un poco más
-                rectangular que el ratio físico real (1.585) para
-                contrarrestar la sensación visual "cuadrada" en cards
-                estrechos del KPI grid. */}
-            <div className="hidden lg:block">
-              <div className="relative overflow-hidden rounded-lg">
-                <div
-                  className="flex transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(-${safeIdx * 100}%)` }}
-                >
-                  {accounts.map((acc) => (
-                    <div key={acc.id} className="w-full shrink-0">
-                      <BankCard
-                        size="mini"
-                        bankId={acc.bankId}
-                        label={acc.label}
-                        last4={acc.last4}
-                        holderName={acc.holderName}
-                        accountType={acc.accountType}
-                        brand={acc.brand}
-                        onClick={() => setEditing(acc)}
-                        className="shadow-card hover:shadow-modal transition-shadow"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {accounts.length > 1 && (
-              <div className="hidden lg:flex items-center justify-between gap-1.5">
-                <button
-                  onClick={goPrev}
-                  className="h-5 w-5 rounded-md text-ink-500 hover:bg-bg-100 hover:text-ink-900 inline-flex items-center justify-center shrink-0"
-                  aria-label="Cuenta anterior"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <div className="flex items-center gap-1">
-                  {accounts.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveIdx(idx)}
-                      className={cn(
-                        "h-1.5 rounded-full transition-all duration-200",
-                        idx === safeIdx
-                          ? "w-4 bg-brand-700"
-                          : "w-1.5 bg-line-200 hover:bg-ink-300",
-                      )}
-                      aria-label={`Cuenta ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-                <button
-                  onClick={goNext}
-                  className="h-5 w-5 rounded-md text-ink-500 hover:bg-bg-100 hover:text-ink-900 inline-flex items-center justify-center shrink-0"
-                  aria-label="Cuenta siguiente"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-          </>
+          // Lista de franjas horizontales. Más compacta que el carrusel
+          // de tarjeta visual: cada cuenta ocupa ~48px en vez de ~124px.
+          // max-h con scroll por si hay muchas cuentas (raro, pero no
+          // queremos que el KPI crezca sin límite).
+          <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto -mr-1 pr-1">
+            {accounts.map((acc) => (
+              <BankCard
+                key={acc.id}
+                size="strip"
+                bankId={acc.bankId}
+                label={acc.label}
+                last4={acc.last4}
+                holderName={acc.holderName}
+                accountType={acc.accountType}
+                brand={acc.brand}
+                onClick={() => setEditing(acc)}
+                className="shadow-xs"
+              />
+            ))}
+          </div>
         )}
       </div>
 
