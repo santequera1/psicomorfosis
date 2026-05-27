@@ -145,8 +145,12 @@ export function Hero() {
             animate={floating}
             className="relative overflow-hidden"
           >
+            {/* <source> con WebM primero: browsers modernos (Chrome,
+                Firefox, Edge, Safari 14.1+, iOS 16+) lo eligen y
+                ahorran ~40% de ancho de banda. Safari/iOS viejos
+                caen al MP4 fallback. El MP4 se genera en el VPS con
+                ffmpeg desde el WebM, no se mantiene manualmente. */}
             <video
-              src="/landing/Video-Dashboard-Psic.mp4"
               autoPlay
               loop
               muted
@@ -154,7 +158,10 @@ export function Hero() {
               preload="metadata"
               className="w-full h-auto block"
               aria-label="Demo de Psicomorfosis"
-            />
+            >
+              <source src="/landing/Video-Dashboard-Psic.webm" type="video/webm" />
+              <source src="/landing/Video-Dashboard-Psic.mp4" type="video/mp4" />
+            </video>
           </motion.div>
 
           {/* Badges flotantes — sugieren actividad real */}
