@@ -23,7 +23,7 @@ export function Hero() {
   return (
     <section
       id="hero"
-      className="relative pt-16 pb-10 sm:pt-20 sm:pb-24 overflow-hidden"
+      className="relative pt-20 pb-10 sm:pt-28 sm:pb-24 overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         {/* Badge */}
@@ -37,11 +37,8 @@ export function Hero() {
           Construida con psicólogas colombianas
         </motion.div>
 
-        {/* Headline — palabra por palabra. Tamaño bajado un escalón en
-            cada breakpoint para que el video del hero quepa en el primer
-            paint sin scroll. text-6xl (lg) sigue siendo dominante pero
-            deja respirar los CTAs + el video debajo. */}
-        <h1 className="mt-4 sm:mt-5 font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-[1.05] tracking-tight text-ink-900">
+        {/* Headline — palabra por palabra */}
+        <h1 className="mt-5 sm:mt-6 font-serif text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
           <div className="overflow-hidden">
             {HEADLINE_LINE_1.map((word, i) => (
               <motion.span
@@ -83,9 +80,10 @@ export function Hero() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: easeOutExpo, delay: 0.95 }}
-          className="mt-4 sm:mt-5 max-w-2xl mx-auto text-sm sm:text-base text-ink-500 leading-relaxed px-2"
+          className="mt-4 sm:mt-6 max-w-2xl mx-auto text-sm sm:text-lg text-ink-500 leading-relaxed px-2"
         >
-          Menos tiempo administrando. Más tiempo atendiendo pacientes —
+          Menos tiempo administrando. Más tiempo atendiendo pacientes.
+          Organiza sesiones, historia clínica y seguimiento terapéutico
           desde un solo lugar pensado para psicólogos en Colombia.
         </motion.p>
 
@@ -94,7 +92,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: easeOutExpo, delay: 1.1 }}
-          className="mt-5 sm:mt-7 flex items-stretch sm:items-center justify-center gap-2 sm:gap-3 px-2"
+          className="mt-6 sm:mt-9 flex items-stretch sm:items-center justify-center gap-2 sm:gap-3 px-2"
         >
           <motion.a
             href="#demo"
@@ -119,7 +117,7 @@ export function Hero() {
       {/* Video frame — scale-in con dissolve, después flota infinito.
           Más ancho que el resto del hero (7xl vs 6xl) para que el video
           se sienta integrado a la página, no contenido en una card. */}
-      <div className="mt-6 sm:mt-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="mt-8 sm:mt-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
