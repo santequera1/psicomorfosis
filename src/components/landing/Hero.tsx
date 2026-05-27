@@ -147,11 +147,6 @@ export function Hero() {
             animate={floating}
             className="relative overflow-hidden"
           >
-            {/* Crop CSS: scale 1.06 elimina los márgenes propios que el
-                video trae exportados. El overflow-hidden del wrapper
-                recorta lo que sobresale. Resultado: el dashboard del
-                video se ve "más grande" sin tocar el archivo, ganamos
-                ~40px de altura efectiva en el primer paint. */}
             <video
               src="/landing/Video-Dashboard-Psic.mp4"
               autoPlay
@@ -159,7 +154,7 @@ export function Hero() {
               muted
               playsInline
               preload="metadata"
-              className="w-full h-auto block scale-[1.06] origin-center"
+              className="w-full h-auto block"
               aria-label="Demo de Psicomorfosis"
             />
           </motion.div>
