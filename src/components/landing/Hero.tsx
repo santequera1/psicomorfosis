@@ -34,7 +34,7 @@ export function Hero() {
           className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs text-brand-800 font-medium"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-pulse" />
-          Construida con psicólogas colombianas
+          Construida con psicólogos colombianos
         </motion.div>
 
         {/* Headline — palabra por palabra */}

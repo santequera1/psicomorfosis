@@ -121,7 +121,7 @@ export function Features() {
         <SectionHeader
           eyebrow="La plataforma"
           title="Pensada como trabajas, no como vende un software"
-          subtitle="Cada sección nació de una conversación con psicólogas reales en Colombia. Esto es lo que ves desde el primer día."
+          subtitle="Cada sección nació de una conversación con psicólogos reales en Colombia. Esto es lo que ves desde el primer día."
         />
 
         {/* Mobile: carousel horizontal scroll-snap. Evita que la
@@ -420,7 +420,7 @@ function IntegrationsCard() {
           Google Calendar, Zoom, Google Meet, Calendly e iLovePDF, más recordatorios y confirmaciones automáticas por WhatsApp Business. Exportar a PDF y Excel ya están disponibles.
         </p>
         <p className="mt-3 text-[11px] text-ink-400 italic leading-relaxed">
-          *No somos enemigos de WhatsApp. La plataforma lo usa por ti para recordar citas, no para que respondas pacientes a las 11pm.
+          *No somos enemigos de WhatsApp. La plataforma lo usa por ti para recordar citas, no para que estés atendiendo pacientes a las 11 p. m.
         </p>
       </div>
     </motion.div>

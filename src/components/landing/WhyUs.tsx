@@ -37,7 +37,7 @@ export function WhyUs() {
             className="mt-6 text-base sm:text-lg text-ink-700 leading-relaxed"
           >
             No es Notion con plantillas. No es Calendly con tema verde. Es la primera
-            plataforma clínica construida con psicólogas reales que entiende
+            plataforma clínica construida con psicólogos reales que entiende
             cómo se trabaja aquí.
           </motion.p>
         </motion.div>
@@ -80,10 +80,10 @@ export function WhyUs() {
           >
             <Heart className="h-7 w-7 text-brand-700" />
             <h3 className="mt-4 font-serif text-2xl text-ink-900 leading-tight">
-              Hecha en Colombia, con psicólogas reales
+              Hecha en Colombia, con psicólogos reales
             </h3>
             <p className="mt-3 text-sm text-ink-700 leading-relaxed">
-              Cada función nace de una conversación con una psicóloga clínica en ejercicio.
+              Cada función nace de una conversación con un psicólogo clínico en ejercicio.
               No suponemos qué necesitas: nos lo dices y lo construimos en días, no en meses.
             </p>
             <ul className="mt-5 space-y-2.5 text-sm text-ink-700">

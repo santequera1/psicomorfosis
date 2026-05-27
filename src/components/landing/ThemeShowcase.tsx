@@ -99,7 +99,7 @@ export function ThemeShowcase() {
           transition={{ duration: 0.9, ease: easeOutExpo }}
           className="mt-14"
         >
-          <div className="relative rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-bg">
+          <div className="relative rounded-lg sm:rounded-2xl overflow-hidden border border-line-200 shadow-2xl shadow-brand-700/10 bg-bg">
             {/* Spacer invisible para mantener aspect ratio del frame */}
             <img
               src={MODES[0].src}
