@@ -501,7 +501,11 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
   onOpenSignature: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
+    // Wrapper de 2 zonas: izquierda con scroll horizontal (botones de
+    // formateo), derecha sticky con Dictar siempre visible. Antes Dictar
+    // estaba dentro del scroll y se perdía cuando el toolbar overflow.
+    <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl flex items-stretch">
+      <div className="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto no-scrollbar px-3 py-2">
       <BtnGroup>
         <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Deshacer (⌘Z)">
           <Undo className="h-4 w-4" />
@@ -591,10 +595,11 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
           <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
-      <Sep />
-      {/* Dictado por voz. Inserta el texto transcrito en la posición
-          del cursor — si hay texto seleccionado lo reemplaza. */}
-      <div className="ml-auto pl-1">
+      </div>
+      {/* Zona derecha sticky — Dictar siempre visible aunque el toolbar
+          haga overflow horizontal. Borde izquierdo para separar
+          visualmente del scroll de la izquierda. */}
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-l border-line-100">
         <VoiceRecorderButton
           variant="compact"
           label="Dictar"

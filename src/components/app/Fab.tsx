@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -78,7 +79,14 @@ export function Fab() {
     setActive(a);
   }
 
-  return (
+  // Portal al body para evitar que un stacking context aislado del
+  // <main> (que tiene `animate-in fade-in slide-in-from-bottom-2` →
+  // crea su propio contexto vía transform/opacity) atrape el FAB y lo
+  // ponga visualmente encima de modales con z-50 que viven dentro
+  // del main. Con portal al body, FAB y modales comparten el contexto
+  // raíz y los z-index se respetan: modal z-50 > FAB z-40.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <>
       {/* El contenedor solo ocupa el tamaño del botón circular. Los items
           quedan posicionados absolutamente arriba para no reservar espacio
@@ -137,7 +145,8 @@ export function Fab() {
       {active === "receipt" && (
         <ReceiptFormModal mode="create" onClose={() => setActive(null)} />
       )}
-    </>
+    </>,
+    document.body,
   );
 }
 

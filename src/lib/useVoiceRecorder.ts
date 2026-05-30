@@ -190,7 +190,13 @@ export function useVoiceRecorder(opts: UseVoiceRecorderOptions = {}): UseVoiceRe
         }
       }, 200);
 
-      rec.start();
+      // timeslice=1000 fuerza al MediaRecorder a emitir dataavailable
+      // cada 1s en lugar de solo al stop. Hace la grabación robusta
+      // contra race conditions del browser (a veces el chunk final
+      // de stop se pierde y solo quedan los primeros bytes — síntoma
+      // "solo agarra dos palabras"). Con timeslice tenemos chunks
+      // intermedios garantizados.
+      rec.start(1000);
       setState("recording");
     } catch (err: any) {
       cleanup();

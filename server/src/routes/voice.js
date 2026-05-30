@@ -29,7 +29,7 @@ import { requireAuth } from "../auth.js";
 const router = Router();
 router.use(requireAuth);
 
-const MODEL = "gpt-4o-mini-transcribe";
+const MODEL = "gpt-4o-transcribe";
 const MAX_BYTES = 25 * 1024 * 1024; // 25MB — límite de OpenAI Whisper API
 
 const upload = multer({
