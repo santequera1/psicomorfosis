@@ -501,11 +501,12 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
   onOpenSignature: () => void;
 }) {
   return (
-    // Toolbar con flex-wrap: si los botones no caben en una línea, se
-    // pasan a una segunda fila. Mejor que overflow-x-auto (scroll-x es
-    // incómodo en trackpad y la gente no descubre el botón Dictar al
-    // final). gap-y para separar las filas cuando wrapean.
-    <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-x-0.5 gap-y-1 flex-wrap">
+    // Toolbar en una sola línea. Sin flex-wrap, sin overflow-x. Si en
+    // alguna pantalla muy estrecha no entra, el overflow-x-auto del
+    // wrapper padre maneja el scroll — pero en el ancho típico del
+    // editor de documentos (max-w-4xl) ya entra todo. Dictar va con
+    // ml-auto para quedar pegado a la derecha.
+    <div className="sticky top-16 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
       <BtnGroup>
         <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Deshacer (⌘Z)">
           <Undo className="h-4 w-4" />
@@ -573,9 +574,9 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
         <Btn active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Cita">
           <Quote className="h-4 w-4" />
         </Btn>
-        <Btn active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()} title="Código">
-          <Code className="h-4 w-4" />
-        </Btn>
+        {/* Botón Código eliminado — los psicólogos no insertan code
+            blocks en sus documentos clínicos. Liberamos ese slot para
+            que el toolbar respire. */}
       </BtnGroup>
       <Sep />
       <BtnGroup>
@@ -595,16 +596,17 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
           <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
-      <Sep />
-      {/* Dictar al final. Con flex-wrap, si no cabe en la primera fila
-          el botón se pasa a la segunda — siempre visible sin scroll. */}
-      <VoiceRecorderButton
-        variant="compact"
-        label="Dictar"
-        onTranscript={(text) => {
-          editor.chain().focus().insertContent(text).run();
-        }}
-      />
+      {/* Dictar pegado a la derecha con ml-auto. Pequeño gap-l para
+          separarlo visualmente del grupo anterior sin necesidad de Sep. */}
+      <div className="ml-auto pl-2 shrink-0">
+        <VoiceRecorderButton
+          variant="compact"
+          label="Dictar"
+          onTranscript={(text) => {
+            editor.chain().focus().insertContent(text).run();
+          }}
+        />
+      </div>
     </div>
   );
 }

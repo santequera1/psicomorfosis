@@ -910,6 +910,9 @@ function runMigrations() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE
     )`,
+    // image_url: ruta pública de una captura/imagen opcional que el
+    // admin sube al crear el anuncio (showing & telling de la feature).
+    "ALTER TABLE announcements ADD COLUMN image_url TEXT",
   ];
   for (const sql of migrations) {
     try {

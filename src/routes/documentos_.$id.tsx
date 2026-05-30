@@ -50,6 +50,7 @@ function DocumentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmSign, setConfirmSign] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Cargar body cuando llega la data
@@ -262,11 +263,7 @@ function DocumentDetailPage() {
               {!isLocked && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm("Una vez firmado, este documento queda inmodificable. ¿Continuar?")) {
-                      signMu.mutate();
-                    }
-                  }}
+                  onClick={() => setConfirmSign(true)}
                   disabled={signMu.isPending}
                   className="h-9 px-3 rounded-md text-sm bg-brand-700 text-white hover:bg-brand-700/90 inline-flex items-center gap-2 disabled:opacity-50"
                 >
@@ -334,6 +331,15 @@ function DocumentDetailPage() {
           danger
           onConfirm={() => { setConfirmDelete(false); deleteMu.mutate(); }}
           onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+      {confirmSign && (
+        <ConfirmDialog
+          title="Firmar documento"
+          message="Una vez firmado, este documento queda inmodificable y queda registrado con sello de hora e IP (Res. 1995/1999). ¿Continuar?"
+          confirmLabel="Firmar"
+          onConfirm={() => { setConfirmSign(false); signMu.mutate(); }}
+          onCancel={() => setConfirmSign(false)}
         />
       )}
     </AppShell>

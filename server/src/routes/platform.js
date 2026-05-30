@@ -10,9 +10,41 @@
  */
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import path from "node:path";
+import fs from "node:fs";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { db, seedTaskColumns } from "../db.js";
 import { requirePlatformAdmin } from "../auth.js";
 import { validateUsername, validateEmail } from "../lib/validators.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Directorio público de imágenes de anuncios. Sirvel index.js como
+// static en /api/uploads — accesible inline desde el modal de novedades.
+const ANNOUNCEMENT_IMAGES_DIR = path.join(__dirname, "..", "..", "uploads", "announcements");
+fs.mkdirSync(ANNOUNCEMENT_IMAGES_DIR, { recursive: true });
+
+const announcementImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ANNOUNCEMENT_IMAGES_DIR),
+    filename: (_req, file, cb) => {
+      // 12 bytes random hex + extensión original. Sin info del user
+      // ni timestamp — la URL queda unguessable y nunca colisiona.
+      const ext = path.extname(file.originalname).toLowerCase().slice(0, 6) || ".png";
+      const id = crypto.randomBytes(12).toString("hex");
+      cb(null, `${id}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    // Solo imágenes. PDFs / video no aplican para esta vista.
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.mimetype)) {
+      return cb(new Error("Solo PNG, JPG, WebP o GIF"));
+    }
+    cb(null, true);
+  },
+});
 
 const router = Router();
 router.use(requirePlatformAdmin);
@@ -811,6 +843,7 @@ const VALID_CATEGORIES = new Set(["feature", "fix", "note"]);
 router.get("/announcements", (_req, res) => {
   const items = db.prepare(`
     SELECT a.id, a.title, a.body, a.category, a.active,
+           a.image_url AS imageUrl,
            a.published_at AS publishedAt,
            (SELECT COUNT(*) FROM announcement_reads r WHERE r.announcement_id = a.id) AS readCount
     FROM announcements a
@@ -820,9 +853,27 @@ router.get("/announcements", (_req, res) => {
   res.json({ items });
 });
 
+/**
+ * Sube una imagen para anuncio. Retorna la URL pública para que el
+ * admin la asigne luego al crear/editar el anuncio. La imagen vive
+ * en server/uploads/announcements/<random>.<ext> y se sirve como
+ * static bajo /api/uploads/announcements/<random>.<ext>.
+ */
+router.post("/announcements/upload-image", (req, res) => {
+  announcementImageUpload.single("image")(req, res, (err) => {
+    if (err) {
+      const status = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      return res.status(status).json({ error: err.message || "Error subiendo imagen" });
+    }
+    if (!req.file) return res.status(400).json({ error: "Falta el archivo 'image'" });
+    const url = `/api/uploads/announcements/${req.file.filename}`;
+    res.json({ ok: true, url });
+  });
+});
+
 /** Crea un nuevo anuncio. published_at = now automático. */
 router.post("/announcements", (req, res) => {
-  const { title, body, category, active } = req.body ?? {};
+  const { title, body, category, active, imageUrl } = req.body ?? {};
   if (!title || typeof title !== "string" || title.trim().length < 3) {
     return res.status(400).json({ error: "Título mínimo 3 caracteres" });
   }
@@ -831,10 +882,15 @@ router.post("/announcements", (req, res) => {
   }
   const cat = VALID_CATEGORIES.has(category) ? category : "feature";
   const isActive = active === false ? 0 : 1;
+  // imageUrl debe ser una ruta interna /api/uploads/announcements/* —
+  // no aceptamos URLs externas para evitar hotlinking accidental.
+  const img = typeof imageUrl === "string" && imageUrl.startsWith("/api/uploads/announcements/")
+    ? imageUrl
+    : null;
   const result = db.prepare(`
-    INSERT INTO announcements (title, body, category, active)
-    VALUES (?, ?, ?, ?)
-  `).run(title.trim().slice(0, 200), body.trim().slice(0, 4000), cat, isActive);
+    INSERT INTO announcements (title, body, category, active, image_url)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(title.trim().slice(0, 200), body.trim().slice(0, 4000), cat, isActive, img);
   res.status(201).json({ ok: true, id: result.lastInsertRowid });
 });
 
@@ -845,7 +901,7 @@ router.patch("/announcements/:id", (req, res) => {
   const current = db.prepare("SELECT * FROM announcements WHERE id = ?").get(id);
   if (!current) return res.status(404).json({ error: "no encontrado" });
 
-  const { title, body, category, active } = req.body ?? {};
+  const { title, body, category, active, imageUrl } = req.body ?? {};
   const updates = {};
   if (typeof title === "string" && title.trim().length >= 3) {
     updates.title = title.trim().slice(0, 200);
@@ -858,6 +914,13 @@ router.patch("/announcements/:id", (req, res) => {
   }
   if (typeof active === "boolean") {
     updates.active = active ? 1 : 0;
+  }
+  // imageUrl: string vacío o null borra la imagen, valor con prefijo
+  // /api/uploads/announcements/ la setea, cualquier otra cosa se ignora.
+  if (imageUrl === null || imageUrl === "") {
+    updates.image_url = null;
+  } else if (typeof imageUrl === "string" && imageUrl.startsWith("/api/uploads/announcements/")) {
+    updates.image_url = imageUrl;
   }
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: "Nada que actualizar" });

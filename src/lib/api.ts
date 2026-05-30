@@ -1275,6 +1275,7 @@ export const api = {
       title: string;
       body: string;
       category: "feature" | "fix" | "note";
+      imageUrl: string | null;
       publishedAt: string;
       isRead: boolean;
     }>;
@@ -1774,22 +1775,40 @@ export const api = {
       body: string;
       category: "feature" | "fix" | "note";
       active: boolean;
+      imageUrl: string | null;
       publishedAt: string;
       readCount: number;
     }>;
   }>("/api/platform/announcements"),
-  platformCreateAnnouncement: (body: { title: string; body: string; category: "feature" | "fix" | "note"; active?: boolean }) =>
+  platformCreateAnnouncement: (body: { title: string; body: string; category: "feature" | "fix" | "note"; active?: boolean; imageUrl?: string | null }) =>
     request<{ ok: true; id: number }>("/api/platform/announcements", {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  platformUpdateAnnouncement: (id: number, patch: Partial<{ title: string; body: string; category: "feature" | "fix" | "note"; active: boolean }>) =>
+  platformUpdateAnnouncement: (id: number, patch: Partial<{ title: string; body: string; category: "feature" | "fix" | "note"; active: boolean; imageUrl: string | null }>) =>
     request<{ ok: true }>(`/api/platform/announcements/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
   platformDeleteAnnouncement: (id: number) =>
     request<{ ok: true }>(`/api/platform/announcements/${id}`, { method: "DELETE" }),
+  /** Sube una imagen para anuncio. Multipart con field "image". */
+  platformUploadAnnouncementImage: async (file: File): Promise<{ ok: true; url: string }> => {
+    const token = getToken();
+    const form = new FormData();
+    form.append("image", file);
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/api/platform/announcements/upload-image`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    if (res.status === 401) clearSession();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? "No se pudo subir la imagen");
+    return body;
+  },
   platformDeleteWorkspace: (id: number, confirmName: string) =>
     request<{ ok: boolean }>(`/api/platform/workspaces/${id}`, {
       method: "DELETE",

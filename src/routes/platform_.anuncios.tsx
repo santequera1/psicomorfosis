@@ -1,13 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Sparkles, Plus, Edit2, Trash2, Eye, EyeOff, X, Loader2, Bug, FileText,
-  Megaphone, Users,
+  Megaphone, Users, ImagePlus,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { AppSelect } from "@/components/app/AppSelect";
+import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { api, getStoredUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ interface FormState {
   body: string;
   category: Category;
   active: boolean;
+  imageUrl: string | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -36,6 +38,7 @@ const EMPTY_FORM: FormState = {
   body: "",
   category: "feature",
   active: true,
+  imageUrl: null,
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: typeof Sparkles; bg: string; fg: string }> = {
@@ -49,6 +52,7 @@ function PlatformAnnouncementsPage() {
   const qc = useQueryClient();
   const [ready, setReady] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null);
 
   useEffect(() => {
     const u = getStoredUser();
@@ -108,6 +112,7 @@ function PlatformAnnouncementsPage() {
       body: form.body.trim(),
       category: form.category,
       active: form.active,
+      imageUrl: form.imageUrl,
     };
     if (form.id == null) createMu.mutate(payload);
     else updateMu.mutate({ id: form.id, patch: payload });
@@ -167,15 +172,12 @@ function PlatformAnnouncementsPage() {
                   body: it.body,
                   category: it.category,
                   active: it.active,
+                  imageUrl: it.imageUrl,
                 })}
                 onToggleActive={() =>
                   updateMu.mutate({ id: it.id, patch: { active: !it.active } })
                 }
-                onDelete={() => {
-                  if (confirm(`¿Eliminar "${it.title}"? Esto borra también las marcas de leído de todos los usuarios.`)) {
-                    deleteMu.mutate(it.id);
-                  }
-                }}
+                onDelete={() => setDeleteTarget({ id: it.id, title: it.title })}
               />
             ))}
           </ul>
@@ -188,6 +190,20 @@ function PlatformAnnouncementsPage() {
             onClose={() => setForm(null)}
             onSubmit={handleSubmit}
             saving={createMu.isPending || updateMu.isPending}
+          />
+        )}
+
+        {deleteTarget && (
+          <ConfirmDialog
+            title={`Eliminar "${deleteTarget.title}"`}
+            message="Esto borra el anuncio y todas las marcas de leído de los usuarios. Si solo quieres ocultarlo conservando estadísticas, mejor usa el botón 'Desactivar' (el ojo)."
+            confirmLabel="Eliminar"
+            danger
+            onConfirm={() => {
+              deleteMu.mutate(deleteTarget.id);
+              setDeleteTarget(null);
+            }}
+            onCancel={() => setDeleteTarget(null)}
           />
         )}
       </div>
@@ -367,6 +383,11 @@ function AnnouncementFormModal({
             </label>
           </div>
 
+          <ImageField
+            url={form.imageUrl}
+            onChange={(url) => setForm({ ...form, imageUrl: url })}
+          />
+
           <div className="pt-2 flex items-center justify-end gap-2">
             <button
               type="button"
@@ -388,6 +409,89 @@ function AnnouncementFormModal({
         </form>
       </div>
     </div>
+  );
+}
+
+/**
+ * Subida de imagen opcional para el anuncio. Si ya hay una, muestra
+ * preview con botón quitar. Si no, botón para elegir archivo. Sube al
+ * backend que retorna la URL pública (no la commiteamos al anuncio
+ * hasta que el admin haga "Guardar" — antes solo persiste en el form).
+ */
+function ImageField({ url, onChange }: { url: string | null; onChange: (url: string | null) => void }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    try {
+      const res = await api.platformUploadAnnouncementImage(file);
+      onChange(res.url);
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo subir la imagen");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <label className="block">
+      <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+        Imagen (opcional) <span className="text-ink-400 normal-case tracking-normal">— captura de pantalla mostrando la feature</span>
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+          e.target.value = "";
+        }}
+      />
+      {url ? (
+        <div className="mt-1 relative rounded-lg border border-line-200 overflow-hidden bg-bg-50">
+          <img src={url} alt="Preview" className="w-full max-h-64 object-contain" />
+          <div className="absolute top-2 right-2 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+              className="h-8 px-2.5 rounded-md bg-surface/95 backdrop-blur border border-line-200 text-xs text-ink-700 hover:border-brand-400 disabled:opacity-50"
+            >
+              Cambiar
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              disabled={uploading}
+              className="h-8 w-8 rounded-md bg-surface/95 backdrop-blur border border-line-200 text-ink-700 hover:border-risk-high hover:text-risk-high flex items-center justify-center disabled:opacity-50"
+              title="Quitar imagen"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="mt-1 w-full h-24 rounded-lg border border-dashed border-line-200 bg-bg-50/40 hover:bg-bg-100 hover:border-brand-400 text-ink-500 inline-flex items-center justify-center gap-2 text-sm transition-colors disabled:opacity-50"
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Subiendo…
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-4 w-4" /> Agregar imagen (PNG, JPG, WebP — máx 5MB)
+            </>
+          )}
+        </button>
+      )}
+    </label>
   );
 }
 

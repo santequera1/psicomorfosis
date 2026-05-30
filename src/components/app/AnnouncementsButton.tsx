@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Sparkles, X, Bug, FileText, MessageCircle } from "lucide-react";
+import { Sparkles, X, Bug, FileText, MessageCircle, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 
@@ -68,7 +68,7 @@ export function AnnouncementsButton() {
         aria-label="Novedades"
         className="relative h-10 w-10 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center justify-center"
       >
-        <Sparkles className="h-4 w-4" />
+        <Megaphone className="h-4 w-4" />
         {unreadCount > 0 && (
           <span
             className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-brand-700 text-white text-[10px] font-semibold flex items-center justify-center ring-2 ring-surface tabular"
@@ -89,6 +89,7 @@ interface Announcement {
   title: string;
   body: string;
   category: "feature" | "fix" | "note";
+  imageUrl: string | null;
   publishedAt: string;
   isRead: boolean;
 }
@@ -195,6 +196,16 @@ function AnnouncementItem({ item }: { item: Announcement }) {
             )}
           </div>
           <p className="mt-1.5 text-sm text-ink-700 leading-relaxed whitespace-pre-wrap">{item.body}</p>
+          {item.imageUrl && (
+            <div className="mt-3 rounded-lg border border-line-200 overflow-hidden bg-bg-50">
+              <img
+                src={item.imageUrl}
+                alt={`Captura: ${item.title}`}
+                loading="lazy"
+                className="w-full max-h-80 object-contain"
+              />
+            </div>
+          )}
           <p className="mt-2 text-[11px] text-ink-400 inline-flex items-center gap-1.5">
             <MessageCircle className="h-3 w-3" />
             <span>{meta.label}</span>

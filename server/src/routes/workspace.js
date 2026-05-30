@@ -647,6 +647,7 @@ router.get("/announcements", (req, res) => {
   const userId = req.user.id;
   const items = db.prepare(`
     SELECT a.id, a.title, a.body, a.category,
+           a.image_url AS imageUrl,
            a.published_at AS publishedAt,
            CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS isRead
     FROM announcements a
