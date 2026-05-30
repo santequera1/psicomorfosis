@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, type ApiPatient } from "@/lib/api";
@@ -127,9 +127,20 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
     } as any);
   }
 
+  // Escape cierra el modal (mismo patrón que otros modales de la app).
+  // Click outside NO cierra — el form tiene varios pasos y un click
+  // accidental afuera borraba todo el progreso. Solo Esc o la X.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto">
+      <div className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden">
         <header className="p-5 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Pacientes</p>

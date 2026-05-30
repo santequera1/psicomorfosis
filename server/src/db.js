@@ -889,6 +889,27 @@ function runMigrations() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     "CREATE INDEX IF NOT EXISTS idx_demo_requests_created ON demo_requests(created_at DESC)",
+    // Anuncios in-app ('novedades'). Globales — todos los staff ven los
+    // mismos. Los crea el platform admin (por ahora via SQL directo).
+    // announcement_reads trackea qué usuario ya marcó cada uno como
+    // leído, para mostrar badge + auto-abrir modal solo la primera vez.
+    `CREATE TABLE IF NOT EXISTS announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'feature',
+      active INTEGER DEFAULT 1,
+      published_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(active, published_at DESC)",
+    `CREATE TABLE IF NOT EXISTS announcement_reads (
+      user_id INTEGER NOT NULL,
+      announcement_id INTEGER NOT NULL,
+      read_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, announcement_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE
+    )`,
   ];
   for (const sql of migrations) {
     try {

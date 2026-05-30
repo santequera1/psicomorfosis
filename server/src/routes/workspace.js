@@ -629,6 +629,53 @@ router.get("/reports-stats", (req, res) => {
   });
 });
 
+// ─── Novedades / anuncios in-app ──────────────────────────────────────────
+//
+// Anuncios globales — todos los staff ven los mismos. announcement_reads
+// trackea qué usuario marcó cada uno como leído. El frontend usa esto
+// para mostrar un badge en el botón y auto-abrir el modal la primera
+// vez. Aún no hay UI admin: los anuncios se crean con SQL directo en
+// el VPS (INSERT INTO announcements ...).
+
+/**
+ * GET /api/workspace/announcements
+ * Devuelve las activas con flag isRead para el user actual y un
+ * `unreadCount` resumen para que el frontend pinte el badge sin
+ * recorrer toda la lista.
+ */
+router.get("/announcements", (req, res) => {
+  const userId = req.user.id;
+  const items = db.prepare(`
+    SELECT a.id, a.title, a.body, a.category,
+           a.published_at AS publishedAt,
+           CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS isRead
+    FROM announcements a
+    LEFT JOIN announcement_reads r
+      ON r.announcement_id = a.id AND r.user_id = ?
+    WHERE a.active = 1
+    ORDER BY a.published_at DESC
+    LIMIT 30
+  `).all(userId).map((r) => ({ ...r, isRead: Boolean(r.isRead) }));
+  const unreadCount = items.filter((x) => !x.isRead).length;
+  res.json({ items, unreadCount });
+});
+
+/**
+ * POST /api/workspace/announcements/:id/read
+ * Idempotente: si el user ya leyó este anuncio, no falla.
+ */
+router.post("/announcements/:id/read", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const exists = db.prepare("SELECT 1 FROM announcements WHERE id = ?").get(id);
+  if (!exists) return res.status(404).json({ error: "anuncio no encontrado" });
+  db.prepare(`
+    INSERT OR IGNORE INTO announcement_reads (user_id, announcement_id)
+    VALUES (?, ?)
+  `).run(req.user.id, id);
+  res.json({ ok: true });
+});
+
 // ─── Helpers de stats avanzadas ───────────────────────────────────────────
 
 /** Cuántas sesiones atendidas hay por día de la semana (últimos 90 días). */

@@ -15,6 +15,7 @@ import { AppSelect } from "./AppSelect";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
+import { AnnouncementsButton } from "./AnnouncementsButton";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
 import { roleLabel } from "@/lib/utils";
 
@@ -225,6 +226,10 @@ export function Topbar() {
           >
             <Settings className="h-4 w-4" />
           </Link>
+
+          {/* Novedades — badge con conteo de anuncios sin leer. Modal
+              auto-abre la primera vez por sesión si hay novedades. */}
+          <AnnouncementsButton />
 
           <div className="relative">
             <button

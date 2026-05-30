@@ -501,11 +501,11 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
   onOpenSignature: () => void;
 }) {
   return (
-    // Wrapper de 2 zonas: izquierda con scroll horizontal (botones de
-    // formateo), derecha sticky con Dictar siempre visible. Antes Dictar
-    // estaba dentro del scroll y se perdía cuando el toolbar overflow.
-    <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl flex items-stretch">
-      <div className="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto no-scrollbar px-3 py-2">
+    // Toolbar con flex-wrap: si los botones no caben en una línea, se
+    // pasan a una segunda fila. Mejor que overflow-x-auto (scroll-x es
+    // incómodo en trackpad y la gente no descubre el botón Dictar al
+    // final). gap-y para separar las filas cuando wrapean.
+    <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-x-0.5 gap-y-1 flex-wrap">
       <BtnGroup>
         <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Deshacer (⌘Z)">
           <Undo className="h-4 w-4" />
@@ -595,19 +595,16 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
           <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
-      </div>
-      {/* Zona derecha sticky — Dictar siempre visible aunque el toolbar
-          haga overflow horizontal. Borde izquierdo para separar
-          visualmente del scroll de la izquierda. */}
-      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-l border-line-100">
-        <VoiceRecorderButton
-          variant="compact"
-          label="Dictar"
-          onTranscript={(text) => {
-            editor.chain().focus().insertContent(text).run();
-          }}
-        />
-      </div>
+      <Sep />
+      {/* Dictar al final. Con flex-wrap, si no cabe en la primera fila
+          el botón se pasa a la segunda — siempre visible sin scroll. */}
+      <VoiceRecorderButton
+        variant="compact"
+        label="Dictar"
+        onTranscript={(text) => {
+          editor.chain().focus().insertContent(text).run();
+        }}
+      />
     </div>
   );
 }

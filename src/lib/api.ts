@@ -1267,6 +1267,21 @@ export const api = {
    * JSON; con FormData el browser debe poner el boundary multipart
    * correcto automáticamente y no debemos setear Content-Type a mano.
    */
+  /** Novedades / anuncios in-app. Globales — todos los staff ven los
+   *  mismos. El backend marca cada uno con isRead según el user actual. */
+  listAnnouncements: () => request<{
+    items: Array<{
+      id: number;
+      title: string;
+      body: string;
+      category: "feature" | "fix" | "note";
+      publishedAt: string;
+      isRead: boolean;
+    }>;
+    unreadCount: number;
+  }>("/api/workspace/announcements"),
+  markAnnouncementRead: (id: number) =>
+    request<{ ok: true }>(`/api/workspace/announcements/${id}/read`, { method: "POST" }),
   transcribeVoice: async (audio: Blob, opts?: { filename?: string; signal?: AbortSignal }): Promise<{ success: true; text: string } | { success: false; error: string }> => {
     const token = getToken();
     const form = new FormData();

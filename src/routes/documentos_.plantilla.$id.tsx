@@ -95,7 +95,7 @@ function TemplateEditPage() {
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto">
-        <header className="psm-no-print sticky top-0 z-10 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 bg-bg/95 backdrop-blur border-b border-line-100 mb-4">
+        <header className="psm-no-print sticky top-16 z-10 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 bg-bg/95 backdrop-blur border-b border-line-100 mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Link to="/documentos" className="h-9 w-9 rounded-md hover:bg-bg-100 flex items-center justify-center text-ink-500 shrink-0" aria-label="Volver">
