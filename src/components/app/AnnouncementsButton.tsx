@@ -167,8 +167,10 @@ function AnnouncementsModal({ items, onClose }: { items: Announcement[]; onClose
   );
 }
 
-const CATEGORY_META: Record<Announcement["category"], { label: string; icon: typeof Sparkles; bg: string; fg: string }> = {
-  feature: { label: "Nuevo", icon: Sparkles, bg: "bg-brand-50 border-brand-200", fg: "text-brand-800" },
+const CATEGORY_META: Record<Announcement["category"], { label: string; icon: typeof Megaphone; bg: string; fg: string }> = {
+  // Megaphone para 'feature' también — antes Sparkles que el user
+  // asocia con IA. Megaphone refuerza la lectura 'anuncio'.
+  feature: { label: "Nuevo", icon: Megaphone, bg: "bg-brand-50 border-brand-200", fg: "text-brand-800" },
   fix: { label: "Mejora", icon: Bug, bg: "bg-amber-50 border-amber-200", fg: "text-amber-800" },
   note: { label: "Aviso", icon: FileText, bg: "bg-bg-100 border-line-200", fg: "text-ink-700" },
 };

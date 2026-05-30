@@ -501,12 +501,12 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
   onOpenSignature: () => void;
 }) {
   return (
-    // Toolbar en una sola línea. Sin flex-wrap, sin overflow-x. Si en
-    // alguna pantalla muy estrecha no entra, el overflow-x-auto del
-    // wrapper padre maneja el scroll — pero en el ancho típico del
-    // editor de documentos (max-w-4xl) ya entra todo. Dictar va con
-    // ml-auto para quedar pegado a la derecha.
-    <div className="sticky top-16 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl px-3 py-2 flex items-center gap-0.5 overflow-x-auto no-scrollbar">
+    // Toolbar en 2 zonas: izquierda con scroll horizontal de seguridad
+    // (botones de formato) + derecha sticky con Dictar siempre visible
+    // y completo, nunca recortado. El editor padre usa max-w-5xl así
+    // que en práctica los botones siempre caben sin scrollear.
+    <div className="sticky top-16 z-10 bg-surface/95 backdrop-blur border-b border-line-100 rounded-t-xl flex items-stretch">
+      <div className="flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto no-scrollbar px-3 py-2">
       <BtnGroup>
         <Btn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Deshacer (⌘Z)">
           <Undo className="h-4 w-4" />
@@ -596,9 +596,10 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
           <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
-      {/* Dictar pegado a la derecha con ml-auto. Pequeño gap-l para
-          separarlo visualmente del grupo anterior sin necesidad de Sep. */}
-      <div className="ml-auto pl-2 shrink-0">
+      </div>
+      {/* Zona derecha sticky: Dictar siempre visible y completo, fuera
+          del overflow-x del scroll. border-l para separar visualmente. */}
+      <div className="shrink-0 flex items-center px-3 py-2 border-l border-line-100 bg-surface/95">
         <VoiceRecorderButton
           variant="compact"
           label="Dictar"

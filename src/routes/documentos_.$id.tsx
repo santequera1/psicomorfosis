@@ -204,11 +204,13 @@ function DocumentDetailPage() {
   // Editor in-app
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto">
-        {/* Header sticky con metadata + acciones. top-16 deja respirar
-            la Topbar global (h-16) que también es sticky — antes top-0
-            hacía que esta barra se solapara con la global. */}
-        <header className="psm-no-print sticky top-16 z-10 -mx-4 sm:mx-0 px-4 sm:px-0 py-3 bg-bg/95 backdrop-blur border-b border-line-100 mb-4">
+      <div className="max-w-5xl mx-auto">
+        {/* Header NO sticky — antes lo era y se solapaba con el toolbar
+            sticky del editor al hacer scroll. Las acciones (descargar /
+            firma / etc) y datos del paciente quedan accesibles haciendo
+            scroll hasta arriba; lo que sí queda fijo es el toolbar de
+            formato dentro del editor. */}
+        <header className="psm-no-print -mx-4 sm:mx-0 px-4 sm:px-0 py-3 border-b border-line-100 mb-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Link to="/documentos" className="h-9 w-9 rounded-md hover:bg-bg-100 flex items-center justify-center text-ink-500 shrink-0" aria-label="Volver">
