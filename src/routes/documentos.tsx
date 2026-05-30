@@ -854,13 +854,14 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
         "aspect-[4/5]",
       )}
     >
-      {/* Card minimalista con base cream + wash sutil de color en la
-          derecha. La doble background (gradient encima del color base)
-          permite que el wash aporte tinte sin tapar el cream. */}
+      {/* Card minimalista. Base bg-surface (light: cream blanco, dark:
+          surface oscuro) en lugar de un hex hardcoded — antes ignoraba
+          el modo oscuro y las cards quedaban blancas sobre fondo dark.
+          El wash de color va como overlay; en dark se vuelve casi
+          imperceptible, lo cual está bien (es decorativo, no aporta info). */}
       <div
-        className="relative h-full overflow-hidden rounded-md border border-line-200/70 transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
+        className="relative h-full overflow-hidden rounded-md border border-line-200/70 bg-surface transition-all duration-200 group-hover:border-line-300 group-hover:shadow-card"
         style={{
-          backgroundColor: "oklch(0.995 0.003 80)",
           backgroundImage: wash,
           boxShadow: "0 1px 2px rgb(31 57 63 / 0.03), 0 2px 8px rgb(31 57 63 / 0.03)",
         }}

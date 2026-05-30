@@ -218,13 +218,17 @@ function DocumentDetailPage() {
               </Link>
               <DocumentTitle doc={doc} editable={!isLocked} onRename={(name) => renameMu.mutate(name)} />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            {/* flex-wrap + justify-end: si los botones no caben en una
+                fila se van a la siguiente sin desbordar el viewport.
+                En mobile reducimos padding (px-2 sm:px-3) y los labels
+                hidden sm:inline ya colapsan a solo iconos — todo cabe. */}
+            <div className="flex items-center justify-end gap-2 flex-wrap">
               <SaveStatus saving={saving} savedAt={savedAt} locked={isLocked} />
               <button
                 type="button"
                 onClick={downloadPdf}
                 disabled={downloadingPdf}
-                className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
+                className="h-9 px-2 sm:px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
                 title="Descargar el documento como PDF"
               >
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -237,8 +241,8 @@ function DocumentDetailPage() {
                   disabled={shareMu.isPending}
                   className={
                     doc.shared_with_patient
-                      ? "h-9 px-3 rounded-md text-sm border border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100 inline-flex items-center gap-2 disabled:opacity-60"
-                      : "h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
+                      ? "h-9 px-2 sm:px-3 rounded-md text-sm border border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100 inline-flex items-center gap-2 disabled:opacity-60"
+                      : "h-9 px-2 sm:px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700 disabled:opacity-60"
                   }
                   title={
                     doc.shared_with_patient
@@ -256,7 +260,7 @@ function DocumentDetailPage() {
                 <button
                   type="button"
                   onClick={() => setSignRequestOpen(true)}
-                  className="h-9 px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700"
+                  className="h-9 px-2 sm:px-3 rounded-md text-sm border border-line-200 hover:border-brand-400 inline-flex items-center gap-2 text-ink-700"
                   title="Generar enlace para que el paciente firme desde su celular"
                 >
                   <Send className="h-4 w-4" /> <span className="hidden sm:inline">Pedir firma del paciente</span>
@@ -267,7 +271,7 @@ function DocumentDetailPage() {
                   type="button"
                   onClick={() => setConfirmSign(true)}
                   disabled={signMu.isPending}
-                  className="h-9 px-3 rounded-md text-sm bg-brand-700 text-white hover:bg-brand-700/90 inline-flex items-center gap-2 disabled:opacity-50"
+                  className="h-9 px-2 sm:px-3 rounded-md text-sm bg-brand-700 text-white hover:bg-brand-700/90 inline-flex items-center gap-2 disabled:opacity-50"
                 >
                   <FileSignature className="h-4 w-4" /> <span className="hidden sm:inline">Firmar</span>
                 </button>

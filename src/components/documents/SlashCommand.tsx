@@ -437,7 +437,7 @@ export const SlashList = forwardRef<SlashListRef, SlashListProps>(({ items, comm
 
   let runningIdx = 0;
   return (
-    <div className="rounded-lg border border-line-200 bg-surface shadow-card max-h-96 overflow-y-auto w-80 p-1">
+    <div className="rounded-lg border border-line-200 bg-surface shadow-card max-h-96 overflow-y-auto w-80 max-w-[calc(100vw-1rem)] p-1">
       {orderedGroups.map(([groupName, { items: groupItems }]) => (
         <div key={groupName}>
           <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium">
@@ -491,16 +491,27 @@ function makePopover() {
     show: (rect: DOMRect) => {
       el.style.display = "block";
       el.style.visibility = "hidden";
-      // Limitamos left a viewport
-      el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 320))}px`;
+      // Posición inicial provisional para que el menú se renderice y
+      // podamos medir su ancho real (el menú es w-80 max-w-[100vw-1rem],
+      // entonces en mobile puede ser <320px). Después corregimos con
+      // el ancho medido — antes asumíamos 320px fijo y se salía cuando
+      // el viewport era ~330px o el rect estaba al medio-derecho.
+      el.style.left = "0px";
       el.style.top = "0";
       requestAnimationFrame(() => {
         const menuH = el.offsetHeight;
+        const menuW = el.offsetWidth;
         const viewH = window.innerHeight;
+        const viewW = window.innerWidth;
+        // Left clamped al ancho real del menú renderizado. min(8) deja
+        // un mini margen del borde izquierdo, viewW-menuW-8 evita
+        // que se salga por la derecha.
+        const left = Math.max(8, Math.min(rect.left, viewW - menuW - 8));
         const spaceBelow = viewH - rect.bottom;
         const spaceAbove = rect.top;
         const goUp = spaceBelow < menuH + 16 && spaceAbove > spaceBelow;
         const top = goUp ? Math.max(8, rect.top - menuH - 6) : rect.bottom + 6;
+        el.style.left = `${left}px`;
         el.style.top = `${top}px`;
         el.style.maxHeight = `${Math.max(160, (goUp ? spaceAbove : spaceBelow) - 16)}px`;
         el.style.visibility = "visible";

@@ -77,7 +77,7 @@ export const VariableList = forwardRef<VariableListRef, VariableListProps>(({ it
 
   if (items.length === 0) {
     return (
-      <div className="rounded-lg border border-line-200 bg-surface shadow-card p-3 text-xs text-ink-500 w-72">
+      <div className="rounded-lg border border-line-200 bg-surface shadow-card p-3 text-xs text-ink-500 w-72 max-w-[calc(100vw-1rem)]">
         Sin variables que coincidan
       </div>
     );
@@ -89,7 +89,7 @@ export const VariableList = forwardRef<VariableListRef, VariableListProps>(({ it
 
   let runningIdx = 0;
   return (
-    <div className="rounded-lg border border-line-200 bg-surface shadow-card w-80 p-1 overflow-y-auto" style={{ maxHeight: "inherit" }}>
+    <div className="rounded-lg border border-line-200 bg-surface shadow-card w-80 max-w-[calc(100vw-1rem)] p-1 overflow-y-auto" style={{ maxHeight: "inherit" }}>
       {Object.entries(grouped).map(([group, vars]) => (
         <div key={group}>
           <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-[0.08em] text-ink-500 font-medium">{group}</div>
@@ -129,14 +129,20 @@ function makeVarPopover() {
     show: (rect: DOMRect) => {
       el.style.display = "block";
       el.style.visibility = "hidden";
-      el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 340))}px`;
+      el.style.left = "0px";
       el.style.top = "0";
       requestAnimationFrame(() => {
+        // Mismo patrón que SlashCommand: medimos ancho real porque el
+        // menú es responsive (w-80 con max-w-[100vw-1rem]). Antes
+        // asumíamos 340px fijo y se salía en mobile.
         const menuH = el.offsetHeight;
+        const menuW = el.offsetWidth;
         const viewH = window.innerHeight;
+        const viewW = window.innerWidth;
         const spaceBelow = viewH - rect.bottom;
         const spaceAbove = rect.top;
         const goUp = spaceBelow < menuH + 16 && spaceAbove > spaceBelow;
+        el.style.left = `${Math.max(8, Math.min(rect.left, viewW - menuW - 8))}px`;
         el.style.top = `${goUp ? Math.max(8, rect.top - menuH - 6) : rect.bottom + 6}px`;
         el.style.maxHeight = `${Math.max(160, (goUp ? spaceAbove : spaceBelow) - 16)}px`;
         el.style.visibility = "visible";
