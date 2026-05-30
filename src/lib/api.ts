@@ -1258,6 +1258,35 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /**
+   * Transcribe un audio grabado en el navegador. Envía el blob como
+   * multipart/form-data al backend que hace de proxy a OpenAI Whisper /
+   * gpt-4o-transcribe. Auth requerida.
+   *
+   * No usamos `request<T>` porque ese helper hardcodea Content-Type
+   * JSON; con FormData el browser debe poner el boundary multipart
+   * correcto automáticamente y no debemos setear Content-Type a mano.
+   */
+  transcribeVoice: async (audio: Blob, opts?: { filename?: string; signal?: AbortSignal }): Promise<{ success: true; text: string } | { success: false; error: string }> => {
+    const token = getToken();
+    const form = new FormData();
+    form.append("audio", audio, opts?.filename ?? "dictado.webm");
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/api/voice/transcribe`, {
+      method: "POST",
+      headers,
+      body: form,
+      signal: opts?.signal,
+    });
+    if (res.status === 401) clearSession();
+    let body: any = null;
+    try { body = await res.json(); } catch { /* noop */ }
+    if (!res.ok || !body?.success) {
+      return { success: false, error: body?.error ?? "No se pudo transcribir el audio." };
+    }
+    return { success: true, text: String(body.text ?? "") };
+  },
   /** Setea/actualiza la nota clínica del psicólogo sobre el resultado del test. */
   setTestApplicationNotes: (id: string, notes: string | null) =>
     request<{ ok: true; notes: string | null }>(`/api/tests/applications/${id}/notes`, {

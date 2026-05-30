@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { RiskBadge } from "@/components/app/RiskBadge";
+import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -572,18 +573,31 @@ function ClinicalBlock({ kind, note, patientId }: { kind: keyof typeof BLOCK_LAB
 
       {editing ? (
         <>
-          <textarea
-            rows={6}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={
-              isDiagBlock
-                ? "Conceptualización, hipótesis diagnóstica adicional, dinámicas relevantes del caso…"
-                : `Escribe el ${title.toLowerCase()}…`
-            }
-            className="w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
-            autoFocus
-          />
+          <div className="relative">
+            <textarea
+              rows={6}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={
+                isDiagBlock
+                  ? "Conceptualización, hipótesis diagnóstica adicional, dinámicas relevantes del caso…"
+                  : `Escribe el ${title.toLowerCase()}…`
+              }
+              className="w-full px-3 py-2 pr-14 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
+              autoFocus
+            />
+            {/* Botón Dictar flotante arriba-derecha del textarea. No
+                interfiere con el contenido (pr-14 reserva el espacio). */}
+            <div className="absolute top-2 right-2">
+              <VoiceRecorderButton
+                variant="icon"
+                onTranscript={(text) => {
+                  const current = draft.trim();
+                  setDraft(current ? `${current} ${text}` : text);
+                }}
+              />
+            </div>
+          </div>
           {note?.signedAt && (
             <div className="mt-2 rounded-md border border-warning/30 bg-warning-soft p-2 text-xs text-ink-700 flex items-start gap-2">
               <AlertCircle className="h-3.5 w-3.5 text-risk-moderate shrink-0 mt-0.5" />
@@ -1381,7 +1395,17 @@ function NoteEditor({ patientId, patientName, onClose }: { patientId: string; pa
           </div>
         ) : (
           <label className="block">
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Contenido</span>
+            <span className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+              <span>Contenido</span>
+              <VoiceRecorderButton
+                variant="compact"
+                label="Dictar"
+                onTranscript={(text) => {
+                  const current = freeText.trim();
+                  setFreeText(current ? `${current} ${text}` : text);
+                }}
+              />
+            </span>
             <textarea
               rows={8}
               autoFocus

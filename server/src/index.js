@@ -39,6 +39,7 @@ import legalRoutes from "./routes/legal.js";
 import bankAccountsRoutes from "./routes/bankAccounts.js";
 import diagnosesRoutes from "./routes/diagnoses.js";
 import landingRoutes from "./routes/landing.js";
+import voiceRoutes from "./routes/voice.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -101,6 +102,9 @@ app.use("/api/invoices", invoicesRoutes);
 app.use("/api/bank-accounts", bankAccountsRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/settings", settingsRoutes);
+// Transcripción de voz (OpenAI Whisper / gpt-4o-transcribe). Auth y
+// rate-limit aplicados dentro del router. Audio nunca toca disco.
+app.use("/api/voice", voiceRoutes);
 // portalRoutes va ANTES que notesRoutes porque expone endpoints públicos
 // (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
 // requireAuth global, así que si va primero intercepta cualquier /api/*.

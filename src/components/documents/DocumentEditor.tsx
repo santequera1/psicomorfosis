@@ -41,6 +41,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { SignatureModal } from "./SignatureModal";
+import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
 import {
   Bold, Italic, Underline, Strikethrough, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Code, Minus, Link2,
@@ -590,6 +591,18 @@ function Toolbar({ editor, onSetLink, onPickImage, onPickAttachment, onOpenSigna
           <FileSignature className="h-4 w-4" />
         </Btn>
       </BtnGroup>
+      <Sep />
+      {/* Dictado por voz. Inserta el texto transcrito en la posición
+          del cursor — si hay texto seleccionado lo reemplaza. */}
+      <div className="ml-auto pl-1">
+        <VoiceRecorderButton
+          variant="compact"
+          label="Dictar"
+          onTranscript={(text) => {
+            editor.chain().focus().insertContent(text).run();
+          }}
+        />
+      </div>
     </div>
   );
 }

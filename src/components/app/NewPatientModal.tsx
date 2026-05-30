@@ -9,6 +9,7 @@ import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { type Patient, type Modality, type Risk, type RiskType } from "@/lib/mock-data";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { AppSelect } from "@/components/app/AppSelect";
+import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
 
 /**
  * Modal de alta de paciente en 3 pasos. Usado desde la lista de pacientes
@@ -201,8 +202,27 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
           )}
           {step === 2 && (
             <>
-              <Labeled label="Motivo de consulta">
-                <textarea rows={3} onChange={(e) => updateField("reason", e.target.value)} placeholder="Describe brevemente el motivo principal…" className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+              <Labeled
+                label="Motivo de consulta"
+                rightSlot={
+                  <VoiceRecorderButton
+                    variant="compact"
+                    label="Dictar"
+                    onTranscript={(text) => {
+                      const current = (form.reason ?? "").trim();
+                      const joined = current ? `${current} ${text}` : text;
+                      updateField("reason", joined);
+                    }}
+                  />
+                }
+              >
+                <textarea
+                  rows={3}
+                  value={form.reason ?? ""}
+                  onChange={(e) => updateField("reason", e.target.value)}
+                  placeholder="Describe brevemente el motivo principal…"
+                  className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
+                />
               </Labeled>
               <div className={"grid gap-3 " + (isOrg ? "grid-cols-2" : "grid-cols-1")}>
                 {isOrg && (
@@ -340,10 +360,13 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+function Labeled({ label, children, rightSlot }: { label: string; children: React.ReactNode; rightSlot?: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">{label}</span>
+      <span className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-ink-500 font-medium">
+        <span>{label}</span>
+        {rightSlot}
+      </span>
       {children}
     </label>
   );
