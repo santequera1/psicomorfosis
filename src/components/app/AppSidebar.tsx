@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
   PanelLeftClose, PanelLeftOpen, X, Shield, LogOut, Bug,
-  Scale, FileText, ClipboardCheck,
+  Scale, FileText, ClipboardCheck, Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn, roleLabel } from "@/lib/utils";
@@ -93,6 +93,7 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
         { to: "/platform", label: "Cuentas y uso", icon: Shield },
         { to: "/platform/reportes", label: "Reportes", icon: Bug },
         { to: "/platform/test-requests", label: "Tests solicitados", icon: Brain },
+        { to: "/platform/anuncios", label: "Novedades", icon: Sparkles },
       ],
     },
     {

@@ -1766,6 +1766,30 @@ export const api = {
     }),
   platformEnableWorkspace: (id: number) =>
     request<{ ok: boolean }>(`/api/platform/workspaces/${id}/enable`, { method: "POST" }),
+  // Novedades / anuncios — admin de plataforma.
+  platformListAnnouncements: () => request<{
+    items: Array<{
+      id: number;
+      title: string;
+      body: string;
+      category: "feature" | "fix" | "note";
+      active: boolean;
+      publishedAt: string;
+      readCount: number;
+    }>;
+  }>("/api/platform/announcements"),
+  platformCreateAnnouncement: (body: { title: string; body: string; category: "feature" | "fix" | "note"; active?: boolean }) =>
+    request<{ ok: true; id: number }>("/api/platform/announcements", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  platformUpdateAnnouncement: (id: number, patch: Partial<{ title: string; body: string; category: "feature" | "fix" | "note"; active: boolean }>) =>
+    request<{ ok: true }>(`/api/platform/announcements/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  platformDeleteAnnouncement: (id: number) =>
+    request<{ ok: true }>(`/api/platform/announcements/${id}`, { method: "DELETE" }),
   platformDeleteWorkspace: (id: number, confirmName: string) =>
     request<{ ok: boolean }>(`/api/platform/workspaces/${id}`, {
       method: "DELETE",

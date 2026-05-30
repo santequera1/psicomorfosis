@@ -799,4 +799,82 @@ router.post("/test-requests/:id/to-task", (req, res) => {
   res.status(201).json({ ok: true, task_id: taskId });
 });
 
+// ─── Novedades / anuncios in-app (CRUD admin) ────────────────────────────
+//
+// Los anuncios son globales (todos los staff los ven). Solo platform
+// admin puede crear/editar/desactivar. El endpoint público que los
+// usuarios consumen vive en workspace.js (/announcements).
+
+const VALID_CATEGORIES = new Set(["feature", "fix", "note"]);
+
+/** Lista TODOS (activos + inactivos) con conteo de reads. */
+router.get("/announcements", (_req, res) => {
+  const items = db.prepare(`
+    SELECT a.id, a.title, a.body, a.category, a.active,
+           a.published_at AS publishedAt,
+           (SELECT COUNT(*) FROM announcement_reads r WHERE r.announcement_id = a.id) AS readCount
+    FROM announcements a
+    ORDER BY a.published_at DESC
+    LIMIT 200
+  `).all().map((r) => ({ ...r, active: Boolean(r.active) }));
+  res.json({ items });
+});
+
+/** Crea un nuevo anuncio. published_at = now automático. */
+router.post("/announcements", (req, res) => {
+  const { title, body, category, active } = req.body ?? {};
+  if (!title || typeof title !== "string" || title.trim().length < 3) {
+    return res.status(400).json({ error: "Título mínimo 3 caracteres" });
+  }
+  if (!body || typeof body !== "string" || body.trim().length < 5) {
+    return res.status(400).json({ error: "Cuerpo mínimo 5 caracteres" });
+  }
+  const cat = VALID_CATEGORIES.has(category) ? category : "feature";
+  const isActive = active === false ? 0 : 1;
+  const result = db.prepare(`
+    INSERT INTO announcements (title, body, category, active)
+    VALUES (?, ?, ?, ?)
+  `).run(title.trim().slice(0, 200), body.trim().slice(0, 4000), cat, isActive);
+  res.status(201).json({ ok: true, id: result.lastInsertRowid });
+});
+
+/** Edita parcial. Útil para toggle active sin tocar texto. */
+router.patch("/announcements/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const current = db.prepare("SELECT * FROM announcements WHERE id = ?").get(id);
+  if (!current) return res.status(404).json({ error: "no encontrado" });
+
+  const { title, body, category, active } = req.body ?? {};
+  const updates = {};
+  if (typeof title === "string" && title.trim().length >= 3) {
+    updates.title = title.trim().slice(0, 200);
+  }
+  if (typeof body === "string" && body.trim().length >= 5) {
+    updates.body = body.trim().slice(0, 4000);
+  }
+  if (typeof category === "string" && VALID_CATEGORIES.has(category)) {
+    updates.category = category;
+  }
+  if (typeof active === "boolean") {
+    updates.active = active ? 1 : 0;
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "Nada que actualizar" });
+  }
+  const setClause = Object.keys(updates).map((k) => `${k} = ?`).join(", ");
+  db.prepare(`UPDATE announcements SET ${setClause} WHERE id = ?`)
+    .run(...Object.values(updates), id);
+  res.json({ ok: true });
+});
+
+/** Borra el anuncio + sus reads (CASCADE). */
+router.delete("/announcements/:id", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+  const result = db.prepare("DELETE FROM announcements WHERE id = ?").run(id);
+  if (result.changes === 0) return res.status(404).json({ error: "no encontrado" });
+  res.json({ ok: true });
+});
+
 export default router;

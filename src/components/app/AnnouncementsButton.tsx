@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, X, Bug, FileText, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -103,7 +104,12 @@ function AnnouncementsModal({ items, onClose }: { items: Announcement[]; onClose
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Portal al body — el modal se renderiza desde un botón en el Topbar
+  // que está cerca de elementos con backdrop-blur (Topbar mismo,
+  // headers sticky). backdrop-blur crea stacking context aislado y
+  // el modal con z-50 queda atrapado debajo. Portal lo saca al raíz.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto"
       onClick={onClose}
@@ -155,7 +161,8 @@ function AnnouncementsModal({ items, onClose }: { items: Announcement[]; onClose
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

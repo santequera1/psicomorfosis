@@ -30,6 +30,7 @@ import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlatformTestRequestsRouteImport } from './routes/platform_.test-requests'
 import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
+import { Route as PlatformAnunciosRouteImport } from './routes/platform_.anuncios'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as PTestsRouteImport } from './routes/p_.tests'
 import { Route as PTareasRouteImport } from './routes/p_.tareas'
@@ -152,6 +153,11 @@ const PlatformReportesRoute = PlatformReportesRouteImport.update({
   path: '/platform/reportes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlatformAnunciosRoute = PlatformAnunciosRouteImport.update({
+  id: '/platform_/anuncios',
+  path: '/platform/anuncios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacientesIdRoute = PacientesIdRouteImport.update({
   id: '/pacientes_/$id',
   path: '/pacientes/$id',
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
@@ -304,6 +311,7 @@ export interface FileRoutesByTo {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
@@ -344,6 +352,7 @@ export interface FileRoutesById {
   '/p_/tareas': typeof PTareasRoute
   '/p_/tests': typeof PTestsRoute
   '/pacientes_/$id': typeof PacientesIdRoute
+  '/platform_/anuncios': typeof PlatformAnunciosRoute
   '/platform_/reportes': typeof PlatformReportesRoute
   '/platform_/test-requests': typeof PlatformTestRequestsRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
@@ -385,6 +394,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/platform/anuncios'
     | '/platform/reportes'
     | '/platform/test-requests'
     | '/documentos/plantilla/$id'
@@ -424,6 +434,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/platform/anuncios'
     | '/platform/reportes'
     | '/platform/test-requests'
     | '/documentos/plantilla/$id'
@@ -463,6 +474,7 @@ export interface FileRouteTypes {
     | '/p_/tareas'
     | '/p_/tests'
     | '/pacientes_/$id'
+    | '/platform_/anuncios'
     | '/platform_/reportes'
     | '/platform_/test-requests'
     | '/documentos_/plantilla/$id'
@@ -503,6 +515,7 @@ export interface RootRouteChildren {
   PTareasRoute: typeof PTareasRoute
   PTestsRoute: typeof PTestsRoute
   PacientesIdRoute: typeof PacientesIdRoute
+  PlatformAnunciosRoute: typeof PlatformAnunciosRoute
   PlatformReportesRoute: typeof PlatformReportesRoute
   PlatformTestRequestsRoute: typeof PlatformTestRequestsRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
@@ -660,6 +673,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformReportesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/platform_/anuncios': {
+      id: '/platform_/anuncios'
+      path: '/platform/anuncios'
+      fullPath: '/platform/anuncios'
+      preLoaderRoute: typeof PlatformAnunciosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacientes_/$id': {
       id: '/pacientes_/$id'
       path: '/pacientes/$id'
@@ -807,6 +827,7 @@ const rootRouteChildren: RootRouteChildren = {
   PTareasRoute: PTareasRoute,
   PTestsRoute: PTestsRoute,
   PacientesIdRoute: PacientesIdRoute,
+  PlatformAnunciosRoute: PlatformAnunciosRoute,
   PlatformReportesRoute: PlatformReportesRoute,
   PlatformTestRequestsRoute: PlatformTestRequestsRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
