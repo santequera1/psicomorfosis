@@ -59,25 +59,30 @@ export function BankCard({
   const s = getBankStyle(bankId);
   const isXs = size === "xs";
 
-  // Variante chip pequeño: solo color de fondo + texto, sin chip EMV
-  // ni decoración. Se usa en la lista de recibos para indicar
-  // "este recibo se cobró en X cuenta".
+  // Variante chip pequeño: estilo minimalista neutro que combina con
+  // el resto del UI (filas de recibos). Sin background del color del
+  // banco — solo un dot pequeño a la izquierda con el color como acento.
+  // Antes era un chip amarillo Bancolombia / rojo Davivienda / morado
+  // Nequi etc, que destacaba demasiado en una tabla calmada.
   if (isXs) {
     return (
       <span
         className={cn(
           "inline-flex items-center gap-1.5 font-medium shrink-0 max-w-full",
-          s.cardBg, s.textColor, SIZE_CLASS.xs,
+          "h-10 px-3 py-1.5 rounded text-[11px]",
+          "bg-bg-50 text-ink-700 border border-line-200",
           className,
         )}
         title={`${s.name} · ${label}`}
       >
-        <span className={cn("font-semibold tracking-tight", logoFontClass(s.logoFont))}>
-          {s.logoText}
-        </span>
-        <span className="opacity-80 truncate">·</span>
-        <span className="truncate opacity-90">{label}</span>
-        {last4 && <span className="opacity-70 tabular ml-1">··{last4}</span>}
+        <span
+          className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.cardBg)}
+          aria-hidden
+        />
+        <span className="font-semibold tracking-tight">{s.name}</span>
+        <span className="text-ink-300 shrink-0">·</span>
+        <span className="truncate text-ink-500">{label}</span>
+        {last4 && <span className="text-ink-500 tabular ml-0.5">··{last4}</span>}
       </span>
     );
   }
