@@ -92,17 +92,17 @@ export const FONT_FAMILIES: Record<FontFamily, FontDescriptor> = {
   },
   inter: {
     label: "Inter",
-    description: "Inter para títulos y texto — sans-only, pantallas modernas.",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+    description: "Inter para texto, Fraunces para títulos — clean + editorial.",
+    href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap",
     sans: '"Inter", system-ui, sans-serif',
-    serif: '"Inter", system-ui, sans-serif',
+    serif: '"Fraunces", Georgia, serif',
   },
   manrope: {
     label: "Manrope",
-    description: "Manrope para todo — geométrica cálida, redondeada.",
-    href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap",
+    description: "Manrope para texto, Fraunces para títulos — geométrica + serif suave.",
+    href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap",
     sans: '"Manrope", system-ui, sans-serif',
-    serif: '"Manrope", system-ui, sans-serif',
+    serif: '"Fraunces", Georgia, serif',
   },
 };
 
