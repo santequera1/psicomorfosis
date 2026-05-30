@@ -214,6 +214,18 @@ export function Topbar() {
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
+          {/* Atajo directo a configuración. Cmd+K lo abre pero pocos
+              usuarios saben el atajo; tener el engranaje a la vista
+              hace el camino más corto. */}
+          <Link
+            to="/configuracion"
+            className="h-10 w-10 rounded-lg border border-line-200 bg-surface text-ink-700 hover:border-brand-400 transition-colors flex items-center justify-center"
+            aria-label="Configuración"
+            title="Configuración"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+
           <div className="relative">
             <button
               onClick={() => setNotifOpen((v) => !v)}

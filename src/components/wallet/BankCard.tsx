@@ -82,10 +82,10 @@ export function BankCard({
     );
   }
 
-  // Variante strip: franja horizontal compacta (full-width, ~48px alto).
-  // Para listas de cuentas donde una tarjeta visual robaría demasiado
-  // espacio vertical. Muestra "Banco · Label ··last4" sobre el color
-  // del banco. Ahorra ~60% de altura vs la tarjeta visual.
+  // Variante strip: franja horizontal minimalista (full-width, ~44px alto).
+  // Sin colores extravagantes, sin gradientes, sin decoración SVG —
+  // estética neutra que combina con el resto del UI. El color del banco
+  // queda solo como un pequeño dot a la izquierda (acento sutil).
   if (size === "strip") {
     const Comp = (onClick ? "button" : "div") as "button" | "div";
     return (
@@ -93,26 +93,25 @@ export function BankCard({
         type={onClick ? "button" : undefined}
         onClick={onClick}
         className={cn(
-          "relative w-full text-left overflow-hidden flex items-center gap-2 h-12 px-3 rounded-lg",
-          s.cardBg, s.textColor,
-          onClick && "hover:shadow-card cursor-pointer transition-shadow",
-          selected && "ring-2 ring-offset-1 ring-brand-700",
+          "w-full text-left flex items-center gap-2.5 h-11 px-3 rounded-lg border border-line-200 bg-surface",
+          onClick && "hover:border-brand-400 hover:bg-bg-50/60 cursor-pointer transition-colors",
+          selected && "border-brand-700 bg-brand-50/40",
           className,
         )}
         title={`${s.name} · ${label}`}
       >
-        {s.decorative && s.decorativeStrokes && (
-          <DecoStrokes colors={s.decorativeStrokes} />
-        )}
-        <span className={cn("relative font-semibold tracking-tight shrink-0 text-sm", logoFontClass(s.logoFont))}>
-          {s.logoText}
-        </span>
-        <span className="relative opacity-50 shrink-0">·</span>
-        <span className="relative truncate opacity-90 flex-1 min-w-0 text-sm">{label}</span>
+        {/* Dot del color del banco — único acento de color */}
+        <span
+          className={cn("h-2 w-2 rounded-full shrink-0", s.cardBg)}
+          aria-hidden
+        />
+        <span className="text-sm font-medium text-ink-900 shrink-0">{s.name}</span>
+        <span className="text-ink-300 shrink-0">·</span>
+        <span className="text-sm text-ink-500 truncate flex-1 min-w-0">{label}</span>
         {last4 && (
-          <span className="relative tabular text-xs font-medium opacity-80 shrink-0">··{last4}</span>
+          <span className="tabular text-xs font-medium text-ink-500 shrink-0">··{last4}</span>
         )}
-        {actionsSlot && <span className="relative shrink-0">{actionsSlot}</span>}
+        {actionsSlot && <span className="shrink-0">{actionsSlot}</span>}
       </Comp>
     );
   }

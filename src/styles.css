@@ -12,10 +12,18 @@
  * Todos los colores en oklch. Nunca usar colores ad-hoc en componentes.
  * ================================================================ */
 
-@theme inline {
+/* Fuentes en @theme puro (sin inline) para que las utilities .font-sans
+   y .font-serif se compilen con var(--font-*) y respeten el override
+   que hace theme.ts en runtime cuando el usuario elige Manrope, Bitter,
+   etc. Con @theme inline, Tailwind inlinea el valor literal y las
+   utilities ignoran el cambio de runtime — por eso los <h1 font-serif>
+   se quedaban en Fraunces aunque el body ya estaba en Manrope. */
+@theme {
   --font-sans: "Inter", system-ui, sans-serif;
   --font-serif: "Fraunces", Georgia, serif;
+}
 
+@theme inline {
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
