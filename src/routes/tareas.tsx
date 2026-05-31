@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Filter, Circle, Clock, AlertCircle, CheckCircle2, Check,
   CalendarDays, Flag, User, Pencil, Trash2, Archive, Copy, X, UserPlus, Users,
-  Paperclip, Download, Upload, FileText, Loader2,
+  Paperclip, Download, Upload, FileText, Loader2, GripVertical, MoveRight,
 } from "lucide-react";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { AppSelect } from "@/components/app/AppSelect";
@@ -603,6 +603,14 @@ function TareasPage() {
                   const nextStatus: TareaStatus = t.status === "DONE" ? "TODO" : "DONE";
                   moveMutation.mutate({ id: t.id, status: nextStatus, position: 0 });
                 }}
+                allColumns={columns}
+                onTaskMoveTo={(id, status) => {
+                  // Mover tarea a otra columna (vía menú "Mover a..."
+                  // del card). La posición es el final de la columna
+                  // destino para no mezclarse con lo existente.
+                  const destLen = filteredTasks.filter((x) => x.status === status).length;
+                  moveMutation.mutate({ id, status, position: destLen });
+                }}
               />
             ))}
           </div>
@@ -684,6 +692,7 @@ function KanbanColumn({
   column, tasks, projects, professionals, patients,
   onDragOver, onDrop, onTaskDragStart, onTaskDragEnd, draggedId, dragOverGap,
   onTaskClick, onTaskDelete, onTaskArchive, onTaskDuplicate, onTaskToggleDone,
+  allColumns, onTaskMoveTo,
   animateIndex,
 }: {
   column: TareaColumn;
@@ -706,6 +715,11 @@ function KanbanColumn({
   onTaskArchive: (id: number) => void;
   onTaskDuplicate: (id: number) => void;
   onTaskToggleDone: (t: Tarea) => void;
+  /** Todas las columnas (para que cada card muestre el menú "Mover a..."). */
+  allColumns: TareaColumn[];
+  /** Mover una tarea a otra columna sin drag (usado por el menú "..."
+      del card). El padre calcula la position al final de la columna destino. */
+  onTaskMoveTo: (id: number, status: TareaStatus) => void;
   /** Índice para stagger de entrada. Aplicamos las clases de animación
       DIRECTO sobre el div de la columna (no en un wrapper) porque envolver
       la columna rompía el drag-and-drop: el grid alargaba la fila a la
@@ -810,6 +824,8 @@ function KanbanColumn({
                   onArchive={() => onTaskArchive(t.id)}
                   onDuplicate={() => onTaskDuplicate(t.id)}
                   onToggleDone={() => onTaskToggleDone(t)}
+                  allColumns={allColumns}
+                  onMoveTo={(status) => onTaskMoveTo(t.id, status)}
                 />
               );
             });
@@ -830,6 +846,7 @@ const DRAG_SHIFT_PX = 88;
 function TareaCard({
   task, project, assignee, patient, dragging,
   onDragStart, onDragEnd, onClick, onDelete, onArchive, onDuplicate, onToggleDone,
+  allColumns, onMoveTo,
   style,
 }: {
   task: Tarea;
@@ -846,6 +863,10 @@ function TareaCard({
   onArchive: () => void;
   onDuplicate: () => void;
   onToggleDone: () => void;
+  /** Columnas para el menú "Mover a..." que es la alternativa al drag
+      en mobile (drag horizontal es difícil con dedo en pantalla chica). */
+  allColumns: TareaColumn[];
+  onMoveTo: (status: TareaStatus) => void;
   /** style override desde el padre — usado por KanbanColumn para aplicar
       transform/maxHeight durante drag y crear el efecto de "abrir espacio". */
   style?: React.CSSProperties;
@@ -882,6 +903,16 @@ function TareaCard({
       )}
     >
       <div className="flex items-start gap-2 mb-2">
+        {/* Drag handle visible — pista UX clara de que la card se puede
+            arrastrar. El draggable sigue siendo toda la card; el handle es
+            decorativo + cursor-grab. En mobile siempre visible (a diferencia
+            de las acciones que aparecen solo en hover desktop). */}
+        <span
+          className="text-ink-300 group-hover:text-ink-500 transition-colors shrink-0 mt-0.5 cursor-grab"
+          aria-hidden
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
         {/* Checkbox redondo para marcar hecha desde la card sin abrir el modal.
             Click stopPropagation para que no abra el detalle. */}
         <button
@@ -953,13 +984,103 @@ function TareaCard({
           )}
         </div>
       </div>
-      {/* Acciones rápidas */}
-      <div className="flex items-center gap-1 mt-2 pt-2 border-t border-line-100 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Acciones rápidas. En mobile siempre visibles (sm:opacity-0 →
+          solo se ocultan en desktop hasta hover, para no recargar el
+          desktop). El menú "Mover a..." va siempre visible — es la
+          alternativa al drag, especialmente útil en mobile. */}
+      <div className="flex items-center gap-1 mt-2 pt-2 border-t border-line-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
         <CardAction icon={<Pencil className="h-3 w-3" />} onClick={(e) => { e.stopPropagation(); onClick(); }} label="Editar" />
         <CardAction icon={<Copy className="h-3 w-3" />} onClick={(e) => { e.stopPropagation(); onDuplicate(); }} label="Duplicar" />
         <CardAction icon={<Archive className="h-3 w-3" />} onClick={(e) => { e.stopPropagation(); onArchive(); }} label="Archivar" />
         <CardAction icon={<Trash2 className="h-3 w-3" />} onClick={(e) => { e.stopPropagation(); onDelete(); }} label="Borrar" danger />
+        <span className="ml-auto">
+          <MoveToMenu
+            allColumns={allColumns}
+            currentStatus={task.status}
+            onMove={onMoveTo}
+          />
+        </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Menú "Mover a..." inline. Alternativa al drag-and-drop, sobre todo
+ * útil en mobile donde mover horizontal con dedo entre columnas es
+ * difícil. Click outside / ESC cierran.
+ */
+function MoveToMenu({
+  allColumns, currentStatus, onMove,
+}: {
+  allColumns: TareaColumn[];
+  currentStatus: TareaStatus;
+  onMove: (status: TareaStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        title="Mover a otra columna"
+        className="h-6 px-2 rounded inline-flex items-center gap-1 text-[10px] font-medium text-ink-500 hover:bg-bg hover:text-ink-900"
+      >
+        <MoveRight className="h-3 w-3" /> Mover a
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 bottom-full mb-1 z-30 min-w-[160px] rounded-lg border border-line-200 bg-surface shadow-card py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {allColumns.map((col) => {
+            const isCurrent = col.status === currentStatus;
+            return (
+              <button
+                key={col.id}
+                type="button"
+                disabled={isCurrent}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  if (!isCurrent) onMove(col.status);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-1.5 text-xs flex items-center gap-2",
+                  isCurrent
+                    ? "text-ink-400 cursor-default"
+                    : "text-ink-700 hover:bg-bg-100 hover:text-ink-900",
+                )}
+              >
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: col.color ?? "var(--ink-400)" }}
+                />
+                <span className="flex-1 truncate">{col.title}</span>
+                {isCurrent && <span className="text-[10px] text-ink-400">actual</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

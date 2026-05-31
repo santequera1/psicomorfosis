@@ -16,6 +16,7 @@ import {
   Brain, CheckCircle2, Clock, Send, Search, X, ChevronRight,
   Loader2, AlertOctagon, ShieldAlert, UserPlus, Plus, FileText,
   Trash2, Pencil, MessageSquarePlus, Sparkles,
+  ClipboardList, User as UserIcon,
 } from "lucide-react";
 import { cn, displayPatientName } from "@/lib/utils";
 import { useAutoTour, testsTour, TOUR_NAMES } from "@/lib/tours";
@@ -150,7 +151,7 @@ function TestsPage() {
           </div>
         </header>
 
-        <section className="grid grid-cols-4 gap-2 sm:gap-4">
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <KpiCard label="Total aplicados" value={String(kpis.total)} hint="histórico" icon={<Brain className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Pendientes" value={String(kpis.pending)} hint="por contestar" icon={<Clock className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Completados" value={String(kpis.completed)} hint="con resultado" icon={<CheckCircle2 className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
@@ -349,90 +350,120 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
     <li
       data-tour={dataTour}
       className={cn(
-        "px-5 py-4 hover:bg-brand-50/40 transition-colors group",
+        "px-5 py-5 sm:px-6 sm:py-6 hover:bg-brand-50/40 transition-colors group",
         typeof animateIndex === "number" && "animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards",
       )}
       style={animDelay ? { animationDelay: animDelay } : undefined}
     >
-      {/* Layout mobile: stack vertical (icono+texto arriba, botones
-          abajo en row). En desktop (sm+) volvemos al layout horizontal
-          original. Antes el botón Aplicar/Asignar quedaba pegado a la
-          derecha con título de 3+ líneas a la izquierda — se veía
-          desproporcionado en mobile con tests de nombre largo. */}
-      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
-        <div className="flex items-start gap-3 flex-1 min-w-0">
+      {/* Layout vertical con jerarquía clara:
+            1. Icono + Título XL bold + nombre completo en gris (en row arriba)
+            2. Badges: categoría (chip brand suave) + "Mío" si aplica
+            3. Descripción
+            4. Metadata con iconos: items / min / edad
+            5. Botones grandes full-width abajo (split 2 columnas)
+          Inspirado en la referencia del user — más jerárquico y respirable. */}
+      <div className="flex items-start gap-4">
         <div className={cn(
-          "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+          "h-12 w-12 sm:h-14 sm:w-14 rounded-xl flex items-center justify-center shrink-0",
           isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
         )}>
-          {isCustom ? <FileText className="h-5 w-5" /> : <Brain className="h-5 w-5" />}
+          {isCustom ? <FileText className="h-6 w-6" /> : <Brain className="h-6 w-6" />}
         </div>
         <div className="flex-1 min-w-0">
-          {/* Layout: código a la izquierda (clave para reconocer el test
-              rápido) + nombre completo en la misma línea cuando hay espacio,
-              o debajo en mobile. Los psicólogos memorizan los códigos
-              ("AUDIT", "PHQ-9") pero los nombres completos ayudan a quien
-              no los conoce — sobre todo a tests menos universales como
-              "BIS-11" → "Barratt Impulsiveness Scale". */}
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-base font-semibold tracking-tight text-ink-900">{test.code}</span>
-            {/* shortName se omite si es igual al código (ruido). */}
-            {test.shortName && test.shortName !== test.code && (
-              <span className="text-xs text-ink-500">{test.shortName}</span>
-            )}
-            {/* Nombre completo — más prominente que antes para que el
-                psicólogo identifique el test sin pasar al description. */}
-            {test.name && test.name !== test.code && test.name !== test.shortName && (
-              <span className="text-sm text-ink-700">· {test.name}</span>
-            )}
-            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-bg-100 text-ink-500 font-medium">{test.category}</span>
-            {isCustom && (
-              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-medium border border-brand-100">
-                Mío
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-ink-700 mt-1 line-clamp-2">{test.description}</p>
-          <p className="text-[11px] text-ink-500 mt-1">{test.items} ítems · ~{test.minutes} min · {test.ageRange}</p>
-        </div>
-        </div>
-        {/* Acciones: en mobile fila horizontal full-width abajo,
-            en desktop column a la derecha como antes. */}
-        <div className="flex flex-row sm:flex-col gap-1.5 sm:shrink-0">
-          {ready ? (
-            <>
-              <button onClick={onApply} className="flex-1 sm:flex-initial h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
-                <Send className="h-3.5 w-3.5" /> Aplicar ahora
-              </button>
-              <button onClick={onAssign} className="flex-1 sm:flex-initial h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5">
-                <UserPlus className="h-3.5 w-3.5" /> Asignar
-              </button>
-              {onEdit && (
-                <button
-                  onClick={onEdit}
-                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5"
-                  title="Editar test"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Editar
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  onClick={onDelete}
-                  className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center gap-1.5"
-                  title="Eliminar formulario"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                </button>
-              )}
-            </>
-          ) : (
-            <button onClick={onView} className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-500 inline-flex items-center gap-1.5">
-              Ver detalle
-            </button>
+          <h3 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-ink-900 leading-none">
+            {test.code}
+          </h3>
+          {/* Nombre completo: prominente debajo del código. shortName se
+              omite si coincide con code (ruido). */}
+          {test.name && test.name !== test.code && (
+            <p className="mt-1.5 text-sm sm:text-base text-ink-500 leading-snug">
+              {test.name}
+            </p>
+          )}
+          {!test.name && test.shortName && test.shortName !== test.code && (
+            <p className="mt-1.5 text-sm sm:text-base text-ink-500 leading-snug">
+              {test.shortName}
+            </p>
           )}
         </div>
       </div>
+
+      {/* Badges. Categoría con estilo "pill brand suave" similar a la
+          referencia (verde claro con texto verde oscuro). */}
+      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-brand-50 text-brand-800 font-semibold border border-brand-100">
+          {test.category}
+        </span>
+        {isCustom && (
+          <span className="text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-lavender-100 text-lavender-500 font-semibold">
+            Mío
+          </span>
+        )}
+      </div>
+
+      {/* Descripción en text-sm para mejor legibilidad. */}
+      <p className="mt-3 text-sm text-ink-700 leading-relaxed line-clamp-3">
+        {test.description}
+      </p>
+
+      {/* Metadata con iconos consistentes. tabular para que los números
+          (10 ítems, 5 min) alineen al cambiar de test. */}
+      <div className="mt-4 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-ink-500">
+        <span className="inline-flex items-center gap-1.5">
+          <ClipboardList className="h-3.5 w-3.5 text-ink-400" />
+          <span className="tabular">{test.items}</span> ítems
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5 text-ink-400" />
+          <span className="tabular">~{test.minutes}</span> min
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <UserIcon className="h-3.5 w-3.5 text-ink-400" />
+          {test.ageRange}
+        </span>
+      </div>
+
+      {/* Acciones: 2 botones grandes lado a lado, full-width. El primario
+          (Aplicar ahora) destaca con bg-brand-700. Editar/Eliminar van
+          en una segunda fila más pequeña — son secundarios. */}
+      <div className="mt-4 sm:mt-5 grid grid-cols-2 gap-2">
+        {ready ? (
+          <>
+            <button onClick={onApply} className="h-11 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 transition-colors">
+              <Send className="h-4 w-4" /> Aplicar ahora
+            </button>
+            <button onClick={onAssign} className="h-11 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-2 transition-colors">
+              <UserPlus className="h-4 w-4" /> Asignar
+            </button>
+          </>
+        ) : (
+          <button onClick={onView} className="col-span-2 h-11 px-4 rounded-lg border border-line-200 text-sm text-ink-500 inline-flex items-center justify-center gap-2">
+            Ver detalle
+          </button>
+        )}
+      </div>
+      {ready && (onEdit || onDelete) && (
+        <div className="mt-2 flex items-center gap-2">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="flex-1 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              title="Editar test"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="flex-1 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center justify-center gap-1.5"
+              title="Eliminar formulario"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Eliminar
+            </button>
+          )}
+        </div>
+      )}
     </li>
   );
 }
