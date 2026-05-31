@@ -197,6 +197,17 @@
   --chart-4: var(--brand-400);
   --chart-5: var(--warning);
 
+  /* Folder tones para PatientFolder/GenericFolder. 6 variantes en
+     paleta cálida pastel (light). En dark se sobrescriben con tonos
+     oscuros tenues para que las carpetas no destellen blancas sobre
+     fondo oscuro. */
+  --folder-1-body: #F4D78A; --folder-1-tab: #E9C875; --folder-1-border: #C8A553;  /* amarillo */
+  --folder-2-body: #C8E6B7; --folder-2-tab: #B8D9A6; --folder-2-border: #8FB37C;  /* verde */
+  --folder-3-body: #F4C7E0; --folder-3-tab: #E5B5D2; --folder-3-border: #C18BAA;  /* rosa */
+  --folder-4-body: #C5D8F4; --folder-4-tab: #B5C9E6; --folder-4-border: #8AA5C8;  /* azul */
+  --folder-5-body: #E5D2F4; --folder-5-tab: #D6C2E6; --folder-5-border: #A89BC8;  /* lavanda */
+  --folder-6-body: #F4D5B7; --folder-6-tab: #E5C6A8; --folder-6-border: #C8A07A;  /* durazno */
+
   /* Sidebar oscuro teal */
   --sidebar: oklch(0.28 0.025 200);
   --sidebar-foreground: oklch(0.92 0.012 180);
@@ -229,6 +240,15 @@
   --border: oklch(1 0 0 / 0.13);
   --input: oklch(1 0 0 / 0.14);
   --ring: var(--brand-400);
+
+  /* Folder tones (dark) — tonos sutiles con chroma baja sobre fondo
+     oscuro. Diferentes hues para variedad sin parecer pinturas. */
+  --folder-1-body: oklch(0.35 0.04 80);  --folder-1-tab: oklch(0.30 0.04 80);  --folder-1-border: oklch(0.45 0.05 80);
+  --folder-2-body: oklch(0.35 0.04 150); --folder-2-tab: oklch(0.30 0.04 150); --folder-2-border: oklch(0.45 0.05 150);
+  --folder-3-body: oklch(0.35 0.04 350); --folder-3-tab: oklch(0.30 0.04 350); --folder-3-border: oklch(0.45 0.05 350);
+  --folder-4-body: oklch(0.35 0.04 230); --folder-4-tab: oklch(0.30 0.04 230); --folder-4-border: oklch(0.45 0.05 230);
+  --folder-5-body: oklch(0.35 0.04 290); --folder-5-tab: oklch(0.30 0.04 290); --folder-5-border: oklch(0.45 0.05 290);
+  --folder-6-body: oklch(0.35 0.04 50);  --folder-6-tab: oklch(0.30 0.04 50);  --folder-6-border: oklch(0.45 0.05 50);
 
   /* Backgrounds y superficie */
   --bg-50: oklch(0.17 0.018 200);

@@ -208,7 +208,7 @@ function DocumentosPage() {
           </div>
         </header>
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <section className="grid grid-cols-4 gap-2 sm:gap-4">
           <KpiCard label="Total" value={String(kpis.total)} hint="en biblioteca" icon={<FileText className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Pendientes firma" value={String(kpis.pendingSign)} emphasis={kpis.pendingSign > 0 ? "risk" : "default"} hint="acción" icon={<FileClock className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Firmados" value={String(kpis.signed)} hint="cerrados" icon={<FileCheck2 className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
@@ -272,7 +272,7 @@ function DocumentosPage() {
             ) : viewMode === "folders" && !openFolderData ? (
               <div
                 key="folders-grid"
-                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4"
+                className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-4 justify-items-center"
               >
                 {folders.map((f, i) => {
                   // Click derecho → confirmar eliminación de la carpeta y

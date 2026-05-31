@@ -532,17 +532,21 @@ function PendingCard({ label, hint, count, icon, to, tone }: {
     ? "bg-brand-50 text-brand-700"
     : "bg-warning-soft text-risk-moderate";
   return (
+    // Layout vertical en mobile (icono arriba + texto pleno abajo, sin
+    // truncar) y horizontal en sm+. Antes el icono+gap ocupaba ~50px y
+    // dejaba muy poca anchura → textos como 'Tests por revisar' se
+    // cortaban a 'Tests por...'.
     <Link
       to={to as any}
-      className={`rounded-lg border p-3 hover:border-brand-400 transition-colors flex items-start gap-3 ${dim ? "opacity-60 border-line-100" : "border-line-200 bg-surface"}`}
+      className={`rounded-lg border p-3 hover:border-brand-400 transition-colors flex flex-col sm:flex-row items-start gap-2 sm:gap-3 ${dim ? "opacity-60 border-line-100" : "border-line-200 bg-surface"}`}
     >
       <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${dim ? "bg-bg-100 text-ink-400" : toneCls}`}>
         {icon}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <div className="text-xl font-serif text-ink-900 tabular leading-none">{count}</div>
-        <div className="text-xs text-ink-900 font-medium mt-1 truncate">{label}</div>
-        <div className="text-[10px] text-ink-500 truncate">{hint}</div>
+        <div className="text-xs text-ink-900 font-medium mt-1 leading-tight">{label}</div>
+        <div className="text-[10px] text-ink-500 leading-tight mt-0.5">{hint}</div>
       </div>
     </Link>
   );
@@ -575,6 +579,9 @@ function UpcomingSessionRow({ session: s }: { session: any }) {
             <ModalityIcon className="h-3 w-3" /> {s.modality}{s.room ? ` · ${s.room}` : ""}
           </div>
         </div>
+        {/* Acciones: WhatsApp e historia ocultas en mobile para no
+            cortar el nombre del paciente. El status pasa a un dot
+            de color en mobile y texto completo en sm+. */}
         <div className="flex items-center gap-1 shrink-0">
           {wa && (
             <a
@@ -583,7 +590,7 @@ function UpcomingSessionRow({ session: s }: { session: any }) {
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               title={`WhatsApp ${s.patient_phone}`}
-              className="h-8 w-8 rounded-md text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 inline-flex items-center justify-center"
+              className="hidden sm:inline-flex h-8 w-8 rounded-md text-sage-500 hover:text-sage-700 hover:bg-sage-200/30 items-center justify-center"
             >
               <Phone className="h-3.5 w-3.5" />
             </a>
@@ -594,16 +601,29 @@ function UpcomingSessionRow({ session: s }: { session: any }) {
               search={{ id: s.patient_id }}
               onClick={(e) => e.stopPropagation()}
               title="Abrir historia clínica"
-              className="h-8 w-8 rounded-md text-ink-500 hover:text-brand-700 hover:bg-brand-50 inline-flex items-center justify-center"
+              className="hidden sm:inline-flex h-8 w-8 rounded-md text-ink-500 hover:text-brand-700 hover:bg-brand-50 items-center justify-center"
             >
               <ClipboardList className="h-3.5 w-3.5" />
             </Link>
           )}
+          {/* Mobile: dot pequeño. sm+: pill con texto. */}
+          <span
+            className={
+              "sm:hidden h-2 w-2 rounded-full " +
+              (s.status === "atendida" ? "bg-success" :
+               s.status === "en_curso" ? "bg-info" :
+               s.status === "confirmada" ? "bg-brand-700" :
+               "bg-ink-300")
+            }
+            title={String(s.status).replace("_", " ")}
+            aria-label={String(s.status)}
+          />
           <span className={
-            s.status === "atendida" ? "text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-success-soft text-success font-medium" :
-            s.status === "en_curso" ? "text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-info-soft text-info font-medium" :
-            s.status === "confirmada" ? "text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-brand-100 text-brand-800 font-medium" :
-            "text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-bg-100 text-ink-500 font-medium"
+            "hidden sm:inline-flex text-[10px] uppercase tracking-wider px-2 py-1 rounded-full font-medium " +
+            (s.status === "atendida" ? "bg-success-soft text-success" :
+             s.status === "en_curso" ? "bg-info-soft text-info" :
+             s.status === "confirmada" ? "bg-brand-100 text-brand-800" :
+             "bg-bg-100 text-ink-500")
           }>
             {String(s.status).replace("_", " ")}
           </span>

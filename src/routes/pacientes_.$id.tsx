@@ -313,12 +313,32 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
       onClose();
     },
   });
+  // Esc para cerrar. Click outside NO cierra — mismo patrón seguro
+  // que NewPatientModal: el form es largo y un click accidental afuera
+  // borraba todo lo editado.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto" onClick={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); mu.mutate(); }} className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <header className="p-5 border-b border-line-100">
-          <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Pacientes · {patient.id}</p>
-          <h3 className="font-serif text-xl text-ink-900 mt-0.5">Editar paciente</h3>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4 overflow-y-auto">
+      <form onSubmit={(e) => { e.preventDefault(); mu.mutate(); }} className="w-full max-w-xl rounded-2xl bg-surface shadow-modal overflow-hidden">
+        <header className="p-5 border-b border-line-100 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Pacientes · {patient.id}</p>
+            <h3 className="font-serif text-xl text-ink-900 mt-0.5">Editar paciente</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 flex items-center justify-center shrink-0"
+            aria-label="Cerrar"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </header>
         <div className="p-5 space-y-3">
           <label className="block">

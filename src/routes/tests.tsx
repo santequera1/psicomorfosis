@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
+import { AppSelect } from "@/components/app/AppSelect";
 import { KpiCard } from "@/components/app/KpiCard";
 import { TestRunner } from "@/components/tests/TestRunner";
 import { ApplicationDetailModal, MillonResultView, QualitativeResultView } from "@/components/tests/ApplicationDetailModal";
@@ -149,7 +150,7 @@ function TestsPage() {
           </div>
         </header>
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <section className="grid grid-cols-4 gap-2 sm:gap-4">
           <KpiCard label="Total aplicados" value={String(kpis.total)} hint="histórico" icon={<Brain className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Pendientes" value={String(kpis.pending)} hint="por contestar" icon={<Clock className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
           <KpiCard label="Completados" value={String(kpis.completed)} hint="con resultado" icon={<CheckCircle2 className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
@@ -353,7 +354,13 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
       )}
       style={animDelay ? { animationDelay: animDelay } : undefined}
     >
-      <div className="flex items-start gap-3">
+      {/* Layout mobile: stack vertical (icono+texto arriba, botones
+          abajo en row). En desktop (sm+) volvemos al layout horizontal
+          original. Antes el botón Aplicar/Asignar quedaba pegado a la
+          derecha con título de 3+ líneas a la izquierda — se veía
+          desproporcionado en mobile con tests de nombre largo. */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
         <div className={cn(
           "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
           isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
@@ -388,13 +395,16 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
           <p className="text-xs text-ink-700 mt-1 line-clamp-2">{test.description}</p>
           <p className="text-[11px] text-ink-500 mt-1">{test.items} ítems · ~{test.minutes} min · {test.ageRange}</p>
         </div>
-        <div className="flex flex-col gap-1.5 shrink-0">
+        </div>
+        {/* Acciones: en mobile fila horizontal full-width abajo,
+            en desktop column a la derecha como antes. */}
+        <div className="flex flex-row sm:flex-col gap-1.5 sm:shrink-0">
           {ready ? (
             <>
-              <button onClick={onApply} className="h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5">
+              <button onClick={onApply} className="flex-1 sm:flex-initial h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5">
                 <Send className="h-3.5 w-3.5" /> Aplicar ahora
               </button>
-              <button onClick={onAssign} className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5">
+              <button onClick={onAssign} className="flex-1 sm:flex-initial h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5">
                 <UserPlus className="h-3.5 w-3.5" /> Asignar
               </button>
               {onEdit && (
@@ -584,15 +594,13 @@ function ApplyTestModal({ test, patients, presetPatientId, onClose }: { test: Ps
       <Modal onClose={onClose} title={`Aplicar ${test.code}`}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-ink-500">Selecciona el paciente al que vas a aplicar el test en esta sesión.</p>
-          <select
+          <AppSelect
             value={patientId}
-            onChange={(e) => setPatientId(e.target.value)}
-            autoFocus
-            className="w-full h-11 px-3 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
-          >
-            <option value="">— Selecciona paciente —</option>
-            {patients.map((p) => <option key={p.id} value={p.id}>{displayPatientName(p)} ({p.id})</option>)}
-          </select>
+            onChange={(v) => setPatientId(v)}
+            placeholder="— Selecciona paciente —"
+            options={patients.map((p) => ({ value: p.id, label: `${displayPatientName(p)} (${p.id})` }))}
+            className="w-full"
+          />
           <button
             onClick={() => setStep("run")}
             disabled={!patientId}
@@ -700,15 +708,13 @@ function AssignTestModal({ test, patients, onClose }: { test: PsychTest; patient
     <Modal onClose={onClose} title={`Asignar ${test.code} al paciente`}>
       <div className="p-5 space-y-4">
         <p className="text-sm text-ink-500">El paciente verá este test en su portal y podrá contestarlo cuando le sea cómodo. Recibirás los resultados al instante con alerta si hay respuestas críticas.</p>
-        <select
+        <AppSelect
           value={patientId}
-          onChange={(e) => setPatientId(e.target.value)}
-          autoFocus
-          className="w-full h-11 px-3 rounded-md border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
-        >
-          <option value="">— Selecciona paciente —</option>
-          {patients.map((p) => <option key={p.id} value={p.id}>{displayPatientName(p)} ({p.id})</option>)}
-        </select>
+          onChange={(v) => setPatientId(v)}
+          placeholder="— Selecciona paciente —"
+          options={patients.map((p) => ({ value: p.id, label: `${displayPatientName(p)} (${p.id})` }))}
+          className="w-full"
+        />
         <p className="text-xs text-ink-500">⚠️ El paciente debe tener cuenta activa en el portal para acceder al test. Invítalo desde su ficha si aún no la tiene.</p>
         <button
           onClick={() => assignMu.mutate()}

@@ -224,8 +224,11 @@ function AnnouncementRow({
 }) {
   const meta = CATEGORY_META[item.category];
   const Icon = meta.icon;
+  // Mobile: 2 filas — fila 1: icono + texto, fila 2: acciones full-width.
+  // sm+: layout horizontal con acciones a la derecha.
   return (
-    <li className="px-5 py-4 flex items-start gap-4">
+    <li className="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+      <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
       <span className={cn(
         "h-9 w-9 rounded-lg border inline-flex items-center justify-center shrink-0",
         meta.bg, meta.fg,
@@ -257,7 +260,8 @@ function AnnouncementRow({
           </span>
         </div>
       </div>
-      <div className="shrink-0 flex items-center gap-1">
+      </div>
+      <div className="shrink-0 flex items-center justify-end gap-1">
         <button
           onClick={onToggleActive}
           title={item.active ? "Desactivar (lo ocultas sin perder estadísticas)" : "Reactivar"}

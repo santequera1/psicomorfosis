@@ -155,10 +155,14 @@ function TestRequestsView() {
             {items.map((r, i) => (
               <li
                 key={r.id}
-                className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-1 duration-400 fill-mode-backwards"
+                className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 animate-in fade-in slide-in-from-bottom-1 duration-400 fill-mode-backwards"
                 style={{ animationDelay: `${Math.min(i * 30, 400)}ms` }}
               >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
+                {/* Mobile: stack vertical (texto arriba, botones abajo
+                    full-width). Antes era flex-wrap pero con texto largo
+                    a la izquierda los botones quedaban a la mitad de la
+                    fila — se veía descompuesto. */}
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <h3 className="font-semibold text-ink-900 tracking-tight">
@@ -203,12 +207,13 @@ function TestRequestsView() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                  {/* Mobile: row horizontal full-width abajo. sm+: column derecha. */}
+                  <div className="flex flex-row sm:flex-col items-stretch sm:items-end gap-1.5 sm:shrink-0">
                     {r.status === "open" && (
                       <button
                         onClick={() => toTaskMu.mutate(r.id)}
                         disabled={toTaskMu.isPending || resolveMu.isPending}
-                        className="h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        className="flex-1 sm:flex-initial h-8 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 disabled:opacity-50 whitespace-nowrap"
                         title="Crear una tarea en Por hacer con esta solicitud y cerrarla acá"
                       >
                         {toTaskMu.isPending && toTaskMu.variables === r.id
@@ -221,7 +226,7 @@ function TestRequestsView() {
                       <button
                         onClick={() => resolveMu.mutate({ id: r.id, status: "closed" })}
                         disabled={resolveMu.isPending || toTaskMu.isPending}
-                        className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        className="flex-1 sm:flex-initial h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5 disabled:opacity-50 whitespace-nowrap"
                         title="Cerrar sin crear tarea"
                       >
                         <CheckCircle2 className="h-3.5 w-3.5" /> Cerrar
@@ -230,7 +235,7 @@ function TestRequestsView() {
                       <button
                         onClick={() => resolveMu.mutate({ id: r.id, status: "open" })}
                         disabled={resolveMu.isPending}
-                        className="h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50"
+                        className="flex-1 sm:flex-initial h-8 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5 disabled:opacity-50 whitespace-nowrap"
                         title="Reabrir solicitud"
                       >
                         <RotateCw className="h-3.5 w-3.5" /> Reabrir

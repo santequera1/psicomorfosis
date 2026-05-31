@@ -329,7 +329,10 @@ function PlatformDashboard() {
               <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap text-xs">
+            {/* Mobile: vertical stack para que cada filtro tome su
+                línea (antes se desbordaba en pantallas chicas). En sm+
+                vuelve a horizontal con wrap. */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs overflow-x-auto sm:overflow-visible">
               {/* Estado */}
               <FilterPills
                 label="Estado"
@@ -431,11 +434,11 @@ function FilterPills<T extends string>({
   options: { v: T; label: string; count?: number; icon?: React.ReactNode }[];
 }) {
   return (
-    <div className="inline-flex items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium">
+    <div className="inline-flex items-center gap-1.5 w-full sm:w-auto">
+      <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium shrink-0">
         {label}
       </span>
-      <div className="flex gap-1 p-1 rounded-md bg-bg-100">
+      <div className="flex gap-1 p-1 rounded-md bg-bg-100 flex-1 sm:flex-initial overflow-x-auto">
         {options.map((it) => {
           const active = value === it.v;
           return (
