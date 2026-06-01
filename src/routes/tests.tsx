@@ -50,6 +50,10 @@ function TestsPage() {
   useAutoTour(TOUR_NAMES.tests, testsTour);
   const qc = useQueryClient();
   const [query, setQuery] = useState("");
+  // Filtro por categoría — null = "Todos". Las categorías disponibles se
+  // derivan del catálogo (no las hardcodeamos para que tests nuevos
+  // aparezcan automáticamente como opción).
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [activeTest, setActiveTest] = useState<PsychTest | null>(null);
   const [applyContext, setApplyContext] = useState<{ test: PsychTest; patientId?: string; patientName?: string } | null>(null);
   const [assignContext, setAssignContext] = useState<PsychTest | null>(null);
@@ -93,15 +97,35 @@ function TestsPage() {
     queryFn: () => api.listPatients(),
   });
 
+  // Categorías disponibles + conteo por categoría (sobre el catálogo
+  // completo, no el filtrado — los conteos no deben cambiar al activar
+  // un filtro). Ordenadas por conteo descendente para que las más
+  // usadas aparezcan primero en las pills.
+  const categoriesWithCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of catalog) {
+      counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [catalog]);
+
   const filteredCatalog = useMemo(() => {
-    if (!query.trim()) return catalog;
-    const q = query.toLowerCase();
-    return catalog.filter((t) =>
-      t.code.toLowerCase().includes(q) ||
-      t.name.toLowerCase().includes(q) ||
-      t.category.toLowerCase().includes(q)
-    );
-  }, [catalog, query]);
+    let list = catalog;
+    if (categoryFilter) {
+      list = list.filter((t) => t.category === categoryFilter);
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter((t) =>
+        t.code.toLowerCase().includes(q) ||
+        t.name.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [catalog, query, categoryFilter]);
 
   const officialTests = useMemo(() => filteredCatalog.filter((t) => !t.isCustom), [filteredCatalog]);
   const customForms   = useMemo(() => filteredCatalog.filter((t) =>  t.isCustom), [filteredCatalog]);
@@ -161,7 +185,7 @@ function TestsPage() {
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Catálogo */}
           <div data-tour="tests-catalog" className="lg:col-span-2 rounded-xl border border-line-200 bg-surface">
-            <div className="p-4 border-b border-line-100">
+            <div className="p-4 border-b border-line-100 space-y-3">
               <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40">
                 <Search className="h-4 w-4 text-ink-400 shrink-0" />
                 <input
@@ -171,6 +195,27 @@ function TestsPage() {
                   className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
                 />
               </div>
+              {/* Pills de filtro por categoría con conteo. Scroll-x en
+                  mobile si hay muchas. 'Todos' siempre primero. */}
+              {categoriesWithCount.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5">
+                  <CategoryPill
+                    label="Todos"
+                    count={catalog.length}
+                    active={categoryFilter === null}
+                    onClick={() => setCategoryFilter(null)}
+                  />
+                  {categoriesWithCount.map((c) => (
+                    <CategoryPill
+                      key={c.category}
+                      label={c.category}
+                      count={c.count}
+                      active={categoryFilter === c.category}
+                      onClick={() => setCategoryFilter(c.category)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             {catalogLoading ? (
               <div className="p-10 text-center text-sm text-ink-500"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Cargando…</div>
@@ -350,121 +395,135 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
     <li
       data-tour={dataTour}
       className={cn(
-        "px-5 py-5 sm:px-6 sm:py-6 hover:bg-brand-50/40 transition-colors group",
+        "px-4 py-3.5 hover:bg-brand-50/40 transition-colors group",
         typeof animateIndex === "number" && "animate-in fade-in slide-in-from-left-3 duration-400 fill-mode-backwards",
       )}
       style={animDelay ? { animationDelay: animDelay } : undefined}
     >
-      {/* Layout vertical con jerarquía clara:
-            1. Icono + Título XL bold + nombre completo en gris (en row arriba)
-            2. Badges: categoría (chip brand suave) + "Mío" si aplica
-            3. Descripción
-            4. Metadata con iconos: items / min / edad
-            5. Botones grandes full-width abajo (split 2 columnas)
-          Inspirado en la referencia del user — más jerárquico y respirable. */}
-      <div className="flex items-start gap-4">
+      {/* Layout horizontal compacto:
+            [icono] [código + nombre + meta inline] ················ [botones]
+          Mantiene la jerarquía del rediseño anterior pero ocupa ~50%
+          de altura. Para 50 tests es mucho más navegable. */}
+      <div className="flex items-start gap-3">
         <div className={cn(
-          "h-12 w-12 sm:h-14 sm:w-14 rounded-xl flex items-center justify-center shrink-0",
+          "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
           isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
         )}>
-          {isCustom ? <FileText className="h-6 w-6" /> : <Brain className="h-6 w-6" />}
+          {isCustom ? <FileText className="h-4.5 w-4.5" /> : <Brain className="h-4.5 w-4.5" />}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-ink-900 leading-none">
-            {test.code}
-          </h3>
-          {/* Nombre completo: prominente debajo del código. shortName se
-              omite si coincide con code (ruido). */}
-          {test.name && test.name !== test.code && (
-            <p className="mt-1.5 text-sm sm:text-base text-ink-500 leading-snug">
-              {test.name}
-            </p>
-          )}
-          {!test.name && test.shortName && test.shortName !== test.code && (
-            <p className="mt-1.5 text-sm sm:text-base text-ink-500 leading-snug">
-              {test.shortName}
-            </p>
-          )}
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h3 className="font-serif text-lg font-semibold tracking-tight text-ink-900 leading-none">
+              {test.code}
+            </h3>
+            {test.name && test.name !== test.code && (
+              <span className="text-sm text-ink-500 leading-snug">{test.name}</span>
+            )}
+            {!test.name && test.shortName && test.shortName !== test.code && (
+              <span className="text-sm text-ink-500 leading-snug">{test.shortName}</span>
+            )}
+          </div>
+          {/* Badges + meta en una línea para ahorrar vertical. */}
+          <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-[11px] text-ink-500">
+            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-semibold border border-brand-100">
+              {test.category}
+            </span>
+            {isCustom && (
+              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-semibold">
+                Mío
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1">
+              <ClipboardList className="h-3 w-3 text-ink-400" />
+              <span className="tabular">{test.items}</span> ítems
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3 text-ink-400" />
+              <span className="tabular">~{test.minutes}</span> min
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <UserIcon className="h-3 w-3 text-ink-400" />
+              {test.ageRange}
+            </span>
+          </div>
+          {/* Descripción 1 línea con truncate — el detalle completo está
+              en "Ver detalle" si hace falta. */}
+          <p className="mt-1 text-xs text-ink-700 leading-snug line-clamp-1">
+            {test.description}
+          </p>
         </div>
-      </div>
-
-      {/* Badges. Categoría con estilo "pill brand suave" similar a la
-          referencia (verde claro con texto verde oscuro). */}
-      <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-brand-50 text-brand-800 font-semibold border border-brand-100">
-          {test.category}
-        </span>
-        {isCustom && (
-          <span className="text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-full bg-lavender-100 text-lavender-500 font-semibold">
-            Mío
-          </span>
-        )}
-      </div>
-
-      {/* Descripción en text-sm para mejor legibilidad. */}
-      <p className="mt-3 text-sm text-ink-700 leading-relaxed line-clamp-3">
-        {test.description}
-      </p>
-
-      {/* Metadata con iconos consistentes. tabular para que los números
-          (10 ítems, 5 min) alineen al cambiar de test. */}
-      <div className="mt-4 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-ink-500">
-        <span className="inline-flex items-center gap-1.5">
-          <ClipboardList className="h-3.5 w-3.5 text-ink-400" />
-          <span className="tabular">{test.items}</span> ítems
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5 text-ink-400" />
-          <span className="tabular">~{test.minutes}</span> min
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <UserIcon className="h-3.5 w-3.5 text-ink-400" />
-          {test.ageRange}
-        </span>
-      </div>
-
-      {/* Acciones: 2 botones grandes lado a lado, full-width. El primario
-          (Aplicar ahora) destaca con bg-brand-700. Editar/Eliminar van
-          en una segunda fila más pequeña — son secundarios. */}
-      <div className="mt-4 sm:mt-5 grid grid-cols-2 gap-2">
-        {ready ? (
-          <>
-            <button onClick={onApply} className="h-11 px-4 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 transition-colors">
-              <Send className="h-4 w-4" /> Aplicar ahora
+        {/* Acciones a la derecha en desktop, debajo en mobile (vía
+            flex-wrap del padre + min-w del grupo). h-9 más compacto. */}
+        <div className="flex sm:flex-col gap-1.5 sm:shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+          {ready ? (
+            <>
+              <button onClick={onApply} className="flex-1 sm:flex-initial h-9 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap">
+                <Send className="h-3.5 w-3.5" /> Aplicar
+              </button>
+              <button onClick={onAssign} className="flex-1 sm:flex-initial h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap">
+                <UserPlus className="h-3.5 w-3.5" /> Asignar
+              </button>
+            </>
+          ) : (
+            <button onClick={onView} className="flex-1 sm:flex-initial h-9 px-3 rounded-md border border-line-200 text-xs text-ink-500 inline-flex items-center justify-center gap-1.5">
+              Ver detalle
             </button>
-            <button onClick={onAssign} className="h-11 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-2 transition-colors">
-              <UserPlus className="h-4 w-4" /> Asignar
-            </button>
-          </>
-        ) : (
-          <button onClick={onView} className="col-span-2 h-11 px-4 rounded-lg border border-line-200 text-sm text-ink-500 inline-flex items-center justify-center gap-2">
-            Ver detalle
-          </button>
-        )}
-      </div>
-      {ready && (onEdit || onDelete) && (
-        <div className="mt-2 flex items-center gap-2">
-          {onEdit && (
+          )}
+          {ready && onEdit && (
             <button
               onClick={onEdit}
-              className="flex-1 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
+              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 hover:text-ink-900 inline-flex items-center justify-center"
               title="Editar test"
             >
-              <Pencil className="h-3.5 w-3.5" /> Editar
+              <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          {onDelete && (
+          {ready && onDelete && (
             <button
               onClick={onDelete}
-              className="flex-1 h-9 px-3 rounded-md border border-line-200 text-xs text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center justify-center gap-1.5"
+              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center justify-center"
               title="Eliminar formulario"
             >
-              <Trash2 className="h-3.5 w-3.5" /> Eliminar
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
-      )}
+      </div>
     </li>
+  );
+}
+
+/**
+ * Pill de filtro de categoría con conteo. Active = fondo brand suave +
+ * texto brand oscuro. Inactivas = neutro con hover.
+ */
+function CategoryPill({
+  label, count, active, onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[11px] font-medium uppercase tracking-wider transition-colors",
+        active
+          ? "bg-brand-50 text-brand-800 border border-brand-200"
+          : "bg-bg-100 text-ink-500 border border-transparent hover:bg-bg hover:text-ink-900",
+      )}
+    >
+      {label}
+      <span className={cn(
+        "tabular text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
+        active ? "bg-brand-700 text-white" : "bg-line-100 text-ink-500",
+      )}>
+        {count}
+      </span>
+    </button>
   );
 }
 
