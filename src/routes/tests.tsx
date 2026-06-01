@@ -198,7 +198,10 @@ function TestsPage() {
               {/* Pills de filtro por categoría con conteo. Scroll-x en
                   mobile si hay muchas. 'Todos' siempre primero. */}
               {categoriesWithCount.length > 1 && (
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-0.5">
+                // overflow-x-auto SIN no-scrollbar — barra visible para
+                // que el user vea que hay más categorías y pueda
+                // arrastrarla. pb-2 reserva el alto de la barrita.
+                <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-2">
                   <CategoryPill
                     label="Todos"
                     count={catalog.length}
@@ -400,61 +403,63 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
       )}
       style={animDelay ? { animationDelay: animDelay } : undefined}
     >
-      {/* Layout horizontal compacto:
-            [icono] [código + nombre + meta inline] ················ [botones]
-          Mantiene la jerarquía del rediseño anterior pero ocupa ~50%
-          de altura. Para 50 tests es mucho más navegable. */}
-      <div className="flex items-start gap-3">
-        <div className={cn(
-          "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
-          isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
-        )}>
-          {isCustom ? <FileText className="h-4.5 w-4.5" /> : <Brain className="h-4.5 w-4.5" />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <h3 className="font-serif text-lg font-semibold tracking-tight text-ink-900 leading-none">
-              {test.code}
-            </h3>
-            {test.name && test.name !== test.code && (
-              <span className="text-sm text-ink-500 leading-snug">{test.name}</span>
-            )}
-            {!test.name && test.shortName && test.shortName !== test.code && (
-              <span className="text-sm text-ink-500 leading-snug">{test.shortName}</span>
-            )}
+      {/* Mobile: stack vertical — info arriba, botones abajo full-width.
+          sm+: horizontal con botones a la derecha.
+          Antes el flex sin wrap dejaba los botones encima del texto. */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className={cn(
+            "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+            isCustom ? "bg-brand-50 text-brand-700" : "bg-lavender-100 text-lavender-500"
+          )}>
+            {isCustom ? <FileText className="h-4.5 w-4.5" /> : <Brain className="h-4.5 w-4.5" />}
           </div>
-          {/* Badges + meta en una línea para ahorrar vertical. */}
-          <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-[11px] text-ink-500">
-            <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-semibold border border-brand-100">
-              {test.category}
-            </span>
-            {isCustom && (
-              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-semibold">
-                Mío
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h3 className="font-serif text-lg font-semibold tracking-tight text-ink-900 leading-none">
+                {test.code}
+              </h3>
+              {test.name && test.name !== test.code && (
+                <span className="text-sm text-ink-500 leading-snug">{test.name}</span>
+              )}
+              {!test.name && test.shortName && test.shortName !== test.code && (
+                <span className="text-sm text-ink-500 leading-snug">{test.shortName}</span>
+              )}
+            </div>
+            {/* Badges + meta en una línea para ahorrar vertical. */}
+            <div className="mt-1.5 flex items-center gap-x-2 gap-y-1 flex-wrap text-[11px] text-ink-500">
+              <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-brand-50 text-brand-800 font-semibold border border-brand-100">
+                {test.category}
               </span>
-            )}
-            <span className="inline-flex items-center gap-1">
-              <ClipboardList className="h-3 w-3 text-ink-400" />
-              <span className="tabular">{test.items}</span> ítems
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Clock className="h-3 w-3 text-ink-400" />
-              <span className="tabular">~{test.minutes}</span> min
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <UserIcon className="h-3 w-3 text-ink-400" />
-              {test.ageRange}
-            </span>
+              {isCustom && (
+                <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full bg-lavender-100 text-lavender-500 font-semibold">
+                  Mío
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1">
+                <ClipboardList className="h-3 w-3 text-ink-400" />
+                <span className="tabular">{test.items}</span> ítems
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3 w-3 text-ink-400" />
+                <span className="tabular">~{test.minutes}</span> min
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <UserIcon className="h-3 w-3 text-ink-400" />
+                {test.ageRange}
+              </span>
+            </div>
+            {/* Descripción a 2 líneas en mobile (más legible) y 1 línea
+                en desktop (donde la card es más estrecha al lado de los
+                botones). */}
+            <p className="mt-1 text-xs text-ink-700 leading-snug line-clamp-2 sm:line-clamp-1">
+              {test.description}
+            </p>
           </div>
-          {/* Descripción 1 línea con truncate — el detalle completo está
-              en "Ver detalle" si hace falta. */}
-          <p className="mt-1 text-xs text-ink-700 leading-snug line-clamp-1">
-            {test.description}
-          </p>
         </div>
-        {/* Acciones a la derecha en desktop, debajo en mobile (vía
-            flex-wrap del padre + min-w del grupo). h-9 más compacto. */}
-        <div className="flex sm:flex-col gap-1.5 sm:shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+        {/* Acciones: mobile fila horizontal full-width, desktop columna
+            angosta a la derecha. shrink-0 para que no se aplasten. */}
+        <div className="flex flex-row sm:flex-col gap-1.5 sm:shrink-0">
           {ready ? (
             <>
               <button onClick={onApply} className="flex-1 sm:flex-initial h-9 px-3 rounded-md bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap">
@@ -472,7 +477,7 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
           {ready && onEdit && (
             <button
               onClick={onEdit}
-              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 hover:text-ink-900 inline-flex items-center justify-center"
+              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 hover:text-ink-900 inline-flex items-center justify-center shrink-0"
               title="Editar test"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -481,7 +486,7 @@ function CatalogRow({ test, onApply, onAssign, onView, onEdit, onDelete, dataTou
           {ready && onDelete && (
             <button
               onClick={onDelete}
-              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center justify-center"
+              className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-rose-400 hover:text-rose-700 inline-flex items-center justify-center shrink-0"
               title="Eliminar formulario"
             >
               <Trash2 className="h-3.5 w-3.5" />

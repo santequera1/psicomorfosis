@@ -1074,7 +1074,7 @@ function MoveToMenu({
                   className="h-2 w-2 rounded-full shrink-0"
                   style={{ backgroundColor: col.color ?? "var(--ink-400)" }}
                 />
-                <span className="flex-1 truncate">{col.title}</span>
+                <span className="flex-1 truncate">{col.name}</span>
                 {isCurrent && <span className="text-[10px] text-ink-400">actual</span>}
               </button>
             );
