@@ -36,17 +36,45 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "color-scheme", content: "light dark" },
-      { title: "Psicomorfosis" },
-      { name: "description", content: "Plataforma de gestión clínica para psicólogos." },
-      { property: "og:title", content: "Psicomorfosis" },
-      { property: "og:description", content: "Plataforma de gestión clínica para psicólogos." },
+      { title: "Psicomorfosis · App para psicólogos" },
+      {
+        name: "description",
+        content:
+          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
+      },
+      // Open Graph (Facebook, WhatsApp, LinkedIn)
+      { property: "og:site_name", content: "Psicomorfosis" },
+      { property: "og:title", content: "Psicomorfosis · App para psicólogos" },
+      {
+        property: "og:description",
+        content:
+          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
+      },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Psicomorfosis" },
-      { name: "twitter:description", content: "Plataforma de gestión clínica para psicólogos." },
-      // Sin og:image / twitter:image: la imagen anterior era de un cliente
-      // específico y no debe representar el producto. Cuando tengamos un
-      // OG asset propio, lo agregamos aquí.
+      { property: "og:locale", content: "es_CO" },
+      { property: "og:url", content: "https://psico.wailus.co/" },
+      { property: "og:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { property: "og:image:secure_url", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { property: "og:image:type", content: "image/jpeg" },
+      { property: "og:image:width", content: "1920" },
+      { property: "og:image:height", content: "1117" },
+      {
+        property: "og:image:alt",
+        content: "Psicomorfosis — App para psicólogos. Diseñada para el día a día del psicólogo.",
+      },
+      // Twitter / X
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Psicomorfosis · App para psicólogos" },
+      {
+        name: "twitter:description",
+        content:
+          "Una plataforma diseñada para el día a día del psicólogo. Organiza sesiones, pacientes, evaluaciones y notas clínicas desde una única herramienta.",
+      },
+      { name: "twitter:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      {
+        name: "twitter:image:alt",
+        content: "Psicomorfosis — App para psicólogos.",
+      },
     ],
     links: [
       {

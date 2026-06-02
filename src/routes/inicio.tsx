@@ -6,11 +6,12 @@ import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
 import { Hero } from "@/components/landing/Hero";
 import { BeforeAfter } from "@/components/landing/BeforeAfter";
 import { Features } from "@/components/landing/Features";
+import { VoiceDictation } from "@/components/landing/VoiceDictation";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { WhyUs } from "@/components/landing/WhyUs";
 import { LegalTrust } from "@/components/landing/LegalTrust";
 import { FinalCTA } from "@/components/landing/FinalCTA";
-import { Developers } from "@/components/landing/Developers";
+// import { Developers } from "@/components/landing/Developers"; // oculta temporalmente
 import { DemoForm } from "@/components/landing/DemoForm";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
@@ -26,20 +27,31 @@ import { LandingFooter } from "@/components/landing/LandingFooter";
 export const Route = createFileRoute("/inicio")({
   head: () => ({
     meta: [
-      { title: "Psicomorfosis · La consulta clínica sin WhatsApp ni Excel" },
+      { title: "Psicomorfosis · App para psicólogos" },
       {
         name: "description",
         content:
-          "Menos tiempo administrando. Más tiempo atendiendo pacientes. La nueva generación de herramientas clínicas para psicólogos en Colombia.",
+          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
       },
-      { property: "og:title", content: "Psicomorfosis · Plataforma clínica para psicólogos" },
+      { property: "og:title", content: "Psicomorfosis · App para psicólogos" },
       {
         property: "og:description",
         content:
-          "Organiza pacientes, sesiones, historia clínica y seguimiento terapéutico desde un solo lugar. Hecha con psicólogas reales en Colombia.",
+          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
       },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://psico.wailus.co/inicio" },
+      { property: "og:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { property: "og:image:secure_url", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { property: "og:image:type", content: "image/jpeg" },
+      { property: "og:image:width", content: "1920" },
+      { property: "og:image:height", content: "1117" },
+      {
+        property: "og:image:alt",
+        content: "Psicomorfosis — App para psicólogos. Diseñada para el día a día del psicólogo.",
+      },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
     ],
   }),
   component: InicioPage,
@@ -67,11 +79,12 @@ function InicioPage() {
         <Hero />
         <BeforeAfter />
         <Features />
+        <VoiceDictation />
         <ThemeShowcase />
         <WhyUs />
         <LegalTrust />
         <FinalCTA />
-        <Developers />
+        {/* <Developers /> oculta temporalmente */}
         <DemoForm />
       </main>
       <LandingFooter />

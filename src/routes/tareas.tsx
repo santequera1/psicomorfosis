@@ -10,6 +10,7 @@ import {
 import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppShell } from "@/components/app/AppShell";
+import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
 import {
   api, type Tarea, type TareaStatus, type TareaPriority,
   type TareaProject, type TareaColumn, type Professional, type ApiPatient,
@@ -1296,11 +1297,19 @@ function TareaDialog({
             />
           </Field>
 
-          <Field label="Descripción">
-            {/* resize-y: el usuario puede arrastrar la esquina inferior
-                para crecer/encoger la altura. min-h-20 evita que quede
-                tan diminuta que no se vea el caret; max-h-96 evita que
-                empuje el footer del modal fuera de la pantalla. */}
+          <Field
+            label="Descripción"
+            rightSlot={
+              <VoiceRecorderButton
+                variant="compact"
+                label="Dictar"
+                onTranscript={(text) => {
+                  const current = description.trim();
+                  setDescription(current ? `${current} ${text}` : text);
+                }}
+              />
+            }
+          >
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -1525,11 +1534,20 @@ function TareaDialog({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children, rightSlot }: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+  /** Botón/control opcional alineado a la derecha del label (ej. Dictar). */
+  rightSlot?: React.ReactNode;
+}) {
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-ink-700 mb-1.5">
-        {label}{required && <span className="text-rose-700"> *</span>}
+      <span className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-xs font-medium text-ink-700">
+          {label}{required && <span className="text-rose-700"> *</span>}
+        </span>
+        {rightSlot}
       </span>
       {children}
     </label>
