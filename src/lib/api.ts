@@ -1132,6 +1132,21 @@ export const api = {
     request<{ ok: true; signature_url: string }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ dataUrl }) }),
   clearMySignature: () =>
     request<{ ok: true; signature_url: null }>("/api/workspace/me/signature", { method: "PUT", body: JSON.stringify({ clear: true }) }),
+  /** Foto de perfil del usuario actual. dataUrl para set, clear:true para quitar. */
+  getMyPhoto: () => request<{ photo_url: string | null }>("/api/workspace/me/photo"),
+  setMyPhoto: (dataUrl: string) =>
+    request<{ ok: true; photo_url: string }>("/api/workspace/me/photo", { method: "PUT", body: JSON.stringify({ dataUrl }) }),
+  clearMyPhoto: () =>
+    request<{ ok: true; photo_url: null }>("/api/workspace/me/photo", { method: "PUT", body: JSON.stringify({ clear: true }) }),
+  /** Preferencias de notificaciones — default true si no hay override. */
+  getMyNotificationPrefs: () => request<{
+    prefs: Array<{ type: "appointment_reminder" | "clinical_risk_alert" | "daily_summary" | "payment_received"; enabled: boolean }>;
+  }>("/api/workspace/me/notification-prefs"),
+  setNotificationPref: (type: string, enabled: boolean) =>
+    request<{ ok: true }>("/api/workspace/me/notification-prefs", {
+      method: "PATCH",
+      body: JSON.stringify({ type, enabled }),
+    }),
   updateWorkspace: (body: { name?: string; mode?: WorkspaceMode; specialties?: string[] | null; max_patients?: number | null }) =>
     request<{ id: number; name: string; mode: WorkspaceMode; specialties: string[]; maxPatients: number | null }>(
       "/api/workspace",

@@ -1,7 +1,7 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { LegalAdminShell } from "./legal-admin";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -292,13 +292,7 @@ function PerfilPanel() {
   return (
     <>
       <SectionHeader title="Perfil profesional" desc="Información visible para pacientes y colegas." />
-      <div className="flex items-center gap-5 mb-7 pb-7 border-b border-line-100">
-        <div className="h-20 w-20 rounded-2xl bg-brand-100 text-brand-800 flex items-center justify-center text-2xl font-serif">{initials}</div>
-        <div>
-          <p className="text-sm text-ink-700 font-medium">{initials !== "—" ? "Tus iniciales" : "Sin foto de perfil"}</p>
-          <p className="text-xs text-ink-500 mt-1">Por ahora se muestran tus iniciales en lugar de una foto.</p>
-        </div>
-      </div>
+      <ProfilePhotoSection name={profForm.name} initials={initials} />
 
       <form
         onSubmit={(e) => { e.preventDefault(); profMu.mutate(); }}
@@ -357,6 +351,114 @@ function PerfilPanel() {
   );
 }
 
+/**
+ * Sección de foto de perfil. dataURL → PUT /me/photo (mismo patrón
+ * que firma). Al guardar se invalida el cache ["me-photo"] para que
+ * Topbar y Sidebar refresquen automáticamente.
+ */
+function ProfilePhotoSection({ name, initials }: { name: string; initials: string }) {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["me-photo"], queryFn: () => api.getMyPhoto() });
+  const photoUrl = data?.photo_url ?? null;
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFile(file: File) {
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Imagen demasiado grande (máx 2MB)");
+      return;
+    }
+    setUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(new Error("No se pudo leer el archivo"));
+        r.readAsDataURL(file);
+      });
+      await api.setMyPhoto(dataUrl);
+      qc.invalidateQueries({ queryKey: ["me-photo"] });
+      toast.success("Foto actualizada");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo subir la foto");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleClear() {
+    setUploading(true);
+    try {
+      await api.clearMyPhoto();
+      qc.invalidateQueries({ queryKey: ["me-photo"] });
+      toast.success("Foto eliminada");
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo eliminar");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-5 mb-7 pb-7 border-b border-line-100">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleFile(f);
+          e.target.value = "";
+        }}
+      />
+      {photoUrl ? (
+        <img
+          src={photoUrl}
+          alt={name}
+          className="h-20 w-20 rounded-2xl object-cover border border-line-200"
+        />
+      ) : (
+        <div className="h-20 w-20 rounded-2xl bg-brand-100 text-brand-800 dark:text-white flex items-center justify-center text-2xl font-serif">
+          {initials}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-ink-700 font-medium">
+          {photoUrl ? "Foto de perfil" : "Sin foto"}
+        </p>
+        <p className="text-xs text-ink-500 mt-1">
+          {photoUrl
+            ? "Aparece en el header y la barra lateral. PNG, JPG o WebP, máx 2MB."
+            : "Subí una foto para reemplazar las iniciales. PNG, JPG o WebP, máx 2MB."}
+        </p>
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            {uploading
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Subiendo…</>
+              : <>{photoUrl ? "Cambiar foto" : "Subir foto"}</>}
+          </button>
+          {photoUrl && (
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={uploading}
+              className="h-9 px-3 rounded-lg border border-line-200 text-ink-500 text-xs hover:border-rose-400 hover:text-rose-700 disabled:opacity-50"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LabeledInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <label className="block">
@@ -372,28 +474,40 @@ function LabeledInput({ label, value, onChange, type = "text", placeholder }: { 
   );
 }
 
-function Toggle({ label, desc, on = false, comingSoon = false }: {
+function Toggle({ label, desc, on = false, comingSoon = false, onChange, disabled = false }: {
   label: string; desc: string; on?: boolean; comingSoon?: boolean;
+  onChange?: (next: boolean) => void;
+  disabled?: boolean;
 }) {
-  const [v, setV] = useState(on);
+  // Si onChange viene del padre → controlled (padre maneja state).
+  // Si no → uncontrolled (state local) — para casos legacy/demo.
+  const [local, setLocal] = useState(on);
+  const v = onChange ? on : local;
+  const handle = () => {
+    if (disabled) return;
+    if (onChange) onChange(!v);
+    else setLocal(!v);
+  };
   return (
     <div className="flex items-start justify-between gap-3 py-4 border-b border-line-100 last:border-0">
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-ink-900">{label}</div>
         <div className="text-xs text-ink-500 mt-0.5">{desc}</div>
       </div>
-      {comingSoon ? (
-        <span className="shrink-0 mt-0.5 inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
-          <Circle className="h-2.5 w-2.5" /> Próximamente
-        </span>
-      ) : (
+      <div className="shrink-0 mt-0.5 flex items-center gap-2">
+        {comingSoon && (
+          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-800 border border-amber-200">
+            <Circle className="h-2.5 w-2.5" /> Próximamente
+          </span>
+        )}
         <button
           type="button"
-          onClick={() => setV(!v)}
+          onClick={handle}
+          disabled={disabled}
           aria-checked={v}
           role="switch"
           className={cn(
-            "shrink-0 mt-0.5 relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50",
             v ? "bg-brand-700" : "bg-line-200"
           )}
         >
@@ -402,22 +516,63 @@ function Toggle({ label, desc, on = false, comingSoon = false }: {
             v ? "translate-x-5" : "translate-x-0.5"
           )} />
         </button>
-      )}
+      </div>
     </div>
   );
 }
 
+interface NotifMeta { type: "appointment_reminder" | "clinical_risk_alert" | "daily_summary" | "payment_received"; label: string; desc: string; }
+const NOTIF_DEFS: NotifMeta[] = [
+  { type: "appointment_reminder", label: "Recordatorio de citas", desc: "Recibirás un aviso 1h antes de cada sesión." },
+  { type: "clinical_risk_alert",  label: "Alertas de riesgo clínico", desc: "Notificación inmediata ante banderas críticas." },
+  { type: "daily_summary",        label: "Resumen diario", desc: "Cada mañana, panorama de tu agenda." },
+  { type: "payment_received",     label: "Pagos recibidos", desc: "Avisos cuando un paciente confirma pago." },
+];
+
 function NotifPanel() {
-  // Por ahora todas las notificaciones se muestran como "Próximamente" — la
-  // infraestructura de envío (email/WhatsApp/push) aún no está cableada al
-  // backend. Se quitó "Mensajes de pacientes" porque la app no tiene chat.
+  // Los toggles SÍ persisten preferencias en el backend (tabla
+  // user_notification_prefs). El badge "Próximamente" queda hasta que
+  // se cablee el envío real de cada tipo — al apagar el toggle queda
+  // pre-configurado para no recibir cuando se implementen.
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["notification-prefs"],
+    queryFn: () => api.getMyNotificationPrefs(),
+  });
+  const prefMap = new Map((data?.prefs ?? []).map((p) => [p.type, p.enabled]));
+  const setMu = useMutation({
+    mutationFn: ({ type, enabled }: { type: string; enabled: boolean }) => api.setNotificationPref(type, enabled),
+    onMutate: async ({ type, enabled }) => {
+      // Optimistic update — toggle responde inmediato.
+      await qc.cancelQueries({ queryKey: ["notification-prefs"] });
+      const prev = qc.getQueryData<{ prefs: { type: string; enabled: boolean }[] }>(["notification-prefs"]);
+      if (prev) {
+        qc.setQueryData(["notification-prefs"], {
+          prefs: prev.prefs.map((p) => p.type === type ? { ...p, enabled } : p),
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["notification-prefs"], ctx.prev);
+      toast.error("No se pudo guardar la preferencia");
+    },
+  });
+
   return (
     <>
-      <SectionHeader title="Notificaciones" desc="Elige qué eventos quieres recibir y por qué canal." />
-      <Toggle label="Recordatorio de citas" desc="Recibirás un aviso 1h antes de cada sesión." comingSoon />
-      <Toggle label="Alertas de riesgo clínico" desc="Notificación inmediata ante banderas críticas." comingSoon />
-      <Toggle label="Resumen diario" desc="Cada mañana, panorama de tu agenda." comingSoon />
-      <Toggle label="Pagos recibidos" desc="Avisos cuando un paciente confirma pago." comingSoon />
+      <SectionHeader title="Notificaciones" desc="Elige qué eventos quieres recibir. La preferencia se guarda al instante." />
+      {NOTIF_DEFS.map((def) => (
+        <Toggle
+          key={def.type}
+          label={def.label}
+          desc={def.desc}
+          on={prefMap.get(def.type) ?? true}
+          disabled={isLoading}
+          comingSoon
+          onChange={(enabled) => setMu.mutate({ type: def.type, enabled })}
+        />
+      ))}
     </>
   );
 }

@@ -314,6 +314,99 @@ router.put("/me/signature", express.json({ limit: "2mb" }), async (req, res) => 
 });
 
 /**
+ * GET /api/workspace/me/photo — devuelve la URL de la foto de perfil
+ * del usuario actual (null si no tiene).
+ */
+router.get("/me/photo", (req, res) => {
+  const row = db.prepare("SELECT photo_url FROM users WHERE id = ?").get(req.user.id);
+  res.json({ photo_url: row?.photo_url ?? null });
+});
+
+/**
+ * PUT /api/workspace/me/photo
+ * Body: { dataUrl: "data:image/png;base64,..." } | { clear: true }
+ *
+ * Mismo patrón que /me/signature pero a nivel users (cualquier rol
+ * tiene foto, no solo profesionales). Escribe a uploads/avatars/<user_id>.<ext>.
+ */
+router.put("/me/photo", express.json({ limit: "3mb" }), async (req, res) => {
+  const { dataUrl, clear } = req.body ?? {};
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const avatarsDir = path.join(process.cwd(), "uploads", "avatars");
+  fs.mkdirSync(avatarsDir, { recursive: true });
+
+  if (clear) {
+    // Borrar el archivo físico si existe (cualquier extensión).
+    for (const e of ["png", "jpg", "webp"]) {
+      const p = path.join(avatarsDir, `${req.user.id}.${e}`);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    db.prepare("UPDATE users SET photo_url = NULL WHERE id = ?").run(req.user.id);
+    return res.json({ ok: true, photo_url: null });
+  }
+
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    return res.status(400).json({ error: "dataUrl inválida" });
+  }
+  const m = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: "Solo PNG, JPG o WebP" });
+  const ext = m[1] === "jpeg" ? "jpg" : m[1];
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.length > 2 * 1024 * 1024) {
+    return res.status(413).json({ error: "Imagen demasiado grande (>2MB)" });
+  }
+  const filename = `${req.user.id}.${ext}`;
+  fs.writeFileSync(path.join(avatarsDir, filename), buf);
+  // Limpiar otras extensiones del mismo user_id
+  for (const e of ["png", "jpg", "webp"]) {
+    if (e !== ext) {
+      const old = path.join(avatarsDir, `${req.user.id}.${e}`);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+  }
+  const url = `/api/uploads/avatars/${filename}?v=${Date.now()}`;
+  db.prepare("UPDATE users SET photo_url = ? WHERE id = ?").run(url, req.user.id);
+  res.json({ ok: true, photo_url: url });
+});
+
+// ─── Preferencias de notificaciones ───────────────────────────────────────
+//
+// 4 tipos por ahora: appointment_reminder, clinical_risk_alert,
+// daily_summary, payment_received. La tabla guarda solo overrides;
+// si no hay fila, el default es habilitado.
+const NOTIF_TYPES = ["appointment_reminder", "clinical_risk_alert", "daily_summary", "payment_received"];
+
+router.get("/me/notification-prefs", (req, res) => {
+  const rows = db.prepare(
+    "SELECT type, enabled FROM user_notification_prefs WHERE user_id = ?"
+  ).all(req.user.id);
+  const map = new Map(rows.map((r) => [r.type, Boolean(r.enabled)]));
+  const prefs = NOTIF_TYPES.map((type) => ({
+    type,
+    // Default true si no hay override en DB.
+    enabled: map.has(type) ? map.get(type) : true,
+  }));
+  res.json({ prefs });
+});
+
+router.patch("/me/notification-prefs", express.json(), (req, res) => {
+  const { type, enabled } = req.body ?? {};
+  if (!NOTIF_TYPES.includes(type)) {
+    return res.status(400).json({ error: "Tipo de notificación desconocido" });
+  }
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ error: "enabled debe ser boolean" });
+  }
+  db.prepare(`
+    INSERT INTO user_notification_prefs (user_id, type, enabled, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(user_id, type) DO UPDATE SET enabled = excluded.enabled, updated_at = CURRENT_TIMESTAMP
+  `).run(req.user.id, type, enabled ? 1 : 0);
+  res.json({ ok: true });
+});
+
+/**
  * PUT /api/workspace/receipt-logo
  * Body: { dataUrl: "data:image/png;base64,..." } | { clear: true }
  *

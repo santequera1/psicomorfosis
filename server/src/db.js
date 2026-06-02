@@ -913,6 +913,21 @@ function runMigrations() {
     // image_url: ruta pública de una captura/imagen opcional que el
     // admin sube al crear el anuncio (showing & telling de la feature).
     "ALTER TABLE announcements ADD COLUMN image_url TEXT",
+    // Foto de perfil del usuario (cualquier rol). URL apunta a
+    // /api/uploads/avatars/<user_id>.<ext>. Si es NULL, los componentes
+    // de avatar caen al patrón actual de iniciales coloreadas.
+    "ALTER TABLE users ADD COLUMN photo_url TEXT",
+    // Preferencias de notificaciones del usuario. Guardamos solo overrides:
+    // si no hay fila para (user_id, type), el default es habilitada. Así
+    // ahorramos insertar 4 filas por user al registrarse.
+    `CREATE TABLE IF NOT EXISTS user_notification_prefs (
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, type),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
   ];
   for (const sql of migrations) {
     try {

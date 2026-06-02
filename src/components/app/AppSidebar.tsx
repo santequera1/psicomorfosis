@@ -9,8 +9,10 @@ import { useEffect, useState } from "react";
 import { cn, roleLabel } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { api, getStoredUser, setSession, logoutEverywhere, type ApiUser, getToken } from "@/lib/api";
+import { useMyPhoto } from "@/lib/useMyPhoto";
 import { useSidebar } from "./SidebarContext";
 import { ReportProblemModal } from "./ReportProblemModal";
+import { UserAvatar } from "./UserAvatar";
 
 const groups: Array<{
   label: string;
@@ -77,7 +79,7 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
       .catch(() => { /* silent */ });
   }, []);
 
-  const initials = (user?.name ?? "?").split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+  const myPhoto = useMyPhoto();
 
 
   // Sidebar exclusivo para platform admin. Su trabajo es administrar
@@ -320,9 +322,12 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
               )}
               style={animateEntrance ? { animationDelay: `${footerStart}ms` } : undefined}
             >
-              <div className="h-9 w-9 rounded-full bg-brand-400/30 text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold shrink-0">
-                {initials}
-              </div>
+              <UserAvatar
+                name={user.name ?? "?"}
+                photoUrl={myPhoto}
+                size="sm"
+                fallbackClassName="bg-brand-400/30 text-sidebar-accent-foreground"
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-sidebar-accent-foreground truncate">{user.name}</div>
                 <div className="text-[11px] text-sidebar-foreground/65 truncate">{roleLabel(user)}</div>

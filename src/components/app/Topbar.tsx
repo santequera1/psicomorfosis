@@ -16,6 +16,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "./RiskBadge";
 import { AnnouncementsButton } from "./AnnouncementsButton";
+import { UserAvatar } from "./UserAvatar";
+import { useMyPhoto } from "@/lib/useMyPhoto";
 import { getTheme, toggleTheme, type ThemePreference } from "@/lib/theme";
 import { roleLabel } from "@/lib/utils";
 
@@ -40,6 +42,7 @@ export function Topbar() {
   const label = pathKey ? ROUTE_LABELS[pathKey] : "Psicomorfosis";
   // Lazy init desde localStorage: el primer paint ya muestra las iniciales
   // y el nombre del user en lugar del "?" placeholder.
+  const myPhoto = useMyPhoto();
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getStoredUser>>(() =>
     typeof window === "undefined" ? null : getStoredUser(),
   );
@@ -246,20 +249,27 @@ export function Topbar() {
           <div className="relative">
             <button
               onClick={() => setUserOpen((v) => !v)}
-              className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 dark:text-white flex items-center justify-center text-sm font-semibold border border-line-200 hover:border-brand-400 transition-colors"
+              className="h-10 w-10 rounded-full overflow-hidden border border-line-200 hover:border-brand-400 transition-colors"
               title={currentUser?.name ?? "Menú de usuario"}
               aria-label="Menú de usuario"
             >
-              {currentUser?.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase() ?? "?"}
+              <UserAvatar
+                name={currentUser?.name ?? "?"}
+                photoUrl={myPhoto}
+                size="md"
+                className="h-full w-full"
+              />
             </button>
             {userOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setUserOpen(false)} />
                 <div className="absolute right-0 top-12 w-64 rounded-xl border border-line-200 bg-surface shadow-modal z-50 overflow-hidden">
                   <div className="p-4 border-b border-line-100 flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-brand-100 text-brand-800 dark:text-white flex items-center justify-center text-sm font-semibold shrink-0">
-                      {currentUser?.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase() ?? "?"}
-                    </div>
+                    <UserAvatar
+                      name={currentUser?.name ?? "?"}
+                      photoUrl={myPhoto}
+                      size="md"
+                    />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-ink-900 truncate">{currentUser?.name ?? "Sin sesión"}</div>
                       <div className="text-[11px] text-ink-500 truncate">{currentUser?.email ?? ""}</div>
