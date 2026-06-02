@@ -58,15 +58,31 @@ export const Route = createFileRoute("/inicio")({
 });
 
 function InicioPage() {
+  // La landing siempre debe verse en light + tema "clinico".
+  // Si el usuario llega desde la app con dark/aurora activos, hay que
+  // limpiar TODOS los atributos del <html> que controlan tokens, no
+  // solo la clase .dark. Si solo limpias .dark, aurora se queda con
+  // sus tokens oscuros y los textos quedan casi invisibles sobre el
+  // fondo claro de la landing (bug que vimos en mobile).
   useEffect(() => {
     const root = document.documentElement;
-    const hadDark = root.classList.contains("dark");
-    const prevScrollBehavior = root.style.scrollBehavior;
+    const prev = {
+      dark: root.classList.contains("dark"),
+      mode: root.getAttribute("data-mode"),
+      theme: root.getAttribute("data-theme"),
+      scrollBehavior: root.style.scrollBehavior,
+    };
     root.classList.remove("dark");
+    root.setAttribute("data-mode", "light");
+    root.setAttribute("data-theme", "clinico");
     root.style.scrollBehavior = "smooth";
     return () => {
-      if (hadDark) root.classList.add("dark");
-      root.style.scrollBehavior = prevScrollBehavior;
+      if (prev.dark) root.classList.add("dark");
+      if (prev.mode) root.setAttribute("data-mode", prev.mode);
+      else root.removeAttribute("data-mode");
+      if (prev.theme) root.setAttribute("data-theme", prev.theme);
+      else root.removeAttribute("data-theme");
+      root.style.scrollBehavior = prev.scrollBehavior;
     };
   }, []);
 

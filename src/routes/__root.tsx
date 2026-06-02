@@ -102,18 +102,28 @@ export const Route = createRootRoute({
 const BOOTSTRAP_SCRIPT = `
 (function(){
   try {
+    var path = location.pathname;
+    // Rutas que SIEMPRE se renderizan en tema claro neutro
+    // (landing pública). Si entras a /inicio con la app en aurora
+    // o dark, no aplicamos esos atributos para evitar que la
+    // landing herede tokens oscuros antes de hidratar y se vea
+    // con textos casi invisibles + chrome negro.
+    var FORCE_LIGHT_PATHS = ['/inicio'];
+    var forceLight = FORCE_LIGHT_PATHS.indexOf(path) !== -1;
+
     var mode = localStorage.getItem('psm.theme') || 'claro';
     var family = localStorage.getItem('psm.theme.family') || 'clinico';
     var font = localStorage.getItem('psm.theme.font') || 'editorial';
     // Aurora es dark-only; cualquier otro respeta el modo elegido.
     var darkOnly = family === 'aurora';
-    var dark = darkOnly || mode === 'oscuro' ||
+    var dark = !forceLight && (darkOnly || mode === 'oscuro' ||
       (mode === 'auto' && window.matchMedia &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches);
+        window.matchMedia('(prefers-color-scheme: dark)').matches));
+    var effectiveFamily = forceLight ? 'clinico' : family;
     var html = document.documentElement;
     html.classList.toggle('dark', dark);
     html.setAttribute('data-mode', dark ? 'dark' : 'light');
-    html.setAttribute('data-theme', family);
+    html.setAttribute('data-theme', effectiveFamily);
     html.setAttribute('data-font', font);
   } catch(e) {}
   try {
