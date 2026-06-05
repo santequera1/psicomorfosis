@@ -1265,39 +1265,25 @@ function backfillExisting() {
     console.warn("[db] backfill horario default falló:", err.message);
   }
 
-  // 9. Marcar documentos existentes con paciente como compartidos.
+  // 9. (RETIRADO 2026-06-05) Backfill agresivo de shared_with_patient.
   //
-  // Antes del 12 may 2026, cualquier doc asignado a un paciente se
-  // mostraba automáticamente en su portal. Con el nuevo flag
-  // shared_with_patient (default 0 para docs nuevos), los docs
-  // existentes quedarían "invisibles" para el paciente, lo que rompería
-  // la experiencia para psicólogas que ya estaban compartiendo. Este
-  // backfill preserva el comportamiento previo: si el doc YA tenía
-  // patient_id y NO está archivado, lo marcamos como compartido.
+  // Hasta esta fecha, este bloque marcaba `shared_with_patient = 1` a
+  // TODOS los documentos con patient_id NOT NULL y created_at < hoy en
+  // CADA reinicio del server. Eso provocaba que cualquier borrador
+  // clínico que el profesional creara antes de hoy se auto-compartiera
+  // con el paciente al siguiente `pm2 restart` / deploy / crash.
   //
-  // Idempotente: el WHERE incluye `shared_with_patient = 0` para que
-  // si la psicóloga ya quitó acceso explícitamente, no lo restauremos
-  // por accidente en un próximo arranque.
-  try {
-    const r = db.prepare(`
-      UPDATE documents
-      SET shared_with_patient = 1
-      WHERE patient_id IS NOT NULL
-        AND archived_at IS NULL
-        AND shared_with_patient = 0
-        AND (
-          -- Heurística para no marcar docs ya gestionados con el nuevo flujo.
-          -- Solo migramos docs creados antes de hoy (today UTC); los nuevos
-          -- ya nacen con el default 0 explícito y se gestionan con la UI.
-          date(created_at) < date('now')
-        )
-    `).run();
-    if (r.changes > 0) {
-      console.log(`[db] backfill: ${r.changes} documento(s) marcados como compartidos con paciente (migración)`);
-    }
-  } catch (err) {
-    console.warn("[db] backfill shared_with_patient falló:", err.message);
-  }
+  // Incidente real: paciente con acceso a documentos clínicos no
+  // consentidos por la profesional. Ver commit y `INCIDENT_REPORT_2026-06-05`.
+  //
+  // Comportamiento seguro: el default del flag es 0; cada documento
+  // solo se comparte si la profesional lo decide explícitamente desde
+  // la UI (`PATCH /api/documents/:id` con `shared_with_patient: true`).
+  //
+  // Para clínicas que tenían docs LEGÍTIMAMENTE compartidos antes del
+  // 12 may 2026 y que necesitan re-habilitarlos, existe el script
+  // `server/scripts/restore-pre-feature-shares.js` que opera por
+  // workspace + lista blanca de IDs, con confirmación manual.
 
   // 10) Backfill: docs enlazados como template/submission a una tarea deben
   // estar accesibles para el paciente. Sin esto, el paciente recibe 403 al

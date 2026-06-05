@@ -484,8 +484,11 @@ router.get("/portal/me/export", requirePatient, (req, res) => {
     FROM patients WHERE id = ? AND workspace_id = ?
   `).get(pid, wsid);
 
+  // Sin `notes`: es campo del profesional. El texto del export ya promete
+  // al paciente que no recibe "anotaciones clínicas de su psicóloga sobre
+  // él"; entregarlo aquí violaba esa promesa y, peor, el secreto profesional.
   const appointments = db.prepare(`
-    SELECT id, date, time, duration_min, modality, room, status, notes
+    SELECT id, date, time, duration_min, modality, room, status
     FROM appointments WHERE patient_id = ? AND workspace_id = ?
     ORDER BY date DESC, time DESC
   `).all(pid, wsid);
@@ -552,8 +555,15 @@ router.get("/portal/me/export", requirePatient, (req, res) => {
  * GET /api/portal/appointments — citas del paciente, futuras + pasadas.
  */
 router.get("/portal/appointments", requirePatient, (req, res) => {
+  // NUNCA usar `SELECT a.*` en endpoints del portal: la tabla appointments
+  // tiene columna `notes` que el profesional usa para anotaciones internas
+  // (motivo de inasistencia, observación clínica de la sesión, etc.) y
+  // ESO no debe salir al paciente. Lista blanca explícita.
   const rows = db.prepare(`
-    SELECT a.*, pr.name AS professional_name, s.name AS sede_name, s.address AS sede_address
+    SELECT a.id, a.workspace_id, a.patient_id, a.sede_id, a.professional_id,
+           a.date, a.time, a.duration_min, a.modality, a.room, a.status,
+           pr.name AS professional_name,
+           s.name AS sede_name, s.address AS sede_address
     FROM appointments a
     LEFT JOIN professionals pr ON a.professional_id = pr.id
     LEFT JOIN sedes s ON a.sede_id = s.id
