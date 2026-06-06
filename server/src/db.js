@@ -928,6 +928,98 @@ function runMigrations() {
       PRIMARY KEY (user_id, type),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )`,
+    // ═══════════════════════════════════════════════════════════════════════
+    // MESSAGING / WHATSAPP (5 jun 2026) — Sprint 1 del módulo de
+    // notificaciones externas. La app NO habla WHAPI/Meta directo: emite
+    // eventos firmados con HMAC contra un "bot" externo (un solo bot
+    // central por ahora). El bot decide proveedor, número, formato.
+    // Ver docs/messaging-webhooks.md para el contrato completo.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Config por workspace. Los secrets de transporte NO viven aquí
+    // (.env del server), porque hay un bot central único para todos los
+    // workspaces. Aquí solo viven preferencias del psicólogo: cómo se
+    // identifica, qué eventos quiere disparar, a quién mandar pruebas.
+    `CREATE TABLE IF NOT EXISTS workspace_messaging_config (
+      workspace_id INTEGER PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      sender_label TEXT,                    -- "Dra. Nathaly" — firma de los msgs
+      test_phone TEXT,                      -- destino del botón "Enviar prueba"
+      enabled_events TEXT,                  -- JSON array: ["appointment.reminder.24h", ...]
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    )`,
+
+    // Plantillas editables por workspace y por evento. Una plantilla por
+    // (workspace, event_type, channel). Si falta una, el sender usa la
+    // plantilla DEFAULT del catálogo (definida en server/src/lib/messaging-templates.js).
+    `CREATE TABLE IF NOT EXISTS message_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'whatsapp',
+      body_text TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (workspace_id, event_type, channel),
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    )`,
+
+    // Auditoría de cada envío saliente al bot. Sin importar si fue OK
+    // o no, queda registrado. Soporta compliance (Habeas Data art. 17:
+    // el paciente puede pedir el log de qué se le envió) y debugging.
+    `CREATE TABLE IF NOT EXISTS messaging_outbound_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      idempotency_key TEXT,                 -- ej: "appt-67-reminder-24h"
+      recipient_kind TEXT,                  -- 'patient' | 'professional'
+      recipient_id TEXT,                    -- patient_id o user_id
+      recipient_phone TEXT,
+      payload_json TEXT,                    -- JSON tal cual se mandó al bot
+      rendered_message TEXT,                -- el texto final (para inspección humana)
+      status TEXT NOT NULL,                 -- 'queued' | 'sent' | 'failed' | 'skipped_opt_out'
+      bot_response_code INTEGER,
+      bot_response_body TEXT,
+      retry_count INTEGER DEFAULT 0,
+      error TEXT,
+      sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_msg_out_workspace ON messaging_outbound_log(workspace_id, sent_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_msg_out_idem ON messaging_outbound_log(idempotency_key)",
+
+    // Deduplicación de webhooks entrantes (bot → app). El bot puede
+    // reenviar el mismo evento si no recibe 200 OK; con esta tabla
+    // ignoramos duplicados por event_id.
+    `CREATE TABLE IF NOT EXISTS messaging_inbound_events (
+      event_id TEXT PRIMARY KEY,
+      workspace_id INTEGER,
+      event_type TEXT,
+      payload_json TEXT,
+      received_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+
+    // Idempotencia de recordatorios automáticos. Cuando el cron decide
+    // enviar el recordatorio 24h o 1h de una cita, marca la fila acá.
+    // Si la cita cambia de fecha, se borra la fila para que el cron
+    // pueda re-enviar el recordatorio para la nueva fecha.
+    `CREATE TABLE IF NOT EXISTS appointment_reminders_sent (
+      appointment_id INTEGER NOT NULL,
+      kind TEXT NOT NULL,                   -- '24h' | '1h'
+      sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (appointment_id, kind),
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+    )`,
+
+    // Consentimiento del paciente para recibir notificaciones por
+    // canales externos. Tres columnas porque distinguimos el momento
+    // de cada acción (Habeas Data exige saber el momento exacto del
+    // consentimiento y de su retiro).
+    "ALTER TABLE patients ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE patients ADD COLUMN whatsapp_opt_in_at TEXT",
+    "ALTER TABLE patients ADD COLUMN whatsapp_opt_out_at TEXT",
   ];
   for (const sql of migrations) {
     try {

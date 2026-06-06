@@ -40,6 +40,7 @@ import bankAccountsRoutes from "./routes/bankAccounts.js";
 import diagnosesRoutes from "./routes/diagnoses.js";
 import landingRoutes from "./routes/landing.js";
 import voiceRoutes from "./routes/voice.js";
+import messagingRoutes from "./routes/messaging.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -63,7 +64,15 @@ app.use(helmet({
   contentSecurityPolicy: false,
 }));
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: "4mb" }));
+// Parser JSON global con captura del raw body. El `verify` callback se
+// ejecuta ANTES del parseo y nos da acceso al Buffer original — necesario
+// para verificar firmas HMAC (ej: /api/webhooks/messaging) donde el body
+// re-serializado por JSON.stringify puede diferir del enviado por el
+// cliente (whitespace, orden de keys). Patrón recomendado por Stripe.
+app.use(express.json({
+  limit: "4mb",
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 // Confiar en X-Forwarded-* de nginx para que express-rate-limit cuente IPs
 // reales (no 127.0.0.1 de todos los requests proxied). nginx en VPS marca
 // el header con la IP del cliente final.
@@ -105,6 +114,11 @@ app.use("/api/settings", settingsRoutes);
 // Transcripción de voz (OpenAI Whisper / gpt-4o-transcribe). Auth y
 // rate-limit aplicados dentro del router. Audio nunca toca disco.
 app.use("/api/voice", voiceRoutes);
+// Messaging (WhatsApp): el webhook entrante POST /api/webhooks/messaging
+// vive dentro del router y usa express.raw para preservar el cuerpo
+// exacto y verificar la firma HMAC; el resto de endpoints (config,
+// templates, log, opt-in/out) usa los parsers globales.
+app.use("/api", messagingRoutes);
 // portalRoutes va ANTES que notesRoutes porque expone endpoints públicos
 // (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
 // requireAuth global, así que si va primero intercepta cualquier /api/*.
