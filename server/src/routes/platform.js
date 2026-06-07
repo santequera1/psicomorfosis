@@ -18,6 +18,10 @@ import { fileURLToPath } from "node:url";
 import { db, seedTaskColumns } from "../db.js";
 import { requirePlatformAdmin } from "../auth.js";
 import { validateUsername, validateEmail } from "../lib/validators.js";
+import {
+  sendAccountApprovedEmail,
+  sendAccountRejectedEmail,
+} from "../mailer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Directorio público de imágenes de anuncios. Sirvel index.js como
@@ -937,6 +941,193 @@ router.delete("/announcements/:id", (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
   const result = db.prepare("DELETE FROM announcements WHERE id = ?").run(id);
   if (result.changes === 0) return res.status(404).json({ error: "no encontrado" });
+  res.json({ ok: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════
+// SOLICITUDES DE CUENTA (account_requests) — registros desde la landing
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Lista solicitudes con filtro por status. Sin status devuelve todas
+ * ordenadas por created_at DESC. Soporta limit (default 100, max 500).
+ *
+ * No devuelve password_hash al frontend — ni siquiera a platform_admin.
+ * El hash solo se materializa al crear el user en /approve.
+ */
+router.get("/account-requests", (req, res) => {
+  const status = req.query.status;
+  const limit = Math.min(Number(req.query.limit ?? 100), 500);
+  const where = ["1=1"];
+  const args = [];
+  if (status && ["pending", "approved", "rejected"].includes(status)) {
+    where.push("status = ?");
+    args.push(status);
+  }
+
+  const rows = db.prepare(`
+    SELECT id, full_name, email, username, phone, message,
+           status, created_at, reviewed_at, rejection_reason,
+           approved_workspace_id, approved_user_id, ip
+    FROM account_requests
+    WHERE ${where.join(" AND ")}
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(...args, limit);
+
+  const counts = db.prepare(`
+    SELECT status, COUNT(*) AS n FROM account_requests GROUP BY status
+  `).all().reduce((acc, r) => { acc[r.status] = r.n; return acc; }, { pending: 0, approved: 0, rejected: 0 });
+
+  res.json({ items: rows, counts });
+});
+
+/**
+ * Aprueba una solicitud pendiente. Crea workspace + professional + user
+ * en una transacción y envía email de bienvenida al solicitante.
+ *
+ * Idempotente: si la solicitud ya está approved, devuelve los IDs creados
+ * sin re-crear nada. Si fue rejected, retorna 400.
+ *
+ * Body opcional: { workspaceName?, professionalTitle? }
+ *   - workspaceName: si no viene, usa "Consulta de <primer nombre>"
+ *   - professionalTitle: default "Psicólogo/a clínico/a"
+ */
+router.post("/account-requests/:id/approve", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+
+  const r = db.prepare(`
+    SELECT id, full_name, email, username, password_hash, phone, status,
+           approved_workspace_id, approved_user_id
+    FROM account_requests WHERE id = ?
+  `).get(id);
+  if (!r) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+  if (r.status === "rejected") {
+    return res.status(400).json({ error: "Esta solicitud fue rechazada. No se puede aprobar." });
+  }
+  if (r.status === "approved") {
+    // Idempotente: si ya está aprobada, no re-crear nada — devolver IDs.
+    return res.json({
+      ok: true, alreadyApproved: true,
+      workspaceId: r.approved_workspace_id,
+      userId: r.approved_user_id,
+      username: r.username,
+    });
+  }
+
+  // Doble check de unicidad (puede haber cambiado desde que se solicitó)
+  if (db.prepare("SELECT 1 FROM users WHERE email = ?").get(r.email)) {
+    return res.status(409).json({ error: "Ya existe una cuenta con ese correo. Marca como rechazada y contacta al solicitante." });
+  }
+  if (db.prepare("SELECT 1 FROM users WHERE username = ?").get(r.username)) {
+    return res.status(409).json({ error: `El usuario "${r.username}" fue tomado mientras tanto. Ajusta manualmente y reintenta.` });
+  }
+
+  const { workspaceName, professionalTitle } = req.body ?? {};
+  const firstName = r.full_name.split(/\s+/)[0] || r.full_name;
+  const wsName = String(workspaceName ?? `Consulta de ${firstName}`).slice(0, 100);
+  const title = String(professionalTitle ?? "Psicólogo/a clínico/a").slice(0, 80);
+
+  const tx = db.transaction(() => {
+    const wsId = db.prepare("INSERT INTO workspaces (name, mode) VALUES (?, 'individual')")
+      .run(wsName).lastInsertRowid;
+
+    // Sembramos tareas_columns para que el kanban funcione desde el día 1.
+    seedTaskColumns(wsId);
+
+    const profId = db.prepare(`
+      INSERT INTO professionals (workspace_id, name, title, email, phone, active)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run(wsId, r.full_name, title, r.email, r.phone ?? null).lastInsertRowid;
+
+    // Usamos el password_hash que ya tenemos — el usuario eligió su pwd al
+    // solicitar; no la pedimos de nuevo.
+    const userId = db.prepare(`
+      INSERT INTO users (workspace_id, username, password_hash, name, email, role, professional_id)
+      VALUES (?, ?, ?, ?, ?, 'super_admin', ?)
+    `).run(wsId, r.username, r.password_hash, r.full_name, r.email, profId).lastInsertRowid;
+
+    db.prepare(`
+      UPDATE account_requests
+      SET status = 'approved',
+          reviewed_at = CURRENT_TIMESTAMP,
+          reviewed_by_user_id = ?,
+          approved_workspace_id = ?,
+          approved_user_id = ?
+      WHERE id = ?
+    `).run(req.user.id, wsId, userId, id);
+
+    return { wsId, userId, profId };
+  });
+
+  let result;
+  try {
+    result = tx();
+  } catch (err) {
+    console.error("[platform] approve falló:", err);
+    return res.status(500).json({ error: "No se pudo crear la cuenta: " + (err?.message ?? "error") });
+  }
+
+  // Email de bienvenida — fire-and-forget, no bloquea la respuesta.
+  const loginUrl = process.env.PUBLIC_APP_URL
+    ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, "")}/login`
+    : "https://psico.wailus.co/login";
+  sendAccountApprovedEmail({
+    fullName: r.full_name, email: r.email, username: r.username,
+    loginUrl,
+    replyTo: process.env.DEMO_LEADS_EMAIL || undefined,
+  }).catch((e) => console.warn("[platform] welcome email error:", e?.message));
+
+  res.json({
+    ok: true,
+    workspaceId: result.wsId,
+    userId: result.userId,
+    professionalId: result.profId,
+    username: r.username,
+  });
+});
+
+/**
+ * Rechaza una solicitud pendiente. Body opcional: { reason }.
+ * Envía email cordial al solicitante.
+ *
+ * Idempotente: si ya está rejected, no envía email duplicado.
+ */
+router.post("/account-requests/:id/reject", (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
+
+  const r = db.prepare(`
+    SELECT id, full_name, email, status FROM account_requests WHERE id = ?
+  `).get(id);
+  if (!r) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+  if (r.status === "approved") {
+    return res.status(400).json({ error: "Esta solicitud ya fue aprobada. Para revertirla, deshabilita el workspace creado." });
+  }
+  if (r.status === "rejected") {
+    return res.json({ ok: true, alreadyRejected: true });
+  }
+
+  const reason = req.body?.reason ? String(req.body.reason).trim().slice(0, 500) : null;
+
+  db.prepare(`
+    UPDATE account_requests
+    SET status = 'rejected',
+        reviewed_at = CURRENT_TIMESTAMP,
+        reviewed_by_user_id = ?,
+        rejection_reason = ?
+    WHERE id = ?
+  `).run(req.user.id, reason, id);
+
+  // Email cordial — best-effort
+  sendAccountRejectedEmail({
+    fullName: r.full_name, email: r.email, reason,
+    replyTo: process.env.DEMO_LEADS_EMAIL || undefined,
+  }).catch((e) => console.warn("[platform] reject email error:", e?.message));
+
   res.json({ ok: true });
 });
 

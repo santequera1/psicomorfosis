@@ -1273,6 +1273,63 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  /** Registro autoservicio desde la landing. Crea una solicitud
+   *  (`account_requests`) en estado `pending` para que el platform admin
+   *  apruebe o rechace desde /platform/solicitudes. Sin auth.
+   *  El password se hashea en el server; el cliente lo manda en HTTPS. */
+  submitRegistration: (body: {
+    fullName: string;
+    email: string;
+    username?: string;
+    password: string;
+    phone?: string;
+    message?: string;
+  }) =>
+    request<{ ok: true; id: number; username: string }>("/api/landing/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // ─── Solicitudes de cuenta (platform admin) ──────────────────────────
+  listAccountRequests: (params?: { status?: "pending" | "approved" | "rejected" }) => {
+    const qs = params?.status ? `?status=${params.status}` : "";
+    return request<{
+      items: Array<{
+        id: number;
+        full_name: string;
+        email: string;
+        username: string;
+        phone: string | null;
+        message: string | null;
+        status: "pending" | "approved" | "rejected";
+        created_at: string;
+        reviewed_at: string | null;
+        rejection_reason: string | null;
+        approved_workspace_id: number | null;
+        approved_user_id: number | null;
+        ip: string | null;
+      }>;
+      counts: { pending: number; approved: number; rejected: number };
+    }>(`/api/platform/account-requests${qs}`);
+  },
+  approveAccountRequest: (id: number, body?: { workspaceName?: string; professionalTitle?: string }) =>
+    request<{
+      ok: true;
+      workspaceId: number;
+      userId: number;
+      professionalId: number;
+      username: string;
+      alreadyApproved?: boolean;
+    }>(`/api/platform/account-requests/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+  rejectAccountRequest: (id: number, body?: { reason?: string }) =>
+    request<{ ok: true; alreadyRejected?: boolean }>(`/api/platform/account-requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   /**
    * Transcribe un audio grabado en el navegador. Envía el blob como
    * multipart/form-data al backend que hace de proxy a OpenAI Whisper /

@@ -1020,6 +1020,43 @@ function runMigrations() {
     "ALTER TABLE patients ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE patients ADD COLUMN whatsapp_opt_in_at TEXT",
     "ALTER TABLE patients ADD COLUMN whatsapp_opt_out_at TEXT",
+    // ═══════════════════════════════════════════════════════════════════════
+    // ACCOUNT REQUESTS (5 jun 2026) — registro autoservicio desde la landing.
+    //
+    // Antes: el form de /inicio enviaba "solicitudes de demo" sueltas que
+    // requerían que el platform admin creara la cuenta a mano por cada lead.
+    // Ahora: el form pide los datos para crear la cuenta (incluyendo password
+    // que el usuario elige y guardamos hasheado), y el admin solo aprueba o
+    // rechaza desde /platform/solicitudes. Al aprobar se crea workspace +
+    // user + professional en una transacción y se envía el email de
+    // bienvenida con sus credenciales (sin la contraseña — la que escogió él
+    // ya la conoce).
+    // ═══════════════════════════════════════════════════════════════════════
+    `CREATE TABLE IF NOT EXISTS account_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      full_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      phone TEXT,
+      message TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'approved' | 'rejected'
+      reviewed_at TEXT,
+      reviewed_by_user_id INTEGER,
+      rejection_reason TEXT,
+      approved_workspace_id INTEGER,
+      approved_user_id INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (approved_workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL,
+      FOREIGN KEY (approved_user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_account_requests_status ON account_requests(status, created_at DESC)",
+    // Email no único: queremos permitir que la misma persona reintente si
+    // su solicitud fue rechazada. La validación de duplicados se hace en
+    // el endpoint (con feedback al usuario) más que con UNIQUE constraint.
   ];
   for (const sql of migrations) {
     try {

@@ -29,6 +29,7 @@ import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlatformTestRequestsRouteImport } from './routes/platform_.test-requests'
+import { Route as PlatformSolicitudesRouteImport } from './routes/platform_.solicitudes'
 import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
 import { Route as PlatformAnunciosRouteImport } from './routes/platform_.anuncios'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
@@ -146,6 +147,11 @@ const IndexRoute = IndexRouteImport.update({
 const PlatformTestRequestsRoute = PlatformTestRequestsRouteImport.update({
   id: '/platform_/test-requests',
   path: '/platform/test-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformSolicitudesRoute = PlatformSolicitudesRouteImport.update({
+  id: '/platform_/solicitudes',
+  path: '/platform/solicitudes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlatformReportesRoute = PlatformReportesRouteImport.update({
@@ -273,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/pacientes/$id': typeof PacientesIdRoute
   '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
+  '/platform/solicitudes': typeof PlatformSolicitudesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/pacientes/$id': typeof PacientesIdRoute
   '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
+  '/platform/solicitudes': typeof PlatformSolicitudesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
@@ -354,6 +362,7 @@ export interface FileRoutesById {
   '/pacientes_/$id': typeof PacientesIdRoute
   '/platform_/anuncios': typeof PlatformAnunciosRoute
   '/platform_/reportes': typeof PlatformReportesRoute
+  '/platform_/solicitudes': typeof PlatformSolicitudesRoute
   '/platform_/test-requests': typeof PlatformTestRequestsRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
@@ -396,6 +405,7 @@ export interface FileRouteTypes {
     | '/pacientes/$id'
     | '/platform/anuncios'
     | '/platform/reportes'
+    | '/platform/solicitudes'
     | '/platform/test-requests'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
@@ -436,6 +446,7 @@ export interface FileRouteTypes {
     | '/pacientes/$id'
     | '/platform/anuncios'
     | '/platform/reportes'
+    | '/platform/solicitudes'
     | '/platform/test-requests'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
@@ -476,6 +487,7 @@ export interface FileRouteTypes {
     | '/pacientes_/$id'
     | '/platform_/anuncios'
     | '/platform_/reportes'
+    | '/platform_/solicitudes'
     | '/platform_/test-requests'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
@@ -517,6 +529,7 @@ export interface RootRouteChildren {
   PacientesIdRoute: typeof PacientesIdRoute
   PlatformAnunciosRoute: typeof PlatformAnunciosRoute
   PlatformReportesRoute: typeof PlatformReportesRoute
+  PlatformSolicitudesRoute: typeof PlatformSolicitudesRoute
   PlatformTestRequestsRoute: typeof PlatformTestRequestsRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
   PActivarTokenRoute: typeof PActivarTokenRoute
@@ -664,6 +677,13 @@ declare module '@tanstack/react-router' {
       path: '/platform/test-requests'
       fullPath: '/platform/test-requests'
       preLoaderRoute: typeof PlatformTestRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform_/solicitudes': {
+      id: '/platform_/solicitudes'
+      path: '/platform/solicitudes'
+      fullPath: '/platform/solicitudes'
+      preLoaderRoute: typeof PlatformSolicitudesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/platform_/reportes': {
@@ -829,6 +849,7 @@ const rootRouteChildren: RootRouteChildren = {
   PacientesIdRoute: PacientesIdRoute,
   PlatformAnunciosRoute: PlatformAnunciosRoute,
   PlatformReportesRoute: PlatformReportesRoute,
+  PlatformSolicitudesRoute: PlatformSolicitudesRoute,
   PlatformTestRequestsRoute: PlatformTestRequestsRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
   PActivarTokenRoute: PActivarTokenRoute,

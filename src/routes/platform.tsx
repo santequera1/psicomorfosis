@@ -7,7 +7,7 @@ import {
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
-  ArrowUpDown, Sparkles,
+  ArrowUpDown, Sparkles, Inbox,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -58,6 +58,41 @@ function PlatformPage() {
   }
 
   return <PlatformDashboard />;
+}
+
+/**
+ * Botón "Solicitudes" en el header de /platform. Hace fetch del conteo
+ * de pendientes (refresca cada 60s en background) y muestra badge con
+ * el número si hay alguna. Click → navega a /platform/solicitudes.
+ */
+function PendingRequestsButton() {
+  const { data } = useQuery({
+    queryKey: ["platform-account-requests-counts"],
+    queryFn: () => api.listAccountRequests({ status: "pending" }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+  const pending = data?.counts?.pending ?? 0;
+  return (
+    <Link
+      to="/platform/solicitudes"
+      className={cn(
+        "relative h-10 px-3 rounded-lg border text-sm inline-flex items-center gap-2 transition-colors",
+        pending > 0
+          ? "border-brand-400 bg-brand-50 text-brand-800 hover:border-brand-500"
+          : "border-line-200 text-ink-700 hover:border-brand-400",
+      )}
+      title="Solicitudes de cuenta desde la landing"
+    >
+      <Inbox className="h-4 w-4" />
+      Solicitudes
+      {pending > 0 && (
+        <span className="inline-flex h-5 min-w-5 px-1.5 items-center justify-center rounded-full bg-brand-700 text-white text-[11px] font-semibold tabular">
+          {pending}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 // Sort options para el listado. Etiqueta y comparator inline para mantener
@@ -238,6 +273,7 @@ function PlatformDashboard() {
           <div className="flex items-center gap-2">
             {/* "Reportes" se movió al sidebar como entrada propia del
                 grupo Plataforma — el botón aquí era duplicado. */}
+            <PendingRequestsButton />
             <button
               onClick={exportWorkspacesCSV}
               className="h-10 px-3 rounded-lg border border-line-200 text-ink-700 hover:border-brand-400 inline-flex items-center gap-2 text-sm"

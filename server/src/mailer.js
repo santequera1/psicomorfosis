@@ -660,6 +660,233 @@ export async function sendDemoRequestEmail(opts) {
   return result;
 }
 
+// ─── Account requests (registro autoservicio desde landing) ───────────
+
+/**
+ * Plantilla: "recibimos tu solicitud". Va al solicitante recién hace POST.
+ * Cálido, breve, sin promesa firme de aprobación. Solo confirma recibo
+ * y da expectativa de 24h.
+ */
+function templateAccountRequestReceived({ fullName, username }) {
+  const firstName = (fullName?.split(" ")[0] ?? "").trim();
+  const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
+  const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">${saludo}</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Recibimos tu solicitud para acceder a Psicomorfosis. Te avisaremos por este
+mismo correo cuando esté lista, generalmente en menos de 24 horas.
+</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Para que tengas a la mano cuando ingreses:
+</p>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:8px 0 4px 0;">
+  <tr><td style="padding:6px 12px 6px 0;color:#78716c;font-size:13px;vertical-align:top;width:120px;">Usuario</td><td style="padding:6px 0;color:#1a1a1a;font-size:14px;font-family:monospace;">${escapeHtml(username)}</td></tr>
+</table>
+<p style="margin:18px 0 0 0;font-size:13px;color:#57534e;">
+Tu contraseña es la que escogiste al solicitar — no la incluimos aquí por seguridad.
+Si la olvidaste, te avisamos cuando la cuenta esté lista y podrás restablecerla
+desde la pantalla de inicio de sesión.
+</p>`;
+  return emailLayout({ title: "Recibimos tu solicitud", bodyHtml: body });
+}
+
+/**
+ * Plantilla: bienvenida al psicólogo recién aprobado. Réplica del email
+ * manual que se enviaba antes (verbatim, con el branding del layout).
+ * Variables: nombre del workspace/persona, username, URL de login.
+ *
+ * NO incluye la contraseña porque el usuario la creó él mismo al solicitar.
+ */
+function templateAccountApproved({ fullName, username, loginUrl }) {
+  const firstName = (fullName?.split(" ")[0] ?? "").trim();
+  const saludo = firstName ? `Hola ${escapeHtml(firstName)} 👋` : "Hola 👋";
+  const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">${saludo}</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Ya tienes lista tu cuenta para que puedas probar la plataforma.
+</p>
+<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:8px 0 4px 0;">
+  <tr><td style="padding:6px 12px 6px 0;color:#78716c;font-size:13px;vertical-align:top;width:120px;">Usuario</td><td style="padding:6px 0;color:#1a1a1a;font-size:14px;font-family:monospace;">${escapeHtml(username)}</td></tr>
+  <tr><td style="padding:6px 12px 6px 0;color:#78716c;font-size:13px;vertical-align:top;">Contraseña</td><td style="padding:6px 0;color:#1a1a1a;font-size:14px;">(la que escogiste al registrarte)</td></tr>
+</table>
+<p style="text-align:center;margin:20px 0;">
+  <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:14px 28px;background:#14685b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+    Entrar a Psicomorfosis
+  </a>
+</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Cuando ingreses, primero te aparecerán unos <strong style="color:#1a1a1a;">términos y condiciones</strong>
+para aceptar. Después, la misma plataforma te hará un recorrido rápido para mostrarte
+las funciones principales. Desde la sección de <strong style="color:#1a1a1a;">Configuración</strong>
+podrás agregar tu horario, cambiar la contraseña si lo prefieres y personalizar la
+apariencia de la aplicación.
+</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+La plataforma incluye gestión de pacientes, historias clínicas, notas de sesión,
+agenda, documentación, tareas terapéuticas, tests psicométricos, facturación y
+reportes. En la parte documental puedes utilizar plantillas prediseñadas o también
+subir, crear, guardar y editar documentos tipo Word directamente desde la
+aplicación — el sistema cuenta con un editor de texto integrado para facilitar
+todo el proceso.
+</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Además, hay un <strong style="color:#1a1a1a;">portal para pacientes</strong> donde
+ellos mismos pueden diligenciar formularios, responder tests, gestionar citas y
+firmar documentos digitalmente. Al momento de crear un paciente, también puedes
+crearle su cuenta y enviarle el acceso.
+</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Si notas algún error, comportamiento extraño o tienes sugerencias, dentro de la
+plataforma encontrarás una opción llamada <strong style="color:#1a1a1a;">Reportar
+problema</strong> para enviarme feedback directamente, o desde el botón flotante
+puedes escribirme a WhatsApp.
+</p>
+<p style="margin:18px 0 0 0;font-size:14px;color:#44403c;">
+¡Muchas gracias!
+</p>`;
+  return emailLayout({ title: "Tu cuenta de Psicomorfosis ya está lista", bodyHtml: body });
+}
+
+/**
+ * Plantilla: rechazo cordial. Sin razones específicas a menos que el admin
+ * las haya escrito en `reason` (futuro: campo opcional en la UI de rechazo).
+ */
+function templateAccountRejected({ fullName, reason }) {
+  const firstName = (fullName?.split(" ")[0] ?? "").trim();
+  const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
+  const reasonBlock = reason
+    ? `<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">${escapeHtml(reason)}</p>`
+    : "";
+  const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">${saludo}</p>
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+Gracias por tu interés en Psicomorfosis. Por el momento no podemos abrir tu
+cuenta, pero te avisaremos en cuanto se abran nuevos cupos para que puedas
+acceder a la plataforma.
+</p>
+${reasonBlock}
+<p style="margin:14px 0 0 0;font-size:13px;color:#57534e;">
+Si esto fue un error o tienes dudas, responde a este correo y te ayudamos.
+</p>`;
+  return emailLayout({ title: "Sobre tu solicitud de acceso", bodyHtml: body, accentColor: "#78716c" });
+}
+
+/**
+ * Notificación a Stiven cuando llega una solicitud nueva. Reutiliza el
+ * estilo de sendDemoRequestEmail (no el emailLayout grande) para que se vea
+ * como un "memo interno" rápido, no como un email a cliente.
+ */
+async function sendAccountRequestNotificationEmail({ request, toEmail }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  const fromAddress = `${c.fromName} <${c.user}>`;
+  const safeName = escapeHtmlMail(String(request.full_name).slice(0, 100));
+  const safeEmail = escapeHtmlMail(String(request.email).slice(0, 200));
+  const safeUsername = escapeHtmlMail(String(request.username).slice(0, 100));
+  const safePhone = request.phone ? escapeHtmlMail(String(request.phone).slice(0, 50)) : "";
+  const safeMessage = request.message ? escapeHtmlMail(String(request.message).slice(0, 2000)) : "";
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
+      <div style="border-left: 3px solid #1f6f6b; padding-left: 16px; margin-bottom: 24px;">
+        <p style="margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280;">Psicomorfosis · Registro</p>
+        <h1 style="margin: 4px 0 0; font-size: 22px; color: #111827;">Nueva solicitud de cuenta</h1>
+      </div>
+      <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <tr><td style="padding: 8px 0; color: #6b7280; width: 110px;">Nombre</td><td style="padding: 8px 0; color: #111827; font-weight: 500;">${safeName}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6b7280;">Email</td><td style="padding: 8px 0;"><a href="mailto:${safeEmail}" style="color: #1f6f6b; text-decoration: none;">${safeEmail}</a></td></tr>
+        <tr><td style="padding: 8px 0; color: #6b7280;">Usuario</td><td style="padding: 8px 0; color: #111827; font-family: monospace;">${safeUsername}</td></tr>
+        ${safePhone ? `<tr><td style="padding: 8px 0; color: #6b7280;">Teléfono</td><td style="padding: 8px 0;"><a href="tel:${safePhone}" style="color: #1f6f6b; text-decoration: none;">${safePhone}</a></td></tr>` : ""}
+      </table>
+      ${safeMessage ? `
+        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <p style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280;">Mensaje</p>
+          <p style="margin: 0; white-space: pre-wrap; line-height: 1.55;">${safeMessage}</p>
+        </div>` : ""}
+      <p style="margin: 24px 0 0; font-size: 13px; color: #6b7280;">
+        Revisa y aprueba en <a href="https://psico.wailus.co/platform/solicitudes" style="color:#1f6f6b;">/platform/solicitudes</a>.
+      </p>
+    </div>
+  `;
+
+  try {
+    await sendMailWithRetry({
+      from: fromAddress, to: toEmail, replyTo: request.email,
+      subject: `Solicitud Psicomorfosis · ${request.full_name}`,
+      html,
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] notificación admin de solicitud falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
+}
+
+/**
+ * Envío del acuse de recibo al solicitante. Best-effort.
+ */
+export async function sendAccountRequestReceivedEmail({ fullName, email, username, replyTo }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  try {
+    await sendMailWithRetry({
+      from: `${c.fromName} <${c.user}>`,
+      to: email,
+      replyTo: replyTo || undefined,
+      subject: "Recibimos tu solicitud · Psicomorfosis",
+      html: templateAccountRequestReceived({ fullName, username }),
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] acuse de recibo falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
+}
+
+/**
+ * Email de bienvenida tras aprobación. Best-effort.
+ */
+export async function sendAccountApprovedEmail({ fullName, email, username, loginUrl, replyTo }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  try {
+    await sendMailWithRetry({
+      from: `${c.fromName} <${c.user}>`,
+      to: email,
+      replyTo: replyTo || undefined,
+      subject: "Tu cuenta de Psicomorfosis ya está lista",
+      html: templateAccountApproved({ fullName, username, loginUrl }),
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] aprobación email falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
+}
+
+/**
+ * Email de rechazo cordial. Best-effort.
+ */
+export async function sendAccountRejectedEmail({ fullName, email, reason, replyTo }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  try {
+    await sendMailWithRetry({
+      from: `${c.fromName} <${c.user}>`,
+      to: email,
+      replyTo: replyTo || undefined,
+      subject: "Sobre tu solicitud de acceso · Psicomorfosis",
+      html: templateAccountRejected({ fullName, reason }),
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] rechazo email falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
+}
+
+export { sendAccountRequestNotificationEmail };
+
 function escapeHtmlMail(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
