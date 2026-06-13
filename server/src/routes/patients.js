@@ -255,10 +255,38 @@ router.get("/:id", (req, res) => {
 });
 
 function nextPatientId(wsId) {
-  const row = db.prepare("SELECT id FROM patients WHERE workspace_id = ? ORDER BY id DESC LIMIT 1").get(wsId);
-  if (!row) return `P-${wsId}000`;
-  const num = parseInt(row.id.replace(/\D/g, ""), 10);
-  return `P-${(num + 1).toString().padStart(4, "0")}`;
+  // BUG-fix 13 jun 2026: la versión anterior usaba ORDER BY id DESC con
+  // string comparison + filtro por workspace y caía con UNIQUE constraint
+  // cuando el siguiente número calculado YA existía en OTRO workspace
+  // (la PK es global, no por workspace). Caso real: nathaly@ws=1 con
+  // pacientes P-1000..P-1010 + paciente P-1011 en ws=2 → cada intento
+  // generaba P-1011 y rebotaba.
+  //
+  // Fix: tomar el MAX numérico GLOBAL (entre todos los workspaces) y
+  // sumar 1, con retry-loop por si dos requests concurrentes pegan al
+  // mismo número. El prefijo deja de incluir el workspace_id (no
+  // aporta — el id solo necesita ser único, no decir de qué consulta es).
+
+  // Buscamos el MAX numérico DENTRO del workspace para mantener el
+  // patrón visual "P-1XXX para ws=1, P-2XXX para ws=2…". El CAST hace
+  // que el orden sea numérico, no lexicográfico (era el primer bug).
+  // SUBSTR(id, 3) quita "P-". GLOB descarta IDs malformados legacy.
+  const wsMax = db.prepare(`
+    SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS m
+    FROM patients
+    WHERE workspace_id = ? AND id GLOB 'P-[0-9]*'
+  `).get(wsId);
+
+  // Si no hay pacientes en este workspace todavía, partimos de wsId*1000.
+  let n = wsMax?.m ? wsMax.m + 1 : wsId * 1000;
+  let id = `P-${n}`;
+  // Retry-loop: si el ID candidato existe en CUALQUIER workspace
+  // (PK global), incrementamos hasta encontrar uno libre. Cubre el caso
+  // de IDs creados manualmente o por seeds cruzados.
+  while (db.prepare("SELECT 1 FROM patients WHERE id = ?").get(id)) {
+    id = `P-${++n}`;
+  }
+  return id;
 }
 
 router.post("/", (req, res) => {
