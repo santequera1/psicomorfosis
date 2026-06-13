@@ -1,16 +1,15 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useWorkspace } from "@/lib/workspace";
 import { api, type ApiPatient } from "@/lib/api";
 import { displayPatientName } from "@/lib/utils";
 import { type Modality } from "@/lib/mock-data";
 import { RiskBadge } from "@/components/app/RiskBadge";
-import { Search, X, Loader2, Calendar, Clock } from "lucide-react";
+import { AlertTriangle, Search, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
-import { AppTimePicker } from "@/components/app/AppTimePicker";
 
 type Props = {
   patients: ApiPatient[];
@@ -38,7 +37,79 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
   const [modality, setModality] = useState<Modality>(prefilledPatient?.modality ?? "individual");
   const [duration, setDuration] = useState(50);
   const [notes, setNotes] = useState("");
-  const [sedeId, setSedeId] = useState<number | "">(isOrg && workspace?.sedes[0] ? workspace.sedes[0].id : "");
+
+  // Settings del workspace: horario configurado + datos del consultorio
+  // principal. Lo usamos para (a) ofrecer el consultorio principal como
+  // opción en el selector "Lugar" y (b) advertir si la hora cae fuera
+  // del horario habitual del psicólogo.
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: () => api.getSettings() });
+
+  // Selección de "Lugar". Distinguimos entre opciones predefinidas
+  // (principal, sede, tele, sin lugar) y libre ("otro lugar"), porque
+  // determinan qué se manda al backend: sede_id resuelta vs room texto.
+  type LugarKind = "principal" | "sede" | "tele" | "custom" | "none";
+  const sedes = workspace?.sedes ?? [];
+  const hasPrincipal = Boolean(settings?.consultorio_name);
+  const initialLugar: { kind: LugarKind; sedeId?: number } =
+    modality === "tele" ? { kind: "tele" }
+    : hasPrincipal ? { kind: "principal" }
+    : sedes[0] ? { kind: "sede", sedeId: sedes[0].id }
+    : { kind: "none" };
+  const [lugar, setLugar] = useState(initialLugar);
+  const [customRoom, setCustomRoom] = useState("");
+
+  // Aviso "cita fuera del horario establecido". Se calcula contra
+  // settings.work_start_hour / work_end_hour / work_days. Solo muestra
+  // banner amarillo — nunca bloquea (el psicólogo conoce su agenda
+  // mejor que nosotros y a veces atiende fuera del horario base).
+  const outOfHoursMsg = useMemo(() => {
+    if (!settings || !date || !time) return null;
+    const wStart = Number(settings.work_start_hour ?? 8);
+    const wEnd = Number(settings.work_end_hour ?? 18);
+    const workDaysCsv = String(settings.work_days ?? "monday,tuesday,wednesday,thursday,friday");
+    const workDays = new Set(workDaysCsv.split(",").map((d) => d.trim()).filter(Boolean));
+    const dayNames = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    const dayLabelsEs: Record<string, string> = {
+      sunday: "domingo", monday: "lunes", tuesday: "martes", wednesday: "miércoles",
+      thursday: "jueves", friday: "viernes", saturday: "sábado",
+    };
+    // new Date("2026-06-13T00:00:00") respeta la zona local — no usamos
+    // new Date("YYYY-MM-DD") solo, porque ese se parsea como UTC y rota
+    // un día atrás en zonas como Bogotá.
+    const dt = new Date(date + "T00:00:00");
+    if (isNaN(dt.getTime())) return null;
+    const dayName = dayNames[dt.getDay()];
+    if (!workDays.has(dayName)) {
+      const labels = Array.from(workDays).map((d) => dayLabelsEs[d]?.slice(0, 3)).filter(Boolean).join(", ");
+      return `Estás agendando en ${dayLabelsEs[dayName]}, que no es parte de tu horario habitual (${labels}).`;
+    }
+    const [hStr, mStr] = String(time).split(":");
+    const h = Number(hStr);
+    const m = Number(mStr ?? 0);
+    if (!Number.isFinite(h)) return null;
+    const minutes = h * 60 + m;
+    const startMin = wStart * 60;
+    const endMin = wEnd * 60;
+    if (minutes < startMin || minutes >= endMin) {
+      const fmt = (n: number) => `${String(n).padStart(2, "0")}:00`;
+      return `${time} está fuera de tu horario habitual (${fmt(wStart)}–${fmt(wEnd)}).`;
+    }
+    return null;
+  }, [date, time, settings]);
+
+  // Resuelve qué mandar al backend según la opción de Lugar elegida.
+  // Tele siempre pisa: la modalidad gobierna sobre el lugar.
+  function resolveLugarApi(): { sede_id: number | null; room: string } {
+    if (modality === "tele") return { sede_id: null, room: "Telepsicología" };
+    switch (lugar.kind) {
+      case "principal": return { sede_id: null, room: settings?.consultorio_name ?? "" };
+      case "sede":      return { sede_id: lugar.sedeId ?? null, room: sedes.find((s) => s.id === lugar.sedeId)?.name ?? "" };
+      case "tele":      return { sede_id: null, room: "Telepsicología" };
+      case "custom":    return { sede_id: null, room: customRoom.trim() };
+      case "none":
+      default:          return { sede_id: null, room: "" };
+    }
+  }
 
   const filtered = query.trim()
     ? patients.filter((p) => {
@@ -48,20 +119,23 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
     : [];
 
   const mu = useMutation({
-    mutationFn: (): Promise<{ id?: number }> => api.createAppointment({
-      patient_id: selected?.id ?? null,
-      patient_name: selected?.name ?? "",
-      professional: selected?.professional ?? "",
-      professional_id: selected?.professionalId ?? null,
-      sede_id: sedeId === "" ? null : sedeId,
-      date,
-      time,
-      duration_min: duration,
-      modality,
-      room: modality === "tele" ? "Telepsicología" : "",
-      status: "confirmada",
-      notes,
-    } as any) as Promise<{ id?: number }>,
+    mutationFn: (): Promise<{ id?: number }> => {
+      const { sede_id, room } = resolveLugarApi();
+      return api.createAppointment({
+        patient_id: selected?.id ?? null,
+        patient_name: selected?.name ?? "",
+        professional: selected?.professional ?? "",
+        professional_id: selected?.professionalId ?? null,
+        sede_id,
+        date,
+        time,
+        duration_min: duration,
+        modality,
+        room,
+        status: "confirmada",
+        notes,
+      } as any) as Promise<{ id?: number }>;
+    },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.invalidateQueries({ queryKey: ["all-appointments"] });
@@ -172,14 +246,35 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-              <AppTimePicker
+              {/* Input nativo type=time para que la psicóloga escriba
+                  cualquier hora (no solo múltiplos de 15min). step=60
+                  permite minutos individuales. showPicker() en click
+                  abre el picker nativo aunque haya hecho click fuera
+                  del icono pequeño del browser. */}
+              <input
+                type="time"
                 value={time}
-                onChange={setTime}
-                className="mt-1"
+                onChange={(e) => setTime(e.target.value)}
+                step={60}
                 aria-label="Hora de la cita"
+                onClick={(e) => {
+                  const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+                  try { el.showPicker?.(); } catch { /* no-op si el browser no soporta */ }
+                }}
+                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
               />
             </label>
           </div>
+
+          {outOfHoursMsg && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span className="leading-relaxed">
+                <strong className="font-medium">Cita fuera del horario establecido.</strong>{" "}
+                {outOfHoursMsg} La cita se crea igual.
+              </span>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -213,20 +308,57 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, onClose
             </label>
           </div>
 
-          {isOrg && workspace && workspace.sedes.length > 0 && (
-            <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Sede</span>
-              <AppSelect
-                value={sedeId === "" ? "" : String(sedeId)}
-                onChange={(v) => setSedeId(v === "" ? "" : Number(v))}
-                className="mt-1"
-                placeholder="Sin sede asignada"
-                options={[
-                  { value: "", label: "Sin sede asignada" },
-                  ...workspace.sedes.map((s) => ({ value: String(s.id), label: s.name })),
-                ]}
-              />
-            </label>
+          {/* Selector "Lugar". Visible siempre (no solo en organization).
+              Construye opciones a partir de:
+                - consultorio principal (settings.consultorio_name)
+                - sedes adicionales del workspace
+                - telepsicología (siempre disponible)
+                - otro lugar (texto libre, p. ej. salida a domicilio)
+                - sin lugar (queda vacío en la cita)
+              Si la modalidad es 'tele' se fuerza visualmente a
+              "Telepsicología" para no confundir a la psicóloga. */}
+          {modality === "tele" ? (
+            <div className="rounded-md border border-line-200 bg-bg-50 px-3 py-2 text-xs text-ink-600">
+              Como la modalidad es <strong>telepsicología</strong>, la cita queda como videollamada.
+              No necesitas elegir un consultorio.
+            </div>
+          ) : (
+            <>
+              <label className="block">
+                <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Lugar</span>
+                <AppSelect
+                  value={lugar.kind === "sede" ? `sede:${lugar.sedeId}` : lugar.kind}
+                  onChange={(v) => {
+                    if (v === "principal") setLugar({ kind: "principal" });
+                    else if (v === "custom") setLugar({ kind: "custom" });
+                    else if (v === "none") setLugar({ kind: "none" });
+                    else if (v.startsWith("sede:")) setLugar({ kind: "sede", sedeId: Number(v.slice(5)) });
+                  }}
+                  className="mt-1"
+                  options={[
+                    ...(hasPrincipal
+                      ? [{ value: "principal", label: settings?.consultorio_name ?? "Mi consultorio" }]
+                      : []),
+                    ...sedes.map((s) => ({ value: `sede:${s.id}`, label: s.name })),
+                    { value: "custom", label: "Otro lugar (escribir)…" },
+                    { value: "none", label: "(Sin lugar especificado)" },
+                  ]}
+                />
+              </label>
+              {lugar.kind === "custom" && (
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">¿Dónde es?</span>
+                  <input
+                    type="text"
+                    value={customRoom}
+                    onChange={(e) => setCustomRoom(e.target.value)}
+                    placeholder="Ej: domicilio del paciente, sala 3, café X…"
+                    maxLength={120}
+                    className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
+                  />
+                </label>
+              )}
+            </>
           )}
 
           <label className="block">

@@ -264,14 +264,20 @@ function emailLayout({ title, accentColor = "#14685b", bodyHtml }) {
 </html>`;
 }
 
-function appointmentDetailsBlock({ appointment, professional, workspaceName }) {
+function appointmentDetailsBlock({ appointment, professional, workspaceName, location }) {
   const cuando = formatHumanDateTime(appointment.date, appointment.time);
   const duracion = appointment.duration_min ? `${appointment.duration_min} minutos` : "";
   const modalidad = formatModality(appointment.modality);
   const profesional = professional?.name ?? workspaceName ?? "";
-  const lugar = appointment.modality === "tele" || appointment.modality === "virtual"
-    ? "Telepsicología (videollamada — el enlace te lo compartirá tu psicóloga/o)"
-    : (appointment.room ? `${appointment.room}` : (workspaceName ?? ""));
+  // `location` viene resuelto desde el caller (notifyAsync) con
+  // nombre + dirección del consultorio cuando hay sede asignada. Si
+  // no llegó (compat con callers viejos), construimos la versión
+  // simple a partir de appointment.room / modality.
+  const lugar = location !== undefined
+    ? location
+    : (appointment.modality === "tele" || appointment.modality === "virtual"
+        ? "Telepsicología (videollamada — el enlace te lo compartirá tu psicóloga/o)"
+        : (appointment.room ? `${appointment.room}` : (workspaceName ?? "")));
 
   const row = (label, value) => value
     ? `<tr><td style="padding:6px 12px 6px 0;color:#78716c;font-size:13px;vertical-align:top;width:120px;">${label}</td><td style="padding:6px 0;color:#1a1a1a;font-size:14px;">${escapeHtml(value)}</td></tr>`
@@ -286,7 +292,7 @@ ${row("Lugar", lugar)}
 </table>`;
 }
 
-function templateCreated({ appointment, patient, professional, workspaceName }) {
+function templateCreated({ appointment, patient, professional, workspaceName, location }) {
   const firstName = (patient?.preferred_name?.trim() || patient?.name?.split(" ")[0] || "").trim();
   const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
   const body = `
@@ -294,7 +300,7 @@ function templateCreated({ appointment, patient, professional, workspaceName }) 
 <p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
 Te confirmamos que tu cita ha sido agendada. Estos son los detalles:
 </p>
-${appointmentDetailsBlock({ appointment, professional, workspaceName })}
+${appointmentDetailsBlock({ appointment, professional, workspaceName, location })}
 <p style="margin:18px 0 6px 0;font-size:13px;color:#57534e;">
 Adjuntamos también un archivo de calendario (.ics) para que puedas agregar la cita a Google Calendar,
 Apple Calendar u Outlook.
@@ -306,7 +312,7 @@ psicóloga/o por el canal habitual.
   return emailLayout({ title: "Tu cita ha sido agendada", bodyHtml: body });
 }
 
-function templateRescheduled({ appointment, patient, professional, workspaceName, previous }) {
+function templateRescheduled({ appointment, patient, professional, workspaceName, location, previous }) {
   const firstName = (patient?.preferred_name?.trim() || patient?.name?.split(" ")[0] || "").trim();
   const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
   const prevWhen = previous ? formatHumanDateTime(previous.date, previous.time) : null;
@@ -317,7 +323,7 @@ function templateRescheduled({ appointment, patient, professional, workspaceName
 Tu cita fue reprogramada${prevWhen ? `. La fecha anterior era <strong style="color:#1a1a1a;">${escapeHtml(prevWhen)}</strong>` : ""}.
 Estos son los nuevos detalles:
 </p>
-${appointmentDetailsBlock({ appointment, professional, workspaceName })}
+${appointmentDetailsBlock({ appointment, professional, workspaceName, location })}
 <p style="margin:18px 0 6px 0;font-size:13px;color:#57534e;">
 Adjuntamos un archivo de calendario actualizado. Si lo abres desde el correo, tu app de calendario
 debería actualizar el evento existente automáticamente.
@@ -373,7 +379,7 @@ const SUBJECTS = {
  */
 export async function sendAppointmentEmail(opts) {
   const start = Date.now();
-  const { kind, appointment, patient, professional, workspaceName, replyTo, previous } = opts;
+  const { kind, appointment, patient, professional, workspaceName, replyTo, location, previous } = opts;
 
   const result = {
     workspace_id: appointment.workspace_id ?? null,
@@ -405,9 +411,9 @@ export async function sendAppointmentEmail(opts) {
     const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
     const fromAddress = `${profDisplay} <${c.user}>`;
     const html =
-      kind === "appointment_rescheduled" ? templateRescheduled({ appointment, patient, professional, workspaceName, previous }) :
+      kind === "appointment_rescheduled" ? templateRescheduled({ appointment, patient, professional, workspaceName, location, previous }) :
       kind === "appointment_cancelled" ? templateCancelled({ appointment, patient, professional, workspaceName }) :
-      templateCreated({ appointment, patient, professional, workspaceName });
+      templateCreated({ appointment, patient, professional, workspaceName, location });
     const subject = SUBJECTS[kind] ?? "Notificación de cita";
 
     // ICS adjunto. Para canceladas usamos METHOD:CANCEL + STATUS:CANCELLED

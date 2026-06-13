@@ -77,11 +77,20 @@ function ConfiguracionPage() {
 
   // Filtrado:
   //   - legal_admin: solo apariencia/seguridad/cuenta
-  //   - psicólogo modo individual: oculta Sedes (no aplica)
+  //   - Sedes ahora visible en TODOS los modos: en individual también
+  //     puede haber varios consultorios (Torices, El Recreo, etc.).
+  //     El copy de la sección se ajusta al modo (ver SedesPanel).
   const secciones = SECCIONES.filter((s) => {
     if (isLegal) return SECCIONES_LEGAL_IDS.has(s.id);
-    if (s.id === "sedes" && !isOrg) return false;
     return true;
+  }).map((s) => {
+    // Rename para individual: el término "Sedes" tiene aire de clínica
+    // con varios profesionales; en consulta individual el psicólogo
+    // habla de "consultorios" o "lugares de atención".
+    if (s.id === "sedes" && !isOrg) {
+      return { ...s, label: "Otros consultorios", desc: "Lugares adicionales donde atiendes" };
+    }
+    return s;
   });
 
   // Lo que efectivamente se renderiza en el panel principal. En mobile
@@ -341,6 +350,7 @@ function PerfilPanel() {
               </div>
             </form>
           </div>
+
         </>
       )}
 
@@ -1570,6 +1580,8 @@ function ProfilePanelSection({ workspace }: { workspace: { specialties?: string[
 // ─── Sedes panel ──────────────────────────────────────────────────────────
 function SedesPanel() {
   const qc = useQueryClient();
+  const { data: workspace } = useWorkspace();
+  const isOrg = workspace?.mode === "organization";
   const { data: sedes = [], isLoading } = useQuery({ queryKey: ["sedes"], queryFn: () => api.listSedes() });
   const [editing, setEditing] = useState<Sede | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -1579,24 +1591,35 @@ function SedesPanel() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sedes"] }); qc.invalidateQueries({ queryKey: ["workspace"] }); },
   });
 
+  // Copy adaptado: individual habla de "consultorios"; organización de "sedes".
+  const labels = isOrg
+    ? { title: "Sedes", desc: "Consultorios físicos y modalidades remotas del workspace.",
+        countSingular: "sede registrada", countPlural: "sedes registradas",
+        empty: "Aún no hay sedes. Crea la primera para comenzar.",
+        addBtn: "Nueva sede" }
+    : { title: "Otros consultorios", desc: "Lugares adicionales donde atiendes (además de tu consultorio principal). Aparecerán como opciones al crear una cita.",
+        countSingular: "consultorio adicional", countPlural: "consultorios adicionales",
+        empty: "Aún no hay consultorios adicionales. Tu principal lo configuras en la pestaña Perfil. Agrega aquí otros lugares (otra sede, sala alterna, etc.).",
+        addBtn: "Nuevo consultorio" };
+
   return (
     <>
-      <SectionHeader title="Sedes" desc="Consultorios físicos y modalidades remotas del workspace." />
+      <SectionHeader title={labels.title} desc={labels.desc} />
 
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-ink-500">{isLoading ? "Cargando…" : `${sedes.length} sedes registradas`}</p>
+        <p className="text-sm text-ink-500">{isLoading ? "Cargando…" : `${sedes.length} ${sedes.length === 1 ? labels.countSingular : labels.countPlural}`}</p>
         <button
           onClick={() => setCreateOpen(true)}
           className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
         >
-          <Plus className="h-3.5 w-3.5" /> Nueva sede
+          <Plus className="h-3.5 w-3.5" /> {labels.addBtn}
         </button>
       </div>
 
       {sedes.length === 0 && !isLoading && (
         <div className="rounded-lg border border-dashed border-line-200 p-10 text-center">
           <Building2 className="h-6 w-6 text-ink-400 mx-auto mb-2" />
-          <p className="text-sm text-ink-500">Aún no hay sedes. Crea la primera para comenzar.</p>
+          <p className="text-sm text-ink-500">{labels.empty}</p>
         </div>
       )}
 

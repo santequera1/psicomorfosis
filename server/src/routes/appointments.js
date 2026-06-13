@@ -9,6 +9,34 @@ import { sendAppointmentEmail } from "../mailer.js";
  * El propósito de este wrapper es desacoplar el envío del flujo HTTP — la
  * respuesta de la API ya salió cuando el email se está mandando.
  */
+/**
+ * Resuelve el "lugar" de una cita como string listo para el email.
+ *
+ * Prioridad:
+ *   1. Telepsicología (texto fijo)
+ *   2. Sede asignada (sede_id): "<nombre> · <dirección>"
+ *   3. room libre: si coincide con settings.consultorio_name, enriquecer
+ *      con la dirección del consultorio principal; si no, devolverlo
+ *      tal cual (probablemente texto libre tipo "domicilio paciente").
+ *   4. Vacío.
+ */
+function buildAppointmentLocation({ appointment, sede, settings }) {
+  if (appointment.modality === "tele" || appointment.modality === "virtual") {
+    return "Telepsicología (videollamada — el enlace te lo compartirá tu psicóloga/o)";
+  }
+  if (sede) {
+    return sede.address ? `${sede.name} · ${sede.address}` : sede.name;
+  }
+  const room = appointment.room?.trim();
+  if (room) {
+    if (settings?.consultorio_name === room && settings.address) {
+      return `${room} · ${settings.address}`;
+    }
+    return room;
+  }
+  return "";
+}
+
 function notifyAsync({ kind, appointment, previous }) {
   setImmediate(() => {
     try {
@@ -23,6 +51,21 @@ function notifyAsync({ kind, appointment, previous }) {
         : null;
       const workspace = db.prepare("SELECT name FROM workspaces WHERE id = ?")
         .get(appointment.workspace_id);
+
+      // Resolver "lugar" para que el email lo muestre completo (nombre
+      // del consultorio + dirección). Sin esto, el paciente solo recibía
+      // un nombre suelto sin saber dónde es.
+      const sede = appointment.sede_id
+        ? db.prepare("SELECT id, name, address FROM sedes WHERE id = ? AND workspace_id = ?")
+            .get(appointment.sede_id, appointment.workspace_id)
+        : null;
+      const settings = Object.fromEntries(
+        db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?")
+          .all(appointment.workspace_id)
+          .map((s) => [s.key, s.value]),
+      );
+      const location = buildAppointmentLocation({ appointment, sede, settings });
+
       sendAppointmentEmail({
         kind,
         appointment,
@@ -30,6 +73,7 @@ function notifyAsync({ kind, appointment, previous }) {
         professional,
         workspaceName: workspace?.name ?? null,
         replyTo: professional?.email ?? undefined,
+        location,
         previous,
       }).catch((err) => console.warn("[mailer] notifyAsync caught:", err?.message));
     } catch (err) {
