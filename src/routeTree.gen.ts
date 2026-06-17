@@ -44,6 +44,7 @@ import { Route as LegalAdminAceptacionesRouteImport } from './routes/legal-admin
 import { Route as LegalAdminSlugRouteImport } from './routes/legal-admin_.$slug'
 import { Route as FirmarTokenRouteImport } from './routes/firmar.$token'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
+import { Route as PacientesIdBibliotecaRouteImport } from './routes/pacientes_.$id_.biblioteca'
 import { Route as PFirmarDocIdRouteImport } from './routes/p_.firmar.$docId'
 import { Route as PDocumentosIdRouteImport } from './routes/p_.documentos_.$id'
 import { Route as PActivarTokenRouteImport } from './routes/p_.activar.$token'
@@ -224,6 +225,11 @@ const DocumentosIdRoute = DocumentosIdRouteImport.update({
   path: '/documentos/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PacientesIdBibliotecaRoute = PacientesIdBibliotecaRouteImport.update({
+  id: '/pacientes_/$id_/biblioteca',
+  path: '/pacientes/$id/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PFirmarDocIdRoute = PFirmarDocIdRouteImport.update({
   id: '/p_/firmar/$docId',
   path: '/p/firmar/$docId',
@@ -285,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
+  '/pacientes/$id/biblioteca': typeof PacientesIdBibliotecaRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -326,6 +333,7 @@ export interface FileRoutesByTo {
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
   '/p/firmar/$docId': typeof PFirmarDocIdRoute
+  '/pacientes/$id/biblioteca': typeof PacientesIdBibliotecaRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -368,6 +376,7 @@ export interface FileRoutesById {
   '/p_/activar/$token': typeof PActivarTokenRoute
   '/p_/documentos_/$id': typeof PDocumentosIdRoute
   '/p_/firmar/$docId': typeof PFirmarDocIdRoute
+  '/pacientes_/$id_/biblioteca': typeof PacientesIdBibliotecaRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -411,6 +420,7 @@ export interface FileRouteTypes {
     | '/p/activar/$token'
     | '/p/documentos/$id'
     | '/p/firmar/$docId'
+    | '/pacientes/$id/biblioteca'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -452,6 +462,7 @@ export interface FileRouteTypes {
     | '/p/activar/$token'
     | '/p/documentos/$id'
     | '/p/firmar/$docId'
+    | '/pacientes/$id/biblioteca'
   id:
     | '__root__'
     | '/'
@@ -493,6 +504,7 @@ export interface FileRouteTypes {
     | '/p_/activar/$token'
     | '/p_/documentos_/$id'
     | '/p_/firmar/$docId'
+    | '/pacientes_/$id_/biblioteca'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -535,6 +547,7 @@ export interface RootRouteChildren {
   PActivarTokenRoute: typeof PActivarTokenRoute
   PDocumentosIdRoute: typeof PDocumentosIdRoute
   PFirmarDocIdRoute: typeof PFirmarDocIdRoute
+  PacientesIdBibliotecaRoute: typeof PacientesIdBibliotecaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -784,6 +797,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentosIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pacientes_/$id_/biblioteca': {
+      id: '/pacientes_/$id_/biblioteca'
+      path: '/pacientes/$id/biblioteca'
+      fullPath: '/pacientes/$id/biblioteca'
+      preLoaderRoute: typeof PacientesIdBibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/p_/firmar/$docId': {
       id: '/p_/firmar/$docId'
       path: '/p/firmar/$docId'
@@ -855,6 +875,7 @@ const rootRouteChildren: RootRouteChildren = {
   PActivarTokenRoute: PActivarTokenRoute,
   PDocumentosIdRoute: PDocumentosIdRoute,
   PFirmarDocIdRoute: PFirmarDocIdRoute,
+  PacientesIdBibliotecaRoute: PacientesIdBibliotecaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

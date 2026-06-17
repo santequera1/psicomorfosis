@@ -1125,6 +1125,12 @@ function TabPrescripcion({ patientId }: { patientId: string }) {
 }
 
 function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) {
+  // Cuenta cuántos son PDFs reales — solo mostramos el botón a la
+  // biblioteca PDFSlick si hay al menos 1, para no llevar a una vista
+  // vacía con un mensaje "no hay PDFs".
+  const pdfCount = rows.filter((r: any) =>
+    r.mime === "application/pdf" || (r.kind === "file" && /\.pdf$/i.test(r.name ?? "")),
+  ).length;
   return (
     <div className="rounded-xl border border-line-200 bg-surface">
       <div className="px-5 py-4 border-b border-line-100 flex items-center justify-between flex-wrap gap-2">
@@ -1137,6 +1143,17 @@ function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) 
           >
             Nuevo documento <ChevronRight className="h-3.5 w-3.5" />
           </Link>
+          {pdfCount > 0 && (
+            <Link
+              to="/pacientes/$id/biblioteca"
+              params={{ id: patientId }}
+              className="h-9 px-3 rounded-md border border-brand-200 bg-brand-50/50 text-xs text-brand-800 hover:border-brand-400 inline-flex items-center gap-1.5"
+              title={`Ver ${pdfCount} PDF${pdfCount === 1 ? "" : "s"} en lector integrado con sidebar`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Ver PDFs ({pdfCount})
+            </Link>
+          )}
           <Link
             to="/documentos"
             search={{ paciente: patientId }}
