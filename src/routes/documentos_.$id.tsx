@@ -39,6 +39,26 @@ function DocumentDetailPage() {
   });
   const { data: workspace } = useWorkspace();
 
+  // Si el doc es un PDF con paciente asignado, redirigimos a la
+  // biblioteca multi-PDF de ese paciente con este preseleccionado.
+  // Así cualquier camino para abrir un PDF de paciente (lista global,
+  // carpeta por paciente, link directo) termina en la vista con sidebar
+  // de todos los PDFs del paciente. `replace: true` evita ensuciar el
+  // historial — el botón "atrás" del browser regresa al lugar real.
+  useEffect(() => {
+    if (!doc) return;
+    const isPdf = doc.mime === "application/pdf"
+      || (doc.kind === "file" && /\.pdf$/i.test(doc.original_name ?? doc.name ?? ""));
+    if (isPdf && doc.patient_id) {
+      navigate({
+        to: "/pacientes/$id/biblioteca",
+        params: { id: doc.patient_id },
+        search: { doc: doc.id },
+        replace: true,
+      });
+    }
+  }, [doc, navigate]);
+
   // Contexto de variables: paciente vinculado al doc + profesional + clínica + fecha.
   // Se refetchea cuando cambia el patient_id (vincular/desvincular paciente).
   const { data: variableContext } = useQuery({
