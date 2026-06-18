@@ -265,11 +265,19 @@ function ViewerPanel({
 
   const source = editorMode ? (editorBuffer ?? undefined) : fileUrl ?? undefined;
 
+  // Zoom inicial: 85% en desktop (Nathaly pidió ese default — page-fit
+  // dejaba el PDF muy chico en monitores grandes); page-fit en mobile
+  // para que se vea entero sin scroll horizontal.
+  const initialScale = typeof window !== "undefined"
+    && window.matchMedia("(min-width: 1024px)").matches
+    ? "0.85"
+    : "page-fit";
+
   const {
     isDocumentLoaded, viewerRef, thumbsRef, store, usePDFSlickStore,
     PDFSlickViewer, PDFSlickThumbnails, error,
   } = usePDFSlick(source, {
-    scaleValue: "page-fit",
+    scaleValue: initialScale,
     singlePageViewer: false,
     removePageBorders: false,
   });

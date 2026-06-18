@@ -34,11 +34,18 @@ export default function PdfSingleViewer({ url, name, minHeight = "80vh" }: Props
   const [searchTerm, setSearchTerm] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Zoom inicial: 85% en desktop, page-fit en mobile (consistente con
+  // la biblioteca multi).
+  const initialScale = typeof window !== "undefined"
+    && window.matchMedia("(min-width: 1024px)").matches
+    ? "0.85"
+    : "page-fit";
+
   const {
     isDocumentLoaded, viewerRef, thumbsRef, store, usePDFSlickStore,
     PDFSlickViewer, PDFSlickThumbnails, error,
   } = usePDFSlick(url, {
-    scaleValue: "page-fit",
+    scaleValue: initialScale,
     singlePageViewer: false,
     removePageBorders: false,
   });
