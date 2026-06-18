@@ -38,9 +38,11 @@ export type DocRow = {
 type Props = {
   docs: DocRow[];
   patientName: string;
+  /** Si viene, se preselecciona ese PDF al cargar (ignorado si no es PDF). */
+  initialDocId?: string | null;
 };
 
-export default function PdfLibraryViewer({ docs, patientName }: Props) {
+export default function PdfLibraryViewer({ docs, patientName, initialDocId }: Props) {
   // Filtra solo los PDFs reales. Documentos del editor (kind=editor) sin
   // archivo físico no aplican; los que sean .docx/img tampoco.
   const pdfDocs = useMemo(
@@ -51,7 +53,14 @@ export default function PdfLibraryViewer({ docs, patientName }: Props) {
     [docs],
   );
 
-  const [selectedId, setSelectedId] = useState<string | null>(pdfDocs[0]?.id ?? null);
+  // Preselección: si viene un initialDocId Y es PDF, usarlo; si no, el
+  // primer PDF de la lista. Esto permite deep-link desde la ficha del
+  // paciente (?doc=<id>) sin perder el comportamiento default.
+  const initialId = useMemo(() => {
+    if (initialDocId && pdfDocs.some((d) => d.id === initialDocId)) return initialDocId;
+    return pdfDocs[0]?.id ?? null;
+  }, [initialDocId, pdfDocs]);
+  const [selectedId, setSelectedId] = useState<string | null>(initialId);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [thumbsOpen, setThumbsOpen] = useState(false);
   const [search, setSearch] = useState("");

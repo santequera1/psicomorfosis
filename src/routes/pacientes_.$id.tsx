@@ -1172,31 +1172,47 @@ function TabDocumentos({ rows, patientId }: { rows: any[]; patientId: string }) 
         </div>
       ) : (
         <ul className="divide-y divide-line-100">
-          {rows.map((d) => (
-            <Link key={d.id} to="/documentos/$id" params={{ id: d.id }} className="contents">
-              <li className="px-5 py-3 flex items-center gap-3 hover:bg-bg-100/40 cursor-pointer">
-                <div className="h-9 w-9 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-ink-900 truncate">{d.name}</div>
-                  <div className="text-xs text-ink-500 tabular">
-                    {new Date(d.updated_at).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
-                    {d.size_kb ? ` · ${d.size_kb} KB` : ""}
-                    {d.kind === "file" ? " · 📎 Archivo" : " · ✍ Editor"}
+          {rows.map((d) => {
+            // Click condicional según tipo:
+            //  - PDFs van al viewer integrado nuevo (biblioteca con
+            //    sidebar de todos los PDFs del paciente, este preseleccionado
+            //    vía ?doc=<id>). El psicólogo puede saltar a otros sin
+            //    salir del viewer.
+            //  - Editor de la app, DOCX, imágenes, etc. siguen abriendo
+            //    en /documentos/$id porque ahí tienen su UX específica
+            //    (editar, firmar, descargar).
+            const isPdf = d.mime === "application/pdf"
+              || (d.kind === "file" && /\.pdf$/i.test(d.name ?? ""));
+            const linkProps = isPdf
+              ? { to: "/pacientes/$id/biblioteca" as const, params: { id: patientId }, search: { doc: d.id } }
+              : { to: "/documentos/$id" as const, params: { id: d.id } };
+            return (
+              <Link key={d.id} {...linkProps} className="contents">
+                <li className="px-5 py-3 flex items-center gap-3 hover:bg-bg-100/40 cursor-pointer">
+                  <div className="h-9 w-9 rounded-md bg-brand-50 text-brand-800 flex items-center justify-center shrink-0">
+                    <FileText className="h-4 w-4" />
                   </div>
-                </div>
-                <span className={
-                  "text-[11px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium capitalize " +
-                  (d.status === "firmado" ? "bg-success-soft text-success"
-                    : d.status === "pendiente_firma" ? "bg-warning-soft text-risk-moderate"
-                      : "bg-bg-100 text-ink-500")
-                }>
-                  {(d.status ?? "borrador").replace("_", " ")}
-                </span>
-              </li>
-            </Link>
-          ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-ink-900 truncate">{d.name}</div>
+                    <div className="text-xs text-ink-500 tabular">
+                      {new Date(d.updated_at).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+                      {d.size_kb ? ` · ${d.size_kb} KB` : ""}
+                      {d.kind === "file" ? " · 📎 Archivo" : " · ✍ Editor"}
+                      {isPdf ? " · PDF" : ""}
+                    </div>
+                  </div>
+                  <span className={
+                    "text-[11px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium capitalize " +
+                    (d.status === "firmado" ? "bg-success-soft text-success"
+                      : d.status === "pendiente_firma" ? "bg-warning-soft text-risk-moderate"
+                        : "bg-bg-100 text-ink-500")
+                  }>
+                    {(d.status ?? "borrador").replace("_", " ")}
+                  </span>
+                </li>
+              </Link>
+            );
+          })}
         </ul>
       )}
     </div>

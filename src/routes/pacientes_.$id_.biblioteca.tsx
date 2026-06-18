@@ -20,11 +20,19 @@ export const Route = createFileRoute("/pacientes_/$id_/biblioteca")({
   head: ({ params }: { params: { id: string } }) => ({
     meta: [{ title: `Biblioteca · ${params.id} · Psicomorfosis` }],
   }),
+  // ?doc=<id> permite deep-link a un PDF específico desde la lista de
+  // documentos del paciente. Si no viene, la biblioteca abre el primer
+  // PDF disponible automáticamente.
+  validateSearch: (s): { doc?: string } => {
+    const v = (s as { doc?: unknown }).doc;
+    return typeof v === "string" && v.length > 0 ? { doc: v } : {};
+  },
   component: BibliotecaPage,
 });
 
 function BibliotecaPage() {
   const { id } = useParams({ from: "/pacientes_/$id_/biblioteca" });
+  const search = Route.useSearch();
   const navigate = useNavigate();
 
   const { data: patient, isLoading: loadingPatient } = useQuery({
@@ -97,6 +105,7 @@ function BibliotecaPage() {
           <PdfLibraryViewer
             docs={docs as unknown as DocRow[]}
             patientName={patientName}
+            initialDocId={search.doc ?? null}
           />
         </Suspense>
       </div>
