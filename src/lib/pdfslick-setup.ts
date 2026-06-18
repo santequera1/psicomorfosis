@@ -1,19 +1,31 @@
 /**
  * Setup del worker de PDF.js para PDFSlick.
  *
- * PDF.js corre el render en un Worker para no bloquear el main thread.
- * Vite tiene que saber DÓNDE servir el archivo del worker. Lo importamos
- * con `?url` para que Vite lo procese como asset estático y nos devuelva
- * la URL final (incluye el hash de build, vive bajo /_build/assets/...
- * en producción).
+ * Servimos el worker desde `/pdfjs-worker.mjs` (en public/, copia del
+ * archivo de node_modules/pdfjs-dist/build/) en lugar de dejar que
+ * Vite lo procese con hash bajo `/assets/`. Razón:
  *
- * Sin este setup, PDFSlick intenta cargar el worker desde un CDN o
- * desde la URL relativa al script — ambas fallan en producción detrás
- * de nginx con cache-control agresivo.
+ *   El worker viene de la lib pdfjs-dist y su contenido es estable
+ *   entre builds. Si Vite lo procesa con `?url`, el hash content-based
+ *   queda fijo (ej: pdf.worker.min-CrMmvqMo.mjs) build tras build.
+ *   Eso es problemático si en cualquier momento el worker se sirvió
+ *   con MIME incorrecto y `Cache-Control: immutable` (como pasó en
+ *   el incidente del 18 jun 2026): el browser cachea esa versión rota
+ *   PARA SIEMPRE y la URL fija nunca cambia para invalidarla.
+ *
+ *   Con un path estable bajo public/ + query versionado (?v=N) podemos:
+ *     - Forzar a TODOS los browsers a descargar fresh subiendo el
+ *       número de versión (cambio de query = URL nueva = cache miss).
+ *     - Servir desde el location `/` de nginx, sin `immutable`.
+ *
+ * Subir WORKER_VERSION invalida globalmente — útil para emergencias
+ * de cache. Aumentar también si se actualiza pdfjs-dist y el contenido
+ * del archivo cambia.
  */
-// eslint-disable-next-line import/no-unresolved
-import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { GlobalWorkerOptions } from "pdfjs-dist";
+
+const WORKER_VERSION = "1";
+const WORKER_URL = `/pdfjs-worker.mjs?v=${WORKER_VERSION}`;
 
 let configured = false;
 
@@ -24,6 +36,6 @@ let configured = false;
  */
 export function ensurePdfSlickSetup(): void {
   if (configured) return;
-  GlobalWorkerOptions.workerSrc = workerSrc;
+  GlobalWorkerOptions.workerSrc = WORKER_URL;
   configured = true;
 }
