@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePDFSlick } from "@pdfslick/react";
 import {
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2,
-  Loader2, AlertCircle,
+  Loader2, AlertCircle, Search, RotateCw, Presentation,
+  BookOpen, Columns, FileText, X,
 } from "lucide-react";
 import "@pdfslick/react/dist/pdf_viewer.css";
 import { ensurePdfSlickSetup } from "@/lib/pdfslick-setup";
@@ -10,26 +11,28 @@ import { cn } from "@/lib/utils";
 
 /**
  * Viewer single-PDF integrado con el tema de la app. Usado desde
- * /documentos/$id como reemplazo del iframe del browser cuando el doc
- * es PDF. Mismo motor que la biblioteca multi-PDF (PDFSlick + PDF.js
- * worker) — solo cambia que acá no hay sidebar de docs.
+ * /documentos/$id para PDFs sin patient_id (los que sí tienen paciente
+ * redirigen a /pacientes/$id/biblioteca con sidebar de todos sus PDFs).
  *
- * Lazy-loaded por el caller (React.lazy + Suspense) para no inflar el
- * bundle inicial.
+ * Mismas features que la biblioteca multi: paginación, zoom, búsqueda
+ * en texto, rotación, spread, presentación, thumbnails. Sin sidebar de
+ * docs porque acá es single.
  */
 
 ensurePdfSlickSetup();
 
 type Props = {
   url: string;
-  /** Solo para alt/title. */
   name?: string;
-  /** Altura mínima del área de render. Default 80vh. */
   minHeight?: string;
 };
 
 export default function PdfSingleViewer({ url, name, minHeight = "80vh" }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [thumbsOpen, setThumbsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const {
     isDocumentLoaded, viewerRef, thumbsRef, store, usePDFSlickStore,
@@ -43,101 +46,224 @@ export default function PdfSingleViewer({ url, name, minHeight = "80vh" }: Props
   const pageNumber = usePDFSlickStore((s) => s.pageNumber);
   const numPages = usePDFSlickStore((s) => s.numPages);
   const scale = usePDFSlickStore((s) => s.scale);
+  const spreadMode = usePDFSlickStore((s) => s.spreadMode);
 
-  function goPrev() {
+  const goPrev = useCallback(() => {
     const ps = store.getState();
     if (ps.pdfSlick && ps.pageNumber > 1) ps.pdfSlick.gotoPage(ps.pageNumber - 1);
-  }
-  function goNext() {
+  }, [store]);
+  const goNext = useCallback(() => {
     const ps = store.getState();
     if (ps.pdfSlick && ps.pageNumber < ps.numPages) ps.pdfSlick.gotoPage(ps.pageNumber + 1);
-  }
-  function zoomIn() {
-    const ps = store.getState();
-    if (ps.pdfSlick) ps.pdfSlick.increaseScale();
-  }
-  function zoomOut() {
-    const ps = store.getState();
-    if (ps.pdfSlick) ps.pdfSlick.decreaseScale();
-  }
-  function fitPage() {
+  }, [store]);
+  const zoomIn = useCallback(() => store.getState().pdfSlick?.increaseScale(), [store]);
+  const zoomOut = useCallback(() => store.getState().pdfSlick?.decreaseScale(), [store]);
+  const fitPage = useCallback(() => {
     const ps = store.getState();
     if (ps.pdfSlick) ps.pdfSlick.currentScaleValue = "page-fit";
-  }
-  function gotoPage(n: number) {
+  }, [store]);
+  const gotoPage = useCallback((n: number) => store.getState().pdfSlick?.gotoPage(n), [store]);
+  const rotate = useCallback(() => {
     const ps = store.getState();
-    if (ps.pdfSlick) ps.pdfSlick.gotoPage(n);
-  }
+    if (ps.pdfSlick) {
+      const next = (ps.pagesRotation + 90) % 360;
+      ps.pdfSlick.setRotation(next);
+    }
+  }, [store]);
+  const cycleSpread = useCallback(() => {
+    const ps = store.getState();
+    if (!ps.pdfSlick) return;
+    const next = (spreadMode + 1) % 3;
+    ps.pdfSlick.setSpreadMode(next);
+  }, [store, spreadMode]);
+
+  const runSearch = useCallback((term: string, direction: "forward" | "backward" = "forward") => {
+    const ps = store.getState();
+    const pdfSlick = ps.pdfSlick;
+    if (!pdfSlick) return;
+    const eb = (pdfSlick as unknown as { eventBus?: { dispatch: (name: string, args: object) => void } }).eventBus;
+    if (!eb) return;
+    eb.dispatch("find", {
+      type: "",
+      query: term,
+      caseSensitive: false,
+      highlightAll: true,
+      findPrevious: direction === "backward",
+    });
+  }, [store]);
+
+  const searchTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (!searchOpen) return;
+    if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(() => runSearch(searchTerm), 250);
+    return () => {
+      if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    };
+  }, [searchTerm, searchOpen, runSearch]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSearchOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [searchOpen]);
+
+  const togglePresent = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.();
+    }
+  }, []);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
 
   return (
     <div
-      className="rounded-lg border border-line-100 bg-surface overflow-hidden flex flex-col"
+      ref={containerRef}
+      className={cn(
+        "rounded-lg border border-line-100 bg-surface overflow-hidden flex flex-col",
+        isFullscreen && "rounded-none border-0",
+      )}
       style={{ minHeight }}
     >
       {/* Toolbar */}
-      <div className="h-11 px-3 border-b border-line-100 flex items-center gap-2 flex-wrap shrink-0">
-        {isDocumentLoaded && (
-          <>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={goPrev} disabled={pageNumber <= 1}
-                className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 disabled:opacity-40 inline-flex items-center justify-center"
-                title="Página anterior" aria-label="Anterior">
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span className="text-xs text-ink-700 tabular px-1">
-                {pageNumber}/{numPages}
-              </span>
-              <button type="button" onClick={goNext} disabled={pageNumber >= numPages}
-                className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 disabled:opacity-40 inline-flex items-center justify-center"
-                title="Página siguiente" aria-label="Siguiente">
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+      <div className="border-b border-line-100 shrink-0">
+        <div className="h-11 px-2 sm:px-3 flex items-center gap-1 sm:gap-2 flex-nowrap overflow-x-auto">
+          {isDocumentLoaded && (
+            <>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button type="button" onClick={goPrev} disabled={pageNumber <= 1}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 disabled:opacity-40 inline-flex items-center justify-center"
+                  title="Página anterior">
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="text-xs text-ink-700 tabular px-1 whitespace-nowrap">
+                  {pageNumber}/{numPages}
+                </span>
+                <button type="button" onClick={goNext} disabled={pageNumber >= numPages}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 disabled:opacity-40 inline-flex items-center justify-center"
+                  title="Página siguiente">
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
-            <div className="flex items-center gap-1 border-l border-line-200 pl-2">
-              <button type="button" onClick={zoomOut}
-                className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
-                title="Reducir zoom" aria-label="Reducir zoom">
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <span className="text-xs text-ink-700 tabular px-1 w-12 text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <button type="button" onClick={zoomIn}
-                className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
-                title="Aumentar zoom" aria-label="Aumentar zoom">
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-              <button type="button" onClick={fitPage}
-                className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
-                title="Ajustar a página" aria-label="Ajustar a página">
-                <Maximize2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
+              <div className="hidden sm:flex items-center gap-0.5 border-l border-line-200 pl-2 shrink-0">
+                <button type="button" onClick={zoomOut}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
+                  title="Reducir zoom">
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <span className="text-xs text-ink-700 tabular px-1 w-12 text-center">
+                  {Math.round(scale * 100)}%
+                </span>
+                <button type="button" onClick={zoomIn}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
+                  title="Aumentar zoom">
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={fitPage}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
+                  title="Ajustar a página">
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
-            <div className="flex items-center gap-1 border-l border-line-200 pl-2 ml-auto">
-              <button
-                type="button"
-                onClick={() => setThumbsOpen((v) => !v)}
-                className={cn(
-                  "h-7 px-2 rounded-md text-xs inline-flex items-center gap-1 transition-colors",
-                  thumbsOpen
-                    ? "bg-brand-50 text-brand-800 border border-brand-200/70"
-                    : "text-ink-700 hover:bg-bg-50",
-                )}
-                title="Miniaturas de páginas"
-              >
-                Páginas
-              </button>
-            </div>
-          </>
+              <div className="flex items-center gap-0.5 border-l border-line-200 pl-1 sm:pl-2 shrink-0 ml-auto">
+                <button type="button" onClick={() => setSearchOpen((v) => !v)}
+                  className={cn(
+                    "h-7 w-7 rounded-md inline-flex items-center justify-center",
+                    searchOpen ? "bg-brand-50 text-brand-800" : "text-ink-700 hover:bg-bg-50",
+                  )}
+                  title="Buscar en el documento">
+                  <Search className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={rotate}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
+                  title="Rotar 90°">
+                  <RotateCw className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={cycleSpread}
+                  className={cn(
+                    "h-7 w-7 rounded-md inline-flex items-center justify-center",
+                    spreadMode !== 0 ? "bg-brand-50 text-brand-800" : "text-ink-700 hover:bg-bg-50",
+                  )}
+                  title={spreadMode === 0 ? "Vista de 2 páginas" : "Cambiar disposición"}>
+                  {spreadMode === 0 ? <BookOpen className="h-3.5 w-3.5" /> : <Columns className="h-3.5 w-3.5" />}
+                </button>
+                <button type="button" onClick={togglePresent}
+                  className="h-7 w-7 rounded-md text-ink-700 hover:bg-bg-50 inline-flex items-center justify-center"
+                  title={isFullscreen ? "Salir de pantalla completa" : "Modo presentación"}>
+                  <Presentation className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThumbsOpen((v) => !v)}
+                  className={cn(
+                    "h-7 w-7 rounded-md inline-flex items-center justify-center",
+                    thumbsOpen ? "bg-brand-50 text-brand-800" : "text-ink-700 hover:bg-bg-50",
+                  )}
+                  title="Miniaturas de páginas"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {searchOpen && (
+          <div className="px-2 sm:px-3 py-2 border-t border-line-100 bg-bg-50 flex items-center gap-2">
+            <Search className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+            <input
+              autoFocus
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar en el documento…"
+              className="flex-1 h-8 px-2 rounded-md border border-line-200 bg-surface text-xs text-ink-900 outline-none focus:border-brand-400"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  runSearch(searchTerm, e.shiftKey ? "backward" : "forward");
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => runSearch(searchTerm, "backward")}
+              className="h-7 w-7 rounded-md text-ink-700 hover:bg-surface inline-flex items-center justify-center"
+              title="Anterior (Shift+Enter)"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => runSearch(searchTerm, "forward")}
+              className="h-7 w-7 rounded-md text-ink-700 hover:bg-surface inline-flex items-center justify-center"
+              title="Siguiente (Enter)"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSearchOpen(false); setSearchTerm(""); }}
+              className="h-7 w-7 rounded-md text-ink-700 hover:bg-surface inline-flex items-center justify-center"
+              title="Cerrar (Esc)"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
       {/* Viewer area */}
       <div className="flex-1 flex min-h-0">
         {thumbsOpen && isDocumentLoaded && (
-          <div className="w-32 shrink-0 border-r border-line-100 bg-bg-50 overflow-y-auto p-2">
+          <div className="hidden sm:block w-32 shrink-0 border-r border-line-100 bg-bg-50 overflow-y-auto p-2">
             <PDFSlickThumbnails
               thumbsRef={thumbsRef}
               usePDFSlickStore={usePDFSlickStore}
@@ -180,6 +306,7 @@ export default function PdfSingleViewer({ url, name, minHeight = "80vh" }: Props
                 <p className="text-xs text-ink-500 mt-1">
                   {String((error as { message?: string }).message ?? error)}
                 </p>
+                {name && <p className="text-xs text-ink-400 mt-2">{name}</p>}
               </div>
             </div>
           ) : !isDocumentLoaded ? (
