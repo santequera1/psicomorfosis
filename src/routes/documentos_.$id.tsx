@@ -1,6 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+
+// Viewer PDFSlick integrado con el tema de la app. Lazy-loaded para
+// no inflar el bundle inicial — PDF.js + worker pesan ~1.5MB y solo
+// debería cargarse cuando el doc abierto es PDF.
+const PdfSingleViewer = lazy(() => import("@/components/biblioteca/PdfSingleViewer"));
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -504,7 +509,16 @@ function FileViewerPage({ doc, onArchive, onDelete, onShareToggle, shareLoading 
         </header>
         <div className="rounded-xl bg-surface border border-line-200 p-4 min-h-[60vh]">
           {isPdf ? (
-            <iframe src={fileUrl} className="w-full h-[80vh] rounded-lg border border-line-100" title={doc.name} />
+            <Suspense
+              fallback={
+                <div className="h-[80vh] flex items-center justify-center text-ink-500 gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-xs">Cargando viewer…</span>
+                </div>
+              }
+            >
+              <PdfSingleViewer url={fileUrl} name={doc.name} minHeight="80vh" />
+            </Suspense>
           ) : isImage ? (
             <img src={fileUrl} alt={doc.name} className="max-w-full mx-auto rounded-lg" />
           ) : isDocLegacy ? (
