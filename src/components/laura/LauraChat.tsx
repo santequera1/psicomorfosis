@@ -112,6 +112,11 @@ export function LauraChat({ open, onClose }: Props) {
     staleTime: 60_000,
   });
 
+  // Estado derivado para el banner y para deshabilitar el input
+  // cuando Laura no puede responder (cuota al 100% o servicio caído).
+  const lauraStatus = deriveLauraStatus(health, quota);
+  const isResting = lauraStatus === "resting";
+
   // Avatar dinámico: el ÚNICO disparo de cambio es enviar el primer
   // mensaje del usuario en esta conversación. Una vez ocurre, persiste
   // en sessionStorage para que reabrir el chat mantenga el estado.
@@ -148,6 +153,11 @@ export function LauraChat({ open, onClose }: Props) {
     // no ve el nuevo texto, porque la closure capturó el state viejo.
     const trimmed = (overrideText ?? input).trim();
     if (!trimmed || sending) return;
+    // Si Laura está descansando (cuota agotada o servicio caído),
+    // bloqueamos el envío en el cliente para no gastar un round-trip
+    // que sabemos va a fallar. El backend igual está protegido si
+    // alguien fuerza la request — devuelve quota_exhausted.
+    if (isResting) return;
 
     setSending(true);
     setInput("");
@@ -252,7 +262,7 @@ export function LauraChat({ open, onClose }: Props) {
       setSending(false);
       abortRef.current = null;
     }
-  }, [input, sending, conversationId, activePatientId, currentPath, markSpoken, refetchUsage]);
+  }, [input, sending, isResting, conversationId, activePatientId, currentPath, markSpoken, refetchUsage]);
 
   const newConversation = useCallback(() => {
     if (sending) abortRef.current?.abort();
@@ -388,7 +398,10 @@ export function LauraChat({ open, onClose }: Props) {
           className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
         >
           {messages.length === 0 ? (
-            <EmptyState onPick={(text) => { void send(text); }} />
+            <EmptyState
+              onPick={(text) => { void send(text); }}
+              disabled={isResting}
+            />
           ) : (
             messages.map((m, i) => (
               <MessageBubble key={i} message={m} avatarActive={hasSpoken} />
@@ -407,26 +420,29 @@ export function LauraChat({ open, onClose }: Props) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={
-                activePatientId
-                  ? "Pregúntame sobre este paciente o sobre la app…"
-                  : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
+                isResting
+                  ? "Laura está descansando — escribir queda deshabilitado hasta la renovación"
+                  : activePatientId
+                    ? "Pregúntame sobre este paciente o sobre la app…"
+                    : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
               }
               rows={2}
               maxLength={8000}
-              disabled={sending}
+              disabled={sending || isResting}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   void send();
                 }
               }}
-              className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60"
+              className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               type="submit"
-              disabled={!input.trim() || sending}
-              className="h-11 w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 inline-flex items-center justify-center shrink-0"
+              disabled={!input.trim() || sending || isResting}
+              className="h-11 w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
               aria-label="Enviar"
+              title={isResting ? "Laura está descansando" : "Enviar"}
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
@@ -442,6 +458,25 @@ export function LauraChat({ open, onClose }: Props) {
 }
 
 // ─── Subcomponentes ──────────────────────────────────────────────────
+
+/**
+ * Estado derivado del banner usado para deshabilitar el input cuando
+ * corresponda. "resting" = no se puede enviar (cuota al 100% o
+ * servicio caído). "high_demand" sigue habilitado (todavía hay margen).
+ */
+type LauraStatus = "available" | "high_demand" | "resting";
+
+function deriveLauraStatus(
+  health: { ok: boolean; subscription?: { ok: boolean } } | undefined,
+  quota: { session: { percent: number } | null } | undefined,
+): LauraStatus {
+  if (!health) return "available";
+  const serviceDown = !health.ok || (health.subscription && !health.subscription.ok);
+  const sessionPct = quota?.session?.percent ?? null;
+  if (serviceDown || (sessionPct !== null && sessionPct >= 100)) return "resting";
+  if (sessionPct !== null && sessionPct >= 80) return "high_demand";
+  return "available";
+}
 
 /**
  * Convierte la fecha de reset que devuelve Claude Code CLI ("Jun 22,
@@ -650,13 +685,21 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
   );
 }
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({
+  onPick, disabled = false,
+}: {
+  onPick: (text: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 gap-4">
       <img
         src={AVATAR_INITIAL}
         alt=""
-        className="h-32 w-32 rounded-2xl bg-brand-50 shadow-md object-cover ring-4 ring-brand-50/50"
+        className={cn(
+          "h-32 w-32 rounded-2xl bg-brand-50 shadow-md object-cover ring-4 ring-brand-50/50",
+          disabled && "grayscale opacity-60",
+        )}
       />
       <div>
         <h3 className="font-serif text-xl text-ink-900">Hola, soy Laura</h3>
@@ -666,20 +709,31 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
         </p>
       </div>
       <div className="w-full max-w-xs space-y-2 mt-1">
-        <SuggestionChip text="¿Cómo agendo una cita?" onPick={onPick} />
-        <SuggestionChip text="Dame ejercicios para ansiedad social" onPick={onPick} />
-        <SuggestionChip text="¿Cómo agrego un diagnóstico DSM-5?" onPick={onPick} />
+        <SuggestionChip text="¿Cómo agendo una cita?" onPick={onPick} disabled={disabled} />
+        <SuggestionChip text="Dame ejercicios para ansiedad social" onPick={onPick} disabled={disabled} />
+        <SuggestionChip text="¿Cómo agrego un diagnóstico DSM-5?" onPick={onPick} disabled={disabled} />
       </div>
     </div>
   );
 }
 
-function SuggestionChip({ text, onPick }: { text: string; onPick: (text: string) => void }) {
+function SuggestionChip({
+  text, onPick, disabled = false,
+}: {
+  text: string;
+  onPick: (text: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={() => onPick(text)}
-      className="w-full text-left text-xs text-ink-700 px-3 py-2 rounded-lg border border-line-200 bg-surface hover:border-brand-400 hover:bg-brand-50/40 active:scale-[0.99] transition-all"
+      disabled={disabled}
+      className={cn(
+        "w-full text-left text-xs text-ink-700 px-3 py-2 rounded-lg border border-line-200 bg-surface",
+        "hover:border-brand-400 hover:bg-brand-50/40 active:scale-[0.99] transition-all",
+        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-line-200 disabled:hover:bg-surface disabled:active:scale-100",
+      )}
     >
       💡 {text}
     </button>
