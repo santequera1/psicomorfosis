@@ -443,6 +443,68 @@ export function LauraChat({ open, onClose }: Props) {
 
 // ─── Subcomponentes ──────────────────────────────────────────────────
 
+/**
+ * Convierte la fecha de reset que devuelve Claude Code CLI ("Jun 22,
+ * 8:29pm (UTC)" o "Jun 24, 10:59am (UTC)") a hora local Colombia con
+ * formato amigable. Si no parsea, devuelve el string original como
+ * fallback (mejor algo que nada).
+ *
+ * Devuelve algo como:
+ *   - mismo día:  "3:29 p. m."
+ *   - mañana:     "mañana a las 5:59 a. m."
+ *   - otro día:   "mié 24 a las 5:59 a. m."
+ */
+function formatResetTimeColombia(resetStr: string | null | undefined): string | null {
+  if (!resetStr) return null;
+  const m = resetStr.match(/^(\w{3})\s+(\d+),?\s+(\d{1,2}):(\d{2})\s*(am|pm)\s*\(UTC\)$/i);
+  if (!m) return resetStr;
+  const monthMap: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  };
+  const month = monthMap[m[1].toLowerCase()];
+  if (month === undefined) return resetStr;
+  const day = parseInt(m[2], 10);
+  let hour = parseInt(m[3], 10);
+  const min = parseInt(m[4], 10);
+  const ampm = m[5].toLowerCase();
+  if (ampm === "pm" && hour !== 12) hour += 12;
+  if (ampm === "am" && hour === 12) hour = 0;
+
+  // Construimos en UTC. Asumimos el año actual; si el resultado queda
+  // en el pasado (caso raro: cambio de año), probamos año+1.
+  const now = new Date();
+  let utc = new Date(Date.UTC(now.getUTCFullYear(), month, day, hour, min, 0));
+  if (utc.getTime() < now.getTime() - 60_000) {
+    utc = new Date(Date.UTC(now.getUTCFullYear() + 1, month, day, hour, min, 0));
+  }
+
+  // Diferencia en días naturales considerando timezone Colombia
+  const todayCo = new Date(now.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const resetCo = new Date(utc.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const dayDiff = Math.floor(
+    (new Date(resetCo.getFullYear(), resetCo.getMonth(), resetCo.getDate()).getTime() -
+     new Date(todayCo.getFullYear(), todayCo.getMonth(), todayCo.getDate()).getTime()) /
+    (24 * 60 * 60 * 1000),
+  );
+
+  const timeStr = utc.toLocaleTimeString("es-CO", {
+    timeZone: "America/Bogota",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  if (dayDiff === 0) return timeStr;
+  if (dayDiff === 1) return `mañana a las ${timeStr}`;
+  const dayLabel = utc.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    weekday: "short",
+    day: "numeric",
+  });
+  return `${dayLabel} a las ${timeStr}`;
+}
+
 function BetaBanner({
   health, usage, quota,
 }: {
@@ -464,44 +526,37 @@ function BetaBanner({
 
   const sub = health.subscription;
   const messages = usage?.messages_today ?? 0;
-  const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
 
   // Detección de "no disponible":
-  //   1. DARIO down (health.ok = false)
-  //   2. Suscripción marcada explícitamente como agotada por DARIO
-  //   3. % de sesión == 100% según Claude Code CLI (la fuente real)
+  //   1. Servicio interno caído (health.ok = false)
+  //   2. Cuota agotada explícitamente
+  //   3. Uso de la sesión >= 100% según la fuente real
   const sessionPct = quota?.session?.percent ?? null;
-  const weekPct = quota?.week?.percent ?? null;
   const sessionFull = sessionPct !== null && sessionPct >= 100;
   const unavailable = !health.ok || (sub && !sub.ok) || sessionFull;
+
+  const resetCo = formatResetTimeColombia(quota?.session?.resets_at);
 
   if (unavailable) {
     return (
       <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200">
         <p className="text-[11px] text-rose-900 font-semibold leading-snug flex items-center gap-1.5">
           <AlertTriangle className="h-3 w-3" />
-          Laura no está disponible ahora
+          Laura IA no está disponible ahora
         </p>
-        {quota?.session?.resets_at ? (
+        {resetCo ? (
           <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
-            Estará disponible nuevamente el <strong className="tabular">{quota.session.resets_at}</strong>.
-          </p>
-        ) : sub?.expires_in ? (
-          <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
-            Estará disponible en <strong className="tabular">{sub.expires_in}</strong>.
+            Volverá a estar disponible {resetCo}{resetCo.includes("las") || resetCo.includes("mañana") || /\d/.test(resetCo) ? " (Colombia)" : ""}.
           </p>
         ) : (
           <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
-            {health.error
-              ? "Estará disponible cuando se restablezca el servicio."
-              : "Estará disponible cuando se renueve la suscripción."}
+            Estaremos restableciendo el servicio pronto.
           </p>
         )}
       </div>
     );
   }
 
-  // Color de la barra según el % real reportado por Claude
   const pct = sessionPct ?? 0;
   const barColor =
     pct < 60 ? "bg-emerald-500" :
@@ -510,25 +565,19 @@ function BetaBanner({
 
   return (
     <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
+      {/* Header: estado + badge beta */}
       <p className="text-[11px] text-amber-900 font-semibold leading-snug flex items-center gap-1.5">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Uso de la asistente activa
-        {sub?.expires_in && (
-          <span className="font-normal text-amber-900/80">
-            · se renueva en <strong className="tabular">{sub.expires_in}</strong>
-          </span>
-        )}
+        Laura IA · Beta
       </p>
 
-      {/* Barra de cuota REAL reportada por Claude (claude -p /usage).
-          Solo aparece cuando ya cargó el primer fetch (puede tardar
-          ~3-5s la primera vez del día). Mientras tanto el banner se
-          ve sin barra y eso está bien. */}
+      {/* Barra de uso (solo si ya cargó el primer fetch). Mientras tanto
+          el banner se ve sin barra durante 3-5s la primera vez del día. */}
       {sessionPct !== null && (
         <>
           <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-amber-900/80">
-            <span>Sesión actual</span>
-            <span className="tabular font-medium">{sessionPct}% usado</span>
+            <span>Uso disponible</span>
+            <span className="tabular font-medium">{sessionPct}% utilizado</span>
           </div>
           <div className="mt-0.5 h-1.5 w-full rounded-full bg-amber-100/80 overflow-hidden">
             <div
@@ -536,29 +585,23 @@ function BetaBanner({
               style={{ width: `${Math.max(2, pct)}%` }}
             />
           </div>
-          {quota?.session?.resets_at && (
-            <p className="text-[10px] text-amber-900/70 mt-0.5 leading-snug">
-              Se restablece el <span className="tabular">{quota.session.resets_at}</span>
-            </p>
-          )}
-          {weekPct !== null && (
-            <p className="text-[10px] text-amber-900/60 mt-1 leading-snug">
-              Semanal (todos los modelos): <span className="tabular font-medium">{weekPct}% usado</span>
-              {quota?.week?.resets_at && (
-                <> · se restablece el <span className="tabular">{quota.week.resets_at}</span></>
-              )}
+          {resetCo && (
+            <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
+              Próxima renovación: <strong className="tabular">{resetCo}</strong>{" "}
+              (Colombia)
             </p>
           )}
         </>
       )}
 
-      <p className="text-[10px] text-amber-900/70 mt-1.5 leading-snug">
-        Hoy usaste {messages} mensaje{messages === 1 ? "" : "s"}{" "}
-        · {totalTokens.toLocaleString("es-CO")} tokens locales
+      <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
+        Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"}</strong>{" "}
+        realizada{messages === 1 ? "" : "s"}
       </p>
-      <p className="text-[10px] text-amber-900/70 mt-1 leading-snug">
-        Laura es una beta que usa una suscripción compartida de Claude. Si alcanza
-        su límite, no estará disponible hasta que se renueve.
+
+      <p className="text-[10px] text-amber-900/65 mt-1.5 leading-snug">
+        Laura está en fase beta. Los límites de uso nos ayudan a mantener
+        la estabilidad mientras mejoramos la experiencia.
       </p>
     </div>
   );
