@@ -18,7 +18,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { buildSystemPrompt, streamMessage, healthCheck, darioStatus, LAURA_MODEL } from "../lib/laura.js";
+import { buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage, LAURA_MODEL } from "../lib/laura.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -37,6 +37,14 @@ router.get("/laura/health", async (_req, res) => {
       error: ds.error ?? null,
     },
   });
+});
+
+// Cuota real de Claude (sesión + semanal %) — endpoint separado del
+// health porque el comando subyacente (claude -p /usage) tarda ~3-5s
+// la primera vez. Cache 5min interna; siguientes calls instantáneos.
+router.get("/laura/quota", async (_req, res) => {
+  const q = await claudeUsage();
+  res.json(q);
 });
 
 // ── Usage diario ──────────────────────────────────────────────────────

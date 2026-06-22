@@ -384,3 +384,78 @@ export async function darioStatus() {
     return result;
   }
 }
+
+// ─── Cuota real de Claude (parseado de `claude -p /usage`) ─────────────
+//
+// Claude Code CLI sí expone los % reales que muestra claude.ai. Lo
+// ejecutamos via child process y parseamos. El comando tarda ~3-5s
+// (consulta API de Anthropic), así que cacheamos 5 min y devolvemos
+// "stale" inmediato si tenemos algo en cache mientras refresca background.
+
+let _quotaCache = null;
+let _quotaCacheAt = 0;
+let _quotaRefreshInFlight = null;
+const QUOTA_TTL_MS = 5 * 60_000;
+
+async function _fetchClaudeUsage() {
+  const cmd = process.env.LAURA_CLAUDE_BIN || "claude";
+  const { stdout } = await exec(`${cmd} -p "/usage"`, {
+    timeout: 20_000,
+    env: { ...process.env, PATH: `${process.env.PATH}:/home/ubuntu/.npm-global/bin` },
+  });
+  const text = String(stdout);
+  // Patrón típico:
+  //   Current session: 93% used · resets Jun 22, 8:29pm (UTC)
+  //   Current week (all models): 17% used · resets Jun 24, 10:59am (UTC)
+  const sessionMatch = text.match(/Current session:\s*(\d+)% used · resets ([^\n]+)/i);
+  const weekMatch    = text.match(/Current week[^:]*:\s*(\d+)% used · resets ([^\n]+)/i);
+  return {
+    session: sessionMatch
+      ? { percent: Number(sessionMatch[1]), resets_at: sessionMatch[2].trim() }
+      : null,
+    week: weekMatch
+      ? { percent: Number(weekMatch[1]), resets_at: weekMatch[2].trim() }
+      : null,
+    raw: text.trim(),
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Devuelve la cuota actual de la suscripción Claude tal como la
+ * reporta `claude -p /usage`. Estructura:
+ *
+ *   { session: { percent, resets_at }, week: { percent, resets_at } }
+ *
+ * Si nunca se ha consultado, hace un fetch sincrónico (~3-5s) la
+ * primera vez. Llamadas siguientes devuelven la cache. Si la cache
+ * está stale (>5min), responde con la cache vieja Y dispara un
+ * refresh en background — el cliente nunca espera.
+ */
+export async function claudeUsage({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  const fresh = _quotaCache && now - _quotaCacheAt < QUOTA_TTL_MS;
+
+  if (fresh && !forceRefresh) return _quotaCache;
+
+  // Si hay cache stale, devolvemos eso ya y refrescamos en background.
+  if (_quotaCache && !forceRefresh) {
+    if (!_quotaRefreshInFlight) {
+      _quotaRefreshInFlight = _fetchClaudeUsage()
+        .then((r) => { _quotaCache = r; _quotaCacheAt = Date.now(); })
+        .catch((err) => { console.warn("[laura] claudeUsage refresh failed:", err.message); })
+        .finally(() => { _quotaRefreshInFlight = null; });
+    }
+    return _quotaCache;
+  }
+
+  // Primera vez (o forced): hacemos fetch sincrónico.
+  try {
+    const r = await _fetchClaudeUsage();
+    _quotaCache = r;
+    _quotaCacheAt = now;
+    return r;
+  } catch (err) {
+    return { error: err?.message ?? String(err), session: null, week: null };
+  }
+}

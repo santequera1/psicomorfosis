@@ -2215,6 +2215,16 @@ export const api = {
     request<{ date: string; messages_today: number; tokens_in_today: number; tokens_out_today: number }>(
       "/api/laura/usage",
     ),
+  /** Cuota real de Claude (% sesión + % semana) parseada de `claude -p /usage`.
+   *  Cache 5min en el server; primera llamada del día tarda ~3-5s,
+   *  siguientes son instantáneas. */
+  lauraQuota: () =>
+    request<{
+      session: { percent: number; resets_at: string } | null;
+      week: { percent: number; resets_at: string } | null;
+      fetched_at?: string;
+      error?: string;
+    }>("/api/laura/quota"),
   lauraListConversations: (params?: { limit?: number }) =>
     request<{
       items: Array<{

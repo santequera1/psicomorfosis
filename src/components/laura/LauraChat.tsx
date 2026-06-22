@@ -100,6 +100,17 @@ export function LauraChat({ open, onClose }: Props) {
     enabled: open,
     refetchInterval: 30_000,
   });
+  // Cuota real de Claude (% sesión + % semana). Primera llamada
+  // tarda ~3-5s; siguientes instantáneas por cache server-side.
+  const { data: quota } = useQuery({
+    queryKey: ["laura-quota"],
+    queryFn: () => api.lauraQuota(),
+    enabled: open,
+    // Refresh cada 2 min — la barra se actualiza sola si el usuario
+    // deja el chat abierto.
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
 
   // Avatar dinámico: el ÚNICO disparo de cambio es enviar el primer
   // mensaje del usuario en esta conversación. Una vez ocurre, persiste
@@ -351,7 +362,7 @@ export function LauraChat({ open, onClose }: Props) {
         </header>
 
         {/* Banner cuota/estado */}
-        <BetaBanner health={health} usage={usage} />
+        <BetaBanner health={health} usage={usage} quota={quota} />
 
         {/* Contexto activo */}
         {activePatientId && messages.length === 0 && (
@@ -433,7 +444,7 @@ export function LauraChat({ open, onClose }: Props) {
 // ─── Subcomponentes ──────────────────────────────────────────────────
 
 function BetaBanner({
-  health, usage,
+  health, usage, quota,
 }: {
   health?: {
     ok: boolean;
@@ -443,6 +454,11 @@ function BetaBanner({
     subscription?: { ok: boolean; status: string | null; expires_in: string | null; error?: string | null };
   };
   usage?: { messages_today: number; tokens_in_today: number; tokens_out_today: number };
+  quota?: {
+    session: { percent: number; resets_at: string } | null;
+    week: { percent: number; resets_at: string } | null;
+    error?: string;
+  };
 }) {
   if (!health) return null;
 
@@ -450,14 +466,14 @@ function BetaBanner({
   const messages = usage?.messages_today ?? 0;
   const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
 
-  // Estado "no disponible" = DARIO down O suscripción Claude marcada
-  // como no-healthy. El % real de uso de Claude (91%, etc.) NO está
-  // accesible vía DARIO — solo a través de claude.ai. Por eso NO
-  // mostramos barra de progreso de cuota: la única info real que
-  // tenemos es "activa o no" + "cuándo se renueva". Mostrar una barra
-  // que mida cosas locales (mensajes del día contra un tope inventado)
-  // resulta engañoso si el usuario asume que es el % de Claude.
-  const unavailable = !health.ok || (sub && !sub.ok);
+  // Detección de "no disponible":
+  //   1. DARIO down (health.ok = false)
+  //   2. Suscripción marcada explícitamente como agotada por DARIO
+  //   3. % de sesión == 100% según Claude Code CLI (la fuente real)
+  const sessionPct = quota?.session?.percent ?? null;
+  const weekPct = quota?.week?.percent ?? null;
+  const sessionFull = sessionPct !== null && sessionPct >= 100;
+  const unavailable = !health.ok || (sub && !sub.ok) || sessionFull;
 
   if (unavailable) {
     return (
@@ -466,7 +482,11 @@ function BetaBanner({
           <AlertTriangle className="h-3 w-3" />
           Laura no está disponible ahora
         </p>
-        {sub?.expires_in ? (
+        {quota?.session?.resets_at ? (
+          <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
+            Estará disponible nuevamente el <strong className="tabular">{quota.session.resets_at}</strong>.
+          </p>
+        ) : sub?.expires_in ? (
           <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
             Estará disponible en <strong className="tabular">{sub.expires_in}</strong>.
           </p>
@@ -481,6 +501,13 @@ function BetaBanner({
     );
   }
 
+  // Color de la barra según el % real reportado por Claude
+  const pct = sessionPct ?? 0;
+  const barColor =
+    pct < 60 ? "bg-emerald-500" :
+    pct < 85 ? "bg-amber-500" :
+    "bg-rose-500";
+
   return (
     <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
       <p className="text-[11px] text-amber-900 font-semibold leading-snug flex items-center gap-1.5">
@@ -492,13 +519,46 @@ function BetaBanner({
           </span>
         )}
       </p>
-      <p className="text-[11px] text-amber-900/80 leading-snug mt-0.5 tabular">
+
+      {/* Barra de cuota REAL reportada por Claude (claude -p /usage).
+          Solo aparece cuando ya cargó el primer fetch (puede tardar
+          ~3-5s la primera vez del día). Mientras tanto el banner se
+          ve sin barra y eso está bien. */}
+      {sessionPct !== null && (
+        <>
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-amber-900/80">
+            <span>Sesión actual</span>
+            <span className="tabular font-medium">{sessionPct}% usado</span>
+          </div>
+          <div className="mt-0.5 h-1.5 w-full rounded-full bg-amber-100/80 overflow-hidden">
+            <div
+              className={cn("h-full transition-all duration-500", barColor)}
+              style={{ width: `${Math.max(2, pct)}%` }}
+            />
+          </div>
+          {quota?.session?.resets_at && (
+            <p className="text-[10px] text-amber-900/70 mt-0.5 leading-snug">
+              Se restablece el <span className="tabular">{quota.session.resets_at}</span>
+            </p>
+          )}
+          {weekPct !== null && (
+            <p className="text-[10px] text-amber-900/60 mt-1 leading-snug">
+              Semanal (todos los modelos): <span className="tabular font-medium">{weekPct}% usado</span>
+              {quota?.week?.resets_at && (
+                <> · se restablece el <span className="tabular">{quota.week.resets_at}</span></>
+              )}
+            </p>
+          )}
+        </>
+      )}
+
+      <p className="text-[10px] text-amber-900/70 mt-1.5 leading-snug">
         Hoy usaste {messages} mensaje{messages === 1 ? "" : "s"}{" "}
-        · {totalTokens.toLocaleString("es-CO")} tokens
+        · {totalTokens.toLocaleString("es-CO")} tokens locales
       </p>
       <p className="text-[10px] text-amber-900/70 mt-1 leading-snug">
         Laura es una beta que usa una suscripción compartida de Claude. Si alcanza
-        su límite diario, no estará disponible hasta que se renueve.
+        su límite, no estará disponible hasta que se renueve.
       </p>
     </div>
   );
