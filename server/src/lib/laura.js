@@ -145,6 +145,111 @@ function loadProfessionalContext(workspaceId, userId) {
   return { workspace: ws, user: u, professional: prof };
 }
 
+// ─── Resumen estructural del workspace ─────────────────────────────────
+//
+// Vista panorámica que Laura recibe en CADA turno (sea o no que haya un
+// paciente activo en contexto). Lo justo para responder preguntas como
+// "¿cuántos pacientes tengo?", "¿qué tengo mañana?", "¿quién está
+// pendiente de firmar X?", sin tener que cargar la BD entera en el
+// prompt. Tope de ~1500 tokens estimados.
+
+function loadWorkspaceSummary(workspaceId) {
+  // Conteos rápidos
+  const counts = {
+    patients_active: db.prepare(
+      "SELECT COUNT(*) AS n FROM patients WHERE workspace_id = ? AND status = 'activo' AND archived_at IS NULL",
+    ).get(workspaceId).n,
+    patients_total: db.prepare(
+      "SELECT COUNT(*) AS n FROM patients WHERE workspace_id = ? AND archived_at IS NULL",
+    ).get(workspaceId).n,
+    patients_archived: db.prepare(
+      "SELECT COUNT(*) AS n FROM patients WHERE workspace_id = ? AND archived_at IS NOT NULL",
+    ).get(workspaceId).n,
+    patients_at_risk: db.prepare(
+      "SELECT COUNT(*) AS n FROM patients WHERE workspace_id = ? AND risk IN ('moderado','alto') AND archived_at IS NULL",
+    ).get(workspaceId).n,
+  };
+
+  // Próximas 7 citas (no atendidas ni canceladas)
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const upcomingAppts = db.prepare(`
+    SELECT a.id, a.date, a.time, a.modality, a.status, a.room,
+           p.name AS patient_name, p.preferred_name AS patient_preferred
+    FROM appointments a
+    LEFT JOIN patients p ON p.id = a.patient_id
+    WHERE a.workspace_id = ?
+      AND a.date >= ?
+      AND a.status IN ('pendiente','confirmada','agendada','en_curso')
+    ORDER BY a.date ASC, a.time ASC
+    LIMIT 7
+  `).all(workspaceId, todayIso);
+
+  // Pacientes activos (top 20 — lista corta para que Laura pueda
+  // resolver "qué paciente es X" o "muéstrame mis pacientes")
+  const patientsList = db.prepare(`
+    SELECT id, name, preferred_name, modality, status, risk, last_contact
+    FROM patients
+    WHERE workspace_id = ? AND archived_at IS NULL
+    ORDER BY
+      CASE WHEN status = 'activo' THEN 0 ELSE 1 END,
+      updated_at DESC
+    LIMIT 20
+  `).all(workspaceId);
+
+  // Tareas pendientes (no completadas)
+  const pendingTasks = db.prepare(`
+    SELECT t.id, t.title, t.due_date, t.status,
+           p.name AS patient_name, p.preferred_name AS patient_preferred
+    FROM tareas t
+    LEFT JOIN patients p ON p.id = t.patient_id
+    WHERE t.workspace_id = ?
+      AND t.archived_at IS NULL AND t.deleted_at IS NULL
+      AND t.status != 'DONE'
+      AND t.visibility != 'private'
+    ORDER BY
+      CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,
+      t.due_date ASC
+    LIMIT 10
+  `).all(workspaceId);
+
+  // Tests recientes (30 días)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const recentTests = db.prepare(`
+    SELECT t.test_code, t.test_name, t.date, t.score, t.level, t.status,
+           p.name AS patient_name, p.preferred_name AS patient_preferred
+    FROM test_applications t
+    LEFT JOIN patients p ON p.id = t.patient_id
+    WHERE t.workspace_id = ? AND t.date >= ?
+    ORDER BY t.date DESC
+    LIMIT 10
+  `).all(workspaceId, thirtyDaysAgo);
+
+  // Documentos recientes con paciente vinculado
+  const recentDocs = db.prepare(`
+    SELECT d.id, d.name, d.type, d.status, d.signed_at, d.created_at,
+           p.name AS patient_name, p.preferred_name AS patient_preferred
+    FROM documents d
+    LEFT JOIN patients p ON p.id = d.patient_id
+    WHERE d.workspace_id = ? AND d.archived_at IS NULL
+    ORDER BY d.updated_at DESC
+    LIMIT 8
+  `).all(workspaceId);
+
+  // Sedes / consultorios configurados
+  const sedes = db.prepare(
+    "SELECT name, address FROM sedes WHERE workspace_id = ? AND active = 1 ORDER BY id ASC LIMIT 5",
+  ).all(workspaceId);
+
+  // Settings clave (horario, consultorio principal)
+  const settings = Object.fromEntries(
+    db.prepare(
+      "SELECT key, value FROM settings WHERE workspace_id = ? AND key IN ('consultorio_name','address','phone','work_start_hour','work_end_hour','work_days','tarifa_sesion')",
+    ).all(workspaceId).map((s) => [s.key, s.value]),
+  );
+
+  return { counts, upcomingAppts, patientsList, pendingTasks, recentTests, recentDocs, sedes, settings };
+}
+
 // ─── Builder del system prompt ─────────────────────────────────────────
 
 /**
@@ -160,6 +265,7 @@ function loadProfessionalContext(workspaceId, userId) {
 export function buildSystemPrompt({ workspaceId, userId, patientId, currentPath }) {
   const condicionantes = loadCondicionantes();
   const profCtx = loadProfessionalContext(workspaceId, userId);
+  const wsSummary = loadWorkspaceSummary(workspaceId);
   const patCtx = patientId ? loadPatientContext(workspaceId, patientId) : null;
 
   const profDisplay = profCtx.professional?.name ?? profCtx.user?.name ?? "Profesional";
@@ -189,6 +295,79 @@ Trata a este profesional como un colega del equipo clínico, no como un estudian
 Solo lectura: tienes acceso de lectura completa al workspace, pero **toda acción que escriba, envíe o modifique** (notas en historia, mensajes a pacientes, agenda, tareas, documentos) requiere **confirmación explícita** del profesional.
 
 En esta versión beta, **solo puedes consultar y proponer en texto**. Cualquier operación de escritura real está deshabilitada — el psicólogo la ejecuta manualmente. Si te piden "agenda esto" o "manda este mensaje", propón el texto/payload claro pero deja claro que él tiene que confirmarlo en la app.`);
+
+  // 4. Resumen estructural del workspace — la "memoria" panorámica
+  // que Laura tiene siempre disponible para responder preguntas
+  // generales sin necesidad de ir paciente por paciente.
+  const fmt = (v) => (v == null || v === "" ? "—" : String(v));
+  const apptBlock = wsSummary.upcomingAppts.length
+    ? wsSummary.upcomingAppts.map((a) =>
+        `  - ${a.date} ${a.time} · ${a.patient_preferred || a.patient_name || "(sin paciente)"} · ${a.modality ?? "—"} · ${a.status}${a.room ? " · " + a.room : ""}`,
+      ).join("\n")
+    : "  (sin citas próximas)";
+  const patientsBlock = wsSummary.patientsList.length
+    ? wsSummary.patientsList.map((p) =>
+        `  - ${p.preferred_name || p.name} (ID ${p.id}) · ${p.modality ?? "—"} · ${p.status ?? "—"}${p.risk && p.risk !== "ninguno" ? ` · riesgo ${p.risk}` : ""}`,
+      ).join("\n")
+    : "  (sin pacientes registrados)";
+  const tasksBlock = wsSummary.pendingTasks.length
+    ? wsSummary.pendingTasks.map((t) =>
+        `  - [${t.status}] ${t.title}${t.patient_name ? ` · ${t.patient_preferred || t.patient_name}` : ""}${t.due_date ? ` · vence ${t.due_date}` : ""}`,
+      ).join("\n")
+    : "  (sin tareas pendientes)";
+  const testsBlock = wsSummary.recentTests.length
+    ? wsSummary.recentTests.map((t) =>
+        `  - ${t.test_code} (${t.date}) · ${t.patient_preferred || t.patient_name || "—"} · score ${fmt(t.score)} · ${fmt(t.level)} · ${t.status}`,
+      ).join("\n")
+    : "  (sin tests recientes)";
+  const docsBlock = wsSummary.recentDocs.length
+    ? wsSummary.recentDocs.map((d) =>
+        `  - "${d.name}" · ${d.type ?? "—"} · ${d.status ?? "—"}${d.signed_at ? " · FIRMADO" : ""}${d.patient_name ? ` · ${d.patient_preferred || d.patient_name}` : ""}`,
+      ).join("\n")
+    : "  (sin documentos recientes)";
+  const sedesBlock = wsSummary.sedes.length
+    ? wsSummary.sedes.map((s) => `  - ${s.name}${s.address ? ` · ${s.address}` : ""}`).join("\n")
+    : "  (sin sedes adicionales)";
+  const settingsLines = [];
+  if (wsSummary.settings.consultorio_name)
+    settingsLines.push(`  - Consultorio principal: ${wsSummary.settings.consultorio_name}${wsSummary.settings.address ? ` · ${wsSummary.settings.address}` : ""}`);
+  if (wsSummary.settings.work_start_hour && wsSummary.settings.work_end_hour)
+    settingsLines.push(`  - Horario configurado: ${wsSummary.settings.work_start_hour}:00–${wsSummary.settings.work_end_hour}:00 (días: ${wsSummary.settings.work_days ?? "—"})`);
+  if (wsSummary.settings.tarifa_sesion)
+    settingsLines.push(`  - Tarifa por sesión: COP ${wsSummary.settings.tarifa_sesion}`);
+
+  sections.push(`# Estado actual del workspace
+
+Estos son los datos en tiempo real del workspace del profesional. Úsalos para responder preguntas como "¿cuántos pacientes tengo?", "¿qué tengo mañana?", "¿quién tiene tareas pendientes?", etc.
+
+## Conteos
+- **Pacientes activos:** ${wsSummary.counts.patients_active}
+- **Pacientes totales (no archivados):** ${wsSummary.counts.patients_total}
+- **Pacientes archivados:** ${wsSummary.counts.patients_archived}
+- **Pacientes con riesgo moderado/alto:** ${wsSummary.counts.patients_at_risk}
+
+## Próximas citas (hasta 7)
+${apptBlock}
+
+## Pacientes recientes (hasta 20, ordenados por última actualización)
+${patientsBlock}
+
+## Tareas pendientes (hasta 10)
+${tasksBlock}
+
+## Tests recientes (últimos 30 días)
+${testsBlock}
+
+## Documentos recientes (hasta 8)
+${docsBlock}
+
+## Sedes adicionales
+${sedesBlock}
+
+## Configuración del consultorio
+${settingsLines.length ? settingsLines.join("\n") : "  (sin configuración)"}
+
+**Importante**: si el profesional pregunta por información puntual de un paciente que NO está en las 20 listadas arriba, pídele que abra la ficha del paciente para tener su contexto completo. No inventes datos.`);
 
   // 4. Contexto del paciente activo (si hay)
   if (patCtx) {
