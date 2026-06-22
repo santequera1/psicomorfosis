@@ -440,7 +440,13 @@ export function LauraChat({ open, onClose }: Props) {
 function BetaBanner({
   health, usage,
 }: {
-  health?: { ok: boolean; latencyMs?: number; error?: string; model: string };
+  health?: {
+    ok: boolean;
+    latencyMs?: number;
+    error?: string;
+    model: string;
+    subscription?: { ok: boolean; status: string | null; expires_in: string | null; error?: string | null };
+  };
   usage?: { messages_today: number; tokens_in_today: number; tokens_out_today: number };
 }) {
   if (!health) return null;
@@ -457,8 +463,6 @@ function BetaBanner({
   }
   const messages = usage?.messages_today ?? 0;
   const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
-  // Tomamos el "uso" como el % más alto entre mensajes y tokens. Eso da
-  // una sola barra que refleja el límite que esté más cerca.
   const msgPct = Math.min(100, (messages / BETA_MESSAGE_LIMIT) * 100);
   const tokPct = Math.min(100, (totalTokens / BETA_TOKEN_LIMIT) * 100);
   const usePct = Math.max(msgPct, tokPct);
@@ -466,6 +470,7 @@ function BetaBanner({
     usePct < 60 ? "bg-emerald-500" :
     usePct < 85 ? "bg-amber-500" :
     "bg-rose-500";
+  const sub = health.subscription;
   return (
     <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
       <p className="text-[11px] text-amber-900 font-semibold leading-snug">
@@ -482,6 +487,20 @@ function BetaBanner({
           style={{ width: `${Math.max(2, usePct)}%` }}
         />
       </div>
+      {/* Estado de la suscripción Claude reportado por DARIO. expires_in
+          viene como "7h 59m" o "1d 3h" — texto literal del tool. */}
+      {sub?.ok && sub.expires_in && (
+        <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 align-middle" />
+          Suscripción Claude activa · se renueva en <strong className="tabular">{sub.expires_in}</strong>
+        </p>
+      )}
+      {sub && !sub.ok && (
+        <p className="text-[10px] text-rose-800/90 mt-1 leading-snug">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500 mr-1 align-middle" />
+          Suscripción agotada. Laura volverá cuando se renueve.
+        </p>
+      )}
       <p className="text-[10px] text-amber-900/70 mt-1 leading-snug">
         El uso de Laura tiene límites diarios durante la beta. Si alcanzas el límite,
         estará disponible nuevamente más tarde.

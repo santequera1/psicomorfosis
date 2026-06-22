@@ -12,7 +12,9 @@ import { cn } from "@/lib/utils";
  */
 
 const STORAGE_KEY = "laura.fab.open";
-const AVATAR_INITIAL = "/laura/laura-profile-1.svg";
+// Avatar único profile-2 (decidido por UX). profile-1 se mantiene
+// como sprite reservado para iteraciones futuras (estado "pensando", etc.)
+const AVATAR_INITIAL = "/laura/laura-profile-2.svg";
 const AVATAR_ACTIVE = "/laura/laura-profile-2.svg";
 
 export function LauraFab() {

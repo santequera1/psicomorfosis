@@ -327,3 +327,60 @@ export async function healthCheck() {
     };
   }
 }
+
+// ─── Estado de la suscripción Claude (parseado de `dario status`) ─────
+//
+// DARIO no expone un endpoint de "usage" como API — solo el binario
+// imprime el estado. Lo ejecutamos como child process y parseamos el
+// output para devolverlo como JSON al cliente. Cache 60s para no
+// fork-bombear si la UI lo pide a menudo.
+
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
+const exec = promisify(execCb);
+
+let _statusCache = null;
+let _statusCacheAt = 0;
+
+/**
+ * Devuelve el estado de la suscripción de Claude reportado por DARIO.
+ * Estructura típica del output:
+ *
+ *   dario — Status
+ *   ──────────────
+ *
+ *   Status: healthy
+ *   Expires in: 7h 59m
+ *
+ * Devolvemos: { ok, status, expiresIn, raw } o { ok: false, error }.
+ * Cache 60s para no spawn un proceso por cada request.
+ */
+export async function darioStatus() {
+  const now = Date.now();
+  if (_statusCache && now - _statusCacheAt < 60_000) return _statusCache;
+  const cmd = process.env.LAURA_DARIO_BIN || "dario";
+  try {
+    const { stdout } = await exec(`${cmd} status`, {
+      timeout: 5000,
+      env: { ...process.env, PATH: `${process.env.PATH}:/home/ubuntu/.npm-global/bin` },
+    });
+    const text = String(stdout);
+    const statusMatch = text.match(/Status:\s*(\S+)/i);
+    const expiresMatch = text.match(/Expires in:\s*([^\n]+)/i);
+    const result = {
+      ok: Boolean(statusMatch && /healthy/i.test(statusMatch[1])),
+      status: statusMatch?.[1] ?? null,
+      expires_in: expiresMatch?.[1]?.trim() ?? null,
+      raw: text.trim(),
+    };
+    _statusCache = result;
+    _statusCacheAt = now;
+    return result;
+  } catch (err) {
+    const result = { ok: false, error: err?.message ?? String(err) };
+    // No cacheamos errores tanto tiempo — 10s permite recuperar rápido
+    _statusCache = result;
+    _statusCacheAt = now - 50_000;
+    return result;
+  }
+}

@@ -18,7 +18,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { buildSystemPrompt, streamMessage, healthCheck, LAURA_MODEL } from "../lib/laura.js";
+import { buildSystemPrompt, streamMessage, healthCheck, darioStatus, LAURA_MODEL } from "../lib/laura.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -26,8 +26,17 @@ router.use(requireAuth);
 // ── Health ────────────────────────────────────────────────────────────
 
 router.get("/laura/health", async (_req, res) => {
-  const h = await healthCheck();
-  res.json({ ...h, model: LAURA_MODEL });
+  const [h, ds] = await Promise.all([healthCheck(), darioStatus()]);
+  res.json({
+    ...h,
+    model: LAURA_MODEL,
+    subscription: {
+      status: ds.status ?? null,
+      expires_in: ds.expires_in ?? null,
+      ok: ds.ok,
+      error: ds.error ?? null,
+    },
+  });
 });
 
 // ── Usage diario ──────────────────────────────────────────────────────
@@ -225,16 +234,27 @@ router.post("/laura/chat", async (req, res) => {
   let usage = null;
   let errorMsg = null;
 
-  // Manejo de cliente desconectado: cuando el navegador cierra la pestaña
-  // o cancela, abortamos pero igual guardamos lo acumulado.
+  // Manejo de cliente desconectado: usamos res.on('close') en lugar
+  // de req.on('close'). Lo segundo dispara cuando termina el upload
+  // del request body — para POST con SSE, el req ya está "cerrado"
+  // al entrar al handler, y eso provocaba que aborted=true antes del
+  // primer yield del stream, matando todo silenciosamente.
   let aborted = false;
-  req.on("close", () => { aborted = true; });
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      console.log(`[laura/chat] client disconnected conv=${convId}`);
+      aborted = true;
+    }
+  });
 
   console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length}`);
   try {
     let deltaCount = 0;
     for await (const ev of streamMessage({ systemPrompt, history, userMessage: message })) {
-      if (aborted) break;
+      if (aborted) {
+        console.log(`[laura/chat] aborted mid-stream conv=${convId} deltas=${deltaCount}`);
+        break;
+      }
       if (ev.type === "delta") {
         deltaCount++;
         accumulated += ev.text;

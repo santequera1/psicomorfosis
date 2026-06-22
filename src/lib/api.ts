@@ -2198,9 +2198,19 @@ export const api = {
 
   // ─── Laura (IA) ────────────────────────────────────────────────────
   lauraHealth: () =>
-    request<{ ok: boolean; status?: number; latencyMs?: number; error?: string; model: string }>(
-      "/api/laura/health",
-    ),
+    request<{
+      ok: boolean;
+      status?: number;
+      latencyMs?: number;
+      error?: string;
+      model: string;
+      subscription?: {
+        ok: boolean;
+        status: string | null;
+        expires_in: string | null;
+        error?: string | null;
+      };
+    }>("/api/laura/health"),
   lauraUsage: () =>
     request<{ date: string; messages_today: number; tokens_in_today: number; tokens_out_today: number }>(
       "/api/laura/usage",
