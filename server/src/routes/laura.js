@@ -138,6 +138,7 @@ router.delete("/laura/conversations/:id", (req, res) => {
 
 router.post("/laura/chat", async (req, res) => {
   const { conversation_id, patient_id, current_path, message } = req.body ?? {};
+  console.log(`[laura/chat] user=${req.user?.id} ws=${req.user?.workspace_id} conv=${conversation_id ?? "new"} patient=${patient_id ?? "—"} msg.len=${(message ?? "").length}`);
   if (typeof message !== "string" || message.trim().length === 0) {
     return res.status(400).json({ error: "Falta el mensaje" });
   }
@@ -229,18 +230,22 @@ router.post("/laura/chat", async (req, res) => {
   let aborted = false;
   req.on("close", () => { aborted = true; });
 
+  console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length}`);
   try {
+    let deltaCount = 0;
     for await (const ev of streamMessage({ systemPrompt, history, userMessage: message })) {
       if (aborted) break;
       if (ev.type === "delta") {
+        deltaCount++;
         accumulated += ev.text;
         emit({ type: "delta", text: ev.text });
       } else if (ev.type === "done") {
         usage = ev.usage;
+        console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
       }
     }
   } catch (err) {
-    console.error("[laura] stream error:", err);
+    console.error(`[laura/chat] STREAM ERROR conv=${convId}:`, err);
     errorMsg = err?.message ?? String(err);
     // Mapeo de errores comunes para UX
     if (/quota|rate_limit|usage_limit|out of credits/i.test(errorMsg)) {
