@@ -154,13 +154,53 @@ router.delete("/laura/conversations/:id", (req, res) => {
 //   }
 
 router.post("/laura/chat", async (req, res) => {
-  const { conversation_id, patient_id, current_path, message } = req.body ?? {};
-  console.log(`[laura/chat] user=${req.user?.id} ws=${req.user?.workspace_id} conv=${conversation_id ?? "new"} patient=${patient_id ?? "—"} msg.len=${(message ?? "").length}`);
-  if (typeof message !== "string" || message.trim().length === 0) {
+  const { conversation_id, patient_id, current_path, message, images } = req.body ?? {};
+  const imgCount = Array.isArray(images) ? images.length : 0;
+  console.log(`[laura/chat] user=${req.user?.id} ws=${req.user?.workspace_id} conv=${conversation_id ?? "new"} patient=${patient_id ?? "—"} msg.len=${(message ?? "").length} images=${imgCount}`);
+  if (typeof message !== "string") {
     return res.status(400).json({ error: "Falta el mensaje" });
+  }
+  // Permitimos message vacío si vienen imágenes (caso "pegué una imagen
+  // sin escribir nada"). Cuando no hay imágenes, el mensaje sí es
+  // obligatorio.
+  if (message.trim().length === 0 && imgCount === 0) {
+    return res.status(400).json({ error: "Escribe un mensaje o adjunta una imagen" });
   }
   if (message.length > 8000) {
     return res.status(400).json({ error: "Mensaje demasiado largo (máx 8000 caracteres)" });
+  }
+  if (imgCount > 5) {
+    return res.status(400).json({ error: "Máximo 5 imágenes por mensaje" });
+  }
+
+  // Validar imágenes: base64 + media_type permitido. Tope individual
+  // 4MB de raw bytes (Anthropic acepta hasta 5MB en base64, dejamos
+  // margen). Total combinado: 12MB para no inflar requests al backend.
+  const ALLOWED_IMG_TYPES = new Set([
+    "image/jpeg", "image/png", "image/gif", "image/webp",
+  ]);
+  let totalImageBytes = 0;
+  if (imgCount > 0) {
+    for (const img of images) {
+      if (!img || typeof img !== "object") {
+        return res.status(400).json({ error: "Imagen con formato inválido" });
+      }
+      if (!ALLOWED_IMG_TYPES.has(img.media_type)) {
+        return res.status(400).json({ error: `Tipo de imagen no soportado: ${img.media_type}. Usa JPEG, PNG, GIF o WebP.` });
+      }
+      if (typeof img.data !== "string" || img.data.length === 0) {
+        return res.status(400).json({ error: "Imagen sin datos" });
+      }
+      // base64 a bytes aprox: len * 0.75
+      const approxBytes = Math.floor(img.data.length * 0.75);
+      if (approxBytes > 4 * 1024 * 1024) {
+        return res.status(400).json({ error: "Cada imagen debe pesar máximo 4MB" });
+      }
+      totalImageBytes += approxBytes;
+    }
+    if (totalImageBytes > 12 * 1024 * 1024) {
+      return res.status(400).json({ error: "El conjunto de imágenes excede 12MB" });
+    }
   }
 
   // Configurar SSE
@@ -224,10 +264,20 @@ router.post("/laura/chat", async (req, res) => {
   // Guardar el mensaje del usuario antes de invocar al modelo.
   // Si la generación falla, el mensaje del user igual quedó persistido —
   // así puede reintentarse desde el frontend sin perder lo escrito.
+  //
+  // Para imágenes: guardamos solo un marcador (no el base64) en el
+  // content para que el historial no infle la BD. El modelo igual
+  // recibe las imágenes vía userImages en este turno; en turnos
+  // siguientes el contexto visual no se reenvía (decisión: costo
+  // de tokens y privacidad — Laura "vio" la imagen pero no la
+  // recuerda byte por byte en próximas vueltas).
+  const persistedContent = imgCount > 0
+    ? `${message}${message ? "\n\n" : ""}[${imgCount} imagen${imgCount === 1 ? "" : "es"} adjunta${imgCount === 1 ? "" : "s"}]`
+    : message;
   db.prepare(`
     INSERT INTO laura_messages (conversation_id, role, content)
     VALUES (?, 'user', ?)
-  `).run(convId, message);
+  `).run(convId, persistedContent);
 
   // Armar system prompt con todo el contexto disponible.
   const systemPrompt = buildSystemPrompt({
@@ -255,10 +305,10 @@ router.post("/laura/chat", async (req, res) => {
     }
   });
 
-  console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length}`);
+  console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length} images=${imgCount}`);
   try {
     let deltaCount = 0;
-    for await (const ev of streamMessage({ systemPrompt, history, userMessage: message })) {
+    for await (const ev of streamMessage({ systemPrompt, history, userMessage: message, userImages: images })) {
       if (aborted) {
         console.log(`[laura/chat] aborted mid-stream conv=${convId} deltas=${deltaCount}`);
         break;

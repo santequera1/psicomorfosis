@@ -444,10 +444,43 @@ El profesional está navegando en \`${currentPath}\` de la plataforma. No hay un
  * No persiste nada — el caller maneja la BD para que el commit sea
  * atómico con el end-of-stream.
  */
-export async function* streamMessage({ systemPrompt, history, userMessage, model = LAURA_MODEL, maxTokens = 1500 }) {
+/**
+ * Stream de respuesta del modelo. Acepta:
+ *   - systemPrompt: string
+ *   - history: [{ role, content }]   — assistants y users previos
+ *   - userMessage: string            — texto del usuario actual
+ *   - userImages?: [{ data, media_type }]
+ *       Imágenes en base64 que acompañan al userMessage. Se mandan
+ *       como content multimodal según el formato de Anthropic
+ *       (visión nativa de Claude Sonnet 4.x). Si están presentes y
+ *       el texto está vacío, mandamos solo las imágenes (Claude
+ *       responde describiéndolas / interpretándolas).
+ */
+export async function* streamMessage({
+  systemPrompt, history, userMessage, userImages = [],
+  model = LAURA_MODEL, maxTokens = 1500,
+}) {
+  // Si hay imágenes, el content del último mensaje es array con
+  // image blocks + text block al final. Si no, el content es string
+  // (más simple y eficiente en tokens).
+  let userContent;
+  if (Array.isArray(userImages) && userImages.length > 0) {
+    userContent = [
+      ...userImages.map((img) => ({
+        type: "image",
+        source: { type: "base64", media_type: img.media_type, data: img.data },
+      })),
+      ...(userMessage && userMessage.length > 0
+        ? [{ type: "text", text: userMessage }]
+        : []),
+    ];
+  } else {
+    userContent = userMessage;
+  }
+
   const messages = [
     ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: userMessage },
+    { role: "user", content: userContent },
   ];
 
   const stream = getClient().messages.stream({

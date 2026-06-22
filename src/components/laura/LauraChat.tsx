@@ -3,7 +3,8 @@ import { useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2,
-  MessageSquarePlus, ChevronLeft, Plus, History,
+  MessageSquarePlus, ChevronLeft, Plus, History, ChevronDown,
+  Paperclip, Image as ImageIcon,
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,25 @@ type Message = {
   // Solo para assistant: "streaming" mientras llega, "ok"/"error" cuando termina
   status?: "streaming" | "ok" | "error";
   error?: string | null;
+  /** Solo para mensajes del user: dataURLs de imágenes adjuntas
+   *  para mostrar inline en la burbuja después de enviarlas. */
+  imageDataUrls?: string[];
 };
+
+type AttachedImage = {
+  id: string;
+  dataUrl: string;          // "data:image/jpeg;base64,..." para preview <img>
+  base64: string;           // solo bytes (sin prefijo) — eso es lo que va al server
+  mediaType: string;        // image/jpeg | image/png | etc.
+  filename: string;
+  sizeBytes: number;
+};
+
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+]);
+const MAX_IMAGES = 5;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB por imagen
 
 type Props = {
   open: boolean;
@@ -50,6 +69,9 @@ export function LauraChat({ open, onClose }: Props) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // mounted controla la animación: cuando `open` pasa a false, no
   // desmontamos inmediatamente — mantenemos `mounted=true` mientras se
   // ejecuta la animación de salida, luego desmontamos al terminar.
@@ -144,6 +166,90 @@ export function LauraChat({ open, onClose }: Props) {
     }
   }, [open, sending]);
 
+  // ── Manejo de imágenes adjuntas ──────────────────────────────────
+
+  // Convierte un File a dataURL + base64 puro (sin el prefijo
+  // "data:...;base64,"). Valida tipo y tamaño y devuelve un
+  // AttachedImage o null con un error.
+  const fileToAttachment = useCallback(async (file: File): Promise<AttachedImage | string> => {
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      return `Tipo no soportado (${file.type || "desconocido"}). Usa JPG, PNG, GIF o WebP.`;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      return `La imagen pesa ${(file.size / 1024 / 1024).toFixed(1)} MB. Máximo 4 MB.`;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    // dataUrl viene como "data:image/jpeg;base64,<base64>". Cortamos.
+    const commaIdx = dataUrl.indexOf(",");
+    const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      dataUrl,
+      base64,
+      mediaType: file.type,
+      filename: file.name || "imagen",
+      sizeBytes: file.size,
+    };
+  }, []);
+
+  const addFiles = useCallback(async (files: FileList | File[] | null | undefined) => {
+    if (!files) return;
+    const arr = Array.from(files);
+    if (arr.length === 0) return;
+    setAttachedImages((prev) => {
+      const room = MAX_IMAGES - prev.length;
+      if (room <= 0) return prev;
+      return prev; // se actualiza luego con append
+    });
+    const next: AttachedImage[] = [];
+    for (const file of arr) {
+      const r = await fileToAttachment(file);
+      if (typeof r === "string") {
+        // Error de validación: lo añadimos como toast simple via alert
+        // ligero (sin librería para no crecer dependencias acá).
+        console.warn("[laura] upload:", r);
+        continue;
+      }
+      next.push(r);
+    }
+    if (next.length === 0) return;
+    setAttachedImages((prev) => [...prev, ...next].slice(0, MAX_IMAGES));
+  }, [fileToAttachment]);
+
+  const removeAttachedImage = useCallback((id: string) => {
+    setAttachedImages((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const onPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === "file") {
+        const f = it.getAsFile();
+        if (f && ALLOWED_IMAGE_TYPES.has(f.type)) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      void addFiles(files);
+    }
+  }, [addFiles]);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) void addFiles(files);
+  }, [addFiles]);
+
   // ── Acciones ──────────────────────────────────────────────────────
 
   const send = useCallback(async (overrideText?: string) => {
@@ -152,21 +258,33 @@ export function LauraChat({ open, onClose }: Props) {
     // setState + closure: setInput(text) + send() en el mismo handler
     // no ve el nuevo texto, porque la closure capturó el state viejo.
     const trimmed = (overrideText ?? input).trim();
-    if (!trimmed || sending) return;
+    const hasImages = attachedImages.length > 0;
+    // Permitimos enviar solo imágenes (sin texto) — Claude visión las
+    // describe / interpreta. Requerimos al menos una de las dos cosas.
+    if ((!trimmed && !hasImages) || sending) return;
     // Si Laura está descansando (cuota agotada o servicio caído),
     // bloqueamos el envío en el cliente para no gastar un round-trip
     // que sabemos va a fallar. El backend igual está protegido si
     // alguien fuerza la request — devuelve quota_exhausted.
     if (isResting) return;
 
+    // Snapshot de las imágenes antes de limpiarlas (para mostrarlas
+    // en la burbuja del user y para mandarlas al backend).
+    const sendingImages = attachedImages;
+
     setSending(true);
     setInput("");
+    setAttachedImages([]);
     markSpoken();
 
-    // Append mensaje del user y un placeholder del assistant
+    // Append mensaje del user (con sus imágenes inline) y placeholder
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: trimmed },
+      {
+        role: "user",
+        content: trimmed,
+        imageDataUrls: sendingImages.map((i) => i.dataUrl),
+      },
       { role: "assistant", content: "", status: "streaming" },
     ]);
 
@@ -180,6 +298,9 @@ export function LauraChat({ open, onClose }: Props) {
           patient_id: activePatientId,
           current_path: currentPath,
           message: trimmed,
+          images: sendingImages.length > 0
+            ? sendingImages.map((i) => ({ data: i.base64, media_type: i.mediaType }))
+            : undefined,
         },
         (ev: LauraStreamEvent) => {
           if (ev.type === "conversation_id") {
@@ -409,44 +530,138 @@ export function LauraChat({ open, onClose }: Props) {
           )}
         </div>
 
-        {/* Input */}
+        {/* Input + attachments */}
         <form
           className="border-t border-line-100 p-3 shrink-0"
           onSubmit={(e) => { e.preventDefault(); void send(); }}
+          onDragEnter={(e) => {
+            if (isResting) return;
+            const items = e.dataTransfer?.items;
+            if (items && Array.from(items).some((i) => i.kind === "file")) {
+              setDragOver(true);
+            }
+          }}
+          onDragOver={(e) => {
+            if (isResting) return;
+            e.preventDefault(); // habilita el drop
+          }}
+          onDragLeave={(e) => {
+            // El leave se dispara cuando entra a hijos también; verificar
+            // que sale del contenedor real.
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setDragOver(false);
+          }}
+          onDrop={onDrop}
         >
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                isResting
-                  ? "Laura está descansando — escribir queda deshabilitado hasta la renovación"
-                  : activePatientId
-                    ? "Pregúntame sobre este paciente o sobre la app…"
-                    : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
-              }
-              rows={2}
-              maxLength={8000}
-              disabled={sending || isResting}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send();
+          {/* Previews de imágenes adjuntas */}
+          {attachedImages.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {attachedImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative group h-16 w-16 rounded-md overflow-hidden border border-line-200 bg-bg-50"
+                  title={`${img.filename} · ${(img.sizeBytes / 1024).toFixed(0)} KB`}
+                >
+                  <img src={img.dataUrl} alt={img.filename} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachedImage(img.id)}
+                    className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-ink-900/70 text-white hover:bg-ink-900 inline-flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Quitar ${img.filename}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {attachedImages.length < MAX_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-16 w-16 rounded-md border-2 border-dashed border-line-200 hover:border-brand-400 text-ink-400 hover:text-brand-700 inline-flex items-center justify-center"
+                  title="Agregar más imágenes"
+                  disabled={isResting}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Drop overlay visible cuando arrastras un archivo encima */}
+          <div className="relative">
+            {dragOver && !isResting && (
+              <div className="absolute inset-0 z-10 rounded-lg border-2 border-dashed border-brand-400 bg-brand-50/90 flex items-center justify-center pointer-events-none">
+                <span className="text-xs text-brand-800 font-medium inline-flex items-center gap-1.5">
+                  <ImageIcon className="h-4 w-4" />
+                  Suelta las imágenes acá
+                </span>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              {/* Botón adjuntar — paperclip */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || isResting || attachedImages.length >= MAX_IMAGES}
+                className="h-11 w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                aria-label="Adjuntar imagen"
+                title={
+                  attachedImages.length >= MAX_IMAGES
+                    ? `Máximo ${MAX_IMAGES} imágenes`
+                    : "Adjuntar imagen (también puedes pegar con Ctrl+V o arrastrar)"
                 }
-              }}
-              className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || sending || isResting}
-              className="h-11 w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
-              aria-label="Enviar"
-              title={isResting ? "Laura está descansando" : "Enviar"}
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                multiple
+                hidden
+                onChange={(e) => {
+                  void addFiles(e.target.files);
+                  e.target.value = ""; // permite re-elegir el mismo archivo después
+                }}
+              />
+
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onPaste={onPaste}
+                placeholder={
+                  isResting
+                    ? "Laura está descansando — escribir queda deshabilitado hasta la renovación"
+                    : attachedImages.length > 0
+                      ? "Describe lo que ves, o envía solo la imagen…"
+                      : activePatientId
+                        ? "Pregúntame sobre este paciente o sobre la app…"
+                        : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
+                }
+                rows={2}
+                maxLength={8000}
+                disabled={sending || isResting}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={(!input.trim() && attachedImages.length === 0) || sending || isResting}
+                className="h-11 w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                aria-label="Enviar"
+                title={isResting ? "Laura está descansando" : "Enviar"}
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
+
           <p className="mt-2 text-[10px] text-ink-500 inline-flex items-center gap-1">
             <ShieldCheck className="h-3 w-3" />
             Laura nunca toca tus pacientes ni tu historia sin tu visto bueno.
@@ -613,28 +828,71 @@ function BetaBanner({
     );
   }
 
-  // Estado normal (verde)
+  // Estado normal (verde) — colapsable. Cuando alta demanda o
+  // descansando, NO se colapsa (info crítica que debe quedar visible).
+  return <AvailableBanner messages={messages} resetCo={resetCo} />;
+}
+
+/**
+ * Variante colapsable del banner cuando Laura está disponible. Por
+ * default colapsado (solo el dot + título); el usuario puede expandir
+ * para ver renovación, consultas del día y disclaimer.
+ *
+ * Persistencia en sessionStorage para que la elección se conserve al
+ * cerrar/abrir el chat dentro de la misma sesión.
+ */
+function AvailableBanner({ messages, resetCo }: { messages: number; resetCo: string | null }) {
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("laura.banner.expanded") === "1";
+  });
+  useEffect(() => {
+    try { window.sessionStorage.setItem("laura.banner.expanded", expanded ? "1" : "0"); } catch {}
+  }, [expanded]);
+
   return (
-    <div className="px-4 py-2.5 bg-emerald-50/50 border-b border-emerald-200/50">
-      <p className="text-[11px] text-emerald-900 font-semibold leading-snug flex items-center gap-1.5">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Laura IA · Beta
-      </p>
-      <p className="text-[11px] text-emerald-900/85 leading-snug mt-1">
-        Estado: <strong>Disponible</strong>
-      </p>
-      <p className="text-[11px] text-emerald-900/85 leading-snug mt-0.5">
-        Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"} realizada{messages === 1 ? "" : "s"}</strong>
-      </p>
-      {resetCo && (
-        <p className="text-[11px] text-emerald-900/80 leading-snug mt-0.5">
-          Renovación de capacidad: <strong className="tabular">{resetCo}</strong> (Colombia)
-        </p>
+    <div className="bg-emerald-50/50 border-b border-emerald-200/50">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-4 py-2 flex items-center justify-between gap-2 hover:bg-emerald-100/30 transition-colors"
+        aria-expanded={expanded}
+      >
+        <span className="text-[11px] text-emerald-900 font-semibold leading-snug inline-flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          Laura IA · Beta
+          {!expanded && (
+            <span className="ml-1 text-emerald-900/65 font-normal">
+              · Disponible
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 text-emerald-900/70 transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
+      </button>
+      {expanded && (
+        <div className="px-4 pb-2.5 animate-in slide-in-from-top-1 fade-in duration-200">
+          <p className="text-[11px] text-emerald-900/85 leading-snug">
+            Estado: <strong>Disponible</strong>
+          </p>
+          <p className="text-[11px] text-emerald-900/85 leading-snug mt-0.5">
+            Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"} realizada{messages === 1 ? "" : "s"}</strong>
+          </p>
+          {resetCo && (
+            <p className="text-[11px] text-emerald-900/80 leading-snug mt-0.5">
+              Renovación de capacidad: <strong className="tabular">{resetCo}</strong> (Colombia)
+            </p>
+          )}
+          <p className="text-[10px] text-emerald-900/65 mt-1.5 leading-snug">
+            Laura está en fase beta. Estamos aumentando gradualmente su capacidad
+            durante las pruebas.
+          </p>
+        </div>
       )}
-      <p className="text-[10px] text-emerald-900/65 mt-1.5 leading-snug">
-        Laura está en fase beta. Estamos aumentando gradualmente su capacidad
-        durante las pruebas.
-      </p>
     </div>
   );
 }
@@ -647,8 +905,33 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-brand-700 text-white px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed">
-          {message.content}
+        <div className="max-w-[85%] space-y-1.5">
+          {message.imageDataUrls && message.imageDataUrls.length > 0 && (
+            <div className={cn(
+              "grid gap-1.5",
+              message.imageDataUrls.length === 1 ? "grid-cols-1" :
+              message.imageDataUrls.length === 2 ? "grid-cols-2" :
+              "grid-cols-3",
+            )}>
+              {message.imageDataUrls.map((url, i) => (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-xl overflow-hidden border border-line-200 bg-bg-50"
+                  title="Abrir en pestaña nueva"
+                >
+                  <img src={url} alt={`Imagen adjunta ${i + 1}`} className="w-full h-auto max-h-48 object-cover" />
+                </a>
+              ))}
+            </div>
+          )}
+          {message.content && (
+            <div className="rounded-2xl rounded-tr-sm bg-brand-700 text-white px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed">
+              {message.content}
+            </div>
+          )}
         </div>
       </div>
     );

@@ -2283,6 +2283,10 @@ export const api = {
       patient_id?: string | null;
       current_path?: string | null;
       message: string;
+      /** Imágenes adjuntas. data = base64 SIN el prefijo data:...;base64,
+       *  (solo los bytes). Tipos aceptados: image/jpeg | png | gif | webp.
+       *  Máx 5 imágenes, 4MB cada una, 12MB total. */
+      images?: Array<{ data: string; media_type: string }>;
     },
     onEvent: (ev: LauraStreamEvent) => void,
     signal?: AbortSignal,
