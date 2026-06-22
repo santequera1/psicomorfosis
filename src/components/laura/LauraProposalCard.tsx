@@ -50,6 +50,22 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
     onDecide?.(action.tool_id, "dismissed");
   }
 
+  /**
+   * Wrapper sobre navigate de TanStack: si la ruta no matchea
+   * ninguna route registrada, cae a window.location.assign para
+   * garantizar que el usuario llega a algún lado (aun con full
+   * page reload). Esto evita la pantalla blanca con error que
+   * pasaba antes cuando Laura proponía rutas no exactas.
+   */
+  function safeNavigate(fn: () => void, fallbackHref: string) {
+    try {
+      fn();
+    } catch (err) {
+      console.warn("[laura] navigate falló, fallback a location.assign", err);
+      window.location.assign(fallbackHref);
+    }
+  }
+
   // ── navigate_to ─────────────────────────────────────────────────────
   if (action.name === "navigate_to") {
     const path = String(action.input.path ?? "/");
@@ -65,7 +81,9 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
             <>
               <ApproveButton
                 label="Ir"
-                onClick={() => approve(() => navigate({ to: path as never }))}
+                onClick={() => approve(() =>
+                  safeNavigate(() => navigate({ to: path as never }), path)
+                )}
               />
               <DismissButton onClick={dismiss} />
             </>
@@ -90,7 +108,12 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
             <>
               <ApproveButton
                 label="Abrir ficha"
-                onClick={() => approve(() => navigate({ to: "/pacientes/$id", params: { id: patientId } }))}
+                onClick={() => approve(() =>
+                  safeNavigate(
+                    () => navigate({ to: "/pacientes/$id", params: { id: patientId } }),
+                    `/pacientes/${patientId}`,
+                  )
+                )}
               />
               <DismissButton onClick={dismiss} />
             </>
@@ -121,10 +144,16 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
       const payload = btoa(unescape(encodeURIComponent(JSON.stringify({
         kind, title, content,
       }))));
-      approve(() => navigate({
-        to: "/historia",
-        search: { id: patientId, laura_note: payload } as never,
-      }));
+      approve(() =>
+        safeNavigate(
+          () =>
+            navigate({
+              to: "/historia",
+              search: { id: patientId, laura_note: payload } as never,
+            }),
+          `/historia?id=${encodeURIComponent(patientId)}&laura_note=${encodeURIComponent(payload)}`,
+        )
+      );
     };
     return (
       <Card

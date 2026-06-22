@@ -636,14 +636,17 @@ export async function* streamMessage({
     { role: "user", content: userContent },
   ];
 
-  // Heurística: si el mensaje parece pegar contenido clínico de una
-  // sesión / paciente (texto largo + keywords típicas de relato
-  // clínico), forzamos al modelo a invocar UN tool con tool_choice
-  // "any". Sin esto, Claude tiende a devolver el SOAP en texto plano
-  // y termina con "cópialo manualmente" en lugar de proponer la
-  // tarjeta accionable.
+  // Heurística para forzar tool_choice = "any". Sin esto, el modelo
+  // responde con texto bonito y nunca invoca tools — perdemos la
+  // ventaja de tarjetas accionables. Dos triggers:
   //
-  // Triggers — palabras que sugieren texto clínico para registrar:
+  // A. CONTENIDO CLÍNICO largo → propose_clinical_note
+  //    msg.length > 300 + keywords típicas de relato de sesión.
+  //
+  // B. INTENTO DE NAVEGACIÓN → navigate_to / open_patient
+  //    Verbos como "llévame", "abre", "muéstrame", "navega",
+  //    "voy a", "necesito ir a", "abrime", etc. — son triggers
+  //    directos. Independiente de la longitud del mensaje.
   const text = (userMessage ?? "").toLowerCase();
   const clinicalCues = [
     "sesi", "sesión", "evolución", "evolucion", "anotar", "registra",
@@ -651,9 +654,19 @@ export async function* streamMessage({
     "historia clínica", "historia clinica", "guarda en la nota",
     "pásalo a nota", "pasalo a nota", "convierte en nota",
   ];
+  const navigationCues = [
+    "llévame", "llevame", "ábreme", "abreme", "abrime",
+    "muéstrame", "muestrame", "muéstrale", "muestrale",
+    "navégame", "navegame", "vamos a", "ir a la ",
+    "ve a ", "vé a ", "lléveme", "lleveme",
+    "abrir ficha", "abre la ficha", "abre ficha",
+    "ver paciente", "ver el paciente",
+  ];
   const looksClinical =
     userMessage && userMessage.length > 300 && clinicalCues.some((k) => text.includes(k));
-  const tool_choice = looksClinical ? { type: "any" } : { type: "auto" };
+  const looksNavigation = navigationCues.some((k) => text.includes(k));
+  const forceTool = looksClinical || looksNavigation;
+  const tool_choice = forceTool ? { type: "any" } : { type: "auto" };
 
   const stream = getClient().messages.stream({
     model,
@@ -705,10 +718,34 @@ export async function* streamMessage({
         currentTool = null;
       }
     } else if (event.type === "message_delta") {
-      outputTokens = event.usage?.output_tokens ?? outputTokens;
-      stopReason = event.delta?.stop_reason ?? stopReason;
+      // message_delta es CUMULATIVO en algunos casos, no incremental.
+      // Tomamos el valor más reciente (no sumamos).
+      if (typeof event.usage?.output_tokens === "number") {
+        outputTokens = event.usage.output_tokens;
+      }
+      if (event.delta?.stop_reason) {
+        stopReason = event.delta.stop_reason;
+      }
     }
   }
+
+  // Como fallback adicional, intentamos extraer el usage del mensaje
+  // final del stream (algunas versiones del SDK lo exponen ahí). Si
+  // el output_tokens sigue en 0 pero el stream emitió deltas, es solo
+  // que DARIO no reportó tokens reales — no es bug, no hay nada que
+  // arreglar en cliente.
+  try {
+    const finalMessage = await stream.finalMessage?.();
+    if (finalMessage?.usage?.output_tokens != null) {
+      outputTokens = finalMessage.usage.output_tokens;
+    }
+    if (finalMessage?.usage?.input_tokens != null && !inputTokens) {
+      inputTokens = finalMessage.usage.input_tokens;
+    }
+    if (finalMessage?.stop_reason && !stopReason) {
+      stopReason = finalMessage.stop_reason;
+    }
+  } catch { /* ignorar — no rompemos el stream */ }
 
   yield {
     type: "done",

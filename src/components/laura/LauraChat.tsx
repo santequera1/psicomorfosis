@@ -472,7 +472,11 @@ export function LauraChat({ open, onClose }: Props) {
           que se sienta orgánico, no robótico. */}
       <aside
         className={cn(
-          "fixed top-0 right-0 z-50 h-screen w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
+          // h-[100dvh] = "dynamic viewport height": en mobile se ajusta
+          // automáticamente cuando aparece el teclado virtual y no deja
+          // el input/footer tapado. h-screen (100vh) ignora el teclado
+          // y por eso antes el footer se escondía debajo.
+          "fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
           "flex flex-col",
           "transition-transform duration-300",
           entering
@@ -687,6 +691,16 @@ export function LauraChat({ open, onClose }: Props) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onPaste={onPaste}
+                onFocus={() => {
+                  // En mobile el teclado virtual oculta el último
+                  // mensaje. Scrolleamos al fondo tras un beat para
+                  // que el browser termine de medir el nuevo viewport.
+                  window.setTimeout(() => {
+                    if (scrollRef.current) {
+                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                    }
+                  }, 250);
+                }}
                 placeholder={
                   isResting
                     ? "Laura está descansando — escribir queda deshabilitado hasta la renovación"
