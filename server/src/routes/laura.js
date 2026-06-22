@@ -117,11 +117,20 @@ router.get("/laura/conversations/:id", (req, res) => {
   `).get(id, req.user.id, req.user.workspace_id);
   if (!c) return res.status(404).json({ error: "Conversación no encontrada" });
   const messages = db.prepare(`
-    SELECT id, role, content, model, tokens_in, tokens_out, error, created_at
+    SELECT id, role, content, model, tokens_in, tokens_out, error, created_at, proposed_actions_json
     FROM laura_messages
     WHERE conversation_id = ?
     ORDER BY id ASC
-  `).all(id);
+  `).all(id).map((m) => {
+    let proposed_actions = null;
+    if (m.proposed_actions_json) {
+      try { proposed_actions = JSON.parse(m.proposed_actions_json); }
+      catch { /* tolerar JSON corrupto */ }
+    }
+    const { proposed_actions_json, ...rest } = m;
+    void proposed_actions_json;
+    return { ...rest, proposed_actions };
+  });
   res.json({ conversation: c, messages });
 });
 
@@ -306,6 +315,7 @@ router.post("/laura/chat", async (req, res) => {
   });
 
   console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length} images=${imgCount}`);
+  const proposedActions = [];
   try {
     let deltaCount = 0;
     for await (const ev of streamMessage({ systemPrompt, history, userMessage: message, userImages: images })) {
@@ -317,9 +327,13 @@ router.post("/laura/chat", async (req, res) => {
         deltaCount++;
         accumulated += ev.text;
         emit({ type: "delta", text: ev.text });
+      } else if (ev.type === "tool_call") {
+        console.log(`[laura/chat] tool_call conv=${convId} name=${ev.name}`);
+        proposedActions.push({ tool_id: ev.tool_id, name: ev.name, input: ev.input });
+        emit({ type: "tool_call", tool_id: ev.tool_id, name: ev.name, input: ev.input });
       } else if (ev.type === "done") {
         usage = ev.usage;
-        console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
+        console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} tools=${proposedActions.length} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
       }
     }
   } catch (err) {
@@ -336,10 +350,12 @@ router.post("/laura/chat", async (req, res) => {
   }
 
   // Persistir respuesta del assistant (o error si no hubo contenido).
-  if (accumulated.length > 0 || usage) {
+  const actionsJson = proposedActions.length > 0 ? JSON.stringify(proposedActions) : null;
+  if (accumulated.length > 0 || usage || proposedActions.length > 0) {
     db.prepare(`
-      INSERT INTO laura_messages (conversation_id, role, content, model, tokens_in, tokens_out, stop_reason, error)
-      VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?)
+      INSERT INTO laura_messages
+      (conversation_id, role, content, model, tokens_in, tokens_out, stop_reason, error, proposed_actions_json)
+      VALUES (?, 'assistant', ?, ?, ?, ?, ?, ?, ?)
     `).run(
       convId,
       accumulated,
@@ -348,10 +364,9 @@ router.post("/laura/chat", async (req, res) => {
       usage?.output_tokens ?? null,
       usage?.stop_reason ?? null,
       errorMsg,
+      actionsJson,
     );
   } else if (errorMsg) {
-    // Hubo error y nada acumulado — guardar el error como mensaje vacío
-    // para que el frontend pueda mostrar "intento fallido" en el historial.
     db.prepare(`
       INSERT INTO laura_messages (conversation_id, role, content, model, error)
       VALUES (?, 'assistant', '', ?, ?)

@@ -422,7 +422,30 @@ Cuando cites información de las notas o tests, **siempre menciona la fecha y el
 El profesional está navegando en \`${currentPath}\` de la plataforma. No hay un paciente específicamente activo en el contexto. Si te pregunta sobre un paciente concreto, pídele que lo abra desde la lista o referenciarlo por nombre/ID.`);
   }
 
-  // 5. Formato esperado de respuestas
+  // 5. Tools disponibles — cuándo y cómo usarlos
+  sections.push(`# Acciones que puedes proponer (tools)
+
+Tienes tres herramientas para ayudar al profesional a moverse y trabajar más rápido. **Nunca escriben datos directamente** — solo proponen, y el psicólogo aprueba o descarta en la UI.
+
+- **navigate_to(path, reason)**: úsalo cuando el psicólogo pregunte cómo llegar a una sección de la plataforma (Pacientes, Agenda, Tareas, Documentos, etc.) o cuando quieras ofrecerle un atajo. Acompañado siempre del campo \`reason\` con una frase breve y amable. No lo uses si ya te están preguntando otra cosa específica.
+
+- **open_patient(patient_id, reason)**: úsalo cuando el psicólogo mencione un paciente por nombre y tengas su ID en el resumen del workspace. El user va a la ficha completa de ese paciente. Si no estás seguro de qué paciente es, pregunta antes de usar el tool.
+
+- **propose_clinical_note(patient_id, kind, title, content)**: el tool más potente. Úsalo cuando el psicólogo te pase texto libre (transcripción de sesión, dictado, notas sueltas) y pida que lo conviertas a formato clínico. Estructura el contenido siguiendo el modelo SOAP cuando aplique:
+  - **S** (Subjetivo): lo que reporta el paciente
+  - **O** (Objetivo): observaciones del profesional, lenguaje no verbal, examen mental
+  - **A** (Análisis): hipótesis clínica, evolución
+  - **P** (Plan): próximos pasos, tareas, intervenciones
+
+  El campo \`kind\` debe ser uno de: motivo, antecedentes, examen_mental, evolucion, plan. Si no es obvio, usa 'evolucion'. Título corto y descriptivo (ej "Evolución 22 jun 2026").
+
+  **Regla crítica**: NO inventes datos clínicos que no estén en el texto original. Si el texto es escaso, la nota corta. Mejor poco y verdadero que mucho y especulativo.
+
+**Cuándo NO usar tools**: si te están haciendo preguntas conceptuales (DSM-5, técnica X, "qué hago si..."), responde con texto normal. Los tools son para acciones concretas en la plataforma.
+
+Cuando uses un tool, además del tool_use puedes acompañar con una frase corta de texto explicando qué propones. El usuario ve la tarjeta de propuesta y la decide.`);
+
+  // 6. Formato esperado de respuestas
   sections.push(`# Estilo
 
 - Español neutro, profesional, cálido. Trata al profesional con respeto pero sin formalismo excesivo.
@@ -444,6 +467,86 @@ El profesional está navegando en \`${currentPath}\` de la plataforma. No hay un
  * No persiste nada — el caller maneja la BD para que el commit sea
  * atómico con el end-of-stream.
  */
+// ─── Catálogo de tools (acciones que Laura puede proponer) ─────────────
+//
+// El modelo invoca estas funciones cuando quiere hacer algo accionable.
+// El backend NO ejecuta nada — solo emite el tool_call al frontend que
+// muestra la tarjeta de propuesta. La acción real solo ocurre cuando el
+// psicólogo aprueba en la UI. Alineado con laura-condicionantes.md §0.1:
+// "Laura tiene lectura completa, pero toda acción que escriba, envíe o
+// modifique pasa por confirmación explícita del psicólogo".
+export const LAURA_TOOLS = [
+  {
+    name: "navigate_to",
+    description: "Lleva al psicólogo a una sección de la plataforma Psicomorfosis. " +
+      "Úsalo cuando el psicólogo pregunte cómo llegar a algo o quieras ofrecerle un atajo. " +
+      "Solo navega — no modifica datos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Ruta absoluta de la app. Ejemplos válidos: /inicio, /pacientes, /agenda, /tareas, /documentos, /tests, /facturacion, /reportes, /configuracion",
+        },
+        reason: {
+          type: "string",
+          description: "Por qué propones esta navegación (1 frase, visible al usuario).",
+        },
+      },
+      required: ["path", "reason"],
+    },
+  },
+  {
+    name: "open_patient",
+    description: "Abre la ficha clínica de un paciente específico. " +
+      "Úsalo cuando el psicólogo mencione un paciente concreto y quieras facilitarle el acceso a su historia. " +
+      "El patient_id lo tienes en el resumen del workspace.",
+    input_schema: {
+      type: "object",
+      properties: {
+        patient_id: {
+          type: "string",
+          description: "ID del paciente (formato P-XXXX). Debe ser uno que exista en el workspace.",
+        },
+        reason: {
+          type: "string",
+          description: "Por qué quieres abrir esta ficha (1 frase, visible al usuario).",
+        },
+      },
+      required: ["patient_id", "reason"],
+    },
+  },
+  {
+    name: "propose_clinical_note",
+    description: "Propone agregar una nota clínica a la historia de un paciente. " +
+      "Úsalo cuando el psicólogo te pase texto libre (transcripción, dictado, notas) y te pida estructurarlo. " +
+      "Solo PROPONES el contenido — NO se guarda. Al aprobar, el psicólogo va a la vista del paciente con la nota pre-cargada para revisar, editar y firmar manualmente.",
+    input_schema: {
+      type: "object",
+      properties: {
+        patient_id: {
+          type: "string",
+          description: "ID del paciente al que pertenece la nota.",
+        },
+        kind: {
+          type: "string",
+          enum: ["motivo", "antecedentes", "examen_mental", "evolucion", "plan"],
+          description: "Tipo de bloque clínico al que va la nota.",
+        },
+        title: {
+          type: "string",
+          description: "Título corto descriptivo de la nota (ej: 'Evolución 22 jun 2026').",
+        },
+        content: {
+          type: "string",
+          description: "Contenido de la nota, estructurado y profesional. Puede ser SOAP (S/O/A/P) o texto libre clínico. Sin inventar datos que no estén en la fuente.",
+        },
+      },
+      required: ["patient_id", "kind", "title", "content"],
+    },
+  },
+];
+
 /**
  * Stream de respuesta del modelo. Acepta:
  *   - systemPrompt: string
@@ -455,6 +558,11 @@ El profesional está navegando en \`${currentPath}\` de la plataforma. No hay un
  *       (visión nativa de Claude Sonnet 4.x). Si están presentes y
  *       el texto está vacío, mandamos solo las imágenes (Claude
  *       responde describiéndolas / interpretándolas).
+ *
+ * Emite eventos:
+ *   { type: "delta", text }              — fragmento de texto
+ *   { type: "tool_call", name, input }   — propuesta de acción
+ *   { type: "done", usage: {...} }       — fin del stream
  */
 export async function* streamMessage({
   systemPrompt, history, userMessage, userImages = [],
@@ -488,24 +596,55 @@ export async function* streamMessage({
     max_tokens: maxTokens,
     system: systemPrompt,
     messages,
+    tools: LAURA_TOOLS,
   });
 
   let inputTokens = 0;
   let outputTokens = 0;
   let stopReason = null;
 
+  // Estado de un tool_use block en curso. Anthropic stream emite
+  // content_block_start con name+id, luego una serie de
+  // input_json_delta con partial_json (fragmentos del JSON del input),
+  // y content_block_stop al final. Acumulamos y parseamos al cierre.
+  let currentTool = null;
+
   for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-      yield { type: "delta", text: event.delta.text };
-    } else if (event.type === "message_start") {
+    if (event.type === "message_start") {
       inputTokens = event.message?.usage?.input_tokens ?? 0;
+    } else if (event.type === "content_block_start") {
+      if (event.content_block?.type === "tool_use") {
+        currentTool = {
+          id: event.content_block.id,
+          name: event.content_block.name,
+          jsonBuffer: "",
+        };
+      }
+    } else if (event.type === "content_block_delta") {
+      if (event.delta?.type === "text_delta") {
+        yield { type: "delta", text: event.delta.text };
+      } else if (event.delta?.type === "input_json_delta" && currentTool) {
+        currentTool.jsonBuffer += event.delta.partial_json ?? "";
+      }
+    } else if (event.type === "content_block_stop") {
+      if (currentTool) {
+        let parsedInput = {};
+        try { parsedInput = currentTool.jsonBuffer ? JSON.parse(currentTool.jsonBuffer) : {}; }
+        catch (e) { console.warn("[laura] tool input JSON parse error:", e.message, "buffer:", currentTool.jsonBuffer); }
+        yield {
+          type: "tool_call",
+          tool_id: currentTool.id,
+          name: currentTool.name,
+          input: parsedInput,
+        };
+        currentTool = null;
+      }
     } else if (event.type === "message_delta") {
       outputTokens = event.usage?.output_tokens ?? outputTokens;
       stopReason = event.delta?.stop_reason ?? stopReason;
     }
   }
 
-  // El SDK también expone .finalMessage() pero ya tenemos los tokens.
   yield {
     type: "done",
     usage: { input_tokens: inputTokens, output_tokens: outputTokens, stop_reason: stopReason },

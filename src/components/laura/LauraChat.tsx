@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { LauraProposalCard, type ProposedAction } from "./LauraProposalCard";
 
 /**
  * Chat de Laura — drawer lateral derecho con conversación streaming.
@@ -41,6 +42,9 @@ type Message = {
   /** Solo para mensajes del user: dataURLs de imágenes adjuntas
    *  para mostrar inline en la burbuja después de enviarlas. */
   imageDataUrls?: string[];
+  /** Solo para assistant: acciones propuestas (tool_use). Cada una
+   *  se renderiza como una <LauraProposalCard> debajo del texto. */
+  proposedActions?: ProposedAction[];
 };
 
 type AttachedImage = {
@@ -72,6 +76,24 @@ export function LauraChat({ open, onClose }: Props) {
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Decisiones tomadas por el usuario sobre las propuestas (tool_use).
+  // Una propuesta puede estar "approved" o "dismissed". Si no aparece
+  // en el map, sigue siendo interactiva. Persistimos en sessionStorage
+  // para que reabrir el chat no pierda el estado de las decisiones.
+  const [toolDecisions, setToolDecisions] = useState<Record<string, "approved" | "dismissed">>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.sessionStorage.getItem("laura.toolDecisions");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  const decideTool = useCallback((toolId: string, decision: "approved" | "dismissed") => {
+    setToolDecisions((prev) => {
+      const next = { ...prev, [toolId]: decision };
+      try { window.sessionStorage.setItem("laura.toolDecisions", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
   // mounted controla la animación: cuando `open` pasa a false, no
   // desmontamos inmediatamente — mantenemos `mounted=true` mientras se
   // ejecuta la animación de salida, luego desmontamos al terminar.
@@ -314,6 +336,25 @@ export function LauraChat({ open, onClose }: Props) {
               }
               return next;
             });
+          } else if (ev.type === "tool_call") {
+            // Acumulamos cada acción propuesta en el mensaje del
+            // assistant en curso. La UI ya muestra la tarjeta debajo
+            // del texto del bubble apenas llega.
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                const actions = last.proposedActions ?? [];
+                next[next.length - 1] = {
+                  ...last,
+                  proposedActions: [
+                    ...actions,
+                    { tool_id: ev.tool_id, name: ev.name, input: ev.input },
+                  ],
+                };
+              }
+              return next;
+            });
           } else if (ev.type === "error") {
             setMessages((prev) => {
               const next = [...prev];
@@ -404,6 +445,7 @@ export function LauraChat({ open, onClose }: Props) {
         content: m.content,
         status: m.error ? "error" : "ok",
         error: m.error,
+        proposedActions: m.proposed_actions ?? undefined,
       })));
     } catch {
       // si falla, no cambiamos el estado
@@ -525,7 +567,22 @@ export function LauraChat({ open, onClose }: Props) {
             />
           ) : (
             messages.map((m, i) => (
-              <MessageBubble key={i} message={m} avatarActive={hasSpoken} />
+              <div key={i} className="space-y-2">
+                <MessageBubble message={m} avatarActive={hasSpoken} />
+                {/* Tarjetas de propuesta (solo en mensajes del assistant) */}
+                {m.role === "assistant" && m.proposedActions && m.proposedActions.length > 0 && (
+                  <div className="pl-9 space-y-2">
+                    {m.proposedActions.map((action) => (
+                      <LauraProposalCard
+                        key={action.tool_id}
+                        action={action}
+                        decision={toolDecisions[action.tool_id] ?? null}
+                        onDecide={decideTool}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             ))
           )}
         </div>

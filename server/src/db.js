@@ -1104,6 +1104,11 @@ function runMigrations() {
       FOREIGN KEY (conversation_id) REFERENCES laura_conversations(id) ON DELETE CASCADE
     )`,
     "CREATE INDEX IF NOT EXISTS idx_laura_msg_conv ON laura_messages(conversation_id, created_at ASC)",
+    // Acciones propuestas (tool_use de Anthropic). JSON array con
+    // { tool_id, name, input }. Solo lo llenan los mensajes del
+    // assistant. Permite renderizar la conversación al recargar sin
+    // perder las tarjetas de propuesta.
+    "ALTER TABLE laura_messages ADD COLUMN proposed_actions_json TEXT",
   ];
   for (const sql of migrations) {
     try {

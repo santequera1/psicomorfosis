@@ -42,7 +42,7 @@ function parseSoap(content: string): SoapContent | null {
   return null;
 }
 
-type HistoriaSearch = { id?: string };
+type HistoriaSearch = { id?: string; laura_note?: string };
 
 export const Route = createFileRoute("/historia")({
   head: () => ({
@@ -53,6 +53,10 @@ export const Route = createFileRoute("/historia")({
   }),
   validateSearch: (search: Record<string, unknown>): HistoriaSearch => ({
     id: typeof search.id === "string" ? search.id : undefined,
+    // Pre-carga de nota propuesta por Laura. Es un base64 con
+    // JSON.stringify({ kind, title, content }). El receptor decodifica
+    // y abre el editor de notas con el contenido pre-poblado.
+    laura_note: typeof search.laura_note === "string" ? search.laura_note : undefined,
   }),
   component: HistoriaPage,
 });
@@ -69,6 +73,29 @@ function HistoriaPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [noteEditorOpen, setNoteEditorOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
+  // Pre-carga de Laura: cuando llega `laura_note` en el query, lo
+  // decodificamos UNA vez, abrimos el editor y limpiamos el query
+  // para que F5 no re-dispare.
+  const [lauraPrefill, setLauraPrefill] = useState<{ kind: string; title?: string; content: string } | null>(null);
+  useEffect(() => {
+    if (!search.laura_note) return;
+    try {
+      const json = decodeURIComponent(escape(atob(search.laura_note)));
+      const parsed = JSON.parse(json) as { kind: string; title?: string; content: string };
+      if (parsed && typeof parsed.content === "string") {
+        setLauraPrefill(parsed);
+        setNoteEditorOpen(true);
+      }
+    } catch (err) {
+      console.warn("[historia] laura_note decode error:", err);
+    }
+    // Limpiamos el query para no re-disparar tras F5.
+    navigate({
+      to: "/historia",
+      search: { id: search.id } as never,
+      replace: true,
+    });
+  }, [search.laura_note, search.id, navigate]);
 
   // Si llega un id nuevo en la URL (navegación desde otra página), respetarlo.
   // Antes había auto-selección del primer paciente, lo que confundía: parecía
@@ -151,7 +178,8 @@ function HistoriaPage() {
           patient={patient}
           editorOpen={noteEditorOpen}
           onOpenEditor={() => setNoteEditorOpen(true)}
-          onCloseEditor={() => setNoteEditorOpen(false)}
+          onCloseEditor={() => { setNoteEditorOpen(false); setLauraPrefill(null); }}
+          lauraPrefill={lauraPrefill}
         />
       </div>
 
@@ -802,12 +830,13 @@ function BlockHistory({ patientId, kind }: { patientId: string; kind: keyof type
  * crear nueva versión de firmadas, y crear nuevas con un editor inline.
  */
 function SessionNotes({
-  patient, editorOpen, onOpenEditor, onCloseEditor,
+  patient, editorOpen, onOpenEditor, onCloseEditor, lauraPrefill,
 }: {
   patient: Patient;
   editorOpen: boolean;
   onOpenEditor: () => void;
   onCloseEditor: () => void;
+  lauraPrefill?: { kind: string; title?: string; content: string } | null;
 }) {
   const { data: notes = [], isLoading } = useQuery({
     queryKey: ["notes", patient.id],
@@ -867,6 +896,7 @@ function SessionNotes({
             patientId={patient.id}
             patientName={displayPatientName(patient)}
             onClose={onCloseEditor}
+            prefill={lauraPrefill ?? undefined}
           />
         </div>
       )}
@@ -1294,11 +1324,61 @@ function PatientPickerModal({ patients, currentId, onPick, onClose }: { patients
  * directamente dentro del flujo de SessionNotes, sin abrir backdrop ni
  * desconectar al psicólogo de la lista de notas existentes.
  */
-function NoteEditor({ patientId, patientName, onClose }: { patientId: string; patientName: string; onClose: () => void }) {
+function NoteEditor({
+  patientId, patientName, onClose, prefill,
+}: {
+  patientId: string;
+  patientName: string;
+  onClose: () => void;
+  /** Pre-carga propuesta por Laura. kind se mapea a las kinds reales
+   *  de la app; content va al freeText (o se intenta parsear SOAP si
+   *  el kind es "sesion"). */
+  prefill?: { kind: string; title?: string; content: string };
+}) {
   const qc = useQueryClient();
-  const [kind, setKind] = useState<NoteKind>("sesion");
-  const [soap, setSoap] = useState<SoapContent>({ s: "", o: "", a: "", p: "" });
-  const [freeText, setFreeText] = useState("");
+
+  // Mapeo de las kinds que propone Laura → kinds reales de la app.
+  // El tool incluye "evolucion" como sinónimo común de las notas de
+  // sesión; la app las llama "sesion".
+  const initialKind: NoteKind = (() => {
+    if (!prefill) return "sesion";
+    const k = prefill.kind;
+    if (k === "evolucion" || k === "sesion") return "sesion";
+    if (["motivo", "antecedentes", "examen_mental", "plan"].includes(k)) return k as NoteKind;
+    return "sesion";
+  })();
+  const [kind, setKind] = useState<NoteKind>(initialKind);
+
+  // Si el prefill viene para "sesion" y luce con secciones S/O/A/P
+  // (markdown común), intentamos parsearlo a SOAP. Si no, lo dejamos
+  // todo en freeText y el usuario reorganiza.
+  const initialSoap: SoapContent = (() => {
+    if (!prefill || initialKind !== "sesion") return { s: "", o: "", a: "", p: "" };
+    const text = prefill.content;
+    // Buscar secciones marcadas con S:, O:, A:, P: (variantes comunes)
+    const grab = (re: RegExp) => {
+      const m = text.match(re);
+      return m ? m[1].trim() : "";
+    };
+    const s = grab(/(?:^|\n)\s*(?:S|Subjetivo|SUBJETIVO)[:\.]?\s*([\s\S]*?)(?=\n\s*(?:O|Objetivo|OBJETIVO)[:\.]|\n\s*(?:A|Análisis|ANÁLISIS|Analisis|ANALISIS)[:\.]|\n\s*(?:P|Plan|PLAN)[:\.]|$)/);
+    const o = grab(/(?:^|\n)\s*(?:O|Objetivo|OBJETIVO)[:\.]?\s*([\s\S]*?)(?=\n\s*(?:A|Análisis|ANÁLISIS|Analisis|ANALISIS)[:\.]|\n\s*(?:P|Plan|PLAN)[:\.]|$)/);
+    const a = grab(/(?:^|\n)\s*(?:A|Análisis|ANÁLISIS|Analisis|ANALISIS)[:\.]?\s*([\s\S]*?)(?=\n\s*(?:P|Plan|PLAN)[:\.]|$)/);
+    const p = grab(/(?:^|\n)\s*(?:P|Plan|PLAN)[:\.]?\s*([\s\S]*?)$/);
+    return { s, o, a, p };
+  })();
+  const [soap, setSoap] = useState<SoapContent>(initialSoap);
+
+  const initialFree: string = (() => {
+    if (!prefill) return "";
+    if (initialKind === "sesion") {
+      // Si parseamos SOAP y al menos una sección quedó vacía + tampoco
+      // detectamos las otras, mejor caer a freeText con el contenido entero.
+      const total = initialSoap.s.length + initialSoap.o.length + initialSoap.a.length + initialSoap.p.length;
+      return total === 0 ? prefill.content : "";
+    }
+    return prefill.content;
+  })();
+  const [freeText, setFreeText] = useState(initialFree);
   const [signNow, setSignNow] = useState(false);
   const useSoap = kind === "sesion";
 

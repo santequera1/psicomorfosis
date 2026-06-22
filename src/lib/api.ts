@@ -2258,6 +2258,7 @@ export const api = {
         tokens_out: number | null;
         error: string | null;
         created_at: string;
+        proposed_actions: Array<{ tool_id: string; name: string; input: Record<string, unknown> }> | null;
       }>;
     }>(`/api/laura/conversations/${id}`),
   lauraDeleteConversation: (id: number) =>
@@ -2333,8 +2334,26 @@ export const api = {
   },
 };
 
+export type LauraToolCall =
+  | { tool_id: string; name: "navigate_to"; input: { path: string; reason: string } }
+  | { tool_id: string; name: "open_patient"; input: { patient_id: string; reason: string } }
+  | {
+      tool_id: string;
+      name: "propose_clinical_note";
+      input: {
+        patient_id: string;
+        kind: "motivo" | "antecedentes" | "examen_mental" | "evolucion" | "plan";
+        title: string;
+        content: string;
+      };
+    }
+  // Tipo genérico de fallback por si el backend introduce tools nuevos
+  // antes de que el cliente los conozca.
+  | { tool_id: string; name: string; input: Record<string, unknown> };
+
 export type LauraStreamEvent =
   | { type: "conversation_id"; id: number }
   | { type: "delta"; text: string }
+  | { type: "tool_call"; tool_id: string; name: string; input: Record<string, unknown> }
   | { type: "error"; code?: string; message: string }
   | { type: "done"; usage?: { input_tokens: number; output_tokens: number; stop_reason: string | null }; conversation_id?: number };
