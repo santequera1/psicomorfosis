@@ -41,6 +41,7 @@ import diagnosesRoutes from "./routes/diagnoses.js";
 import landingRoutes from "./routes/landing.js";
 import voiceRoutes from "./routes/voice.js";
 import messagingRoutes from "./routes/messaging.js";
+import lauraRoutes from "./routes/laura.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -119,6 +120,11 @@ app.use("/api/voice", voiceRoutes);
 // exacto y verificar la firma HMAC; el resto de endpoints (config,
 // templates, log, opt-in/out) usa los parsers globales.
 app.use("/api", messagingRoutes);
+// Laura (asistente IA): chat SSE + conversations + usage. Todo requiere
+// auth. El chat necesita atravesar nginx sin buffering — la config
+// nginx ya tiene X-Accel-Buffering: no en este endpoint vía header del
+// server, pero conviene tenerlo en mente si se cambia el reverse proxy.
+app.use("/api", lauraRoutes);
 // portalRoutes va ANTES que notesRoutes porque expone endpoints públicos
 // (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
 // requireAuth global, así que si va primero intercepta cualquier /api/*.

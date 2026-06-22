@@ -2195,4 +2195,122 @@ export const api = {
       limit: params.limit ?? null,
       offset: params.offset ?? null,
     })}`),
+
+  // ─── Laura (IA) ────────────────────────────────────────────────────
+  lauraHealth: () =>
+    request<{ ok: boolean; status?: number; latencyMs?: number; error?: string; model: string }>(
+      "/api/laura/health",
+    ),
+  lauraUsage: () =>
+    request<{ date: string; messages_today: number; tokens_in_today: number; tokens_out_today: number }>(
+      "/api/laura/usage",
+    ),
+  lauraListConversations: (params?: { limit?: number }) =>
+    request<{
+      items: Array<{
+        id: number;
+        title: string | null;
+        patient_id: string | null;
+        patient_name: string | null;
+        patient_preferred: string | null;
+        created_at: string;
+        updated_at: string;
+        message_count: number;
+      }>;
+    }>(`/api/laura/conversations${qs({ limit: params?.limit ?? null })}`),
+  lauraGetConversation: (id: number) =>
+    request<{
+      conversation: {
+        id: number;
+        title: string | null;
+        patient_id: string | null;
+        patient_name: string | null;
+        patient_preferred: string | null;
+        created_at: string;
+        updated_at: string;
+      };
+      messages: Array<{
+        id: number;
+        role: "user" | "assistant";
+        content: string;
+        model: string | null;
+        tokens_in: number | null;
+        tokens_out: number | null;
+        error: string | null;
+        created_at: string;
+      }>;
+    }>(`/api/laura/conversations/${id}`),
+  lauraDeleteConversation: (id: number) =>
+    request<{ ok: true }>(`/api/laura/conversations/${id}`, { method: "DELETE" }),
+
+  /**
+   * Stream de chat de Laura. SSE manual con fetch + ReadableStream
+   * (no EventSource para poder mandar headers de auth y un body POST).
+   *
+   * `onEvent` recibe cada chunk parseado del backend:
+   *   { type: "conversation_id", id }
+   *   { type: "delta", text }
+   *   { type: "error", code, message }
+   *   { type: "done", usage, conversation_id }
+   *
+   * Devuelve una promesa que resuelve cuando el server cierra el
+   * stream. El caller puede pasar AbortSignal para cancelar a
+   * mitad del stream (cierra la conexión).
+   */
+  lauraChatStream: async (
+    body: {
+      conversation_id?: number | null;
+      patient_id?: string | null;
+      current_path?: string | null;
+      message: string;
+    },
+    onEvent: (ev: LauraStreamEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/laura/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      const errBody = await res.text().catch(() => "");
+      throw new ApiError(res.status, errBody || "No se pudo iniciar el stream de Laura");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE: eventos separados por "\n\n", cada línea con prefijo "data: ".
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          try {
+            onEvent(JSON.parse(payload) as LauraStreamEvent);
+          } catch {
+            // chunk malformado — ignoramos pero no abortamos
+          }
+        }
+      }
+    }
+  },
 };
+
+export type LauraStreamEvent =
+  | { type: "conversation_id"; id: number }
+  | { type: "delta"; text: string }
+  | { type: "error"; code?: string; message: string }
+  | { type: "done"; usage?: { input_tokens: number; output_tokens: number; stop_reason: string | null }; conversation_id?: number };

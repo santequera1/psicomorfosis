@@ -1057,6 +1057,53 @@ function runMigrations() {
     // Email no único: queremos permitir que la misma persona reintente si
     // su solicitud fue rechazada. La validación de duplicados se hace en
     // el endpoint (con feedback al usuario) más que con UNIQUE constraint.
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAURA / IA (22 jun 2026) — asistente conversacional powered by Claude
+    // vía DARIO (proxy local que usa nuestra suscripción Claude Pro sin
+    // cobro per-token). El alcance y reglas viven en laura/laura-*.md.
+    //
+    // El patrón es propose-approve: Laura LEE todo el workspace pero
+    // NO escribe ni envía sin confirmación explícita del psicólogo
+    // (Fase 3+). En esta primera versión es solo chat de lectura.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Conversaciones. Una por "hilo" — puede o no estar ligada a un
+    // paciente. Pertenece al user (no compartidas dentro del workspace
+    // para preservar privacidad del razonamiento clínico de cada profe).
+    `CREATE TABLE IF NOT EXISTS laura_conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      patient_id TEXT,                       -- contexto opcional
+      title TEXT,                            -- generado del primer mensaje
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      archived_at TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_laura_conv_user ON laura_conversations(user_id, updated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_laura_conv_patient ON laura_conversations(patient_id)",
+
+    // Mensajes. role tiene 'user' o 'assistant'. system se reconstruye
+    // por turno (depende de la URL/paciente activo) — no se persiste.
+    // tokens_in/out son por mensaje, sumables para el panel de cuota.
+    `CREATE TABLE IF NOT EXISTS laura_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER NOT NULL,
+      role TEXT NOT NULL,                    -- 'user' | 'assistant'
+      content TEXT NOT NULL,
+      model TEXT,                            -- ej 'claude-sonnet-4-5'
+      tokens_in INTEGER,
+      tokens_out INTEGER,
+      stop_reason TEXT,                      -- 'end_turn'|'max_tokens'|'refusal'|...
+      error TEXT,                            -- si la generación falló
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES laura_conversations(id) ON DELETE CASCADE
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_laura_msg_conv ON laura_messages(conversation_id, created_at ASC)",
   ];
   for (const sql of migrations) {
     try {
