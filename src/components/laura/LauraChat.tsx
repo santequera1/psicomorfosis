@@ -30,11 +30,6 @@ import { cn } from "@/lib/utils";
 const AVATAR_INITIAL = "/laura/laura-profile-2.svg";
 const AVATAR_ACTIVE = "/laura/laura-profile-2.svg";
 
-// Cuota beta — ajustable más adelante. Estos números los muestra el
-// banner para que el psicólogo vea cuánto ha consumido del límite del día.
-const BETA_MESSAGE_LIMIT = 60;
-const BETA_TOKEN_LIMIT = 80_000;
-
 type Message = {
   id?: number;
   role: "user" | "assistant";
@@ -450,60 +445,60 @@ function BetaBanner({
   usage?: { messages_today: number; tokens_in_today: number; tokens_out_today: number };
 }) {
   if (!health) return null;
-  if (!health.ok) {
+
+  const sub = health.subscription;
+  const messages = usage?.messages_today ?? 0;
+  const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
+
+  // Estado "no disponible" = DARIO down O suscripción Claude marcada
+  // como no-healthy. El % real de uso de Claude (91%, etc.) NO está
+  // accesible vía DARIO — solo a través de claude.ai. Por eso NO
+  // mostramos barra de progreso de cuota: la única info real que
+  // tenemos es "activa o no" + "cuándo se renueva". Mostrar una barra
+  // que mida cosas locales (mensajes del día contra un tope inventado)
+  // resulta engañoso si el usuario asume que es el % de Claude.
+  const unavailable = !health.ok || (sub && !sub.ok);
+
+  if (unavailable) {
     return (
-      <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200 flex items-center gap-2">
-        <AlertTriangle className="h-3.5 w-3.5 text-rose-700 shrink-0" />
-        <p className="text-[11px] text-rose-800 leading-snug">
-          <strong>Laura no está disponible ahora mismo.</strong>{" "}
-          {health.error ? `(${health.error})` : "Reintenta en unos minutos."}
+      <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200">
+        <p className="text-[11px] text-rose-900 font-semibold leading-snug flex items-center gap-1.5">
+          <AlertTriangle className="h-3 w-3" />
+          Laura no está disponible ahora
         </p>
+        {sub?.expires_in ? (
+          <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
+            Estará disponible en <strong className="tabular">{sub.expires_in}</strong>.
+          </p>
+        ) : (
+          <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
+            {health.error
+              ? "Estará disponible cuando se restablezca el servicio."
+              : "Estará disponible cuando se renueve la suscripción."}
+          </p>
+        )}
       </div>
     );
   }
-  const messages = usage?.messages_today ?? 0;
-  const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
-  const msgPct = Math.min(100, (messages / BETA_MESSAGE_LIMIT) * 100);
-  const tokPct = Math.min(100, (totalTokens / BETA_TOKEN_LIMIT) * 100);
-  const usePct = Math.max(msgPct, tokPct);
-  const barColor =
-    usePct < 60 ? "bg-emerald-500" :
-    usePct < 85 ? "bg-amber-500" :
-    "bg-rose-500";
-  const sub = health.subscription;
+
   return (
     <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
-      <p className="text-[11px] text-amber-900 font-semibold leading-snug">
-        Beta · Uso de IA limitado
+      <p className="text-[11px] text-amber-900 font-semibold leading-snug flex items-center gap-1.5">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Uso de la asistente activa
+        {sub?.expires_in && (
+          <span className="font-normal text-amber-900/80">
+            · se renueva en <strong className="tabular">{sub.expires_in}</strong>
+          </span>
+        )}
       </p>
       <p className="text-[11px] text-amber-900/80 leading-snug mt-0.5 tabular">
         Hoy usaste {messages} mensaje{messages === 1 ? "" : "s"}{" "}
         · {totalTokens.toLocaleString("es-CO")} tokens
       </p>
-      {/* Barra de uso */}
-      <div className="mt-1.5 h-1.5 w-full rounded-full bg-amber-100/80 overflow-hidden">
-        <div
-          className={cn("h-full transition-all duration-500", barColor)}
-          style={{ width: `${Math.max(2, usePct)}%` }}
-        />
-      </div>
-      {/* Estado de la suscripción Claude reportado por DARIO. expires_in
-          viene como "7h 59m" o "1d 3h" — texto literal del tool. */}
-      {sub?.ok && sub.expires_in && (
-        <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 align-middle" />
-          Suscripción Claude activa · se renueva en <strong className="tabular">{sub.expires_in}</strong>
-        </p>
-      )}
-      {sub && !sub.ok && (
-        <p className="text-[10px] text-rose-800/90 mt-1 leading-snug">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500 mr-1 align-middle" />
-          Suscripción agotada. Laura volverá cuando se renueve.
-        </p>
-      )}
       <p className="text-[10px] text-amber-900/70 mt-1 leading-snug">
-        El uso de Laura tiene límites diarios durante la beta. Si alcanzas el límite,
-        estará disponible nuevamente más tarde.
+        Laura es una beta que usa una suscripción compartida de Claude. Si alcanza
+        su límite diario, no estará disponible hasta que se renueve.
       </p>
     </div>
   );
