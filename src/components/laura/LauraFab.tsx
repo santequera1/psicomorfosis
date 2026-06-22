@@ -54,22 +54,27 @@ export function LauraFab() {
         aria-label={open ? "Cerrar Laura" : "Abrir asistente Laura"}
         title="Laura — asistente clínica"
         className={cn(
-          "fixed right-5 bottom-24 z-30 h-14 w-14 rounded-full shadow-soft-lg",
+          "fixed right-5 bottom-24 z-30 h-14 w-14 rounded-full shadow-lg",
           "bg-surface border-2 border-brand-700",
-          "hover:scale-105 active:scale-95 transition-transform",
+          "hover:scale-110 active:scale-95",
+          "transition-all duration-200",
           "flex items-center justify-center overflow-hidden",
-          open && "ring-4 ring-brand-400/30",
+          // Animación inicial: entra con scale + fade. Solo dura el
+          // primer mount del shell.
+          "animate-in zoom-in-50 fade-in duration-500 ease-out",
+          open && "ring-4 ring-brand-400/40 scale-95",
         )}
+        style={{ animationDelay: "200ms", animationFillMode: "backwards" }}
       >
         <img
           src={hasSpoken ? AVATAR_ACTIVE : AVATAR_INITIAL}
           alt=""
           className="h-full w-full object-cover"
         />
-        {/* Dot indicador "beta" */}
+        {/* Dot indicador "beta" con leve pulse para llamar la atención */}
         <span
           aria-hidden
-          className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-amber-400 border-2 border-surface"
+          className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-amber-400 border-2 border-surface animate-pulse"
           title="Beta"
         />
       </button>

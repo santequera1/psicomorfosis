@@ -25,8 +25,15 @@ import { cn } from "@/lib/utils";
  *   - Historial de conversaciones previas (lista lateral colapsable)
  */
 
-const AVATAR_INITIAL = "/laura/laura-profile-1.svg";
+// Único avatar: profile-2 desde el inicio (decidido por UX — profile-1
+// queda como sprite alterno para iteraciones futuras o badge animado).
+const AVATAR_INITIAL = "/laura/laura-profile-2.svg";
 const AVATAR_ACTIVE = "/laura/laura-profile-2.svg";
+
+// Cuota beta — ajustable más adelante. Estos números los muestra el
+// banner para que el psicólogo vea cuánto ha consumido del límite del día.
+const BETA_MESSAGE_LIMIT = 60;
+const BETA_TOKEN_LIMIT = 80_000;
 
 type Message = {
   id?: number;
@@ -48,9 +55,33 @@ export function LauraChat({ open, onClose }: Props) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // mounted controla la animación: cuando `open` pasa a false, no
+  // desmontamos inmediatamente — mantenemos `mounted=true` mientras se
+  // ejecuta la animación de salida, luego desmontamos al terminar.
+  const [mounted, setMounted] = useState(open);
+  const [entering, setEntering] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Ciclo de mount/animate/unmount: cuando open=true → mount inmediato y
+  // dispara animación de entrada. Cuando open=false → animación de
+  // salida (220ms) y luego unmount.
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      // Pequeño tick para que el primer render parta de las clases
+      // "out" y luego entre. Sin esto el browser no detecta el cambio
+      // y no anima.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setEntering(true));
+      });
+    } else if (mounted) {
+      setEntering(false);
+      const t = setTimeout(() => setMounted(false), 240);
+      return () => clearTimeout(t);
+    }
+  }, [open, mounted]);
 
   // Auto-detect: si estamos en /pacientes/<id> esa es la ficha activa.
   const routerState = useRouterState();
@@ -104,8 +135,12 @@ export function LauraChat({ open, onClose }: Props) {
 
   // ── Acciones ──────────────────────────────────────────────────────
 
-  const send = useCallback(async () => {
-    const trimmed = input.trim();
+  const send = useCallback(async (overrideText?: string) => {
+    // Si viene texto explícito (ej: click en chip de sugerencia), lo
+    // usamos en lugar del state del input. Eso evita el bug clásico de
+    // setState + closure: setInput(text) + send() en el mismo handler
+    // no ve el nuevo texto, porque la closure capturó el state viejo.
+    const trimmed = (overrideText ?? input).trim();
     if (!trimmed || sending) return;
 
     setSending(true);
@@ -217,23 +252,38 @@ export function LauraChat({ open, onClose }: Props) {
     }
   }, [sending]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <>
-      {/* Backdrop — solo en mobile */}
+      {/* Backdrop — solo en mobile, con fade */}
       <div
-        className="lg:hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm"
+        className={cn(
+          "lg:hidden fixed inset-0 z-40 bg-ink-900/40 backdrop-blur-sm",
+          "transition-opacity duration-200 ease-out",
+          entering ? "opacity-100" : "opacity-0",
+        )}
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Drawer lateral derecho */}
+      {/* Drawer lateral derecho — desliza desde la derecha + fade del
+          backdrop. Easing levemente "spring-y" con cubic-bezier para
+          que se sienta orgánico, no robótico. */}
       <aside
         className={cn(
           "fixed top-0 right-0 z-50 h-screen w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
           "flex flex-col",
+          "transition-transform duration-300",
+          entering
+            ? "translate-x-0"
+            : "translate-x-full",
         )}
+        style={{
+          transitionTimingFunction: entering
+            ? "cubic-bezier(0.16, 1, 0.3, 1)" // overshoot ligero al entrar
+            : "cubic-bezier(0.7, 0, 0.84, 0)", // aceleración al salir
+        }}
         role="dialog"
         aria-label="Asistente Laura"
       >
@@ -311,7 +361,7 @@ export function LauraChat({ open, onClose }: Props) {
           className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
         >
           {messages.length === 0 ? (
-            <EmptyState />
+            <EmptyState onPick={(text) => { void send(text); }} />
           ) : (
             messages.map((m, i) => (
               <MessageBubble key={i} message={m} avatarActive={hasSpoken} />
@@ -322,7 +372,7 @@ export function LauraChat({ open, onClose }: Props) {
         {/* Input */}
         <form
           className="border-t border-line-100 p-3 shrink-0"
-          onSubmit={(e) => { e.preventDefault(); send(); }}
+          onSubmit={(e) => { e.preventDefault(); void send(); }}
         >
           <div className="flex items-end gap-2">
             <textarea
@@ -340,7 +390,7 @@ export function LauraChat({ open, onClose }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  send();
+                  void send();
                 }
               }}
               className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60"
@@ -375,7 +425,7 @@ function BetaBanner({
   if (!health) return null;
   if (!health.ok) {
     return (
-      <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 flex items-center gap-2">
+      <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200 flex items-center gap-2">
         <AlertTriangle className="h-3.5 w-3.5 text-rose-700 shrink-0" />
         <p className="text-[11px] text-rose-800 leading-snug">
           <strong>Laura no está disponible ahora mismo.</strong>{" "}
@@ -384,14 +434,36 @@ function BetaBanner({
       </div>
     );
   }
+  const messages = usage?.messages_today ?? 0;
   const totalTokens = (usage?.tokens_in_today ?? 0) + (usage?.tokens_out_today ?? 0);
+  // Tomamos el "uso" como el % más alto entre mensajes y tokens. Eso da
+  // una sola barra que refleja el límite que esté más cerca.
+  const msgPct = Math.min(100, (messages / BETA_MESSAGE_LIMIT) * 100);
+  const tokPct = Math.min(100, (totalTokens / BETA_TOKEN_LIMIT) * 100);
+  const usePct = Math.max(msgPct, tokPct);
+  const barColor =
+    usePct < 60 ? "bg-emerald-500" :
+    usePct < 85 ? "bg-amber-500" :
+    "bg-rose-500";
   return (
-    <div className="px-4 py-2 bg-amber-50/50 border-b border-amber-200/60">
-      <p className="text-[11px] text-amber-900 leading-snug">
-        <strong>Beta · Suscripción compartida.</strong>{" "}
-        Hoy usaste {usage?.messages_today ?? 0} mensaje{(usage?.messages_today ?? 0) === 1 ? "" : "s"}{" "}
-        · {totalTokens.toLocaleString("es-CO")} tokens.{" "}
-        Si Laura no responde, la suscripción se agotó — vuelve en unas horas.
+    <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
+      <p className="text-[11px] text-amber-900 font-semibold leading-snug">
+        Beta · Uso de IA limitado
+      </p>
+      <p className="text-[11px] text-amber-900/80 leading-snug mt-0.5 tabular">
+        Hoy usaste {messages} mensaje{messages === 1 ? "" : "s"}{" "}
+        · {totalTokens.toLocaleString("es-CO")} tokens
+      </p>
+      {/* Barra de uso */}
+      <div className="mt-1.5 h-1.5 w-full rounded-full bg-amber-100/80 overflow-hidden">
+        <div
+          className={cn("h-full transition-all duration-500", barColor)}
+          style={{ width: `${Math.max(2, usePct)}%` }}
+        />
+      </div>
+      <p className="text-[10px] text-amber-900/70 mt-1 leading-snug">
+        El uso de Laura tiene límites diarios durante la beta. Si alcanzas el límite,
+        estará disponible nuevamente más tarde.
       </p>
     </div>
   );
@@ -443,35 +515,39 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
   );
 }
 
-function EmptyState() {
+function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 gap-3">
+    <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8 gap-4">
       <img
         src={AVATAR_INITIAL}
         alt=""
-        className="h-20 w-20 rounded-full bg-brand-50"
+        className="h-32 w-32 rounded-2xl bg-brand-50 shadow-md object-cover ring-4 ring-brand-50/50"
       />
       <div>
-        <h3 className="font-serif text-lg text-ink-900">Hola, soy Laura</h3>
-        <p className="text-xs text-ink-500 mt-1 max-w-xs">
+        <h3 className="font-serif text-xl text-ink-900">Hola, soy Laura</h3>
+        <p className="text-xs text-ink-500 mt-1.5 max-w-xs leading-relaxed">
           Tu asistente clínica. Conozco tu consulta y te ayudo con redacción,
           dudas sobre la plataforma o cómo manejar un caso. Pregúntame.
         </p>
       </div>
-      <div className="w-full max-w-xs space-y-2 mt-2">
-        <SuggestionChip text="¿Cómo agendo una cita?" />
-        <SuggestionChip text="Dame ejercicios para ansiedad social" />
-        <SuggestionChip text="¿Cómo agrego un diagnóstico DSM-5?" />
+      <div className="w-full max-w-xs space-y-2 mt-1">
+        <SuggestionChip text="¿Cómo agendo una cita?" onPick={onPick} />
+        <SuggestionChip text="Dame ejercicios para ansiedad social" onPick={onPick} />
+        <SuggestionChip text="¿Cómo agrego un diagnóstico DSM-5?" onPick={onPick} />
       </div>
     </div>
   );
 }
 
-function SuggestionChip({ text }: { text: string }) {
+function SuggestionChip({ text, onPick }: { text: string; onPick: (text: string) => void }) {
   return (
-    <div className="text-xs text-ink-600 px-3 py-2 rounded-lg border border-line-200 bg-surface">
+    <button
+      type="button"
+      onClick={() => onPick(text)}
+      className="w-full text-left text-xs text-ink-700 px-3 py-2 rounded-lg border border-line-200 bg-surface hover:border-brand-400 hover:bg-brand-50/40 active:scale-[0.99] transition-all"
+    >
       💡 {text}
-    </div>
+    </button>
   );
 }
 
