@@ -222,6 +222,27 @@ export function LauraChat({ open, onClose }: Props) {
         return next;
       });
     } finally {
+      // Safety net: si la burbuja del assistant sigue en "streaming"
+      // cuando el stream se cierra (sin error explícito ni done), la
+      // marcamos como completada o con un error genérico para no
+      // dejar el cursor parpadeando para siempre.
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant" && last.status === "streaming") {
+          if (last.content) {
+            next[next.length - 1] = { ...last, status: "ok" };
+          } else {
+            next[next.length - 1] = {
+              ...last,
+              status: "error",
+              error: "Stream cerrado sin respuesta",
+              content: "No recibí respuesta del servidor. Reintenta o avísanos si persiste.",
+            };
+          }
+        }
+        return next;
+      });
       setSending(false);
       abortRef.current = null;
     }
