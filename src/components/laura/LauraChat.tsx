@@ -526,82 +526,79 @@ function BetaBanner({
 
   const sub = health.subscription;
   const messages = usage?.messages_today ?? 0;
-
-  // Detección de "no disponible":
-  //   1. Servicio interno caído (health.ok = false)
-  //   2. Cuota agotada explícitamente
-  //   3. Uso de la sesión >= 100% según la fuente real
   const sessionPct = quota?.session?.percent ?? null;
-  const sessionFull = sessionPct !== null && sessionPct >= 100;
-  const unavailable = !health.ok || (sub && !sub.ok) || sessionFull;
-
   const resetCo = formatResetTimeColombia(quota?.session?.resets_at);
 
-  if (unavailable) {
+  // Tres estados visuales claros (sin barra — genera ansiedad de ver
+  // el % subir). Los umbrales son los que ya usábamos para colorear
+  // la barra, ahora aplicados a fondo + dot + mensaje.
+  //
+  //   🟢 Disponible:   pct < 80% (y servicio sano)
+  //   🟠 Alta demanda: pct >= 80% (cerca del límite)
+  //   🔴 Descansando:  pct >= 100% O servicio caído O suscripción agotada
+  const serviceDown = !health.ok || (sub && !sub.ok);
+  const isResting = serviceDown || (sessionPct !== null && sessionPct >= 100);
+  const isHighDemand = !isResting && sessionPct !== null && sessionPct >= 80;
+
+  if (isResting) {
     return (
       <div className="px-4 py-2.5 bg-rose-50 border-b border-rose-200">
         <p className="text-[11px] text-rose-900 font-semibold leading-snug flex items-center gap-1.5">
-          <AlertTriangle className="h-3 w-3" />
-          Laura IA no está disponible ahora
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500" />
+          Laura descansando un momento
         </p>
-        {resetCo ? (
+        <p className="text-[11px] text-rose-800/90 leading-snug mt-1">
+          La capacidad beta se ha alcanzado.
+        </p>
+        {resetCo && (
           <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
-            Volverá a estar disponible {resetCo}{resetCo.includes("las") || resetCo.includes("mañana") || /\d/.test(resetCo) ? " (Colombia)" : ""}.
-          </p>
-        ) : (
-          <p className="text-[11px] text-rose-800/90 leading-snug mt-0.5">
-            Estaremos restableciendo el servicio pronto.
+            Estará disponible nuevamente {resetCo.includes("a las") ? resetCo : `a las ${resetCo}`}.
           </p>
         )}
       </div>
     );
   }
 
-  const pct = sessionPct ?? 0;
-  const barColor =
-    pct < 60 ? "bg-emerald-500" :
-    pct < 85 ? "bg-amber-500" :
-    "bg-rose-500";
+  if (isHighDemand) {
+    return (
+      <div className="px-4 py-2.5 bg-amber-100/70 border-b border-amber-300/70">
+        <p className="text-[11px] text-amber-900 font-semibold leading-snug flex items-center gap-1.5">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Alta demanda
+        </p>
+        <p className="text-[11px] text-amber-900/85 leading-snug mt-1">
+          Laura está cerca del límite temporal de la beta.
+        </p>
+        {resetCo && (
+          <p className="text-[11px] text-amber-900/85 leading-snug mt-0.5">
+            La capacidad se renovará {resetCo.includes("a las") ? resetCo : `a las ${resetCo}`}.
+          </p>
+        )}
+      </div>
+    );
+  }
 
+  // Estado normal (verde)
   return (
-    <div className="px-4 py-2.5 bg-amber-50/60 border-b border-amber-200/60">
-      {/* Header: estado + badge beta */}
-      <p className="text-[11px] text-amber-900 font-semibold leading-snug flex items-center gap-1.5">
+    <div className="px-4 py-2.5 bg-emerald-50/50 border-b border-emerald-200/50">
+      <p className="text-[11px] text-emerald-900 font-semibold leading-snug flex items-center gap-1.5">
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
         Laura IA · Beta
       </p>
-
-      {/* Barra de uso (solo si ya cargó el primer fetch). Mientras tanto
-          el banner se ve sin barra durante 3-5s la primera vez del día. */}
-      {sessionPct !== null && (
-        <>
-          <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-amber-900/80">
-            <span>Uso disponible</span>
-            <span className="tabular font-medium">{sessionPct}% utilizado</span>
-          </div>
-          <div className="mt-0.5 h-1.5 w-full rounded-full bg-amber-100/80 overflow-hidden">
-            <div
-              className={cn("h-full transition-all duration-500", barColor)}
-              style={{ width: `${Math.max(2, pct)}%` }}
-            />
-          </div>
-          {resetCo && (
-            <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
-              Próxima renovación: <strong className="tabular">{resetCo}</strong>{" "}
-              (Colombia)
-            </p>
-          )}
-        </>
-      )}
-
-      <p className="text-[10px] text-amber-900/80 mt-1 leading-snug">
-        Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"}</strong>{" "}
-        realizada{messages === 1 ? "" : "s"}
+      <p className="text-[11px] text-emerald-900/85 leading-snug mt-1">
+        Estado: <strong>Disponible</strong>
       </p>
-
-      <p className="text-[10px] text-amber-900/65 mt-1.5 leading-snug">
-        Laura está en fase beta. Los límites de uso nos ayudan a mantener
-        la estabilidad mientras mejoramos la experiencia.
+      <p className="text-[11px] text-emerald-900/85 leading-snug mt-0.5">
+        Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"} realizada{messages === 1 ? "" : "s"}</strong>
+      </p>
+      {resetCo && (
+        <p className="text-[11px] text-emerald-900/80 leading-snug mt-0.5">
+          Renovación de capacidad: <strong className="tabular">{resetCo}</strong> (Colombia)
+        </p>
+      )}
+      <p className="text-[10px] text-emerald-900/65 mt-1.5 leading-snug">
+        Laura está en fase beta. Estamos aumentando gradualmente su capacidad
+        durante las pruebas.
       </p>
     </div>
   );
