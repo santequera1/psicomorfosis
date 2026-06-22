@@ -993,6 +993,11 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
       </div>
     );
   }
+  // Mientras espera el primer token, mostramos un loader de 3 puntos
+  // saltando estilo chat. En cuanto llegan deltas (content > 0), el
+  // loader desaparece y se va viendo el texto streamear.
+  const showTypingLoader = isStreaming && message.content.length === 0;
+
   return (
     <div className="flex gap-2.5">
       <img
@@ -1013,16 +1018,128 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
               {message.error ?? "Error"}
             </p>
           )}
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
-            {isStreaming && (
-              <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-ink-400 align-text-bottom animate-pulse" />
-            )}
-          </div>
+          {showTypingLoader ? (
+            <TypingDots />
+          ) : (
+            <MarkdownLite text={message.content} streaming={isStreaming} />
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Loader "Laura está escribiendo…" con 3 puntos que saltan en cascada.
+ * Más elegante que el cursor pulsante que teníamos antes (un cuadrito
+ * gris que parecía bug). Usa keyframes inline porque el comportamiento
+ * de delay escalonado no se logra con tailwind sin animaciones custom.
+ */
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 py-0.5" aria-label="Laura está escribiendo">
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-400 animate-laura-dot" style={{ animationDelay: "0ms" }} />
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-400 animate-laura-dot" style={{ animationDelay: "150ms" }} />
+      <span className="h-1.5 w-1.5 rounded-full bg-ink-400 animate-laura-dot" style={{ animationDelay: "300ms" }} />
+    </div>
+  );
+}
+
+/**
+ * Mini-parser de Markdown para la respuesta de Laura. Soporta:
+ *  - **negrita** y __negrita__
+ *  - *cursiva* y _cursiva_
+ *  - `código inline`
+ *  - Listas con guión / asterisco / número (las dejamos como texto
+ *    formateado vía whitespace-pre-wrap; no construimos <ul> porque
+ *    el modelo a veces las mezcla en líneas sueltas).
+ *  - Saltos de línea preservados (whitespace-pre-wrap).
+ *
+ * Decisión: NO usamos react-markdown ni similares para mantener el
+ * bundle inicial sin sumar 80KB. El parser inline es suficiente para
+ * los 4 patrones que el modelo usa el 99% del tiempo.
+ *
+ * Mientras streaming=true, ocultamos el último cursor de un `**` o `_`
+ * sin cerrar para evitar que aparezca un asterisco suelto a media
+ * generación.
+ */
+function MarkdownLite({ text, streaming }: { text: string; streaming?: boolean }) {
+  // Tokens reconocidos como pares delimitadores. Cada item: { open, close, render }.
+  // El parser hace múltiples pasadas reemplazando pares balanceados; lo
+  // que no calza queda como texto plano.
+  const safe = text;
+  // Si streaming y hay un par abierto sin cerrar al final, lo cortamos
+  // para no mostrar "**" colgando.
+  const display = streaming ? trimDanglingMarkers(safe) : safe;
+  const nodes = parseInline(display);
+  return (
+    <div className="whitespace-pre-wrap break-words">
+      {nodes}
+      {streaming && <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-ink-400 align-text-bottom animate-pulse" />}
+    </div>
+  );
+}
+
+/**
+ * Si el texto termina con un marcador abierto (ej "**hola mu" durante
+ * streaming), recortamos los caracteres del marcador para evitar
+ * mostrar "**" o "_" colgando. Es heurístico y conservador.
+ */
+function trimDanglingMarkers(text: string): string {
+  // Pares: **, __, *, _, `
+  for (const marker of ["**", "__", "*", "_", "`"]) {
+    const occurrences = (text.match(new RegExp(escapeRegex(marker), "g")) ?? []).length;
+    if (occurrences % 2 === 1) {
+      // Hay uno sin cerrar. Si está cerca del final, lo recortamos.
+      const lastIdx = text.lastIndexOf(marker);
+      if (lastIdx >= text.length - 50) {
+        return text.slice(0, lastIdx);
+      }
+    }
+  }
+  return text;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Parser inline simple: itera el texto buscando pares de marcadores
+ * y construye un array de React.ReactNode (strings + <strong>/<em>/<code>).
+ * No es bonito pero hace el trabajo para el 95% de respuestas del
+ * modelo. Para edge cases (marcadores anidados raros) cae a texto plano.
+ */
+function parseInline(text: string): React.ReactNode[] {
+  // Regex que captura: **bold**, __bold__, *italic*, _italic_, `code`.
+  // El orden importa — primero los dobles para no consumir un solo *.
+  const pattern = /(\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)/g;
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, m.index));
+    }
+    const token = m[0];
+    if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={key++} className="font-semibold">{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("__") && token.endsWith("__")) {
+      nodes.push(<strong key={key++} className="font-semibold">{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith("_") && token.endsWith("_")) {
+      nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(<code key={key++} className="px-1 py-0.5 rounded bg-bg-100 text-[11px] font-mono">{token.slice(1, -1)}</code>);
+    }
+    lastIndex = m.index + token.length;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes;
 }
 
 function EmptyState({

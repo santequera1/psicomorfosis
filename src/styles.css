@@ -21,6 +21,21 @@
 @theme {
   --font-sans: "Inter", system-ui, sans-serif;
   --font-serif: "Fraunces", Georgia, serif;
+
+  /* Animación de "Laura está escribiendo…": 3 puntos en cascada.
+     Definida en @theme para que Tailwind expone .animate-laura-dot. */
+  --animate-laura-dot: laura-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes laura-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 @theme inline {
