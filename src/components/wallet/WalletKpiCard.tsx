@@ -14,7 +14,7 @@ import { CreditCard, Plus, X } from "lucide-react";
 import { api, type BankAccount } from "@/lib/api";
 import { BankCard } from "./BankCard";
 import { BankAccountModal } from "./BankAccountModal";
-import { cn } from "@/lib/utils";
+import { TiltCard } from "@/components/ui/TiltCard";
 
 interface Props {
   className?: string;
@@ -35,10 +35,14 @@ export function WalletKpiCard({ className }: Props) {
 
   return (
     <>
-      <div className={cn(
-        "rounded-xl border border-line-200 bg-surface px-4 py-3 shadow-xs flex flex-col gap-2",
-        className,
-      )}>
+      <TiltCard
+        className={className}
+        cardClassName="border border-line-200 bg-surface px-4 py-3 shadow-xs flex flex-col gap-2"
+        // El border-radius lo dicta el CSS de .t-tilt-card (12px); lo
+        // dejamos así para que el clip del glare quede dentro de las
+        // esquinas redondas.
+        maxTilt={8}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <CreditCard className="h-3.5 w-3.5 text-ink-400 shrink-0" />
@@ -82,7 +86,7 @@ export function WalletKpiCard({ className }: Props) {
             </div>
           </button>
         )}
-      </div>
+      </TiltCard>
 
       {creating && <BankAccountModal onClose={() => setCreating(false)} />}
       {editing && <BankAccountModal account={editing} onClose={() => setEditing(null)} />}
