@@ -327,26 +327,46 @@ Trata a este profesional como un colega del equipo clínico, no como un estudian
   sections.push(`# Reglas transversales (NO negociables)
 
 ## Lectura sí, escritura solo con confirmación
-Tienes lectura completa del workspace. Pero **toda acción** (notas, mensajes, agenda, tareas, navegación) **se propone con tools** y el psicólogo aprueba en la UI.
+Tienes lectura completa del workspace. Pero **toda acción** (notas, mensajes, agenda, tareas, navegación) **se propone emitiendo un marker en texto** y el psicólogo aprueba en la UI.
 
-## REGLA DE ORO sobre los tools
+## REGLA DE ORO sobre acciones (MUY IMPORTANTE)
 
-**Si tienes un tool disponible para algo, ÚSALO. NUNCA describas el resultado en prosa como si ya hubiera pasado.**
+Tienes 3 acciones disponibles que se renderizan como **tarjetas accionables** en la UI:
+- **navigate_to** — atajo de navegación
+- **open_patient** — abrir ficha de un paciente
+- **propose_clinical_note** — proponer nota clínica para que el psicólogo apruebe y firme
 
-Tienes 3 tools:
-- \`navigate_to(path, reason)\` — atajo de navegación
-- \`open_patient(patient_id, reason)\` — abrir ficha de un paciente
-- \`propose_clinical_note(patient_id, kind, title, content)\` — proponer nota clínica para que el psicólogo apruebe y firme
+Para emitir una acción, **incluye un marker en tu respuesta** con este formato EXACTO en una línea propia:
 
-### Triggers OBLIGATORIOS — invoca el tool sí o sí
+\`[[LAURA_ACTION:nombre_accion:{"campo":"valor","otro":"valor"}]]\`
 
-| El psicólogo dice / hace | TÚ debes |
+- El marker tiene **dos brackets** abriendo y cerrando: \`[[\` y \`]]\`.
+- El JSON debe ser **válido** (comillas dobles, sin comentarios, sin trailing commas).
+- **NO** envuelvas el marker en backticks ni en bloques de código.
+- Preferentemente al final del mensaje, después de una frase corta de contexto.
+
+### Forma exacta de cada acción
+
+navigate_to:
+\`[[LAURA_ACTION:navigate_to:{"path":"/agenda","reason":"Te llevo a la agenda."}]]\`
+
+open_patient:
+\`[[LAURA_ACTION:open_patient:{"patient_id":"P-9002","reason":"Te abro la ficha de Andrés."}]]\`
+
+propose_clinical_note:
+\`[[LAURA_ACTION:propose_clinical_note:{"patient_id":"P-9003","kind":"evolucion","title":"Evolución 22 jun 2026","content":"S: ...\\nO: ...\\nA: ...\\nP: ..."}]]\`
+
+### Triggers OBLIGATORIOS — emite el marker sí o sí
+
+| El psicólogo dice / hace | TÚ emites marker |
 |---|---|
 | "llévame a [sección]" / "abre [sección]" | \`navigate_to\` |
-| "llévame a [Paciente]" / "muéstrame a [Paciente]" / "abre la ficha de [Paciente]" | \`open_patient\` |
+| "llévame a [Paciente]" / "abre la ficha de [Paciente]" | \`open_patient\` |
 | Te pega texto descriptivo de una sesión, dictado, anotación de paciente | \`propose_clinical_note\` |
-| "Resume esta sesión", "armame el SOAP", "estructúrame esto", "convierte a evolución" | \`propose_clinical_note\` |
+| "Resume esta sesión", "armame el SOAP", "estructúrame esto" | \`propose_clinical_note\` |
 | "Anota en la historia que…", "guarda en la nota que…" | \`propose_clinical_note\` |
+
+**NUNCA digas "no tengo el tool" o "no tengo el servidor MCP conectado"** — sí podés. El mecanismo es emitir el marker en texto.
 
 ### Anti-patrón PROHIBIDO
 
@@ -359,32 +379,32 @@ Tienes 3 tools:
 > P: …
 > Cópialo y pégalo en la sección de Notas." ← ❌ Texto plano, sin tool. El psicólogo tendría que copiar manualmente.
 
-**BIEN** (lo correcto):
+**BIEN** (con marker — el contenido va dentro del JSON, no se repite en texto):
 > Usuario: "Aquí va lo de la sesión de Carlos: llegó tranquilo pero con ansiedad…"
-> Laura: (invoca propose_clinical_note(patient_id="P-XXXX", kind="evolucion", title="Evolución 22 jun 2026", content="S: …\nO: …\nA: …\nP: …"))
-> Texto que acompaña al tool (1-2 frases): "Te dejé la nota lista para revisar y firmar. Cuando hagas click, te llevo a la historia del paciente con esto pre-cargado."
+> Laura: "Te dejé la nota lista para revisar y firmar.
+> [[LAURA_ACTION:propose_clinical_note:{"patient_id":"P-XXXX","kind":"evolucion","title":"Evolución 22 jun 2026","content":"S: Paciente llega tranquilo...\\nO: ...\\nA: ...\\nP: ..."}]]"
 
 ### Otro ejemplo
 
 > Usuario: "llévame a Andrés Galeano"
 > ❌ MAL: "Ahora estás viendo la ficha de Andrés Galeano (P-9002)…"
-> ✅ BIEN: (invoca open_patient(patient_id="P-9002", reason="Te abro la ficha de Andrés Galeano para que revises su historia."))
->     + frase corta: "Te abro la ficha de Andrés."
+> ✅ BIEN: "Te abro la ficha de Andrés.
+> [[LAURA_ACTION:open_patient:{"patient_id":"P-9002","reason":"Te abro la ficha de Andrés."}]]"
 
-### Cuando no usar tools
+### Cuando NO emitir markers
 
-Solo NO uses tools si:
+Solo NO emitas marker si:
 - La pregunta es conceptual (DSM-5, técnica X, definición de Y, "qué hago si…")
 - El usuario está conversando contigo (saludo, agradecimiento, charla)
 - No estás seguro de qué paciente referencia (en ese caso, pregunta antes)
 
 ### Si la respuesta incluye contenido + acción
 
-Acompaña el tool_call con texto corto explicando qué propones. NO repitas el contenido del tool en el texto — la tarjeta de la app ya lo muestra completo. Solo una frase de contexto.
+Acompaña el marker con texto corto explicando qué propones. NO repitas el contenido del JSON en el texto — la tarjeta de la app ya lo muestra completo. Solo una frase de contexto.
 
 ### Si no estás seguro del patient_id
 
-Mira el resumen del workspace. Si el nombre que dijo el usuario coincide con uno listado allí, usa su ID. Si hay duda (varios candidatos), pregunta antes de invocar.`);
+Mira el resumen del workspace. Si el nombre coincide con uno listado allí, usa su ID. Si hay duda (varios candidatos), pregunta antes de emitir el marker.`);
 
   // 4. Resumen estructural COMPACTO del workspace. Antes era denso
   // (~8000 chars con todas las listas), pero eso ahogaba el prompt y
@@ -462,7 +482,7 @@ El profesional está navegando en \`${currentPath}\` de la plataforma. No hay un
   // 5. Detalle adicional del tool propose_clinical_note (formato SOAP)
   sections.push(`# Cómo estructurar contenido para propose_clinical_note
 
-Cuando uses \`propose_clinical_note\`, el formato del campo \`content\` debe ser legible y profesional:
+Cuando emitas el marker \`propose_clinical_note\`, el formato del campo \`content\` del JSON debe ser legible y profesional:
 
 **Si es una nota de sesión (kind='evolucion' o 'sesion')**, usá SOAP con los marcadores S/O/A/P para que el editor de la app pueda parsearlo automáticamente:
 
@@ -484,7 +504,7 @@ P (Plan): próximos pasos, tareas asignadas, técnicas trabajadas, foco siguient
 - Título corto y específico: "Evolución 22 jun 2026", "Antecedentes — entrevista inicial", "Plan post-evaluación".
 - El kind \`evolucion\` ↔ "sesion" en la app — internamente se manejan igual.
 
-Después de invocar el tool, acompañalo con UNA frase corta de contexto. Algo como: "Te dejé la nota lista — al hacer click te llevo a la historia de Carlos con esto pre-cargado para que la revises y firmes." NO repitas el contenido completo del tool en el texto.`);
+Antes del marker, acompañalo con UNA frase corta de contexto. Algo como: "Te dejé la nota lista — al hacer click te llevo a la historia de Carlos con esto pre-cargado para que la revises y firmes." NO repitas el contenido completo del JSON en el texto. El JSON debe estar **bien escapado**: saltos de línea como \`\\n\`, comillas internas escapadas con \`\\"\`.`);
 
   // 6. Formato esperado de respuestas
   sections.push(`# Estilo
@@ -636,90 +656,109 @@ export async function* streamMessage({
     { role: "user", content: userContent },
   ];
 
-  // Heurística para forzar tool_choice = "any". Sin esto, el modelo
-  // responde con texto bonito y nunca invoca tools — perdemos la
-  // ventaja de tarjetas accionables. Dos triggers:
-  //
-  // A. CONTENIDO CLÍNICO largo → propose_clinical_note
-  //    msg.length > 300 + keywords típicas de relato de sesión.
-  //
-  // B. INTENTO DE NAVEGACIÓN → navigate_to / open_patient
-  //    Verbos como "llévame", "abre", "muéstrame", "navega",
-  //    "voy a", "necesito ir a", "abrime", etc. — son triggers
-  //    directos. Independiente de la longitud del mensaje.
-  const text = (userMessage ?? "").toLowerCase();
-  const clinicalCues = [
-    "sesi", "sesión", "evolución", "evolucion", "anotar", "registra",
-    "registrar", "estructura", "soap", "nota clínica", "nota clinica",
-    "historia clínica", "historia clinica", "guarda en la nota",
-    "pásalo a nota", "pasalo a nota", "convierte en nota",
-  ];
-  const navigationCues = [
-    "llévame", "llevame", "ábreme", "abreme", "abrime",
-    "muéstrame", "muestrame", "muéstrale", "muestrale",
-    "navégame", "navegame", "vamos a", "ir a la ",
-    "ve a ", "vé a ", "lléveme", "lleveme",
-    "abrir ficha", "abre la ficha", "abre ficha",
-    "ver paciente", "ver el paciente",
-  ];
-  const looksClinical =
-    userMessage && userMessage.length > 300 && clinicalCues.some((k) => text.includes(k));
-  const looksNavigation = navigationCues.some((k) => text.includes(k));
-  const forceTool = looksClinical || looksNavigation;
-  const tool_choice = forceTool ? { type: "any" } : { type: "auto" };
-
+  // NOTA: DARIO (proxy local del Claude Code login) **strippea los
+  // tools** del request antes de llegar al modelo — comprobado con
+  // tests directos a localhost:3456. Por eso ya no enviamos tools ni
+  // tool_choice. En lugar de eso, Laura emite "markers" en su texto
+  // con el formato [[LAURA_ACTION:nombre:{...json}]] que parseamos
+  // acá y convertimos en eventos tool_call para el frontend.
   const stream = getClient().messages.stream({
     model,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages,
-    tools: LAURA_TOOLS,
-    tool_choice,
   });
 
   let inputTokens = 0;
   let outputTokens = 0;
   let stopReason = null;
 
-  // Estado de un tool_use block en curso. Anthropic stream emite
-  // content_block_start con name+id, luego una serie de
-  // input_json_delta con partial_json (fragmentos del JSON del input),
-  // y content_block_stop al final. Acumulamos y parseamos al cierre.
-  let currentTool = null;
+  // Parser de markers — buffer que acumula tokens del stream y
+  // detecta secuencias [[LAURA_ACTION:nombre:{...}]]. Yields:
+  //   - { type: "delta", text } con texto limpio (sin markers)
+  //   - { type: "tool_call", tool_id, name, input } cuando completa
+  let textBuffer = "";
+  let markerCounter = 0;
+  const OPEN_TAG = "[[LAURA_ACTION:";
+
+  // Devuelve los eventos a emitir y MUTA textBuffer.
+  function* drainBuffer(finalFlush) {
+    while (true) {
+      const openIdx = textBuffer.indexOf(OPEN_TAG);
+      if (openIdx === -1) {
+        // No hay marker. Pero podría empezar al final del buffer
+        // (los tokens vienen partidos). Retenemos los últimos
+        // OPEN_TAG.length-1 caracteres por si forman el inicio.
+        if (finalFlush) {
+          if (textBuffer.length) yield { type: "delta", text: textBuffer };
+          textBuffer = "";
+          return;
+        }
+        const keepLen = OPEN_TAG.length - 1;
+        if (textBuffer.length > keepLen) {
+          const flushable = textBuffer.slice(0, textBuffer.length - keepLen);
+          textBuffer = textBuffer.slice(textBuffer.length - keepLen);
+          yield { type: "delta", text: flushable };
+        }
+        return;
+      }
+      // Hay un OPEN_TAG. Flush todo antes.
+      if (openIdx > 0) {
+        const before = textBuffer.slice(0, openIdx);
+        textBuffer = textBuffer.slice(openIdx);
+        yield { type: "delta", text: before };
+      }
+      // Ahora textBuffer empieza con OPEN_TAG. Buscar cierre ]]
+      // a partir de la posición OPEN_TAG.length (no antes, evitamos
+      // confundir con corchetes dentro del JSON).
+      const closeIdx = textBuffer.indexOf("]]", OPEN_TAG.length);
+      if (closeIdx === -1) {
+        if (finalFlush) {
+          // Marker que nunca cerró — lo escupimos como texto plano,
+          // mejor eso que perderlo.
+          yield { type: "delta", text: textBuffer };
+          textBuffer = "";
+        }
+        return;
+      }
+      const inside = textBuffer.slice(OPEN_TAG.length, closeIdx);
+      textBuffer = textBuffer.slice(closeIdx + 2);
+      // inside = "nombre:{...json...}"
+      const colonIdx = inside.indexOf(":");
+      if (colonIdx === -1) {
+        console.warn("[laura] marker sin separador name:json, raw:", inside);
+        continue;
+      }
+      const name = inside.slice(0, colonIdx).trim();
+      const jsonStr = inside.slice(colonIdx + 1).trim();
+      let input;
+      try {
+        input = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn("[laura] marker JSON parse error:", e.message, "json:", jsonStr.slice(0, 200));
+        // Fallback: emitir el texto crudo del marker para que el
+        // usuario al menos vea algo y pueda reportar.
+        yield { type: "delta", text: `\n[acción no procesada: ${name}]\n` };
+        continue;
+      }
+      yield {
+        type: "tool_call",
+        tool_id: `marker_${Date.now()}_${++markerCounter}`,
+        name,
+        input,
+      };
+    }
+  }
 
   for await (const event of stream) {
     if (event.type === "message_start") {
       inputTokens = event.message?.usage?.input_tokens ?? 0;
-    } else if (event.type === "content_block_start") {
-      if (event.content_block?.type === "tool_use") {
-        currentTool = {
-          id: event.content_block.id,
-          name: event.content_block.name,
-          jsonBuffer: "",
-        };
-      }
     } else if (event.type === "content_block_delta") {
       if (event.delta?.type === "text_delta") {
-        yield { type: "delta", text: event.delta.text };
-      } else if (event.delta?.type === "input_json_delta" && currentTool) {
-        currentTool.jsonBuffer += event.delta.partial_json ?? "";
-      }
-    } else if (event.type === "content_block_stop") {
-      if (currentTool) {
-        let parsedInput = {};
-        try { parsedInput = currentTool.jsonBuffer ? JSON.parse(currentTool.jsonBuffer) : {}; }
-        catch (e) { console.warn("[laura] tool input JSON parse error:", e.message, "buffer:", currentTool.jsonBuffer); }
-        yield {
-          type: "tool_call",
-          tool_id: currentTool.id,
-          name: currentTool.name,
-          input: parsedInput,
-        };
-        currentTool = null;
+        textBuffer += event.delta.text;
+        yield* drainBuffer(false);
       }
     } else if (event.type === "message_delta") {
-      // message_delta es CUMULATIVO en algunos casos, no incremental.
-      // Tomamos el valor más reciente (no sumamos).
       if (typeof event.usage?.output_tokens === "number") {
         outputTokens = event.usage.output_tokens;
       }
@@ -728,6 +767,8 @@ export async function* streamMessage({
       }
     }
   }
+  // Fin del stream — flush lo que quede.
+  yield* drainBuffer(true);
 
   // Como fallback adicional, intentamos extraer el usage del mensaje
   // final del stream (algunas versiones del SDK lo exponen ahí). Si
