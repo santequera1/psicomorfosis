@@ -18,7 +18,10 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
-import { buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage, LAURA_MODEL } from "../lib/laura.js";
+import {
+  buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage,
+  buildBriefingPrompt, gatherBriefingContext, LAURA_MODEL,
+} from "../lib/laura.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -377,6 +380,112 @@ router.post("/laura/chat", async (req, res) => {
   db.prepare("UPDATE laura_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(convId);
 
   emit({ type: "done", usage, conversation_id: convId });
+  res.end();
+});
+
+// ── Preparador de sesión (briefing) ──────────────────────────────────
+//
+// Genera un briefing por cita: dada una appointment_id, recopila las
+// últimas notas + tareas pendientes + próxima cita del paciente, y
+// stream una síntesis estructurada para que el psicólogo abra la
+// sesión con contexto cargado. NO persiste en BD (es one-shot).
+//
+// Body: { appointment_id: number }
+// Stream SSE: { type: "delta" | "done" | "error", ... }
+
+router.post("/laura/briefing", async (req, res) => {
+  const apptId = Number(req.body?.appointment_id);
+  if (!Number.isFinite(apptId) || apptId <= 0) {
+    return res.status(400).json({ error: "appointment_id requerido" });
+  }
+
+  // Cargar la cita y validar ownership por workspace
+  const appointment = db.prepare(`
+    SELECT id, patient_id, date, time, duration_min, modality, notes, status
+    FROM appointments
+    WHERE id = ? AND workspace_id = ?
+  `).get(apptId, req.user.workspace_id);
+  if (!appointment) {
+    return res.status(404).json({ error: "Cita no encontrada" });
+  }
+  if (!appointment.patient_id) {
+    return res.status(400).json({ error: "La cita no tiene paciente asociado" });
+  }
+
+  console.log(`[laura/briefing] user=${req.user.id} ws=${req.user.workspace_id} appt=${apptId} patient=${appointment.patient_id}`);
+
+  // Recopilar contexto + construir prompt
+  let systemPrompt;
+  try {
+    const ctx = gatherBriefingContext({
+      workspaceId: req.user.workspace_id,
+      patientId: appointment.patient_id,
+      appointment,
+    });
+    if (!ctx.patient) {
+      return res.status(404).json({ error: "Paciente no encontrado" });
+    }
+    systemPrompt = buildBriefingPrompt({ ...ctx, appointment });
+  } catch (err) {
+    console.error("[laura/briefing] gather/build error:", err);
+    return res.status(500).json({ error: "No pude preparar el contexto del briefing" });
+  }
+
+  // SSE setup
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const emit = (obj) => {
+    try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch { /* socket cerrado */ }
+  };
+
+  let aborted = false;
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      console.log(`[laura/briefing] client disconnected appt=${apptId}`);
+      aborted = true;
+    }
+  });
+
+  // Mensaje "user" mínimo — el contenido real va en el system prompt.
+  // Anthropic requiere al menos 1 mensaje user para iniciar el stream.
+  const userTrigger = "Genera el briefing siguiendo la estructura indicada.";
+
+  console.log(`[laura/briefing] starting stream appt=${apptId} systemPromptLen=${systemPrompt.length}`);
+  try {
+    let deltaCount = 0;
+    let usage = null;
+    for await (const ev of streamMessage({
+      systemPrompt,
+      history: [],
+      userMessage: userTrigger,
+      maxTokens: 700, // briefing es corto por diseño
+    })) {
+      if (aborted) break;
+      if (ev.type === "delta") {
+        deltaCount++;
+        emit({ type: "delta", text: ev.text });
+      } else if (ev.type === "done") {
+        usage = ev.usage;
+        console.log(`[laura/briefing] done appt=${apptId} deltas=${deltaCount} in=${usage?.input_tokens} out=${usage?.output_tokens}`);
+      }
+      // Ignoramos tool_call: el system prompt prohíbe markers.
+    }
+    emit({ type: "done", usage });
+  } catch (err) {
+    console.error(`[laura/briefing] STREAM ERROR appt=${apptId}:`, err);
+    const msg = err?.message ?? String(err);
+    if (/quota|rate_limit|usage_limit|out of credits/i.test(msg)) {
+      emit({ type: "error", code: "quota_exhausted", message: "Laura está temporalmente sin cupo. Reintenta en unas horas." });
+    } else if (/ECONNREFUSED|fetch failed/i.test(msg)) {
+      emit({ type: "error", code: "dario_down", message: "Laura no está disponible ahora mismo." });
+    } else {
+      emit({ type: "error", code: "generation_failed", message: "No pude generar el briefing. Reintenta." });
+    }
+  }
   res.end();
 });
 

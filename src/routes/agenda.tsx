@@ -10,6 +10,7 @@ import { displayPatientName, cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { LauraBriefingModal } from "@/components/laura/LauraBriefingModal";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { AppTimePicker } from "@/components/app/AppTimePicker";
@@ -883,6 +884,7 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
   const [busy, setBusy] = useState(false);
   const [cobroOpen, setCobroOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [briefingOpen, setBriefingOpen] = useState(false);
   // Cuando la psicóloga cancela una cita, por default avisamos al paciente
   // por email. Si ya hablaron por WhatsApp o cualquier otro canal, puede
   // marcar este checkbox para no enviar el aviso automático (evita dobles).
@@ -978,6 +980,17 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
           >
             <Receipt className="h-4 w-4" /> Generar recibo
           </button>
+          {patientId && (
+            <button
+              type="button"
+              onClick={() => setBriefingOpen(true)}
+              className="w-full h-10 rounded-md border border-brand-200/70 bg-brand-50/50 text-sm text-brand-800 hover:bg-brand-50 inline-flex items-center justify-center gap-2"
+              title="Laura te prepara un resumen con las últimas notas, tareas pendientes y foco sugerido para esta sesión"
+            >
+              <img src="/laura/laura-profile-2.svg" alt="" className="h-5 w-5 rounded-full object-cover" />
+              Briefing con Laura
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setReschedOpen((v) => !v)}
@@ -1079,6 +1092,14 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
             </div>
           </label>
         }
+      />
+    )}
+    {briefingOpen && patientId && (
+      <LauraBriefingModal
+        appointmentId={slot.id}
+        patientId={patientId}
+        patientName={patientName}
+        onClose={() => setBriefingOpen(false)}
       />
     )}
     </>

@@ -666,6 +666,168 @@ export const LAURA_TOOLS = [
  *   { type: "tool_call", name, input }   — propuesta de acción
  *   { type: "done", usage: {...} }       — fin del stream
  */
+// ─── Preparador de sesión (briefing) ──────────────────────────────────
+
+/**
+ * Recopila el contexto clínico necesario para preparar una sesión
+ * con un paciente. Pensado para alimentar el system prompt del
+ * briefing — devuelve solo lo realmente útil (no toda la BD).
+ *
+ * @param {number} workspaceId
+ * @param {string} patientId
+ * @param {{ id:number, date:string, time:string, modality?:string, notes?:string }} appointment
+ *        La cita para la que se prepara el briefing.
+ * @returns {{
+ *   patient: object,
+ *   recentNotes: object[],     // últimas N notas no superseded
+ *   pendingTasks: object[],    // tareas asignadas/en_curso
+ *   nextAppointment: object|null, // la siguiente cita programada después de ésta
+ * }}
+ */
+export function gatherBriefingContext({ workspaceId, patientId, appointment }) {
+  const patient = db.prepare(`
+    SELECT id, name, preferred_name, age, modality, status, risk_level,
+           main_motive, tags, doc_number, contact_phone, contact_email
+    FROM patients
+    WHERE id = ? AND workspace_id = ?
+  `).get(patientId, workspaceId);
+
+  // Últimas 5 notas no superseded (cualquier kind). Ordenadas por
+  // recencia. Limitamos el content a 1200 chars por nota — con eso
+  // alcanza para que el modelo capte el sentido sin inflar el prompt.
+  const recentNotes = db.prepare(`
+    SELECT id, kind, content, created_at, signed_at
+    FROM clinical_notes
+    WHERE patient_id = ?
+      AND workspace_id = ?
+      AND superseded_by_id IS NULL
+    ORDER BY datetime(created_at) DESC
+    LIMIT 5
+  `).all(patientId, workspaceId).map((n) => ({
+    ...n,
+    content: typeof n.content === "string" && n.content.length > 1200
+      ? n.content.slice(0, 1200) + "…"
+      : n.content,
+  }));
+
+  const pendingTasks = db.prepare(`
+    SELECT id, title, type, description, assigned_at, due_at, status, adherence
+    FROM therapy_tasks
+    WHERE patient_id = ?
+      AND workspace_id = ?
+      AND (status IS NULL OR status IN ('asignada', 'en_curso', 'pendiente'))
+    ORDER BY datetime(COALESCE(due_at, assigned_at)) DESC
+    LIMIT 5
+  `).all(patientId, workspaceId);
+
+  // Próxima cita después de la actual. Útil para el plan.
+  const nextAppointment = appointment ? db.prepare(`
+    SELECT id, date, time, modality
+    FROM appointments
+    WHERE patient_id = ?
+      AND workspace_id = ?
+      AND (status IS NULL OR status != 'cancelada')
+      AND (datetime(date || ' ' || time) > datetime(? || ' ' || ?))
+    ORDER BY datetime(date || ' ' || time) ASC
+    LIMIT 1
+  `).get(patientId, workspaceId, appointment.date, appointment.time) : null;
+
+  return { patient, recentNotes, pendingTasks, nextAppointment };
+}
+
+/**
+ * System prompt específico para el briefing de sesión. Mucho más
+ * compacto que el de chat libre — el objetivo es UN solo output
+ * estructurado.
+ */
+export function buildBriefingPrompt({ patient, appointment, recentNotes, pendingTasks, nextAppointment }) {
+  const safe = (v) => (v ?? "").toString().trim() || "—";
+
+  // Intentamos parsear el SOAP si la última nota es de sesión y luce JSON.
+  // Es la pieza más valiosa para retomar el hilo: el plan.
+  function summarizeNote(n) {
+    if (!n) return null;
+    let body = n.content ?? "";
+    if (n.kind === "sesion") {
+      try {
+        const obj = typeof body === "string" ? JSON.parse(body) : body;
+        if (obj && typeof obj === "object" && ("s" in obj || "p" in obj)) {
+          return [
+            `[Sesión · ${n.created_at?.slice(0,10) ?? ""}${n.signed_at ? " · firmada" : " · borrador"}]`,
+            obj.s ? `S: ${obj.s}` : null,
+            obj.o ? `O: ${obj.o}` : null,
+            obj.a ? `A: ${obj.a}` : null,
+            obj.p ? `P: ${obj.p}` : null,
+          ].filter(Boolean).join("\n");
+        }
+      } catch { /* no era JSON, cae al fallback */ }
+    }
+    return `[${n.kind} · ${n.created_at?.slice(0,10) ?? ""}]\n${body}`;
+  }
+
+  const notesBlock = recentNotes.length
+    ? recentNotes.map(summarizeNote).join("\n\n---\n\n")
+    : "(Sin notas registradas todavía)";
+
+  const tasksBlock = pendingTasks.length
+    ? pendingTasks.map((t) => {
+        const due = t.due_at ? ` · vence ${t.due_at.slice(0,10)}` : "";
+        const adh = typeof t.adherence === "number" ? ` · adherencia ${t.adherence}%` : "";
+        return `- ${t.title || "(sin título)"}${due}${adh}\n  ${t.description ?? ""}`.trim();
+      }).join("\n")
+    : "(Sin tareas asignadas pendientes)";
+
+  const apptInfo = `${appointment.date} ${appointment.time} · ${appointment.modality || "individual"}${appointment.notes ? "\nNotas previas a la cita: " + appointment.notes : ""}`;
+
+  return `Eres Laura, asistente clínica de Psicomorfosis. Estás preparando al psicólogo para una sesión con uno de sus pacientes.
+
+# Cita que preparás
+${apptInfo}
+
+# Paciente
+- **Nombre:** ${safe(patient.preferred_name || patient.name)} (${patient.id})
+- **Edad:** ${safe(patient.age)}
+- **Modalidad:** ${safe(patient.modality)}
+- **Riesgo:** ${safe(patient.risk_level)}
+- **Motivo principal:** ${safe(patient.main_motive)}
+- **Tags:** ${safe(patient.tags)}
+
+# Notas clínicas recientes (más nueva primero)
+${notesBlock}
+
+# Tareas pendientes
+${tasksBlock}
+
+# Próxima cita después de ésta
+${nextAppointment ? `${nextAppointment.date} ${nextAppointment.time}` : "(no hay otra cita programada)"}
+
+---
+
+# Tu tarea — genera un briefing CONCISO con esta estructura EXACTA, en markdown:
+
+## Resumen rápido
+Una o dos líneas de qué pasó la última vez. Cero relleno.
+
+## Pendientes para abrir la sesión
+- (3 a 5 bullets máximo, lo concreto: tarea asignada, tema retomar, escala a aplicar, etc.)
+- Si una tarea estaba asignada → mencionala explícitamente para que el psicólogo pregunte.
+
+## Foco sugerido para hoy
+2 a 3 bullets con lo que tendría sentido trabajar HOY según el plan de la última sesión.
+
+## Banderas / cuidados
+- Solo si hay algo clínicamente relevante (riesgo, abandono, empeoramiento). Si no hay, escribí "Sin banderas activas." y listo. NO inventes.
+
+---
+
+**REGLAS NO NEGOCIABLES:**
+- **NO inventes datos** — si algo no está en las notas, no lo digas.
+- **NO diagnostiqués** — solo retomá lo que el psicólogo ya escribió.
+- **NO uses markers \`[[LAURA_ACTION:...]]\`** — el briefing es solo texto.
+- **NO repitas el contenido de las notas textualmente** — sintetizá.
+- Lenguaje clínico, conciso, en español neutro. Lista total no debería superar 200 palabras.`;
+}
+
 export async function* streamMessage({
   systemPrompt, history, userMessage, userImages = [],
   model = LAURA_MODEL, maxTokens = 1500,

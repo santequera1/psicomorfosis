@@ -2332,6 +2332,57 @@ export const api = {
       }
     }
   },
+
+  /**
+   * Briefing previo a una sesión. Stream SSE one-shot que devuelve
+   * un resumen markdown estructurado para que el psicólogo abra la
+   * cita con contexto cargado (Fase 2.4 — preparador de sesión).
+   *
+   * No persiste en BD (es un cálculo derivado), no consume conversación,
+   * y solo emite eventos delta/done/error (sin tool_call).
+   */
+  lauraBriefingStream: async (
+    appointmentId: number,
+    onEvent: (ev: LauraStreamEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/laura/briefing`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ appointment_id: appointmentId }),
+      signal,
+    });
+    if (!res.ok || !res.body) {
+      const errBody = await res.text().catch(() => "");
+      throw new ApiError(res.status, errBody || "No se pudo iniciar el briefing");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          try {
+            onEvent(JSON.parse(payload) as LauraStreamEvent);
+          } catch { /* ignore malformed */ }
+        }
+      }
+    }
+  },
 };
 
 export type LauraToolCall =
