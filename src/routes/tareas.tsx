@@ -19,7 +19,7 @@ import {
 import { useWorkspace } from "@/lib/workspace";
 import { cn, displayPatientName } from "@/lib/utils";
 
-type TareasSearch = { patient?: string; id?: number };
+type TareasSearch = { patient?: string; id?: number; laura_task?: string };
 export const Route = createFileRoute("/tareas")({
   head: () => ({ meta: [{ title: "Tareas — Psicomorfosis" }] }),
   validateSearch: (s: Record<string, unknown>): TareasSearch => {
@@ -27,6 +27,7 @@ export const Route = createFileRoute("/tareas")({
     return {
       patient: typeof s.patient === "string" ? s.patient : undefined,
       id: Number.isFinite(id) ? id : undefined,
+      laura_task: typeof s.laura_task === "string" ? s.laura_task : undefined,
     };
   },
   component: TareasPage,
@@ -234,6 +235,10 @@ function TareasPage() {
 
   const [editing, setEditing] = useState<Tarea | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Pre-carga propuesta por Laura: cuando llega ?laura_task=<b64>, el
+  // dialog se abre en modo "crear" con los campos pre-llenados para
+  // que el psicólogo solo revise y guarde (patrón propose → approve).
+  const [lauraTaskPrefill, setLauraTaskPrefill] = useState<Partial<Tarea> | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   // Indicador visual del slot donde se insertará la tarea arrastrada.
   const [dragOverGap, setDragOverGap] = useState<{ status: TareaStatus; index: number } | null>(null);
@@ -269,6 +274,27 @@ function TareasPage() {
       replace: true,
     });
   }, [searchParams.id, tasks, navigate]);
+
+  // Decodificar laura_task: payload base64 con { title, description,
+  // patient_id, due_date, priority, type }. Abre el dialog en modo
+  // crear con esos valores.
+  useEffect(() => {
+    if (!searchParams.laura_task) return;
+    try {
+      const json = decodeURIComponent(escape(atob(searchParams.laura_task)));
+      const parsed = JSON.parse(json) as Partial<Tarea>;
+      setLauraTaskPrefill(parsed);
+      setEditing(null);
+      setDialogOpen(true);
+    } catch (err) {
+      console.warn("[tareas] laura_task decode error:", err);
+    }
+    navigate({
+      to: "/tareas",
+      search: (prev: TareasSearch) => ({ ...prev, laura_task: undefined }),
+      replace: true,
+    });
+  }, [searchParams.laura_task, navigate]);
 
   // Filtros
   const filteredTasks = useMemo(() => {
@@ -620,11 +646,12 @@ function TareasPage() {
         {dialogOpen && (
           <TareaDialog
             task={editing}
+            prefill={lauraTaskPrefill ?? undefined}
             projects={projects}
             professionals={professionals}
             patients={patients}
             isOrg={!!isOrg}
-            onClose={() => { setDialogOpen(false); setEditing(null); }}
+            onClose={() => { setDialogOpen(false); setEditing(null); setLauraTaskPrefill(null); }}
           />
         )}
       </div>
@@ -1112,9 +1139,11 @@ function CardAction({
 // ─── Modal crear/editar ─────────────────────────────────────────────────────
 
 function TareaDialog({
-  task, projects, professionals, patients, isOrg, onClose,
+  task, prefill, projects, professionals, patients, isOrg, onClose,
 }: {
   task: Tarea | null;
+  /** Propuesta de Laura: solo aplica cuando task es null (modo crear). */
+  prefill?: Partial<Tarea>;
   projects: TareaProject[];
   professionals: Professional[];
   patients: ApiPatient[];
@@ -1123,17 +1152,20 @@ function TareaDialog({
 }) {
   const queryClient = useQueryClient();
   const isEdit = !!task;
+  // Fuente inicial: si hay task (edit), gana task. Si no, si hay
+  // prefill (propuesta de Laura), gana prefill. Si no, vacío.
+  const init: Partial<Tarea> = task ?? prefill ?? {};
 
-  const [title, setTitle] = useState(task?.title ?? "");
-  const [description, setDescription] = useState(task?.description ?? "");
-  const [type, setType] = useState<TareaType | "">(task?.type ?? "");
-  const [status, setStatus] = useState<TareaStatus>(task?.status ?? "TODO");
-  const [priority, setPriority] = useState<TareaPriority>(task?.priority ?? "MEDIUM");
-  const [assigneeId, setAssigneeId] = useState<number | "">(task?.assignee_id ?? "");
-  const [projectId, setProjectId] = useState<number | "">(task?.project_id ?? "");
-  const [patientId, setPatientId] = useState<string | "">(task?.patient_id ?? "");
-  const [visibility, setVisibility] = useState<TareaVisibility>(task?.visibility ?? "team");
-  const [dueDate, setDueDate] = useState(task?.due_date?.slice(0, 10) ?? "");
+  const [title, setTitle] = useState(init.title ?? "");
+  const [description, setDescription] = useState(init.description ?? "");
+  const [type, setType] = useState<TareaType | "">(init.type ?? "");
+  const [status, setStatus] = useState<TareaStatus>(init.status ?? "TODO");
+  const [priority, setPriority] = useState<TareaPriority>(init.priority ?? "MEDIUM");
+  const [assigneeId, setAssigneeId] = useState<number | "">(init.assignee_id ?? "");
+  const [projectId, setProjectId] = useState<number | "">(init.project_id ?? "");
+  const [patientId, setPatientId] = useState<string | "">(init.patient_id ?? "");
+  const [visibility, setVisibility] = useState<TareaVisibility>(init.visibility ?? "team");
+  const [dueDate, setDueDate] = useState(init.due_date?.slice(0, 10) ?? "");
   // Flujo Moodle: archivo de consigna que el psicólogo adjunta.
   //   templateStaged: archivo seleccionado pero aún no subido (espera al save).
   //   templateDoc:    descriptor del archivo YA subido (solo en edit, o tras

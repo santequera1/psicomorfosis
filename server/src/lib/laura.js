@@ -331,11 +331,12 @@ Tienes lectura completa del workspace. Pero **toda acción** (notas, mensajes, a
 
 ## REGLA DE ORO sobre acciones (MUY IMPORTANTE)
 
-Tienes 4 acciones disponibles que se renderizan como **tarjetas accionables** en la UI:
+Tienes 5 acciones disponibles que se renderizan como **tarjetas accionables** en la UI:
 - **navigate_to** — atajo de navegación
 - **open_patient** — abrir ficha de un paciente
 - **propose_clinical_note** — proponer nota clínica para que el psicólogo apruebe y firme
 - **propose_appointment** — proponer una cita nueva (abre el modal pre-llenado)
+- **propose_task** — proponer una tarea/ejercicio para un paciente
 
 Para emitir una acción, **incluye un marker en tu respuesta** con este formato EXACTO en una línea propia:
 
@@ -364,6 +365,14 @@ propose_appointment (los campos opcionales pueden omitirse):
 - \`duration\` en minutos (50 por defecto si el psicólogo no especifica)
 - \`modality\` ∈ ["individual","pareja","familiar","grupal","tele"]
 
+propose_task (los campos opcionales pueden omitirse):
+\`[[LAURA_ACTION:propose_task:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","title":"Registro de pensamientos automáticos","description":"Anotar cada vez que aparezca un pensamiento del tipo 'voy a fallar'. Anotar contexto, emoción asociada y pensamiento alternativo.","due_date":"2026-06-30","priority":"MEDIUM","type":"Ejercicios"}]]\`
+- \`title\` corto (max 100 chars)
+- \`description\` puede incluir saltos de línea (escapados como \\n)
+- \`due_date\` formato YYYY-MM-DD
+- \`priority\` ∈ ["LOW","MEDIUM","HIGH","URGENT"]
+- \`type\` libre (ej: "Ejercicios", "Tests", "Lectura", "Llamada", "Documento")
+
 ### Triggers OBLIGATORIOS — emite el marker sí o sí
 
 | El psicólogo dice / hace | TÚ emites marker |
@@ -375,6 +384,8 @@ propose_appointment (los campos opcionales pueden omitirse):
 | "Anota en la historia que…", "guarda en la nota que…" | \`propose_clinical_note\` |
 | "Agendame una cita con [Paciente] [día/hora]" / "crea una cita…" | \`propose_appointment\` |
 | "Cuadra a [Paciente] el [día] a las [hora]" / "agéndalo para…" | \`propose_appointment\` |
+| "Asigná tarea/ejercicio/test a [Paciente]" | \`propose_task\` |
+| "Pídele a [Paciente] que haga…", "ponle de tarea…", "mándale un ejercicio de…" | \`propose_task\` |
 
 **NUNCA digas "no tengo el tool" o "no tengo el servidor MCP conectado"** — sí podés. El mecanismo es emitir el marker en texto.
 
@@ -826,6 +837,177 @@ Una o dos líneas de qué pasó la última vez. Cero relleno.
 - **NO uses markers \`[[LAURA_ACTION:...]]\`** — el briefing es solo texto.
 - **NO repitas el contenido de las notas textualmente** — sintetizá.
 - Lenguaje clínico, conciso, en español neutro. Lista total no debería superar 200 palabras.`;
+}
+
+// ─── Análisis de progreso (Fase 3.2) ──────────────────────────────────
+
+/**
+ * Recopila el material para analizar la evolución de un paciente:
+ * todas sus notas de tipo sesión/evolución de los últimos N meses
+ * (default 6), tests aplicados y diagnósticos vigentes. NO incluye
+ * citas (eso es contexto de briefing, no de progreso).
+ */
+export function gatherProgressContext({ workspaceId, patientId, months = 6 }) {
+  const patient = db.prepare(`
+    SELECT id, name, preferred_name, age, modality, reason, main_motive
+    FROM patients
+    WHERE id = ? AND workspace_id = ?
+  `).get(patientId, workspaceId);
+  if (!patient) return null;
+
+  const sinceIso = new Date(Date.now() - months * 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const sessionNotes = db.prepare(`
+    SELECT id, kind, content, created_at, signed_at
+    FROM clinical_notes
+    WHERE patient_id = ?
+      AND workspace_id = ?
+      AND superseded_by_id IS NULL
+      AND kind IN ('sesion', 'evolucion')
+      AND date(created_at) >= date(?)
+    ORDER BY datetime(created_at) ASC
+    LIMIT 20
+  `).all(patientId, workspaceId, sinceIso).map((n) => ({
+    ...n,
+    content: typeof n.content === "string" && n.content.length > 800
+      ? n.content.slice(0, 800) + "…"
+      : n.content,
+  }));
+
+  const tests = db.prepare(`
+    SELECT test_code, test_name, date, score, level, status
+    FROM test_applications
+    WHERE patient_id = ? AND workspace_id = ? AND date(date) >= date(?)
+    ORDER BY date ASC
+    LIMIT 10
+  `).all(patientId, workspaceId, sinceIso);
+
+  return { patient, sessionNotes, tests, months };
+}
+
+export function buildProgressPrompt({ patient, sessionNotes, tests, months }) {
+  function summarizeNote(n) {
+    let body = n.content ?? "";
+    if (n.kind === "sesion") {
+      try {
+        const obj = typeof body === "string" ? JSON.parse(body) : body;
+        if (obj && typeof obj === "object" && ("s" in obj || "p" in obj)) {
+          return `[${n.created_at?.slice(0,10)}]\n` +
+            (obj.s ? `S: ${obj.s}\n` : "") +
+            (obj.o ? `O: ${obj.o}\n` : "") +
+            (obj.a ? `A: ${obj.a}\n` : "") +
+            (obj.p ? `P: ${obj.p}` : "");
+        }
+      } catch { /* not JSON */ }
+    }
+    return `[${n.created_at?.slice(0,10)} · ${n.kind}]\n${body}`;
+  }
+
+  const notesBlock = sessionNotes.length
+    ? sessionNotes.map(summarizeNote).join("\n\n---\n\n")
+    : "(Sin notas en el período)";
+
+  const testsBlock = tests.length
+    ? tests.map((t) => `- ${t.date?.slice(0,10)} · ${t.test_code} (${t.test_name}) · score ${t.score ?? "—"} · nivel ${t.level ?? "—"}`).join("\n")
+    : "(Sin tests en el período)";
+
+  return `Eres Laura, asistente clínica. Tu tarea es generar un **análisis de progreso descriptivo** del paciente para que el psicólogo lo revise.
+
+# Paciente
+- Nombre: ${patient.preferred_name || patient.name} (${patient.id})
+- Motivo: ${patient.main_motive || patient.reason || "—"}
+
+# Período de análisis: últimos ${months} meses
+${sessionNotes.length} nota(s) de sesión registradas.
+
+# Material clínico (en orden cronológico ascendente)
+${notesBlock}
+
+# Tests aplicados en el período
+${testsBlock}
+
+---
+
+# Tu tarea — genera un análisis con esta estructura EXACTA, en markdown:
+
+## Evolución observada
+Síntesis de cómo ha evolucionado el paciente en el período. Qué temas se han trabajado y cómo ha respondido. 2-4 frases.
+
+## Lo que mejoró
+- Bullets concretos de cambios positivos OBSERVADOS en las notas (mejor sueño, menos episodios, mayor adherencia, etc).
+- Solo lo que esté escrito en las notas. NO inventes.
+
+## Lo que sigue presente o empeoró
+- Bullets de temas que NO han cedido o que aparecen recurrentes.
+- Si algo empeoró según las notas, mencionalo.
+
+## Hipótesis del proceso
+- 1-3 bullets con hipótesis del psicólogo que SE REPITEN en las notas. Esto es lo que el psicólogo ya pensó y registró, no análisis tuyo nuevo.
+
+## Sugerencia de foco para los próximos encuentros
+- 2-3 bullets con direcciones que tendrían continuidad lógica con lo trabajado. Conservador, no terapéutico.
+
+---
+
+**REGLAS NO NEGOCIABLES:**
+- **DESCRIPTIVO, NO DIAGNÓSTICO**. Nunca concluyas un cuadro clínico. Solo describí lo que está en las notas.
+- **NO inventes datos** — si algo no aparece, no lo digas.
+- **NO uses markers \`[[LAURA_ACTION:...]]\`** — es solo texto.
+- **NO repitas las notas textualmente** — sintetizá.
+- Lenguaje clínico, conciso. Máximo 250 palabras totales.
+- Si hay pocas notas (< 3), decilo explícitamente al inicio: "Análisis preliminar con base en pocas sesiones registradas".`;
+}
+
+// ─── Reescritura clínica (Fase 1.2 — "Mejorar con Laura") ────────────
+
+/**
+ * Construye el system prompt para reescribir un texto clínico en un
+ * registro/modo específico. La respuesta del modelo es SOLO el texto
+ * reescrito (sin comentarios, sin preámbulo).
+ *
+ * Modos:
+ *  - "clinical"  : registro más clínico / profesional
+ *  - "concise"   : versión breve, sin perder lo crítico
+ *  - "soap"      : reestructura en S/O/A/P (formato SOAP)
+ *  - "humanize"  : más legible para el paciente (cuando es necesario)
+ *  - "expand"    : amplía con estructura clínica (para apuntes muy cortos)
+ */
+export function buildRewritePrompt(mode) {
+  const modeInstructions = {
+    clinical: `Reescribilo en **registro clínico profesional**: lenguaje técnico apropiado, sustantivos clínicos donde corresponda ("pensamientos automáticos", "rumiación", "labilidad afectiva"), sin coloquialismos ni juicios de valor. Mantené el SENTIDO clínico exacto del original.`,
+    concise: `Reescribilo en **versión breve y precisa**: misma información clínica relevante, menos palabras. Eliminá redundancia y muletillas. NO acortes al punto de perder detalles clínicos importantes (síntomas, frecuencia, intensidad, contexto).`,
+    soap: `Reestructurá el texto en formato **SOAP** con las cuatro secciones marcadas explícitamente. Devolvé EXACTAMENTE este formato (líneas vacías entre secciones):
+
+S: <lo subjetivo — lo que el paciente reporta>
+
+O: <lo objetivo — tu observación: presentación, afecto, examen mental>
+
+A: <análisis — interpretación clínica, hipótesis, patrón>
+
+P: <plan — técnicas trabajadas, tareas asignadas, foco siguiente>
+
+Si una sección no tiene contenido en el original, escribí "—" en esa sección, NO la inventes.`,
+    humanize: `Reescribilo en **lenguaje accesible al paciente**: claro, sin tecnicismos innecesarios, manteniendo tono profesional y respetuoso. Útil para devoluciones, resúmenes para el paciente, o textos que el paciente va a leer.`,
+    expand: `Ampliá el texto preservando exactamente lo dicho (no inventes datos clínicos) pero estructurándolo profesionalmente: separá presentación, exploración subjetiva, análisis y plan en párrafos cuando aplique.`,
+  };
+
+  const instr = modeInstructions[mode] ?? modeInstructions.clinical;
+
+  return `Eres Laura, asistente clínica. Tu única tarea AHORA es reescribir un texto clínico que el psicólogo te dará.
+
+# Modo de reescritura
+${instr}
+
+# Reglas no negociables
+- **NO inventes datos clínicos** que no estén en el texto original (no agregues síntomas, frecuencias, contextos, ni diagnósticos no mencionados).
+- **NO añadas comentarios** sobre tu reescritura. NO digas "Aquí está la versión reescrita" ni "Te dejo la propuesta". Devolvé solo el texto reescrito.
+- **NO uses markers** \`[[LAURA_ACTION:...]]\` — esta tarea es solo texto.
+- **NO uses markdown** salvo que el modo SOAP lo requiera (las secciones S/O/A/P).
+- Mantené el español neutro profesional.
+- Si el texto original está vacío o no tiene contenido clínico, devolvé exactamente: "(Sin contenido para reescribir)".
+
+# Importante
+Tu output será insertado DIRECTAMENTE en el editor de notas del psicólogo. Cuidá la limpieza: sin viñetas decorativas, sin frase de cierre, sin "Espero que te sirva".`;
 }
 
 export async function* streamMessage({

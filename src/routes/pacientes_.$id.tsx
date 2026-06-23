@@ -24,6 +24,7 @@ import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { useAutoTour, historyTour, TOUR_NAMES } from "@/lib/tours";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { LauraProgressModal } from "@/components/laura/LauraProgressModal";
 import { ApplicationDetailModal } from "@/components/tests/ApplicationDetailModal";
 import { ReceiptFormModal } from "@/routes/facturacion";
 
@@ -57,6 +58,7 @@ function PatientDetailPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
   const [resetPwdOpen, setResetPwdOpen] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
 
   const { data: patient, isLoading, error } = useQuery({
     queryKey: ["patient", id],
@@ -180,6 +182,15 @@ function PatientDetailPage() {
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="hidden sm:inline">Agendar</span><span className="sm:hidden">Agendar</span>
             </button>
             <button
+              onClick={() => setProgressOpen(true)}
+              className="h-10 px-2 sm:px-3 rounded-lg border border-brand-200/70 bg-brand-50/40 text-brand-800 text-xs sm:text-sm hover:bg-brand-50 inline-flex items-center justify-center gap-1.5"
+              title="Análisis descriptivo de la evolución de este paciente en los últimos 6 meses, generado por Laura"
+            >
+              <img src="/laura/laura-profile-2.svg" alt="" className="h-4 w-4 rounded-full object-cover" />
+              <span className="hidden sm:inline">¿Cómo va?</span>
+              <span className="sm:hidden">Progreso</span>
+            </button>
+            <button
               onClick={() => setInviteOpen(true)}
               className="h-10 px-2 sm:px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm hover:border-brand-400 inline-flex items-center justify-center gap-1.5"
               title={
@@ -280,6 +291,13 @@ function PatientDetailPage() {
       {editing && patient && <EditPatientInlineModal patient={patient} onClose={() => setEditing(false)} />}
       {inviteOpen && patient && <InvitePortalModal patient={patient} onClose={() => setInviteOpen(false)} />}
       {apptOpen && patient && <NewAppointmentModal patients={[patient]} prefilledPatient={patient} onClose={() => setApptOpen(false)} />}
+      {progressOpen && patient && (
+        <LauraProgressModal
+          patientId={patient.id}
+          patientName={displayPatientName(patient)}
+          onClose={() => setProgressOpen(false)}
+        />
+      )}
       {resetPwdOpen && patient && <ResetPasswordModal patient={patient} onClose={() => setResetPwdOpen(false)} />}
     </AppShell>
   );

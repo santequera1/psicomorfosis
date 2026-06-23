@@ -20,7 +20,9 @@ import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import {
   buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage,
-  buildBriefingPrompt, gatherBriefingContext, LAURA_MODEL,
+  buildBriefingPrompt, gatherBriefingContext,
+  buildProgressPrompt, gatherProgressContext,
+  buildRewritePrompt, LAURA_MODEL,
 } from "../lib/laura.js";
 
 const router = Router();
@@ -487,6 +489,126 @@ router.post("/laura/briefing", async (req, res) => {
     }
   }
   res.end();
+});
+
+// ── Análisis de progreso (Fase 3.2) ───────────────────────────────────
+//
+// Stream SSE one-shot que devuelve un análisis descriptivo de la
+// evolución del paciente en los últimos N meses (default 6).
+// Body: { patient_id: string, months?: number }
+
+router.post("/laura/progress", async (req, res) => {
+  const patientId = String(req.body?.patient_id ?? "").trim();
+  const months = Number.isFinite(Number(req.body?.months)) ? Number(req.body.months) : 6;
+  if (!patientId) {
+    return res.status(400).json({ error: "patient_id requerido" });
+  }
+  // Validar ownership
+  const owns = db.prepare("SELECT 1 FROM patients WHERE id = ? AND workspace_id = ?")
+    .get(patientId, req.user.workspace_id);
+  if (!owns) {
+    return res.status(404).json({ error: "Paciente no encontrado" });
+  }
+
+  let systemPrompt;
+  try {
+    const ctx = gatherProgressContext({
+      workspaceId: req.user.workspace_id,
+      patientId,
+      months: Math.max(1, Math.min(24, months)),
+    });
+    if (!ctx) return res.status(404).json({ error: "Paciente no encontrado" });
+    systemPrompt = buildProgressPrompt(ctx);
+  } catch (err) {
+    console.error("[laura/progress] gather error:", err);
+    return res.status(500).json({ error: "No pude preparar el análisis" });
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const emit = (obj) => { try { res.write(`data: ${JSON.stringify(obj)}\n\n`); } catch { /* socket closed */ } };
+
+  let aborted = false;
+  res.on("close", () => { if (!res.writableEnded) aborted = true; });
+
+  console.log(`[laura/progress] starting stream patient=${patientId} months=${months} systemPromptLen=${systemPrompt.length}`);
+  try {
+    let deltaCount = 0;
+    let usage = null;
+    for await (const ev of streamMessage({
+      systemPrompt,
+      history: [],
+      userMessage: "Genera el análisis de progreso siguiendo la estructura indicada.",
+      maxTokens: 900,
+    })) {
+      if (aborted) break;
+      if (ev.type === "delta") { deltaCount++; emit({ type: "delta", text: ev.text }); }
+      else if (ev.type === "done") { usage = ev.usage; }
+    }
+    console.log(`[laura/progress] done patient=${patientId} deltas=${deltaCount} in=${usage?.input_tokens} out=${usage?.output_tokens}`);
+    emit({ type: "done", usage });
+  } catch (err) {
+    console.error("[laura/progress] STREAM ERROR:", err);
+    const msg = err?.message ?? String(err);
+    if (/quota|rate_limit|usage_limit|out of credits/i.test(msg)) {
+      emit({ type: "error", code: "quota_exhausted", message: "Laura está temporalmente sin cupo. Reintenta en unas horas." });
+    } else {
+      emit({ type: "error", code: "generation_failed", message: "No pude generar el análisis. Reintenta." });
+    }
+  }
+  res.end();
+});
+
+// ── Reescritura clínica (Fase 1.2 — "Mejorar con Laura") ─────────────
+//
+// Endpoint NO streaming porque el output es corto y la UX más natural
+// es "esperar y mostrar el resultado completo" para que el usuario
+// pueda comparar con el original y decidir reemplazar.
+//
+// Body: { text: string, mode: "clinical"|"concise"|"soap"|"humanize"|"expand" }
+// Response: { rewritten: string }
+const REWRITE_MODES = new Set(["clinical", "concise", "soap", "humanize", "expand"]);
+
+router.post("/laura/rewrite", async (req, res) => {
+  const { text, mode } = req.body ?? {};
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return res.status(400).json({ error: "Falta el texto a reescribir" });
+  }
+  if (text.length > 8000) {
+    return res.status(400).json({ error: "Texto demasiado largo (máx 8000 caracteres)" });
+  }
+  const safeMode = REWRITE_MODES.has(mode) ? mode : "clinical";
+
+  console.log(`[laura/rewrite] user=${req.user.id} ws=${req.user.workspace_id} mode=${safeMode} len=${text.length}`);
+
+  try {
+    const systemPrompt = buildRewritePrompt(safeMode);
+    let rewritten = "";
+    for await (const ev of streamMessage({
+      systemPrompt,
+      history: [],
+      userMessage: text,
+      maxTokens: 1500,
+    })) {
+      if (ev.type === "delta") rewritten += ev.text;
+      // Ignoramos tool_call (no aplica en rewrite) y done.
+    }
+    res.json({ rewritten: rewritten.trim(), mode: safeMode });
+  } catch (err) {
+    console.error("[laura/rewrite] STREAM ERROR:", err);
+    const msg = err?.message ?? String(err);
+    if (/quota|rate_limit|usage_limit|out of credits/i.test(msg)) {
+      return res.status(503).json({ error: "Laura está temporalmente sin cupo. Reintenta en unas horas.", code: "quota_exhausted" });
+    }
+    if (/ECONNREFUSED|fetch failed/i.test(msg)) {
+      return res.status(503).json({ error: "Laura no está disponible ahora mismo.", code: "dario_down" });
+    }
+    return res.status(500).json({ error: "No pude reescribir el texto. Reintenta.", code: "generation_failed" });
+  }
 });
 
 export default router;

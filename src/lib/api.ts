@@ -2341,6 +2341,67 @@ export const api = {
    * No persiste en BD (es un cálculo derivado), no consume conversación,
    * y solo emite eventos delta/done/error (sin tool_call).
    */
+  /**
+   * Reescribe un texto clínico (Fase 1.2). One-shot, NO streaming —
+   * el output es corto y la UI muestra una propuesta para comparar
+   * con el original. Modos: clinical / concise / soap / humanize / expand.
+   */
+  lauraRewrite: (body: {
+    text: string;
+    mode: "clinical" | "concise" | "soap" | "humanize" | "expand";
+  }): Promise<{ rewritten: string; mode: string }> =>
+    request<{ rewritten: string; mode: string }>("/api/laura/rewrite", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Análisis de progreso del paciente en los últimos N meses
+   * (Fase 3.2). Stream SSE — descriptivo, NUNCA diagnóstico.
+   * Default: 6 meses.
+   */
+  lauraProgressStream: async (
+    patientId: string,
+    onEvent: (ev: LauraStreamEvent) => void,
+    options?: { months?: number; signal?: AbortSignal },
+  ): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/laura/progress`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ patient_id: patientId, months: options?.months }),
+      signal: options?.signal,
+    });
+    if (!res.ok || !res.body) {
+      const errBody = await res.text().catch(() => "");
+      throw new ApiError(res.status, errBody || "No se pudo iniciar el análisis de progreso");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          try { onEvent(JSON.parse(payload) as LauraStreamEvent); }
+          catch { /* ignore malformed */ }
+        }
+      }
+    }
+  },
+
   lauraBriefingStream: async (
     appointmentId: number,
     onEvent: (ev: LauraStreamEvent) => void,

@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight, MapPin, User as UserIcon, FileText, Check,
-  X as XIcon, ShieldCheck, CalendarPlus,
+  X as XIcon, ShieldCheck, CalendarPlus, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -256,6 +256,108 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
             <ShieldCheck className="h-3 w-3" />
             Al aprobar, te abro el formulario de agenda con esto pre-cargado.
             Tú decides si guardar.
+          </p>
+        </div>
+        <Footer
+          muted={isMuted}
+          decision={decision}
+          actions={
+            <>
+              <ApproveButton label="Revisar y crear" onClick={handleApprove} />
+              <DismissButton onClick={dismiss} />
+            </>
+          }
+        />
+      </Card>
+    );
+  }
+
+  // ── propose_task ────────────────────────────────────────────────────
+  if (action.name === "propose_task") {
+    const title = String(action.input.title ?? "");
+    const description = String(action.input.description ?? "");
+    const patientId = String(action.input.patient_id ?? "");
+    const patientName = String(action.input.patient_name ?? "");
+    const dueDate = String(action.input.due_date ?? ""); // yyyy-mm-dd
+    const priority = String(action.input.priority ?? "MEDIUM").toUpperCase();
+    const type = String(action.input.type ?? "");
+
+    const priorityLabel: Record<string, string> = {
+      LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", URGENT: "Urgente",
+    };
+
+    const handleApprove = () => {
+      // Construimos un objeto Partial<Tarea> compatible con el dialog.
+      const taskPayload: Record<string, unknown> = {
+        title, description,
+      };
+      if (patientId) taskPayload.patient_id = patientId;
+      if (patientName) taskPayload.patient_name = patientName;
+      if (dueDate) taskPayload.due_date = dueDate;
+      if (priority && ["LOW", "MEDIUM", "HIGH", "URGENT"].includes(priority)) {
+        taskPayload.priority = priority;
+      }
+      if (type) taskPayload.type = type;
+
+      const payload = btoa(unescape(encodeURIComponent(JSON.stringify(taskPayload))));
+      approve(() =>
+        safeNavigate(
+          () => navigate({
+            to: "/tareas",
+            search: { laura_task: payload } as never,
+          }),
+          `/tareas?laura_task=${encodeURIComponent(payload)}`,
+        )
+      );
+    };
+
+    let prettyDue = dueDate;
+    try {
+      if (dueDate) {
+        const d = new Date(dueDate + "T00:00:00");
+        prettyDue = d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+      }
+    } catch { /* keep raw */ }
+
+    return (
+      <Card icon={<ListChecks className="h-3.5 w-3.5" />} title="Propuesta de tarea" muted={isMuted}>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-ink-500">
+            {patientId && (
+              <span className="px-1.5 py-0.5 rounded-full bg-bg-50 border border-line-200 font-mono">
+                {patientId}
+              </span>
+            )}
+            {type && (
+              <span className="px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-800 border border-brand-200/70 font-medium">
+                {type}
+              </span>
+            )}
+            <span className={cn(
+              "px-1.5 py-0.5 rounded-full font-medium border",
+              priority === "URGENT" && "bg-rose-50 text-rose-800 border-rose-200/70",
+              priority === "HIGH" && "bg-amber-50 text-amber-800 border-amber-200/70",
+              (priority === "MEDIUM" || !priority) && "bg-bg-50 text-ink-700 border-line-200",
+              priority === "LOW" && "bg-sage-50 text-sage-800 border-sage-200/70",
+            )}>
+              Prioridad: {priorityLabel[priority] ?? priority}
+            </span>
+          </div>
+          <p className="text-xs font-medium text-ink-900">{title}</p>
+          {patientName && (
+            <p className="text-[11px] text-ink-700">Para: <span className="font-medium">{patientName}</span></p>
+          )}
+          {description && (
+            <div className="text-[11px] text-ink-700 leading-relaxed whitespace-pre-wrap rounded-md border border-line-100 bg-bg-50/70 p-2 max-h-32 overflow-y-auto">
+              {description}
+            </div>
+          )}
+          {prettyDue && (
+            <p className="text-[11px] text-ink-700">Vence: <span className="font-medium">{prettyDue}</span></p>
+          )}
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            Al aprobar, te abro el formulario de tarea con esto pre-cargado. Tú decides si guardar.
           </p>
         </div>
         <Footer

@@ -139,10 +139,19 @@ export function LauraChat({ open, onClose }: Props) {
   // Auto-detect: si estamos en /pacientes/<id> esa es la ficha activa.
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
+  // TanStack expone `search` como objeto ya parseado, NO como string.
+  const routerSearch = routerState.location.search as Record<string, unknown> | undefined;
+  const searchId = typeof routerSearch?.id === "string" ? routerSearch.id : null;
+  // Patient activo: detectamos en /pacientes/$id (param dinámico) Y
+  // en /historia?id=X (la vista de historia clínica usa query param).
+  // Cuando Laura tiene patient activo, el backend inyecta toda su
+  // ficha (notas, tareas, tests, diagnósticos) en el system prompt.
   const activePatientId = useMemo(() => {
     const m = currentPath.match(/^\/pacientes\/([^/]+)/);
-    return m ? decodeURIComponent(m[1]) : null;
-  }, [currentPath]);
+    if (m) return decodeURIComponent(m[1]);
+    if (currentPath === "/historia" && searchId) return searchId;
+    return null;
+  }, [currentPath, searchId]);
 
   // Health + usage para el banner de cuota
   const { data: health } = useQuery({

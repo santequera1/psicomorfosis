@@ -17,6 +17,7 @@ import { DiagnosisManager } from "@/components/clinical/DiagnosisManager";
 import { useWorkspace } from "@/lib/workspace";
 import { whatsappUrl } from "@/lib/display";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
+import { LauraRewriteButton } from "@/components/laura/LauraRewriteButton";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 type Patient = ApiPatient;
@@ -1487,9 +1488,16 @@ function NoteEditor({
           <div className="space-y-3">
             {(["s", "o", "a", "p"] as const).map((k, i) => (
               <label key={k} className="block">
-                <span className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold inline-flex items-center gap-2">
-                  <span className="h-5 w-5 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center text-[10px] font-serif">{k.toUpperCase()}</span>
-                  {({ s: "Subjetivo — lo que reporta el paciente", o: "Objetivo — observaciones del terapeuta / escalas", a: "Análisis — interpretación clínica / progreso", p: "Plan — técnicas, tareas, próxima sesión" } as const)[k]}
+                <span className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] uppercase tracking-widest text-brand-700 font-semibold inline-flex items-center gap-2">
+                    <span className="h-5 w-5 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center text-[10px] font-serif">{k.toUpperCase()}</span>
+                    {({ s: "Subjetivo — lo que reporta el paciente", o: "Objetivo — observaciones del terapeuta / escalas", a: "Análisis — interpretación clínica / progreso", p: "Plan — técnicas, tareas, próxima sesión" } as const)[k]}
+                  </span>
+                  <LauraRewriteButton
+                    text={soap[k]}
+                    onReplace={(v) => setSoap((p) => ({ ...p, [k]: v }))}
+                    variant="compact"
+                  />
                 </span>
                 <AutoResizeTextarea
                   value={soap[k]}
@@ -1505,14 +1513,21 @@ function NoteEditor({
           <label className="block">
             <span className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wider text-ink-500 font-medium">
               <span>Contenido</span>
-              <VoiceRecorderButton
-                variant="compact"
-                label="Dictar"
-                onTranscript={(text) => {
-                  const current = freeText.trim();
-                  setFreeText(current ? `${current} ${text}` : text);
-                }}
-              />
+              <span className="flex items-center gap-1.5">
+                <LauraRewriteButton
+                  text={freeText}
+                  onReplace={setFreeText}
+                  variant="compact"
+                />
+                <VoiceRecorderButton
+                  variant="compact"
+                  label="Dictar"
+                  onTranscript={(text) => {
+                    const current = freeText.trim();
+                    setFreeText(current ? `${current} ${text}` : text);
+                  }}
+                />
+              </span>
             </span>
             <AutoResizeTextarea
               autoFocus
