@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LauraStreamEvent } from "@/lib/api";
 import { X, AlertCircle, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * Modal genérico para streams one-shot de Laura — briefings, análisis
@@ -25,8 +26,13 @@ type Props = {
   title: string;
   /** Llamada al SDK que dispara el stream. */
   start: StreamStarter;
-  /** Quick actions de pie de modal. */
-  footer?: React.ReactNode;
+  /**
+   * Quick actions de pie de modal. Render prop: recibe `close`
+   * que dispara la animación de cierre antes del unmount.
+   * Si tu acción solo cierra (sin navegar), llamá close().
+   * Si navegás a otra ruta, no hace falta — el unmount ya ocurre.
+   */
+  footer?: (close: () => void) => React.ReactNode;
   onClose: () => void;
 };
 
@@ -35,6 +41,20 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startedRef = useRef(false);
+
+  // Estado de transición t-modal: open → closing → unmount.
+  // Empieza en "opening" para que el primer paint sea con la
+  // base (scale 0.96, opacity 0); el siguiente tick aplica
+  // is-open y arranca la transición de entrada.
+  const [phase, setPhase] = useState<"opening" | "open" | "closing">("opening");
+  useEffect(() => {
+    const t = window.setTimeout(() => setPhase("open"), 10);
+    return () => window.clearTimeout(t);
+  }, []);
+  function requestClose() {
+    setPhase("closing");
+    window.setTimeout(onClose, 150); // matchea --modal-close-dur
+  }
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -60,18 +80,27 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
   }, [start]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") requestClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stateClass = phase === "open" ? "is-open" : phase === "closing" ? "is-closing" : "";
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      className={cn(
+        "fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm flex items-center justify-center p-4 t-modal-backdrop",
+        stateClass,
+      )}
+      onClick={requestClose}
     >
       <div
-        className="bg-surface rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col border border-line-200 animate-in zoom-in-95 fade-in duration-200"
+        className={cn(
+          "bg-surface rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col border border-line-200 t-modal",
+          stateClass,
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center gap-3 p-4 border-b border-line-100 shrink-0">
@@ -84,7 +113,7 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center"
             aria-label="Cerrar"
           >
@@ -94,11 +123,13 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
 
         <div className="flex-1 overflow-y-auto px-5 py-4 text-sm text-ink-800 leading-relaxed">
           {!text && !error && (
-            <div className="flex items-center gap-2 text-xs text-ink-500 py-6 justify-center">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-bounce" style={{ animationDelay: "300ms" }} />
-              <span className="ml-2">Laura está preparando el contenido…</span>
+            <div className="flex items-center justify-center py-6">
+              <span
+                className="t-shimmer text-sm font-medium"
+                data-text="Laura está preparando el contenido…"
+              >
+                Laura está preparando el contenido…
+              </span>
             </div>
           )}
 
@@ -114,7 +145,7 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
 
         {footer && (
           <footer className="border-t border-line-100 p-3 shrink-0 flex flex-wrap items-center gap-2 justify-end">
-            {footer}
+            {footer(requestClose)}
           </footer>
         )}
       </div>

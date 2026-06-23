@@ -33,11 +33,11 @@ export function LauraBriefingModal({ appointmentId, patientId, patientName, onCl
       title={patientName}
       start={start}
       onClose={onClose}
-      footer={
+      footer={() => (
         <>
           <button
             type="button"
-            onClick={() => { onClose(); navigate({ to: "/historia", search: { id: patientId } as never }); }}
+            onClick={() => navigate({ to: "/historia", search: { id: patientId } as never })}
             className="h-9 px-3 rounded-lg border border-line-200 text-xs text-ink-800 hover:bg-bg-50 inline-flex items-center gap-1.5"
           >
             <FileText className="h-3.5 w-3.5" />
@@ -45,7 +45,7 @@ export function LauraBriefingModal({ appointmentId, patientId, patientName, onCl
           </button>
           <button
             type="button"
-            onClick={() => { onClose(); navigate({ to: "/pacientes/$id", params: { id: patientId } }); }}
+            onClick={() => navigate({ to: "/pacientes/$id", params: { id: patientId } })}
             className="h-9 px-3 rounded-lg bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
           >
             <UserIcon className="h-3.5 w-3.5" />
@@ -53,7 +53,7 @@ export function LauraBriefingModal({ appointmentId, patientId, patientName, onCl
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </>
-      }
+      )}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Sparkles, Loader2, X, Check, RotateCw, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,14 +44,29 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
 
 export function LauraRewriteButton({ text, onReplace, variant = "compact", className, disabled }: Props) {
   const [open, setOpen] = useState(false);
+  // Estado de transición del dropdown — montamos mientras está en
+  // "open" o "closing"; al finalizar el close hacemos unmount real.
+  const [dropdownPhase, setDropdownPhase] = useState<"opening" | "open" | "closing">("opening");
   const [loading, setLoading] = useState(false);
   const [proposal, setProposal] = useState<{ original: string; rewritten: string; mode: Mode } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setDropdownPhase("opening");
+    const t = window.setTimeout(() => setDropdownPhase("open"), 10);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  function closeDropdown() {
+    setDropdownPhase("closing");
+    window.setTimeout(() => setOpen(false), 150);
+  }
 
   const hasText = text.trim().length > 0;
   const isDisabled = disabled || !hasText || loading;
 
   async function runRewrite(mode: Mode) {
-    setOpen(false);
+    closeDropdown();
     setLoading(true);
     try {
       const { rewritten } = await api.lauraRewrite({ text, mode });
@@ -78,7 +93,7 @@ export function LauraRewriteButton({ text, onReplace, variant = "compact", class
       <div className="relative inline-block">
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => open ? closeDropdown() : setOpen(true)}
           disabled={isDisabled}
           title={hasText ? "Mejorar este texto con Laura" : "Escribí algo primero"}
           className={cn(
@@ -99,8 +114,15 @@ export function LauraRewriteButton({ text, onReplace, variant = "compact", class
         {open && (
           <>
             {/* Backdrop transparente para cerrar al click fuera */}
-            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-line-200 bg-surface shadow-lg overflow-hidden">
+            <div className="fixed inset-0 z-30" onClick={closeDropdown} />
+            <div
+              data-origin="top-right"
+              className={cn(
+                "t-dropdown absolute right-0 top-full mt-1 z-40 w-56 rounded-lg border border-line-200 bg-surface shadow-lg overflow-hidden",
+                dropdownPhase === "open" && "is-open",
+                dropdownPhase === "closing" && "is-closing",
+              )}
+            >
               <p className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-ink-500 border-b border-line-100">
                 Cómo lo reescribo
               </p>
@@ -148,13 +170,34 @@ function ProposalModal({
   onRetry: () => void;
 }) {
   const modeLabel = MODES.find((m) => m.id === mode)?.label ?? mode;
+  // Patrón t-modal: opening → open → closing → unmount.
+  const [phase, setPhase] = useState<"opening" | "open" | "closing">("opening");
+  useEffect(() => {
+    const t = window.setTimeout(() => setPhase("open"), 10);
+    return () => window.clearTimeout(t);
+  }, []);
+  function requestClose() {
+    setPhase("closing");
+    window.setTimeout(onClose, 150);
+  }
+  function approveAndClose() {
+    setPhase("closing");
+    window.setTimeout(onApprove, 150);
+  }
+  const stateClass = phase === "open" ? "is-open" : phase === "closing" ? "is-closing" : "";
   return (
     <div
-      className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      className={cn(
+        "fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm flex items-center justify-center p-4 t-modal-backdrop",
+        stateClass,
+      )}
+      onClick={requestClose}
     >
       <div
-        className="bg-surface rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-line-200 animate-in zoom-in-95 fade-in duration-200"
+        className={cn(
+          "bg-surface rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-line-200 t-modal",
+          stateClass,
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center gap-3 p-4 border-b border-line-100 shrink-0">
@@ -167,7 +210,7 @@ function ProposalModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center"
             aria-label="Cerrar"
           >
@@ -206,14 +249,14 @@ function ProposalModal({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="h-9 px-3 rounded-lg border border-line-200 text-xs text-ink-700 hover:bg-bg-50"
             >
               Descartar
             </button>
             <button
               type="button"
-              onClick={onApprove}
+              onClick={approveAndClose}
               className="h-9 px-3 rounded-lg bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5"
             >
               <Check className="h-3.5 w-3.5" />

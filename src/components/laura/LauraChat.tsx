@@ -3,7 +3,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2,
-  MessageSquarePlus, ChevronLeft, Plus, History, ChevronDown,
+  MessageSquarePlus, ChevronLeft, Plus, History,
   Paperclip, Image as ImageIcon,
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
@@ -998,11 +998,14 @@ function AvailableBanner({ messages, resetCo }: { messages: number; resetCo: str
   }, [expanded]);
 
   return (
-    <div className="bg-emerald-50/50 border-b border-emerald-200/50">
+    <div
+      className="t-acc bg-emerald-50/50 border-b border-emerald-200/50"
+      data-open={expanded ? "true" : "false"}
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-4 py-2 flex items-center justify-between gap-2 hover:bg-emerald-100/30 transition-colors"
+        className="t-acc-head w-full px-4 py-2 flex items-center justify-between gap-2 hover:bg-emerald-100/30 transition-colors"
         aria-expanded={expanded}
       >
         <span className="text-[11px] text-emerald-900 font-semibold leading-snug inline-flex items-center gap-1.5">
@@ -1014,32 +1017,36 @@ function AvailableBanner({ messages, resetCo }: { messages: number; resetCo: str
             </span>
           )}
         </span>
-        <ChevronDown
-          className={cn(
-            "h-3.5 w-3.5 text-emerald-900/70 transition-transform",
-            expanded && "rotate-180",
-          )}
-        />
+        {/* Chevron simétrico (path en V centrado en 16x16) — flip
+            scaleY(-1) lo convierte en "^". El path tiene vertex
+            symmetry para que el flip coincida exactamente. */}
+        <span className="t-acc-chevron text-emerald-900/70">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 6.5L8 10.5L12 6.5" />
+          </svg>
+        </span>
       </button>
-      {expanded && (
-        <div className="px-4 pb-2.5 animate-in slide-in-from-top-1 fade-in duration-200">
-          <p className="text-[11px] text-emerald-900/85 leading-snug">
-            Estado: <strong>Disponible</strong>
-          </p>
-          <p className="text-[11px] text-emerald-900/85 leading-snug mt-0.5">
-            Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"} realizada{messages === 1 ? "" : "s"}</strong>
-          </p>
-          {resetCo && (
-            <p className="text-[11px] text-emerald-900/80 leading-snug mt-0.5">
-              Renovación de capacidad: <strong className="tabular">{resetCo}</strong> (Colombia)
+      <div className="t-acc-panel">
+        <div className="t-acc-panel-inner">
+          <div className="px-4 pb-2.5">
+            <p className="text-[11px] text-emerald-900/85 leading-snug">
+              Estado: <strong>Disponible</strong>
             </p>
-          )}
-          <p className="text-[10px] text-emerald-900/65 mt-1.5 leading-snug">
-            Laura está en fase beta. Estamos aumentando gradualmente su capacidad
-            durante las pruebas.
-          </p>
+            <p className="text-[11px] text-emerald-900/85 leading-snug mt-0.5">
+              Hoy: <strong>{messages} consulta{messages === 1 ? "" : "s"} realizada{messages === 1 ? "" : "s"}</strong>
+            </p>
+            {resetCo && (
+              <p className="text-[11px] text-emerald-900/80 leading-snug mt-0.5">
+                Renovación de capacidad: <strong className="tabular">{resetCo}</strong> (Colombia)
+              </p>
+            )}
+            <p className="text-[10px] text-emerald-900/65 mt-1.5 leading-snug">
+              Laura está en fase beta. Estamos aumentando gradualmente su capacidad
+              durante las pruebas.
+            </p>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

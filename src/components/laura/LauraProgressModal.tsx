@@ -28,15 +28,15 @@ export function LauraProgressModal({ patientId, patientName, months, onClose }: 
       title={patientName}
       start={start}
       onClose={onClose}
-      footer={
+      footer={(close) => (
         <button
           type="button"
-          onClick={onClose}
+          onClick={close}
           className="h-9 px-3 rounded-lg border border-line-200 text-xs text-ink-700 hover:bg-bg-50"
         >
           Cerrar
         </button>
-      }
+      )}
     />
   );
 }
