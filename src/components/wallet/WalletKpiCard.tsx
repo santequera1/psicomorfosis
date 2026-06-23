@@ -37,52 +37,62 @@ export function WalletKpiCard({ className }: Props) {
     <>
       <TiltCard
         className={className}
-        cardClassName="border border-line-200 bg-surface px-4 py-3 shadow-xs flex flex-col gap-2"
-        // El border-radius lo dicta el CSS de .t-tilt-card (12px); lo
-        // dejamos así para que el clip del glare quede dentro de las
-        // esquinas redondas.
-        maxTilt={8}
+        // Tarjeta de crédito: fondo oscuro gradiente, texto claro,
+        // proporciones de plástico real (aspect-ratio cercano a
+        // 1.586 — el ISO/IEC 7810 ID-1). Aquí limitamos solo la
+        // altura mínima para que dentro del grid KPI no rompa la
+        // grilla. El glare del tilt va a brillar bien sobre el negro.
+        cardClassName="relative bg-gradient-to-br from-ink-900 via-ink-800 to-ink-900 text-white px-4 py-3 shadow-md min-h-[120px] flex flex-col"
+        maxTilt={10}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <CreditCard className="h-3.5 w-3.5 text-ink-400 shrink-0" />
-            <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">
-              Mis cuentas
+        {/* Brillo sutil en la esquina superior derecha para sugerir
+            "borde de tarjeta plástica". Sumado al glare del tilt
+            le da la sensación 3D que vemos en la demo. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full bg-white/10 blur-2xl"
+        />
+
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-white/60 font-medium inline-flex items-center gap-1">
+              <CreditCard className="h-3 w-3" /> Mis cuentas
             </span>
+            <span className="text-[11px] text-white/50 mt-0.5">Wallet</span>
           </div>
           <button
             onClick={() => setCreating(true)}
-            className="text-[11px] text-brand-700 hover:underline inline-flex items-center gap-0.5 shrink-0"
+            className="text-[11px] text-white/85 inline-flex items-center gap-0.5 shrink-0 px-1.5 py-0.5 rounded-md bg-white/10 hover:bg-white/20 transition-colors"
+            title="Agregar nueva cuenta"
           >
             <Plus className="h-3 w-3" /> Agregar
           </button>
         </div>
 
         {isLoading ? (
-          <div className="h-14 rounded-lg bg-bg-100 animate-pulse" />
+          <div className="relative h-14 rounded-lg bg-white/10 animate-pulse mt-3" />
         ) : total === 0 ? (
           <button
             onClick={() => setCreating(true)}
-            className="rounded-lg border border-dashed border-line-200 bg-bg-50 hover:bg-bg-100 hover:border-brand-400 py-3 px-3 w-full flex items-center justify-center gap-1.5 text-ink-500 transition-colors"
+            className="relative mt-auto rounded-lg border border-dashed border-white/30 bg-white/5 hover:bg-white/10 py-3 px-3 w-full flex items-center justify-center gap-1.5 text-white/80 transition-colors"
           >
             <Plus className="h-4 w-4" />
             <span className="text-[11px] font-medium">Agrega tu primera cuenta</span>
           </button>
         ) : (
-          // Contador grande, todo el ancho. Click → abre modal con la
-          // lista de cuentas (cada una editable). No mostrar las cuentas
-          // inline: en pantallas pequeñas era un muro de bloques de color
-          // que rompía la estética calmada del resto del KPI grid.
           <button
             onClick={() => setListOpen(true)}
-            className="text-left rounded-lg hover:bg-bg-100/60 px-1 py-1 -mx-1 transition-colors"
+            className="relative text-left mt-auto pt-2"
             title="Ver y editar tus cuentas"
           >
-            <div className="text-2xl font-serif tabular text-ink-900 leading-tight">
+            {/* Número grande tipo "saldo" en font serif para que dé
+                aire de tarjeta de cliente premium. El blanco puro
+                contra el negro = máxima legibilidad. */}
+            <div className="font-serif tabular text-white leading-none text-3xl">
               {total}
             </div>
-            <div className="text-[11px] text-ink-500 mt-0.5">
-              {totalLabel} <span className="text-brand-700">· ver lista</span>
+            <div className="text-[11px] text-white/65 mt-1.5">
+              {totalLabel} <span className="text-white/85 underline-offset-2 hover:underline">· ver lista</span>
             </div>
           </button>
         )}
