@@ -67,8 +67,22 @@ type Props = {
   onClose: () => void;
 };
 
+/**
+ * Key de sessionStorage donde guardamos el id de la conversación
+ * activa. AppShell se remonta en cada cambio de ruta (ver LauraFab),
+ * así que si Laura ejecuta una acción y navega, el state local de
+ * este componente se vacía. Persistimos el id acá para poder
+ * rehidratar los mensajes al volver a montar.
+ */
+const STORAGE_CONV_ID = "laura.activeConvId";
+
 export function LauraChat({ open, onClose }: Props) {
-  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = window.sessionStorage.getItem(STORAGE_CONV_ID);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -171,6 +185,52 @@ export function LauraChat({ open, onClose }: Props) {
   const markSpoken = useCallback(() => {
     setHasSpoken(true);
     try { window.sessionStorage.setItem("laura.spoken", "1"); } catch {}
+  }, []);
+
+  // Persistir conversationId activo. Esto sobrevive a navegaciones
+  // (AppShell remonta este componente entero al cambiar de ruta).
+  useEffect(() => {
+    try {
+      if (conversationId == null) {
+        window.sessionStorage.removeItem(STORAGE_CONV_ID);
+      } else {
+        window.sessionStorage.setItem(STORAGE_CONV_ID, String(conversationId));
+      }
+    } catch { /* SSR / quota / private mode */ }
+  }, [conversationId]);
+
+  // Rehidratar mensajes cuando el componente se monta con un
+  // conversationId persistido en storage. Si la conversación fue
+  // borrada en el backend, limpiamos el estado y dejamos chat vacío.
+  useEffect(() => {
+    if (conversationId == null) return;
+    if (messages.length > 0) return; // mensajes ya cargados, no pisar
+    let cancelled = false;
+    (async () => {
+      try {
+        const { messages: msgs } = await api.lauraGetConversation(conversationId);
+        if (cancelled) return;
+        setMessages(msgs.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          status: m.error ? "error" : "ok",
+          error: m.error,
+          proposedActions: m.proposed_actions ?? undefined,
+        })));
+      } catch {
+        if (!cancelled) {
+          // Conv ya no existe (borrada o id inválido), reset
+          setConversationId(null);
+          setMessages([]);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // Intencionalmente solo al mount (con el conv inicial del storage)
+    // — no queremos re-fetch cada vez que conversationId cambia por
+    // acciones del usuario (loadConversation ya hace el fetch).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Scroll auto al fondo cuando llegan mensajes nuevos o tokens
@@ -556,6 +616,13 @@ export function LauraChat({ open, onClose }: Props) {
           <ConversationHistory
             onPick={loadConversation}
             onClose={() => setShowHistory(false)}
+            onDeleted={(deletedId) => {
+              // Si borraron la conv activa, limpiar el chat para
+              // que al cerrar el historial no vuelva a aparecer.
+              if (deletedId === conversationId) {
+                newConversation();
+              }
+            }}
           />
         )}
 
@@ -1212,10 +1279,11 @@ function SuggestionChip({
 }
 
 function ConversationHistory({
-  onPick, onClose,
+  onPick, onClose, onDeleted,
 }: {
   onPick: (id: number) => void;
   onClose: () => void;
+  onDeleted: (id: number) => void;
 }) {
   const { data, refetch } = useQuery({
     queryKey: ["laura-conversations"],
@@ -1226,6 +1294,7 @@ function ConversationHistory({
     e.stopPropagation();
     if (!confirm("¿Eliminar esta conversación?")) return;
     await api.lauraDeleteConversation(id);
+    onDeleted(id);
     refetch();
   };
 
