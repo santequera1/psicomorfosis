@@ -11,32 +11,58 @@ import { toast } from "sonner";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
 
+/**
+ * Datos opcionales para pre-llenar el modal. Lo usa Laura cuando
+ * propone una cita: en vez de solo navegar a la agenda, abrimos el
+ * modal con los campos ya rellenos para que el psicólogo solo
+ * revise y confirme.
+ */
+export type AppointmentPrefill = {
+  patientId?: string;
+  date?: string; // yyyy-mm-dd
+  time?: string; // HH:mm
+  duration?: number; // minutos
+  modality?: Modality;
+  notes?: string;
+};
+
 type Props = {
   patients: ApiPatient[];
   /** Si está, se preselecciona y se oculta el buscador (modal contextual). */
   prefilledPatient?: ApiPatient | null;
+  /** Pre-llenado adicional de campos (fecha/hora/duración/etc). */
+  prefill?: AppointmentPrefill;
   onClose: () => void;
   /** Llamado tras crear; útil para invalidar queries específicas de la página. */
   onCreated?: () => void;
 };
 
-export function NewAppointmentModal({ patients, prefilledPatient = null, onClose, onCreated }: Props) {
+export function NewAppointmentModal({ patients, prefilledPatient = null, prefill, onClose, onCreated }: Props) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
-  const [query, setQuery] = useState(prefilledPatient ? displayPatientName(prefilledPatient) : "");
-  const [selected, setSelected] = useState<ApiPatient | null>(prefilledPatient ?? null);
+  // Resolución del paciente inicial: prefilledPatient gana; si no, lo
+  // buscamos en la lista por id de Laura.
+  const initialPatient: ApiPatient | null =
+    prefilledPatient ??
+    (prefill?.patientId ? patients.find((p) => p.id === prefill.patientId) ?? null : null);
+
+  const [query, setQuery] = useState(initialPatient ? displayPatientName(initialPatient) : "");
+  const [selected, setSelected] = useState<ApiPatient | null>(initialPatient);
   const [showResults, setShowResults] = useState(false);
   const [date, setDate] = useState(() => {
+    if (prefill?.date) return prefill.date;
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
-  const [time, setTime] = useState("10:30");
-  const [modality, setModality] = useState<Modality>(prefilledPatient?.modality ?? "individual");
-  const [duration, setDuration] = useState(50);
-  const [notes, setNotes] = useState("");
+  const [time, setTime] = useState(prefill?.time ?? "10:30");
+  const [modality, setModality] = useState<Modality>(
+    prefill?.modality ?? initialPatient?.modality ?? "individual",
+  );
+  const [duration, setDuration] = useState(prefill?.duration ?? 50);
+  const [notes, setNotes] = useState(prefill?.notes ?? "");
 
   // Settings del workspace: horario configurado + datos del consultorio
   // principal. Lo usamos para (a) ofrecer el consultorio principal como

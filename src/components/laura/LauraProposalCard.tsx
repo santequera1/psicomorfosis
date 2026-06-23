@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight, MapPin, User as UserIcon, FileText, Check,
-  X as XIcon, ShieldCheck,
+  X as XIcon, ShieldCheck, CalendarPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -186,6 +186,84 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
           actions={
             <>
               <ApproveButton label="Revisar y guardar" onClick={handleApprove} />
+              <DismissButton onClick={dismiss} />
+            </>
+          }
+        />
+      </Card>
+    );
+  }
+
+  // ── propose_appointment ─────────────────────────────────────────────
+  if (action.name === "propose_appointment") {
+    const patientId = String(action.input.patient_id ?? "");
+    const date = String(action.input.date ?? ""); // yyyy-mm-dd
+    const time = String(action.input.time ?? ""); // HH:mm
+    const duration = Number(action.input.duration ?? 50);
+    const modality = String(action.input.modality ?? "individual");
+    const notes = String(action.input.notes ?? "");
+    const patientName = String(action.input.patient_name ?? "");
+
+    const modalityLabel: Record<string, string> = {
+      individual: "Individual", pareja: "Pareja", familiar: "Familiar",
+      grupal: "Grupal", tele: "Telepsicología",
+    };
+
+    const handleApprove = () => {
+      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({
+        patientId, date, time, duration, modality, notes,
+      }))));
+      approve(() =>
+        safeNavigate(
+          () => navigate({
+            to: "/agenda",
+            search: { laura_appt: payload } as never,
+          }),
+          `/agenda?laura_appt=${encodeURIComponent(payload)}`,
+        )
+      );
+    };
+
+    // Formato amigable de la fecha para preview
+    let prettyDate = date;
+    try {
+      if (date) {
+        const d = new Date(date + "T00:00:00");
+        prettyDate = d.toLocaleDateString("es-CO", {
+          weekday: "long", day: "numeric", month: "long",
+        });
+      }
+    } catch { /* keep raw */ }
+
+    return (
+      <Card icon={<CalendarPlus className="h-3.5 w-3.5" />} title="Propuesta de cita" muted={isMuted}>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-ink-500">
+            <span className="px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-800 border border-brand-200/70 font-medium">
+              {modalityLabel[modality] ?? modality}
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full bg-bg-50 border border-line-200 font-mono">
+              {patientId}
+            </span>
+          </div>
+          {patientName && <p className="text-xs font-medium text-ink-900">{patientName}</p>}
+          <div className="text-[11px] text-ink-700 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 space-y-0.5">
+            <p><span className="font-medium text-ink-900">Fecha:</span> {prettyDate || "—"}</p>
+            <p><span className="font-medium text-ink-900">Hora:</span> {time || "—"} <span className="text-ink-500">({duration} min)</span></p>
+            {notes && <p><span className="font-medium text-ink-900">Notas:</span> {notes}</p>}
+          </div>
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            Al aprobar, te abro el formulario de agenda con esto pre-cargado.
+            Tú decides si guardar.
+          </p>
+        </div>
+        <Footer
+          muted={isMuted}
+          decision={decision}
+          actions={
+            <>
+              <ApproveButton label="Revisar y crear" onClick={handleApprove} />
               <DismissButton onClick={dismiss} />
             </>
           }

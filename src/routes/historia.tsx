@@ -1324,6 +1324,34 @@ function PatientPickerModal({ patients, currentId, onPick, onClose }: { patients
  * directamente dentro del flujo de SessionNotes, sin abrir backdrop ni
  * desconectar al psicólogo de la lista de notas existentes.
  */
+/**
+ * Textarea que se ajusta automáticamente a la altura de su contenido.
+ * Cuando Laura inyecta una nota larga vía prefill, los textareas con
+ * `rows` fijo dejaban el texto cortado y el psicólogo no veía toda
+ * la nota sin hacer scroll interno. Acá medimos scrollHeight tras
+ * cada cambio de valor y aplicamos la altura.
+ */
+function AutoResizeTextarea({
+  value, onChange, minHeight = 56, className, ...rest
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { minHeight?: number }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.max(minHeight, el.scrollHeight)}px`;
+  }, [value, minHeight]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      className={cn("resize-none overflow-hidden", className)}
+      {...rest}
+    />
+  );
+}
+
 function NoteEditor({
   patientId, patientName, onClose, prefill,
 }: {
@@ -1463,11 +1491,11 @@ function NoteEditor({
                   <span className="h-5 w-5 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center text-[10px] font-serif">{k.toUpperCase()}</span>
                   {({ s: "Subjetivo — lo que reporta el paciente", o: "Objetivo — observaciones del terapeuta / escalas", a: "Análisis — interpretación clínica / progreso", p: "Plan — técnicas, tareas, próxima sesión" } as const)[k]}
                 </span>
-                <textarea
-                  rows={2}
+                <AutoResizeTextarea
                   value={soap[k]}
                   onChange={(e) => setSoap((p) => ({ ...p, [k]: e.target.value }))}
                   autoFocus={i === 0}
+                  minHeight={56}
                   className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
                 />
               </label>
@@ -1486,12 +1514,12 @@ function NoteEditor({
                 }}
               />
             </span>
-            <textarea
-              rows={8}
+            <AutoResizeTextarea
               autoFocus
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               placeholder={kind === "privada" ? "Hipótesis de conceptualización, proceso, impresiones…" : "Resumen de la evolución del caso…"}
+              minHeight={180}
               className="mt-1 w-full px-3 py-2 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700"
             />
           </label>

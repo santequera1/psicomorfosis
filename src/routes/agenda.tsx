@@ -19,7 +19,7 @@ import {
   ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2, Receipt,
 } from "lucide-react";
 
-type AgendaSearch = { appt?: number };
+type AgendaSearch = { appt?: number; laura_appt?: string };
 export const Route = createFileRoute("/agenda")({
   head: () => ({
     meta: [
@@ -29,7 +29,10 @@ export const Route = createFileRoute("/agenda")({
   }),
   validateSearch: (s: Record<string, unknown>): AgendaSearch => {
     const v = typeof s.appt === "number" ? s.appt : typeof s.appt === "string" ? Number(s.appt) : undefined;
-    return { appt: Number.isFinite(v) ? v : undefined };
+    return {
+      appt: Number.isFinite(v) ? v : undefined,
+      laura_appt: typeof s.laura_appt === "string" ? s.laura_appt : undefined,
+    };
   },
   component: AgendaPage,
 });
@@ -79,6 +82,10 @@ function AgendaPage() {
   const [view, setView] = useState<View>("dia");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [createOpen, setCreateOpen] = useState(false);
+  // Pre-carga del modal por Laura: cuando la URL trae ?laura_appt=<b64>
+  // decodificamos los datos, abrimos el modal y limpiamos el query
+  // param para que un reload no reabra el modal.
+  const [lauraApptPrefill, setLauraApptPrefill] = useState<import("@/components/app/NewAppointmentModal").AppointmentPrefill | null>(null);
   // Filtros que se aplican client-side a las citas mostradas en cada vista.
   // "" = sin filtrar. modality: individual/pareja/familiar/grupal/tele.
   // sede_id: id numérico de la sede o "" (todas) o "0" (solo virtual / sin sede).
@@ -118,6 +125,26 @@ function AgendaPage() {
       replace: true,
     });
   }, [targetAppt, navigate]);
+
+  // Pre-carga de Laura para crear cita: decodificamos el payload del
+  // query param y abrimos el modal. Limpiamos la query para que un
+  // refresh no reabra el modal con datos viejos.
+  useEffect(() => {
+    if (!searchParams.laura_appt) return;
+    try {
+      const json = decodeURIComponent(escape(atob(searchParams.laura_appt)));
+      const parsed = JSON.parse(json) as import("@/components/app/NewAppointmentModal").AppointmentPrefill;
+      setLauraApptPrefill(parsed);
+      setCreateOpen(true);
+    } catch (err) {
+      console.warn("[agenda] laura_appt decode error:", err);
+    }
+    navigate({
+      to: "/agenda",
+      search: (prev: AgendaSearch) => ({ ...prev, laura_appt: undefined }),
+      replace: true,
+    });
+  }, [searchParams.laura_appt, navigate]);
 
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
@@ -438,7 +465,13 @@ function AgendaPage() {
         </section>
       </div>
 
-      {createOpen && <NewAppointmentModal patients={patients} onClose={() => setCreateOpen(false)} />}
+      {createOpen && (
+        <NewAppointmentModal
+          patients={patients}
+          prefill={lauraApptPrefill ?? undefined}
+          onClose={() => { setCreateOpen(false); setLauraApptPrefill(null); }}
+        />
+      )}
       {detailSlot && <AppointmentDetailModal slot={detailSlot} onClose={() => setDetailSlot(null)} />}
     </AppShell>
   );
