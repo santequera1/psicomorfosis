@@ -64,7 +64,14 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: false,
 }));
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: true,
+  credentials: true,
+  // X-Refresh-Token lo emite auth.js cuando el JWT está cerca de
+  // expirar. Sin exposedHeaders el browser oculta el header al
+  // código del cliente — y entonces el sliding refresh no funciona.
+  exposedHeaders: ["X-Refresh-Token"],
+}));
 // Parser JSON global con captura del raw body. El `verify` callback se
 // ejecuta ANTES del parseo y nos da acceso al Buffer original — necesario
 // para verificar firmas HMAC (ej: /api/webhooks/messaging) donde el body

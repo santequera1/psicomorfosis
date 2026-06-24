@@ -760,6 +760,22 @@ export function refreshToken(token: string) {
   window.localStorage.setItem(TOKEN_KEY, token);
 }
 
+/**
+ * Sliding session: el backend devuelve X-Refresh-Token cuando el
+ * JWT está cerca de expirar (< 24h restantes). Lo guardamos
+ * transparente para que el siguiente request use el token fresco.
+ * Sin esto el usuario era expulsado a las 24h aunque estuviera
+ * usando la app activamente.
+ */
+function maybeStoreRefreshedToken(res: Response) {
+  try {
+    const fresh = res.headers.get("X-Refresh-Token");
+    if (fresh && typeof window !== "undefined") {
+      window.localStorage.setItem(TOKEN_KEY, fresh);
+    }
+  } catch { /* ignore — peor caso, el siguiente request gatilla otro refresh */ }
+}
+
 export function clearSession() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
@@ -807,6 +823,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  // Sliding session: el backend emite X-Refresh-Token cuando al
+  // token le quedan < 24h. Lo guardamos transparente para que el
+  // siguiente request use el token fresco. El usuario nunca se
+  // entera y la sesión no cae mientras esté activo.
+  maybeStoreRefreshedToken(res);
   if (res.status === 204) return undefined as T;
 
   const contentType = res.headers.get("content-type") ?? "";
@@ -1368,6 +1389,7 @@ export const api = {
       signal: opts?.signal,
     });
     if (res.status === 401) clearSession();
+    maybeStoreRefreshedToken(res);
     let body: any = null;
     try { body = await res.json(); } catch { /* noop */ }
     if (!res.ok || !body?.success) {
@@ -2307,6 +2329,7 @@ export const api = {
       const errBody = await res.text().catch(() => "");
       throw new ApiError(res.status, errBody || "No se pudo iniciar el stream de Laura");
     }
+    maybeStoreRefreshedToken(res);
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -2422,6 +2445,7 @@ export const api = {
       const errBody = await res.text().catch(() => "");
       throw new ApiError(res.status, errBody || "No se pudo iniciar el briefing");
     }
+    maybeStoreRefreshedToken(res);
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";

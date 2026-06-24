@@ -1,7 +1,15 @@
 import jwt from "jsonwebtoken";
 import { db } from "./db.js";
 
-const EXPIRES_IN = "24h";
+// 7 días: TTL absoluto del token. El sliding refresh (abajo) emite
+// uno nuevo cada vez que quedan < 24h de vida — así un usuario que
+// usa la app a diario nunca ve la sesión caer. Si no entra en 7
+// días corridos, ahí sí re-loguea.
+const EXPIRES_IN = "7d";
+// Umbral para regenerar token: cuando le quedan < 24h, el middleware
+// emite uno fresco en el header X-Refresh-Token. El cliente lo guarda
+// transparente y el usuario nunca se entera.
+const REFRESH_THRESHOLD_SEC = 24 * 60 * 60;
 const FALLBACK_SECRET = "psicomorfosis-dev-secret-change-me";
 
 // IMPORTANT: leer JWT_SECRET de forma LAZY (no a nivel de módulo). Los
@@ -25,6 +33,27 @@ function getSecret() {
 
 export function signToken(payload) {
   return jwt.sign(payload, getSecret(), { expiresIn: EXPIRES_IN });
+}
+
+/**
+ * Devuelve true si al token le quedan menos de REFRESH_THRESHOLD_SEC
+ * de vida — en ese caso conviene re-emitir uno fresco para que la
+ * sesión no caiga durante el uso normal.
+ */
+function shouldRefresh(payload) {
+  if (!payload?.exp) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  return (payload.exp - nowSec) < REFRESH_THRESHOLD_SEC;
+}
+
+/**
+ * Re-firma el payload del JWT con un nuevo iat/exp. Quitamos los
+ * campos managed por la lib antes de re-firmar para que no se
+ * dupliquen.
+ */
+function refreshFromPayload(payload) {
+  const { iat: _iat, exp: _exp, ...rest } = payload;
+  return signToken(rest);
 }
 
 export function verifyToken(token) {
@@ -72,6 +101,21 @@ export function invalidateUserTokens(userId) {
   return now;
 }
 
+/**
+ * Setea X-Refresh-Token en el response si el token actual está cerca
+ * de expirar. El cliente lee ese header y reemplaza el token en
+ * localStorage sin intervención del usuario. Resultado: el usuario
+ * activo nunca pierde la sesión por TTL.
+ */
+function maybeRefresh(res, payload) {
+  if (!shouldRefresh(payload)) return;
+  try {
+    res.setHeader("X-Refresh-Token", refreshFromPayload(payload));
+  } catch (e) {
+    console.warn("[auth] no pude refrescar token:", e?.message);
+  }
+}
+
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
@@ -79,6 +123,7 @@ export function requireAuth(req, res, next) {
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
   req.user = payload;
+  maybeRefresh(res, payload);
   next();
 }
 
@@ -115,6 +160,7 @@ export function requirePatient(req, res, next) {
     });
   }
   req.user = payload;
+  maybeRefresh(res, payload);
   next();
 }
 
@@ -133,6 +179,7 @@ export function requirePlatformAdmin(req, res, next) {
     return res.status(403).json({ error: "Acceso solo para administradores de plataforma" });
   }
   req.user = payload;
+  maybeRefresh(res, payload);
   next();
 }
 
@@ -151,6 +198,7 @@ export function requireLegalAdmin(req, res, next) {
     return res.status(403).json({ error: "Acceso solo para asesores legales" });
   }
   req.user = payload;
+  maybeRefresh(res, payload);
   next();
 }
 
@@ -165,5 +213,6 @@ export function requireStaff(req, res, next) {
     return res.status(403).json({ error: "Acceso solo para staff" });
   }
   req.user = payload;
+  maybeRefresh(res, payload);
   next();
 }
