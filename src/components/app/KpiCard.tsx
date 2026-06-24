@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { LiquidGlassSurface } from "@/components/ui/LiquidGlassSurface";
 
 interface KpiCardProps {
   label: string;
@@ -13,17 +14,16 @@ interface KpiCardProps {
 export function KpiCard({ label, value, delta, hint, emphasis = "default", icon }: KpiCardProps) {
   const isRisk = emphasis === "risk";
   return (
-    <div
+    <LiquidGlassSurface
       className={cn(
-        // Padding más compacto en mobile (px-2.5 py-2 vs px-3 py-3 antes)
-        // — 4 cards en 2x2 ocupaban demasiado vertical. En desktop
-        // mantengo el padding generoso original.
-        // lg-surface es no-op cuando el tema "liquid" no está activo
-        // (solo agrega glass cuando data-theme=liquid). En cualquier
-        // otro tema mandan los estilos tailwind base de abajo.
-        "lg-surface rounded-xl border bg-surface px-2.5 py-2 sm:px-5 sm:py-4 shadow-xs hover:shadow-soft transition-shadow min-w-0",
+        // En tema "liquid" la librería WebGL hace su efecto y nuestras
+        // clases tailwind pintan el contenido encima. En otros temas
+        // (Clínico, Aurora, etc.) LiquidGlassSurface es solo un <div>
+        // y mandan estos estilos.
+        "rounded-xl border bg-surface px-2.5 py-2 sm:px-5 sm:py-4 shadow-xs hover:shadow-soft transition-shadow min-w-0",
         isRisk ? "border-risk-high/30 bg-error-soft/40" : "border-line-200",
       )}
+      cornerRadius={12}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-[10px] sm:text-[12px] uppercase tracking-[0.08em] text-ink-500 font-medium leading-tight">{label}</div>
@@ -50,6 +50,6 @@ export function KpiCard({ label, value, delta, hint, emphasis = "default", icon 
         )}
         {hint && <span className="text-ink-500 truncate">{hint}</span>}
       </div>
-    </div>
+    </LiquidGlassSurface>
   );
 }

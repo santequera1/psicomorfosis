@@ -71,6 +71,7 @@
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.40.0",
     "input-otp": "^1.4.2",
+    "liquid-glass-react": "^1.1.1",
     "lucide-react": "^0.575.0",
     "pdfjs-dist": "^6.0.227",
     "qrcode.react": "^4.2.0",
