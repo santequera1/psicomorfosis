@@ -4,11 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2,
   MessageSquarePlus, ChevronLeft, Plus, History,
-  Paperclip, Image as ImageIcon,
+  Paperclip, Image as ImageIcon, Mic, Square,
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LauraProposalCard, type ProposedAction } from "./LauraProposalCard";
+import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
+import { toast } from "sonner";
 
 /**
  * Chat de Laura — drawer lateral derecho con conversación streaming.
@@ -90,6 +92,46 @@ export function LauraChat({ open, onClose }: Props) {
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dictado de voz: useVoiceRecorder maneja el MediaRecorder + nivel
+  // RMS + timer. transcribing es el estado entre stop() y respuesta
+  // de /api/voice/transcribe (Whisper). Cap a 5 min para que el
+  // psicólogo pueda dictar una sesión entera sin pasar el límite de
+  // Whisper (25MB).
+  const voice = useVoiceRecorder({ maxDurationMs: 5 * 60 * 1000 });
+  const [transcribing, setTranscribing] = useState(false);
+
+  async function startDictation() {
+    if (sending || isResting || transcribing) return;
+    await voice.start();
+  }
+  async function stopDictation() {
+    if (voice.state !== "recording") return;
+    setTranscribing(true);
+    const blob = await voice.stop();
+    if (!blob) { setTranscribing(false); return; }
+    const result = await api.transcribeVoice(blob, { filename: "dictado.webm" });
+    setTranscribing(false);
+    if (!result.success) {
+      toast.error(result.error || "No pude transcribir el audio.");
+      return;
+    }
+    if (!result.text.trim()) {
+      toast.info("No se detectó voz en la grabación.");
+      return;
+    }
+    // Anexar al input actual (no pisar). Si había texto previo,
+    // separamos con espacio para que quede prolijo.
+    setInput((prev) => {
+      const sep = prev.trim().length > 0 ? " " : "";
+      return prev + sep + result.text.trim();
+    });
+    // Focus al textarea para que el psicólogo pueda editar / mandar.
+    window.setTimeout(() => inputRef.current?.focus(), 50);
+  }
+  function cancelDictation() {
+    voice.cancel();
+  }
   // Decisiones tomadas por el usuario sobre las propuestas (tool_use).
   // Una propuesta puede estar "approved" o "dismissed". Si no aparece
   // en el map, sigue siendo interactiva. Persistimos en sessionStorage
@@ -734,6 +776,19 @@ export function LauraChat({ open, onClose }: Props) {
                 </span>
               </div>
             )}
+            {/* Mientras grabamos, ocultamos el textarea y mostramos
+                un panel rojo con timer + nivel + cancelar/parar. Mismo
+                alto que el textarea (44px) para que no salte el layout. */}
+            {voice.state === "recording" ? (
+              <RecordingPanel
+                level={voice.level}
+                elapsedMs={voice.elapsedMs}
+                onCancel={cancelDictation}
+                onStop={stopDictation}
+              />
+            ) : transcribing ? (
+              <TranscribingPanel onCancel={() => setTranscribing(false)} />
+            ) : (
             <div className="flex items-end gap-2">
               {/* Botón adjuntar — paperclip */}
               <button
@@ -797,6 +852,17 @@ export function LauraChat({ open, onClose }: Props) {
                 }}
                 className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
               />
+              {/* Botón dictado por voz — Whisper */}
+              <button
+                type="button"
+                onClick={() => void startDictation()}
+                disabled={sending || isResting}
+                className="h-11 w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                aria-label="Dictar por voz"
+                title="Dictar por voz — Laura puede convertir el dictado a SOAP o cualquier otro formato si se lo pedís"
+              >
+                <Mic className="h-4 w-4" />
+              </button>
               <button
                 type="submit"
                 disabled={(!input.trim() && attachedImages.length === 0) || sending || isResting}
@@ -807,6 +873,7 @@ export function LauraChat({ open, onClose }: Props) {
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </div>
+            )}
           </div>
 
           <p className="mt-2 text-[10px] text-ink-500 inline-flex items-center gap-1">
@@ -820,6 +887,87 @@ export function LauraChat({ open, onClose }: Props) {
 }
 
 // ─── Subcomponentes ──────────────────────────────────────────────────
+
+/**
+ * Panel de grabación de voz. Reemplaza la row del input mientras
+ * recording=true. Muestra timer mm:ss + barra de nivel reactiva al
+ * volumen + dos acciones: cancelar (descarta) y parar (transcribe).
+ *
+ * El nivel se mapea a una barra horizontal con bg-rose-500 que sube
+ * y baja con el RMS del audio — feedback visual de "te estoy oyendo".
+ */
+function RecordingPanel({
+  level, elapsedMs, onCancel, onStop,
+}: {
+  level: number;
+  elapsedMs: number;
+  onCancel: () => void;
+  onStop: () => void;
+}) {
+  const mm = Math.floor(elapsedMs / 60000);
+  const ss = Math.floor((elapsedMs % 60000) / 1000);
+  const timeLabel = `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  // Nivel a porcentaje con piso de 4% para que la barra nunca quede
+  // completamente vacía y se sienta "viva" durante silencios cortos.
+  const levelPct = Math.max(4, Math.min(100, level * 100));
+  return (
+    <div className="flex items-center gap-2 h-11 px-3 rounded-lg border border-rose-300 bg-rose-50/70">
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-800 tabular shrink-0">
+        <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+        {timeLabel}
+      </span>
+      <div className="flex-1 h-1.5 rounded-full bg-rose-200/60 overflow-hidden">
+        <div
+          className="h-full bg-rose-500 rounded-full transition-all duration-100"
+          style={{ width: `${levelPct}%` }}
+        />
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="h-8 w-8 rounded-md text-rose-700 hover:bg-rose-100 inline-flex items-center justify-center shrink-0"
+        aria-label="Cancelar grabación"
+        title="Cancelar (descarta el audio)"
+      >
+        <X className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onStop}
+        className="h-8 w-8 rounded-md bg-rose-600 text-white hover:bg-rose-700 inline-flex items-center justify-center shrink-0"
+        aria-label="Parar y transcribir"
+        title="Parar y transcribir"
+      >
+        <Square className="h-3.5 w-3.5 fill-current" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Panel mientras Whisper transcribe. Aparece entre el stop de la
+ * grabación y que el texto entre al input. Usa el shimmer text de
+ * transitions.dev para que se sienta vivo en lugar de un spinner
+ * estático.
+ */
+function TranscribingPanel({ onCancel }: { onCancel: () => void }) {
+  return (
+    <div className="flex items-center gap-2 h-11 px-3 rounded-lg border border-line-200 bg-bg-50">
+      <Loader2 className="h-4 w-4 animate-spin text-brand-700 shrink-0" />
+      <span className="t-shimmer flex-1 text-xs font-medium" data-text="Transcribiendo audio…">
+        Transcribiendo audio…
+      </span>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="h-8 px-2 rounded-md text-[11px] text-ink-600 hover:bg-bg-100 shrink-0"
+        title="Cancelar"
+      >
+        Cancelar
+      </button>
+    </div>
+  );
+}
 
 /**
  * Estado derivado del banner usado para deshabilitar el input cuando
