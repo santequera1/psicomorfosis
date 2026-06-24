@@ -162,7 +162,7 @@ export function AdminDashboard() {
           ven los 6 con icon + label. Una sola fila evita robar vertical entre
           saludo y KPIs y mantiene la fila como una "barra de acciones" clara. */}
       <section
-        className="rounded-xl border border-line-200 bg-surface p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
+        className="lg-surface rounded-xl border border-line-200 bg-surface p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
         style={{ animationDelay: "120ms" }}
         data-tour="quick-actions"
       >
@@ -216,7 +216,7 @@ export function AdminDashboard() {
           a estas dos cards. */}
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div
-          className="xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          className="lg-surface xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
           style={{ animationDelay: delayForSection(520) }}
         >
           <div className="flex items-center justify-between mb-4">
@@ -236,7 +236,7 @@ export function AdminDashboard() {
         </div>
 
         <div
-          className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          className="lg-surface lg-surface--risk rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
           style={{ animationDelay: delayForSection(600) }}
         >
           <div className="flex items-center justify-between mb-4">

@@ -94,6 +94,35 @@ html[data-theme="liquid"] body {
       0 4px 12px rgba(0, 0, 0, 0.32) !important;
     transform: none;
   }
+  /* Sidebar: como el header pero con borde a la derecha. El bg
+     queda más opaco para que el contraste del menú sea claro. */
+  html[data-theme="liquid"] .lg-surface--sidebar {
+    background-color: rgba(12, 15, 20, 0.62) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border-width: 0 1px 0 0 !important;
+    border-radius: 0 !important;
+    box-shadow:
+      inset 1px 0 0 rgba(255, 255, 255, 0.08),
+      1px 0 0 rgba(255, 255, 255, 0.04) !important;
+    transform: none;
+  }
+  /* Risk: mantiene el tinte rojo del borde sobre el cristal. */
+  html[data-theme="liquid"] .lg-surface--risk {
+    border-color: rgba(244, 100, 90, 0.42) !important;
+    box-shadow:
+      inset 0 1px 0 var(--lg-edge-highlight),
+      inset 0 -1px 0 var(--lg-edge-shadow),
+      0 0 0 0.5px rgba(244, 100, 90, 0.18),
+      var(--lg-shadow) !important;
+  }
+
+  /* Texto del sidebar: el tema base usa text-sidebar-foreground que
+     en dark queda oscuro. Sobre cristal necesita blanco con opacidad. */
+  html[data-theme="liquid"] .lg-surface--sidebar .text-sidebar-foreground,
+  html[data-theme="liquid"] .lg-surface--sidebar .text-sidebar-foreground\/70 {
+    color: rgba(245, 247, 250, 0.92) !important;
+  }
 
   /* Texto sobre glass — el tema base usa grises oscuros que no se
      leen sobre cristal. Sobrescribir a blancos con opacidad. */

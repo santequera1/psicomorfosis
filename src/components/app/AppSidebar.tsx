@@ -189,6 +189,9 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
       <aside
         className={cn(
           // Mobile: fixed drawer con transform
+          // lg-surface--sidebar es no-op fuera del tema "liquid".
+          // En liquid: cristal opaco con borde derecho luminoso.
+          "lg-surface lg-surface--sidebar",
           "fixed sm:sticky top-0 z-50 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border",
           // Altura: en mobile usamos h-dvh (dynamic viewport height) que
           // sí descuenta las barras de address/tabs del browser. h-screen
