@@ -1,0 +1,189 @@
+/*
+ * Liquid Glass — efecto à la Apple iOS 18
+ *
+ * Capas (en orden de pintado):
+ *   1. backdrop-filter: blur + saturate → granula y satura lo que hay detrás.
+ *   2. filter: url(#liquid-glass-distortion) → desplazamiento sutil
+ *      en los bordes (efecto refracción de cristal).
+ *   3. Gradient overlay sutil (top-left más claro, bottom-right más oscuro)
+ *      → simula caída de luz sobre superficie curva.
+ *   4. Borde brillante con doble box-shadow (inset light + outer halo).
+ *
+ * Variables semánticas para que cada componente pueda tunear blur,
+ * saturación e intensidad de bordes sin tocar el bloque base.
+ *
+ * El filtro SVG se monta una sola vez en el body via <LiquidGlassDefs/>.
+ * Sin ese SVG, las clases siguen funcionando pero pierden la distorsión
+ * (caen a blur + borde + gradiente, que ya es 90% del efecto).
+ */
+
+:root {
+  --lg-blur: 24px;
+  --lg-saturate: 180%;
+  --lg-bg: rgba(255, 255, 255, 0.55);
+  --lg-bg-dark: rgba(20, 24, 28, 0.55);
+  --lg-border: rgba(255, 255, 255, 0.7);
+  --lg-border-dark: rgba(255, 255, 255, 0.18);
+  --lg-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --lg-shadow-strong: 0 16px 48px rgba(0, 0, 0, 0.18);
+  --lg-radius: 16px;
+
+  /* Cursor flotante */
+  --lg-cursor-size: 56px;
+  --lg-cursor-blur: 12px;
+}
+
+/* ─── Superficie glass base (light) ─────────────────────────────────── */
+.lg-surface {
+  position: relative;
+  background-color: var(--lg-bg);
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  border: 1px solid var(--lg-border);
+  border-radius: var(--lg-radius);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05),
+    var(--lg-shadow);
+  isolation: isolate; /* aísla el blur para que no sangre afuera */
+}
+
+/* Capa de refracción (distorsión SVG). La aplicamos como pseudo
+   ::after porque algunos browsers no respetan filter compuesto con
+   backdrop-filter — separar layers lo hace robusto. */
+.lg-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: url(#liquid-glass-distortion);
+  -webkit-backdrop-filter: url(#liquid-glass-distortion);
+  opacity: 0.6;
+  /* mix-blend-mode: overlay; lo dejamos sin blend para que el
+     desplazamiento sea fiel — el blend re-tinta y se ve sucio. */
+}
+
+/* Brillo dinámico en hover — gradient diagonal animado simulando
+   reflejo lento de luz. Pasa por la superficie en ~6s. */
+.lg-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  transition: background-position 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.6;
+  z-index: 1;
+}
+.lg-surface:hover::before {
+  background-position: -50% 0;
+}
+
+/* ─── Variantes ─────────────────────────────────────────────────────── */
+
+/* Sobre fondos oscuros (ej. drawer Laura sobre página clara, en mobile
+   con backdrop dimmed) — sube la opacidad del fondo para legibilidad. */
+.lg-surface--solid {
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+/* Variante dark — para futuras pantallas con tema oscuro. */
+.lg-surface--dark {
+  background-color: var(--lg-bg-dark);
+  border-color: var(--lg-border-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    var(--lg-shadow-strong);
+}
+
+/* Variante "sticky header" — más sutil, menos blur, sin shadow grande. */
+.lg-surface--header {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border-width: 0 0 1px 0;
+  border-radius: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.lg-surface--header::after { opacity: 0.3; }
+
+/* ─── Cursor flotante glass ────────────────────────────────────────── */
+/* Un círculo fijo en la pantalla que sigue al cursor con un efecto
+   glass propio. JS actualiza --lg-cursor-x / --lg-cursor-y. Se
+   oculta en touch (hover:none). */
+.lg-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--lg-cursor-size);
+  height: var(--lg-cursor-size);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate3d(
+    calc(var(--lg-cursor-x, -100px) - var(--lg-cursor-size) / 2),
+    calc(var(--lg-cursor-y, -100px) - var(--lg-cursor-size) / 2),
+    0
+  );
+  background-color: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition:
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 90ms linear;
+  will-change: transform, opacity;
+}
+.lg-cursor.is-visible {
+  opacity: 1;
+}
+/* Capa de distorsión del cursor — más fuerte que la superficie, para
+   que cuando pasa sobre algo se note la refracción del "lente". */
+.lg-cursor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: url(#liquid-glass-distortion-strong);
+  -webkit-backdrop-filter: url(#liquid-glass-distortion-strong);
+}
+
+/* En touch devices no tiene sentido y rompe el feeling. */
+@media (hover: none), (pointer: coarse) {
+  .lg-cursor { display: none !important; }
+}
+
+/* ─── Reduced motion ───────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .lg-surface::before { transition: none !important; }
+  .lg-cursor { transition: opacity 200ms ease !important; }
+}
+
+/* ─── Fallback: si el browser no soporta backdrop-filter, caemos a
+   un fondo sólido con borde para no perder estructura. Chrome,
+   Safari, Edge, Firefox 103+ lo soportan — la mayoría. ──────────── */
+@supports not (backdrop-filter: blur(1px)) {
+  .lg-surface,
+  .lg-surface--header,
+  .lg-surface--solid,
+  .lg-surface--dark {
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+  .lg-surface::after,
+  .lg-cursor::after { display: none; }
+}

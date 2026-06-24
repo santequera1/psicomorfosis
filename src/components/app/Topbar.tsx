@@ -115,7 +115,7 @@ export function Topbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 h-16 bg-surface/85 backdrop-blur border-b border-line-100">
+      <header className="lg-surface lg-surface--header sticky top-0 z-30 h-16">
         <div className="h-full px-3 sm:px-4 md:px-6 flex items-center gap-2 md:gap-4">
           {/* Hamburguesa visible solo en mobile (< sm = < 640px). El sidebar
               ahora es sticky desde sm+ — incluye tablets verticales. */}

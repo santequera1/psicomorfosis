@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { toggleTheme } from "@/lib/theme";
 import { installErrorReporter } from "@/lib/error-reporter";
+import { LiquidGlassDefs, LiquidGlassCursor } from "@/components/ui/LiquidGlass";
 
 import appCss from "../styles.css?url";
 
@@ -226,6 +227,11 @@ function RootComponent() {
         <Outlet />
       </TooltipProvider>
       <Toaster richColors position="top-right" />
+      {/* Liquid Glass: SVG defs con los <filter> que las clases
+          .lg-surface y .lg-cursor referencian. + Cursor flotante
+          glass que sigue al puntero (oculto en touch automáticamente). */}
+      <LiquidGlassDefs />
+      <LiquidGlassCursor />
     </QueryClientProvider>
   );
 }

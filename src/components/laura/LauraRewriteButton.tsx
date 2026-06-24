@@ -195,7 +195,7 @@ function ProposalModal({
     >
       <div
         className={cn(
-          "bg-surface rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col border border-line-200 t-modal",
+          "lg-surface w-full max-w-3xl max-h-[85vh] flex flex-col t-modal",
           stateClass,
         )}
         onClick={(e) => e.stopPropagation()}

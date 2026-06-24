@@ -587,7 +587,11 @@ export function LauraChat({ open, onClose }: Props) {
           // automáticamente cuando aparece el teclado virtual y no deja
           // el input/footer tapado. h-screen (100vh) ignora el teclado
           // y por eso antes el footer se escondía debajo.
-          "fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
+          // lg-surface aplica liquid glass: blur + saturate + borde
+          // brillante + refracción SVG. Override del rounded para que
+          // pegue al borde derecho del viewport (no flotante).
+          "lg-surface lg-surface--solid rounded-none! border-l!",
+          "fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px]",
           "flex flex-col",
           "transition-transform duration-300",
           entering
