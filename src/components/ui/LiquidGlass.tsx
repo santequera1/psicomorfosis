@@ -72,8 +72,14 @@ export function LiquidGlassCursor() {
     const isTouch = window.matchMedia("(hover: none), (pointer: coarse)").matches;
     if (isTouch) return;
 
+    // El cursor glass solo tiene sentido cuando el tema "liquid" está
+    // activo (en otros temas el CSS lo oculta, pero igual gastábamos
+    // CPU con el listener). Observamos data-theme y montamos/desmontamos
+    // el listener cuando cambia.
+    const html = document.documentElement;
     const el = ref.current;
     if (!el) return;
+    let listenerAttached = false;
 
     let rafId = 0;
     let pendingX = 0;
@@ -99,13 +105,37 @@ export function LiquidGlassCursor() {
       if (el) el.classList.remove("is-visible");
     }
 
-    window.addEventListener("pointermove", onMove, { passive: true });
-    document.addEventListener("pointerleave", onLeave);
-
-    return () => {
+    function attach() {
+      if (listenerAttached) return;
+      window.addEventListener("pointermove", onMove, { passive: true });
+      document.addEventListener("pointerleave", onLeave);
+      listenerAttached = true;
+    }
+    function detach() {
+      if (!listenerAttached) return;
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
-      if (rafId) window.cancelAnimationFrame(rafId);
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      if (el) el.classList.remove("is-visible");
+      listenerAttached = false;
+    }
+    function syncWithTheme() {
+      if (html.getAttribute("data-theme") === "liquid") attach();
+      else detach();
+    }
+
+    syncWithTheme();
+    // theme.ts modifica data-theme cuando el usuario cambia tema en
+    // configuración → MutationObserver nos avisa para attach/detach.
+    const observer = new MutationObserver(syncWithTheme);
+    observer.observe(html, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => {
+      observer.disconnect();
+      detach();
     };
   }, []);
 

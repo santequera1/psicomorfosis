@@ -18,11 +18,11 @@ export function KpiCard({ label, value, delta, hint, emphasis = "default", icon 
         // Padding más compacto en mobile (px-2.5 py-2 vs px-3 py-3 antes)
         // — 4 cards en 2x2 ocupaban demasiado vertical. En desktop
         // mantengo el padding generoso original.
-        // lg-surface aplica liquid glass (blur + saturate + borde
-        // brillante + refracción SVG). isRisk mantiene el tinte rojo
-        // sobre el glass para que se note igual el estado de alerta.
-        "lg-surface px-2.5 py-2 sm:px-5 sm:py-4 min-w-0",
-        isRisk && "bg-error-soft/60 border-risk-high/30!",
+        // lg-surface es no-op cuando el tema "liquid" no está activo
+        // (solo agrega glass cuando data-theme=liquid). En cualquier
+        // otro tema mandan los estilos tailwind base de abajo.
+        "lg-surface rounded-xl border bg-surface px-2.5 py-2 sm:px-5 sm:py-4 shadow-xs hover:shadow-soft transition-shadow min-w-0",
+        isRisk ? "border-risk-high/30 bg-error-soft/40" : "border-line-200",
       )}
     >
       <div className="flex items-start justify-between gap-2">

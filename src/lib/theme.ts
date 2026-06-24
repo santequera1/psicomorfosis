@@ -22,7 +22,7 @@
 // ─── Tipos ───────────────────────────────────────────────────────────
 
 export type ThemePreference = "claro" | "oscuro" | "auto";
-export type ThemeFamily = "clinico" | "bridgery" | "minimo" | "aurora";
+export type ThemeFamily = "clinico" | "bridgery" | "minimo" | "aurora" | "liquid";
 export type FontFamily = "editorial" | "clasica" | "academica" | "limpia" | "humanista" | "inter" | "manrope";
 
 // ─── Keys de localStorage ───────────────────────────────────────────
@@ -33,7 +33,7 @@ const KEY_FONT = "psm.theme.font";
 
 // ─── Catálogo: tema → solo soporta dark? ────────────────────────────
 
-const DARK_ONLY_THEMES: ReadonlySet<ThemeFamily> = new Set(["aurora"]);
+const DARK_ONLY_THEMES: ReadonlySet<ThemeFamily> = new Set(["aurora", "liquid"]);
 
 // ─── Catálogo: fuente → URL de Google Fonts y CSS variables ─────────
 //
@@ -140,6 +140,12 @@ export const THEME_FAMILIES: Record<ThemeFamily, ThemeDescriptor> = {
     label: "Aurora",
     description: "Dark premium con auroras de gradiente al fondo. Solo modo oscuro.",
     swatch: "oklch(0.50 0.20 290)",
+    darkOnly: true,
+  },
+  liquid: {
+    label: "Liquid Glass",
+    description: "Cristal translúcido à la Apple sobre fondo fotográfico, con cursor flotante. Solo modo oscuro.",
+    swatch: "oklch(0.70 0.05 220)",
     darkOnly: true,
   },
 };
