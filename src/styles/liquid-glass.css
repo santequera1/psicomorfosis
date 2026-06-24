@@ -1,5 +1,5 @@
 /*
- * Liquid Glass — efecto à la Apple iOS 18
+ * Liquid Glass — efecto à la Apple iOS 18 + Aave glass guidelines
  *
  * IMPORTANTE: todo el efecto está scopeado bajo [data-theme="liquid"].
  * Cuando ese tema no está activo:
@@ -8,184 +8,212 @@
  *   - El cursor flotante está oculto via display:none.
  *   - El body no tiene la imagen de fondo.
  *
- * Esto convierte el tema en opt-in real: el usuario lo elige desde
- * Configuración → Apariencia (igual que Aurora/Bridgery/etc.).
- *
- * Capas del efecto:
- *   1. backdrop-filter: blur + saturate → granula y satura lo que hay detrás.
- *   2. filter: url(#liquid-glass-distortion) → desplazamiento sutil
- *      en los bordes (efecto refracción de cristal).
- *   3. Gradient overlay (top-left más claro, bottom-right más oscuro)
- *      → simula caída de luz sobre superficie curva.
- *   4. Borde brillante con doble box-shadow (inset light + outer halo).
+ * Notas técnicas:
+ *  - Wrapped en @layer utilities para ganar especificidad sobre las
+ *    utility classes de tailwind v4 (.bg-surface, .border-*, etc.).
+ *  - Selector con html[data-theme="liquid"] sube especificidad a
+ *    (0,2,1), asegurando override de cualquier dark:bg-* aunque
+ *    !important no estuviera.
+ *  - Sigue las guidelines de aave.com/design/building-glass-for-the-web:
+ *    edge highlight prominente, glow externo sutil, fondo casi
+ *    transparente para que el blur del backdrop sea el protagonista.
  */
 
 :root {
-  --lg-blur: 24px;
+  --lg-blur: 28px;
   --lg-saturate: 180%;
-  --lg-bg: rgba(255, 255, 255, 0.14);
-  --lg-bg-strong: rgba(255, 255, 255, 0.22);
-  --lg-border: rgba(255, 255, 255, 0.28);
-  --lg-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
-  --lg-shadow-strong: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --lg-brightness: 110%;
+  --lg-bg: rgba(255, 255, 255, 0.06);
+  --lg-bg-strong: rgba(255, 255, 255, 0.14);
+  --lg-border: rgba(255, 255, 255, 0.18);
+  --lg-edge-highlight: rgba(255, 255, 255, 0.45);
+  --lg-edge-shadow: rgba(0, 0, 0, 0.25);
+  --lg-glow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --lg-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   --lg-radius: 16px;
   --lg-cursor-size: 56px;
-  --lg-cursor-blur: 12px;
+  --lg-cursor-blur: 14px;
 }
 
 /* ─── Fondo fotográfico del body (solo en el tema) ─────────────────── */
-[data-theme="liquid"] body {
+html[data-theme="liquid"] body {
   background-image: url("/fondo1.jpg");
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
   background-repeat: no-repeat;
-  /* Overlay sutil para asegurar contraste de texto sobre cualquier
-     imagen de fondo. La capa va en el body via box-shadow inset. */
-  background-color: rgb(15, 18, 22);
+  background-color: rgb(10, 12, 16);
   min-height: 100vh;
 }
-/* Asegurar que el shell sea translúcido para que se vea el fondo */
-[data-theme="liquid"] .min-h-screen,
-[data-theme="liquid"] [data-bg-base] {
-  background-color: transparent !important;
-}
 
-/* ─── Superficie glass (scope: tema activo) ────────────────────────── */
-[data-theme="liquid"] .lg-surface {
-  position: relative;
-  background-color: var(--lg-bg) !important;
-  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
-  border: 1px solid var(--lg-border) !important;
-  border-radius: var(--lg-radius);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-    var(--lg-shadow) !important;
-  isolation: isolate;
-  color: rgb(245, 247, 250) !important;
-}
+/* Tailwind v4: para que mis overrides ganen sobre las utility classes,
+   wrapeo todo en @layer utilities. Mismo nivel → orden de declaración
+   manda → este archivo se importa después de tailwindcss → gana. */
+@layer utilities {
 
-/* Capa de refracción (distorsión SVG). */
-[data-theme="liquid"] .lg-surface::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  backdrop-filter: url(#liquid-glass-distortion);
-  -webkit-backdrop-filter: url(#liquid-glass-distortion);
-  opacity: 0.5;
-}
-
-/* Brillo dinámico — sweep diagonal lento al hover. */
-[data-theme="liquid"] .lg-surface::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.15) 50%,
-    transparent 70%
-  );
-  background-size: 220% 100%;
-  background-position: 100% 0;
-  transition: background-position 1.2s cubic-bezier(0.22, 1, 0.36, 1);
-  opacity: 0.7;
-  z-index: 1;
-}
-[data-theme="liquid"] .lg-surface:hover::before {
-  background-position: -50% 0;
-}
-
-/* Variantes — solo se diferencian dentro del tema */
-[data-theme="liquid"] .lg-surface--solid {
-  background-color: var(--lg-bg-strong) !important;
-}
-[data-theme="liquid"] .lg-surface--header {
-  background-color: rgba(20, 24, 32, 0.45) !important;
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
-  border-width: 0 0 1px 0 !important;
-  border-radius: 0 !important;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-}
-[data-theme="liquid"] .lg-surface--header::after { opacity: 0.25; }
-
-/* Asegura legibilidad de texto sobre glass */
-[data-theme="liquid"] .lg-surface > *,
-[data-theme="liquid"] .lg-surface :is(p, span, div, h1, h2, h3, h4, button, label) {
-  position: relative;
-  z-index: 2;
-}
-
-/* ─── Cursor flotante glass (scope: tema activo) ───────────────────── */
-.lg-cursor { display: none; }
-
-[data-theme="liquid"] .lg-cursor {
-  display: block;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--lg-cursor-size);
-  height: var(--lg-cursor-size);
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 9999;
-  transform: translate3d(
-    calc(var(--lg-cursor-x, -100px) - var(--lg-cursor-size) / 2),
-    calc(var(--lg-cursor-y, -100px) - var(--lg-cursor-size) / 2),
-    0
-  );
-  background-color: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 4px 16px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  transition:
-    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 90ms linear;
-  will-change: transform, opacity;
-  mix-blend-mode: plus-lighter;
-}
-[data-theme="liquid"] .lg-cursor.is-visible {
-  opacity: 1;
-}
-[data-theme="liquid"] .lg-cursor::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  backdrop-filter: url(#liquid-glass-distortion-strong);
-  -webkit-backdrop-filter: url(#liquid-glass-distortion-strong);
-}
-
-/* En touch devices no tiene sentido y rompe el feeling. */
-@media (hover: none), (pointer: coarse) {
-  [data-theme="liquid"] .lg-cursor { display: none !important; }
-}
-
-/* ─── Reduced motion ───────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  [data-theme="liquid"] .lg-surface::before { transition: none !important; }
-  [data-theme="liquid"] .lg-cursor { transition: opacity 200ms ease !important; }
-}
-
-/* ─── Fallback si el browser no soporta backdrop-filter ────────────── */
-@supports not (backdrop-filter: blur(1px)) {
-  [data-theme="liquid"] .lg-surface,
-  [data-theme="liquid"] .lg-surface--header,
-  [data-theme="liquid"] .lg-surface--solid {
-    background-color: rgba(20, 24, 32, 0.85) !important;
+  /* Shell del AppShell, main, y otros contenedores opacos → transparentes
+     para que se vea la imagen de fondo del body en TODA la página. */
+  html[data-theme="liquid"] .bg-bg-50,
+  html[data-theme="liquid"] .bg-bg-100,
+  html[data-theme="liquid"] .bg-bg {
+    background-color: transparent !important;
   }
-  [data-theme="liquid"] .lg-surface::after,
-  [data-theme="liquid"] .lg-cursor::after { display: none; }
+
+  /* ─── Superficie glass base ────────────────────────────────────── */
+  html[data-theme="liquid"] .lg-surface {
+    position: relative;
+    background-color: var(--lg-bg) !important;
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    border: 1px solid var(--lg-border) !important;
+    border-radius: var(--lg-radius);
+    /* Pila de sombras estilo Aave: edge highlight prominente arriba,
+       sombra interna abajo (le da peso), halo externo (separación) y
+       drop shadow principal. */
+    box-shadow:
+      inset 0 1px 0 var(--lg-edge-highlight),
+      inset 0 -1px 0 var(--lg-edge-shadow),
+      var(--lg-glow),
+      var(--lg-shadow) !important;
+    isolation: isolate;
+    color: rgb(245, 247, 250) !important;
+  }
+
+  /* Capa de refracción SVG (distorsión sutil). Se aplica sobre el
+     backdrop, no sobre el contenido propio del elemento. */
+  html[data-theme="liquid"] .lg-surface::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    backdrop-filter: url(#liquid-glass-distortion);
+    -webkit-backdrop-filter: url(#liquid-glass-distortion);
+    opacity: 0.4;
+    z-index: 0;
+  }
+
+  /* Brillo dinámico — sweep diagonal lento al hover. Suma vida sin
+     ser intrusivo. */
+  html[data-theme="liquid"] .lg-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.18) 50%,
+      transparent 70%
+    );
+    background-size: 220% 100%;
+    background-position: 100% 0;
+    transition: background-position 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity: 0.7;
+    z-index: 1;
+  }
+  html[data-theme="liquid"] .lg-surface:hover::before {
+    background-position: -50% 0;
+  }
+
+  /* Variantes */
+  html[data-theme="liquid"] .lg-surface--solid {
+    background-color: var(--lg-bg-strong) !important;
+  }
+
+  html[data-theme="liquid"] .lg-surface--header {
+    background-color: rgba(15, 18, 24, 0.4) !important;
+    backdrop-filter: blur(22px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+    border-width: 0 0 1px 0 !important;
+    border-radius: 0 !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 1px 0 rgba(255, 255, 255, 0.05),
+      0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  }
+  html[data-theme="liquid"] .lg-surface--header::after { opacity: 0.2; }
+
+  /* Texto sobre glass — fuerza z-index por encima de las pseudo-capas. */
+  html[data-theme="liquid"] .lg-surface > * {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Sobrescribir colores de texto opacos que vienen del tema base. */
+  html[data-theme="liquid"] .lg-surface .text-ink-900 { color: rgb(245, 247, 250) !important; }
+  html[data-theme="liquid"] .lg-surface .text-ink-700 { color: rgba(245, 247, 250, 0.85) !important; }
+  html[data-theme="liquid"] .lg-surface .text-ink-500 { color: rgba(245, 247, 250, 0.65) !important; }
+  html[data-theme="liquid"] .lg-surface .text-ink-400 { color: rgba(245, 247, 250, 0.55) !important; }
+
+  /* ─── Cursor flotante glass ────────────────────────────────────── */
+  .lg-cursor { display: none; }
+
+  html[data-theme="liquid"] .lg-cursor {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--lg-cursor-size);
+    height: var(--lg-cursor-size);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    /* SIN transition en el transform → el círculo pega al cursor real
+       sin lag. El smoothing anterior (90ms linear) generaba la
+       sensación de "el cursor flota detrás del puntero", que el
+       usuario reportó como "el mouse no funciona bien". */
+    transform: translate3d(
+      calc(var(--lg-cursor-x, -100px) - var(--lg-cursor-size) / 2),
+      calc(var(--lg-cursor-y, -100px) - var(--lg-cursor-size) / 2),
+      0
+    );
+    background-color: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%) brightness(115%);
+    -webkit-backdrop-filter: blur(var(--lg-cursor-blur)) saturate(180%) brightness(115%);
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+      0 4px 18px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    /* Solo opacity tiene transition — el transform es instantáneo. */
+    transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform, opacity;
+  }
+  html[data-theme="liquid"] .lg-cursor.is-visible {
+    opacity: 1;
+  }
+  html[data-theme="liquid"] .lg-cursor::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    backdrop-filter: url(#liquid-glass-distortion-strong);
+    -webkit-backdrop-filter: url(#liquid-glass-distortion-strong);
+  }
+
+  /* En touch devices no tiene sentido y rompe el feeling. */
+  @media (hover: none), (pointer: coarse) {
+    html[data-theme="liquid"] .lg-cursor { display: none !important; }
+  }
+
+  /* ─── Reduced motion ─────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    html[data-theme="liquid"] .lg-surface::before { transition: none !important; }
+    html[data-theme="liquid"] .lg-cursor { transition: opacity 200ms ease !important; }
+  }
+
+  /* ─── Fallback: si el browser no soporta backdrop-filter ─────── */
+  @supports not (backdrop-filter: blur(1px)) {
+    html[data-theme="liquid"] .lg-surface,
+    html[data-theme="liquid"] .lg-surface--header,
+    html[data-theme="liquid"] .lg-surface--solid {
+      background-color: rgba(20, 24, 32, 0.85) !important;
+    }
+    html[data-theme="liquid"] .lg-surface::after,
+    html[data-theme="liquid"] .lg-cursor::after { display: none; }
+  }
 }
