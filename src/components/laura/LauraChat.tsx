@@ -587,10 +587,11 @@ export function LauraChat({ open, onClose }: Props) {
           // automáticamente cuando aparece el teclado virtual y no deja
           // el input/footer tapado. h-screen (100vh) ignora el teclado
           // y por eso antes el footer se escondía debajo.
-          // lg-surface --solid es no-op fuera del tema "liquid"; ahí
-          // sí cambia el drawer a glass. Mantengo los estilos base
-          // (bg-surface + border + shadow) para los temas normales.
-          "lg-surface lg-surface--solid rounded-none! border-l!",
+          // lg-surface --drawer es no-op fuera del tema "liquid"; ahí
+          // sí cambia el drawer a glass con blur 40px + bg denso 0.72
+          // (más opaco que --solid porque el chat es contenido de
+          // lectura intensa).
+          "lg-surface lg-surface--drawer rounded-none! border-l!",
           "fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
           "flex flex-col",
           "transition-transform duration-300",

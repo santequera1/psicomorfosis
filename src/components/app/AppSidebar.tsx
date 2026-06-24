@@ -293,7 +293,7 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
                             "before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r before:bg-brand-400",
                             "before:origin-left before:transition-all before:duration-250 before:ease-out",
                             active
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium before:opacity-100 before:scale-x-100"
+                              ? "lg-sidebar-active bg-sidebar-accent text-sidebar-accent-foreground font-medium before:opacity-100 before:scale-x-100"
                               : "text-sidebar-foreground/85 before:opacity-0 before:scale-x-0",
                             collapsed && "sm:justify-center sm:px-0"
                           )}

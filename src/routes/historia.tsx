@@ -36,10 +36,42 @@ const BLOCK_ICONS: Record<keyof typeof BLOCK_LABELS, React.ComponentType<{ class
 const formatDateTime = (iso: string) => formatDateTimeCO(iso);
 
 function parseSoap(content: string): SoapContent | null {
+  if (!content) return null;
+
+  // Caso 1: el contenido es JSON puro (lo normal cuando guardás desde
+  // el editor — el editor stringifica el SOAP en `content`).
   try {
-    const p = JSON.parse(content);
-    if (p && typeof p === "object" && "s" in p && "o" in p && "a" in p && "p" in p) return p as SoapContent;
-  } catch { /* not SOAP */ }
+    const p = JSON.parse(content.trim());
+    if (p && typeof p === "object" && "s" in p && "o" in p && "a" in p && "p" in p) {
+      return p as SoapContent;
+    }
+  } catch { /* fallthrough */ }
+
+  // Caso 2: hay JSON al inicio + basura después (ej. "[seed]" en datos
+  // demo seedeados, o un copy-paste con texto extra). Buscamos el primer
+  // `{` y matcheamos su `}` correspondiente respetando profundidad. Si
+  // el bloque resultante es un SOAP válido, lo devolvemos. Esto evita
+  // que la card renderice JSON crudo cuando hay residuos al final.
+  const start = content.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < content.length; i++) {
+    if (content[i] === "{") depth++;
+    else if (content[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        const candidate = content.slice(start, i + 1);
+        try {
+          const p = JSON.parse(candidate);
+          if (p && typeof p === "object" && "s" in p && "o" in p && "a" in p && "p" in p) {
+            return p as SoapContent;
+          }
+        } catch { /* not valid */ }
+        break; // primer bloque {...} ya falló, no seguir
+      }
+    }
+  }
+
   return null;
 }
 

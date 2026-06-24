@@ -22,11 +22,15 @@ import {
   setThemeFamily,
   getFontFamily,
   setFontFamily,
+  getLiquidBg,
+  setLiquidBg,
+  LIQUID_BG_CATALOG,
   THEME_FAMILIES,
   FONT_FAMILIES,
   type ThemePreference,
   type ThemeFamily,
   type FontFamily,
+  type LiquidBg,
 } from "@/lib/theme";
 
 export const Route = createFileRoute("/configuracion")({
@@ -1091,6 +1095,9 @@ function AparienciaPanel() {
           ))}
         </div>
       </div>
+
+      {/* ─── Fondo Liquid Glass — solo cuando family === "liquid" ─── */}
+      {family === "liquid" && <LiquidBgPicker />}
 
       {/* ─── Tipografía ─── */}
       <div>
@@ -2343,6 +2350,48 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
             Eliminar permanentemente
           </button>
         </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Selector de fondo fotográfico para el tema Liquid Glass.
+ * Solo se monta cuando family === "liquid" (ver llamada desde
+ * AppearanceTab). Guarda en localStorage y aplica al instante la
+ * CSS var --lg-bg-image en <html>.
+ */
+function LiquidBgPicker() {
+  const [bg, setBg] = useState<LiquidBg>(getLiquidBg());
+  function pick(next: LiquidBg) {
+    setBg(next);
+    setLiquidBg(next);
+  }
+  const entries = Object.entries(LIQUID_BG_CATALOG) as Array<[LiquidBg, typeof LIQUID_BG_CATALOG[LiquidBg]]>;
+  return (
+    <div className="mb-6">
+      <h4 className="text-sm font-medium text-ink-900 mb-2">Fondo del Liquid Glass</h4>
+      <p className="text-xs text-ink-500 mb-3">
+        Imagen fotográfica que se ve detrás del cristal. El efecto se aprecia más con escenas de bastante textura.
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {entries.map(([id, desc]) => (
+          <button
+            key={id}
+            onClick={() => pick(id)}
+            className={cn(
+              "rounded-xl border-2 p-2 text-left transition-all overflow-hidden",
+              bg === id ? "border-brand-700" : "border-line-200 hover:border-brand-400",
+            )}
+          >
+            {/* Preview real de la imagen — sirve para distinguirlas. */}
+            <div
+              className="h-24 rounded-lg mb-2 bg-cover bg-center"
+              style={{ backgroundImage: `url("${desc.path}")` }}
+            />
+            <div className="text-sm font-medium text-ink-900">{desc.label}</div>
+          </button>
+        ))}
       </div>
     </div>
   );

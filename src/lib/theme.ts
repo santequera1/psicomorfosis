@@ -30,6 +30,9 @@ export type FontFamily = "editorial" | "clasica" | "academica" | "limpia" | "hum
 const KEY_MODE = "psm.theme";       // legacy: solo el modo claro/oscuro
 const KEY_FAMILY = "psm.theme.family";
 const KEY_FONT = "psm.theme.font";
+// Específico del tema Liquid Glass: qué imagen de fondo usar.
+// Solo aplica cuando family === "liquid".
+const KEY_LIQUID_BG = "psm.theme.liquid.bg";
 
 // ─── Catálogo: tema → solo soporta dark? ────────────────────────────
 
@@ -173,6 +176,37 @@ export function getFontFamily(): FontFamily {
   return "editorial";
 }
 
+// ─── Liquid Glass — fondo fotográfico ──────────────────────────────
+
+export type LiquidBg = "fondo1" | "fondo2";
+
+export const LIQUID_BG_CATALOG: Record<LiquidBg, { label: string; path: string }> = {
+  fondo1: { label: "Hojas con gotas", path: "/fondo1.jpg" },
+  fondo2: { label: "Alternativo", path: "/fondo2.jpg" },
+};
+
+export function getLiquidBg(): LiquidBg {
+  if (typeof window === "undefined") return "fondo1";
+  const v = window.localStorage.getItem(KEY_LIQUID_BG);
+  if (v && (v in LIQUID_BG_CATALOG)) return v as LiquidBg;
+  return "fondo1";
+}
+
+export function setLiquidBg(bg: LiquidBg): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(KEY_LIQUID_BG, bg);
+  }
+  applyLiquidBg(bg);
+}
+
+/** Aplica la CSS var --lg-bg-image al <html> para que el CSS del tema
+ *  liquid use la imagen elegida. */
+export function applyLiquidBg(bg: LiquidBg = getLiquidBg()): void {
+  if (typeof document === "undefined") return;
+  const desc = LIQUID_BG_CATALOG[bg] ?? LIQUID_BG_CATALOG.fondo1;
+  document.documentElement.style.setProperty("--lg-bg-image", `url("${desc.path}")`);
+}
+
 // ─── Aplicación al DOM ──────────────────────────────────────────────
 
 /**
@@ -236,6 +270,11 @@ export function applyTheme(
   const fontDesc = FONT_FAMILIES[font];
   html.style.setProperty("--font-sans", fontDesc.sans);
   html.style.setProperty("--font-serif", fontDesc.serif);
+
+  // Si el tema es liquid, aplicar la imagen de fondo elegida (fondo1 o fondo2).
+  if (family === "liquid") {
+    applyLiquidBg();
+  }
 }
 
 // ─── Setters (persisten + aplican) ──────────────────────────────────
