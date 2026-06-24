@@ -1,54 +1,36 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import LiquidGlass from "liquid-glass-react";
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 /**
  * Wrapper theme-aware sobre liquid-glass-react (rdev/liquid-glass-react).
  *
- * Comportamiento:
- *  - Si data-theme="liquid" está activo en <html>: renderiza el
- *    componente real de la librería, que hace refracción WebGL +
- *    chromatic aberration + edge highlights.
- *  - Si no: renderiza un <div> plano con las clases tailwind que
- *    el componente padre pasa en `className`. Es no-op, sin
- *    overhead WebGL, ideal para los otros temas (Clínico, Aurora,
- *    etc.).
+ * IMPORTANTE: la librería usa WebGL/Canvas y rompe en SSR (no hay
+ * `window`, `HTMLCanvasElement`, etc.). Por eso:
+ *   1. La importamos vía React.lazy() — se carga SOLO cuando se
+ *      monta en el browser, nunca en el render del servidor.
+ *   2. Antes de mountar en el cliente (durante hydration), o si el
+ *      tema no es "liquid", caemos a un <div> plano con las clases
+ *      tailwind del componente padre. Cero overhead WebGL en esos
+ *      casos.
  *
  * Observamos data-theme via MutationObserver para reaccionar en
- * vivo cuando el usuario cambia el tema desde Configuración.
- *
- * Props de la librería que exponemos con defaults afinados para
- * superficies tipo card/modal de UI (no para botones flotantes):
- *  - displacementScale: 60  (default 70 era muy fuerte para texto)
- *  - blurAmount: 0.05       (default 0.0625 era un poco lechoso)
- *  - saturation: 130        (default 140 sobre-saturaba la imagen)
- *  - aberrationIntensity: 1 (default 2 daba franjas RGB muy fuertes)
- *  - elasticity: 0          (rigid feel — para cards/cont. estructurales)
- *  - cornerRadius: 16       (matching nuestro radius design system)
+ * vivo cuando el usuario cambia el tema desde Configuración sin
+ * recargar.
  */
+
+// Lazy: la librería se descarga solo cuando JS del cliente la pide.
+// No corre en SSR. import() default da el módulo entero — la
+// librería exporta default LiquidGlass.
+const LiquidGlassImpl = lazy(() => import("liquid-glass-react"));
 
 type Props = {
   children: React.ReactNode;
-  /** Clases tailwind que el padre define. Se aplican siempre, en
-   *  los dos modos (con/sin liquid glass). */
   className?: string;
-  /** Estilo extra. Se mergea con el del LiquidGlass cuando está activo. */
   style?: CSSProperties;
-  /** Override de cornerRadius para casos específicos (drawer pegado
-   *  al borde derecho usa 0). */
   cornerRadius?: number;
-  /** Override de displacementScale — un cursor o badge puede querer
-   *  algo más intenso que una card. */
   displacementScale?: number;
-  /** Padding interno. Pasarlo aquí (no por className) cuando el
-   *  tema liquid esté activo, porque la librería necesita aplicarlo
-   *  internamente para que el efecto cubra todo el área. */
   padding?: string;
-  /** Si el fondo de la página es claro pasar true. En nuestro caso
-   *  (theme liquid = dark only sobre fondo fotográfico) siempre
-   *  queda false. */
   overLight?: boolean;
-  /** onClick para casos en que la superficie es interactiva. */
   onClick?: () => void;
 };
 
@@ -57,8 +39,12 @@ export function LiquidGlassSurface({
   displacementScale = 60, padding, overLight = false, onClick,
 }: Props) {
   const isLiquid = useIsLiquidTheme();
+  const isClient = useIsClient();
 
-  if (!isLiquid) {
+  // Hasta que estemos en cliente Y el tema sea liquid, renderizamos
+  // un div plano. Esto resuelve el SSR (servidor) Y mantiene la UI
+  // responsive en otros temas.
+  if (!isClient || !isLiquid) {
     return (
       <div className={className} style={style} onClick={onClick}>
         {children}
@@ -66,29 +52,46 @@ export function LiquidGlassSurface({
     );
   }
 
+  // En cliente + tema liquid: cargamos la librería WebGL.
+  // El fallback de Suspense es el mismo <div> plano para que durante
+  // el chunk loading el layout no salte.
   return (
-    <LiquidGlass
-      className={className}
-      style={style}
-      cornerRadius={cornerRadius}
-      displacementScale={displacementScale}
-      blurAmount={0.05}
-      saturation={130}
-      aberrationIntensity={1}
-      elasticity={0}
-      padding={padding}
-      overLight={overLight}
-      onClick={onClick}
-    >
-      {children}
-    </LiquidGlass>
+    <Suspense fallback={<div className={className} style={style} onClick={onClick}>{children}</div>}>
+      <LiquidGlassImpl
+        className={className}
+        style={style}
+        cornerRadius={cornerRadius}
+        displacementScale={displacementScale}
+        blurAmount={0.05}
+        saturation={130}
+        aberrationIntensity={1}
+        elasticity={0}
+        padding={padding}
+        overLight={overLight}
+        onClick={onClick}
+      >
+        {children}
+      </LiquidGlassImpl>
+    </Suspense>
   );
 }
 
 /**
- * Hook reactivo que devuelve true cuando html[data-theme="liquid"].
- * Cambia automáticamente cuando el usuario alterna tema desde
- * Configuración (MutationObserver sobre el atributo data-theme).
+ * Guard para hydration mismatch + SSR safety: durante el render
+ * del servidor isClient=false. En el primer effect del cliente
+ * pasa a true. Garantiza que el primer render del cliente
+ * coincide con el del servidor (no hay mismatch), y solo después
+ * se monta el WebGL.
+ */
+function useIsClient(): boolean {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
+  return isClient;
+}
+
+/**
+ * Hook reactivo: true cuando html[data-theme="liquid"]. Cambia en
+ * vivo cuando el usuario alterna tema desde Configuración.
  */
 function useIsLiquidTheme(): boolean {
   const [isLiquid, setIsLiquid] = useState<boolean>(() => {
@@ -109,9 +112,4 @@ function useIsLiquidTheme(): boolean {
   return isLiquid;
 }
 
-/**
- * Helper utility: combina clases. Re-exportado para que los call
- * sites de LiquidGlassSurface no tengan que importar cn de utils
- * en archivos que solo necesitan este wrapper.
- */
 export { cn };
