@@ -478,7 +478,7 @@ function TareasPage() {
 
         {/* Filtros — colapsables en mobile detrás del botón "Filtros" para
             reducir ruido visual. En desktop siempre visibles. */}
-        <div className="rounded-xl bg-surface border border-line-200 shadow-soft p-3 mb-5">
+        <div className="lg-surface rounded-xl bg-surface border border-line-200 shadow-soft p-3 mb-5">
           <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-400" />

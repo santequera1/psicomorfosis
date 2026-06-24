@@ -264,7 +264,7 @@ function PatientsPage() {
           </div>
         </header>
 
-        <div className="rounded-xl border border-line-200 bg-surface" data-tour="pacientes-list">
+        <div className="lg-surface rounded-xl border border-line-200 bg-surface" data-tour="pacientes-list">
           {/* Buscador siempre full width en mobile, filtros agrupados debajo */}
           <div className="p-3 sm:p-4 space-y-2 border-b border-line-100">
             <div data-tour="pacientes-search" className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/50">
@@ -622,7 +622,7 @@ function PatientCard({ patient: p, onEdit, onRemove, onSchedule }: {
     };
   }, [menu]);
   return (
-    <div className="rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
+    <div className="lg-surface rounded-xl border border-line-200 bg-surface p-4 hover:border-brand-400/60 hover:shadow-sm transition-all relative group">
       <Link to="/pacientes/$id" params={{ id: p.id }} className="block">
         <div className="flex items-start gap-3">
           <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${avatarTone(p.name)}`}>

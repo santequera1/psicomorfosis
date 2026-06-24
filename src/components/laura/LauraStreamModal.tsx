@@ -98,7 +98,7 @@ export function LauraStreamModal({ kind, title, start, footer, onClose }: Props)
     >
       <div
         className={cn(
-          "lg-surface bg-surface rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col border border-line-200 t-modal",
+          "lg-surface lg-surface--solid bg-surface rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col border border-line-200 t-modal",
           stateClass,
         )}
         onClick={(e) => e.stopPropagation()}

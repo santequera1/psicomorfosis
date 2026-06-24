@@ -269,7 +269,7 @@ function AgendaPage() {
           {/* Calendario principal: arranca el slide-in apenas terminan los
               KPIs (último delay = 120 + 3*80 = 360ms). */}
           <div
-            className="xl:col-span-2 rounded-xl border border-line-200 bg-surface animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+            className="lg-surface xl:col-span-2 rounded-xl border border-line-200 bg-surface animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
             style={{ animationDelay: "440ms" }}
           >
             <div className="p-5 flex items-center justify-between gap-4 border-b border-line-100 flex-wrap">
@@ -425,7 +425,7 @@ function AgendaPage() {
             )}
 
             <div
-              className="rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
+              className="lg-surface lg-surface--risk rounded-xl border border-risk-high/25 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
               style={{ animationDelay: "600ms" }}
             >
               <h3 className="font-serif text-base text-ink-900 mb-1">Lista de riesgo</h3>
@@ -451,7 +451,7 @@ function AgendaPage() {
             </div>
 
             <div
-              className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
+              className="lg-surface rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-right-3 duration-500 fill-mode-backwards"
               style={{ animationDelay: "680ms" }}
             >
               <h3 className="font-serif text-base text-ink-900 mb-3">Pendientes</h3>
