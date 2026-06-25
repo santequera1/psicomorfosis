@@ -287,7 +287,7 @@ export function AdminDashboard() {
           también renderizan empty states así que el shift es mínimo. */}
       {totalPendingItems > 0 && pendingItems && (
         <section
-          className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
+          className="lg-surface rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
           style={{ animationDelay: delayForSection(680) }}
         >
           <div className="flex items-center justify-between mb-4">
@@ -347,7 +347,7 @@ export function AdminDashboard() {
 
       {/* DESPUÉS: distribuciones / contexto clínico */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-line-200 bg-surface p-5">
+        <div className="lg-surface rounded-xl border border-line-200 bg-surface p-5">
           <h3 className="font-serif text-lg text-ink-900 mb-1">Sesiones por modalidad</h3>
           <p className="text-xs text-ink-500 mb-4">Últimos 30 días</p>
           {sessionsByModality.length === 0 ? (
@@ -378,7 +378,7 @@ export function AdminDashboard() {
           )}
         </div>
 
-        <div className="rounded-xl border border-line-200 bg-surface p-5">
+        <div className="lg-surface rounded-xl border border-line-200 bg-surface p-5">
           <h3 className="font-serif text-lg text-ink-900 mb-1">Motivos de consulta</h3>
           <p className="text-xs text-ink-500 mb-4">Pacientes activos</p>
           {reasons.length === 0 ? (
@@ -401,7 +401,7 @@ export function AdminDashboard() {
 
       {/* AL FINAL: financiero (menos urgente que lo clínico) */}
       <section>
-        <div className="rounded-xl border border-line-200 bg-surface p-5">
+        <div className="lg-surface rounded-xl border border-line-200 bg-surface p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg text-ink-900">Ingresos · últimos 7 días</h3>
@@ -441,7 +441,7 @@ export function AdminDashboard() {
       {/* Pacientes sin seguimiento: alertas clínicas de retención. Solo se
           muestra si hay datos — evita el "fantasma" de un widget vacío. */}
       {patientsWithoutFollowup.length > 0 && (
-        <section className="rounded-xl border border-line-200 bg-surface p-5">
+        <section className="lg-surface rounded-xl border border-line-200 bg-surface p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-serif text-lg text-ink-900 inline-flex items-center gap-2">
@@ -538,7 +538,7 @@ function PendingCard({ label, hint, count, icon, to, tone }: {
     // cortaban a 'Tests por...'.
     <Link
       to={to as any}
-      className={`rounded-lg border p-3 hover:border-brand-400 transition-colors flex flex-col sm:flex-row items-start gap-2 sm:gap-3 ${dim ? "opacity-60 border-line-100" : "border-line-200 bg-surface"}`}
+      className={`lg-surface rounded-lg border p-3 hover:border-brand-400 transition-colors flex flex-col sm:flex-row items-start gap-2 sm:gap-3 ${dim ? "opacity-60 border-line-100" : "border-line-200 bg-surface"}`}
     >
       <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${dim ? "bg-bg-100 text-ink-400" : toneCls}`}>
         {icon}

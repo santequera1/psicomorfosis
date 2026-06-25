@@ -19,23 +19,29 @@
  */
 
 :root {
-  --lg-blur: 30px;
+  /* Tema "liquid" — efecto fuerte. */
+  --lg-blur: 38px;
   --lg-saturate: 180%;
-  /* Bg con tinte oscuro (rgba negro + algo de blanco para borde luminoso).
-     Subido de blanco 0.10 a negro/14 + blanco/6 = más cuerpo + más oscuro
-     para que el contraste de texto contra el cristal sea mejor. */
-  --lg-bg: rgba(12, 16, 20, 0.42);
-  --lg-bg-strong: rgba(12, 16, 20, 0.58);
+  /* Bg con tinte oscuro: más opaco para que el texto blanco se lea
+     cómodo. Subió de 0.42 a 0.55 (sutil pero perceptible). */
+  --lg-bg: rgba(10, 14, 18, 0.55);
+  --lg-bg-strong: rgba(10, 14, 18, 0.70);
   --lg-border: rgba(255, 255, 255, 0.22);
   --lg-edge-highlight: rgba(255, 255, 255, 0.28);
   --lg-edge-shadow: rgba(0, 0, 0, 0.32);
-  --lg-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
+  --lg-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
   --lg-cursor-size: 48px;
   --lg-cursor-blur: 6px;
   /* Imagen de fondo del html — variable para que el usuario pueda
-     alternar entre fondo1.jpg y fondo2.jpg desde Configuración. El
-     selector lo guarda en localStorage y aplica :root style="--lg-bg-image: url(...)". */
+     alternar entre fondo1.jpg y fondo2.jpg desde Configuración. */
   --lg-bg-image: url("/fondo1.jpg");
+
+  /* Frosted glass sutil para MODO CLARO (no tema liquid). Mucho más
+     ligero — solo agrega "frescura" a las cards sin disrumpir el
+     diseño calmado de Psicomorfosis. */
+  --lg-light-bg: rgba(255, 255, 255, 0.65);
+  --lg-light-blur: 14px;
+  --lg-light-border: rgba(255, 255, 255, 0.85);
 }
 
 /* Background fotográfico al html. El body queda transparent !important
@@ -56,6 +62,25 @@ html[data-theme="liquid"] body {
    utility classes de tailwind v4 (.bg-*, .border-*, etc.) que viven
    en esa capa. */
 @layer utilities {
+
+  /* ─── Frosted suave en MODO CLARO (cualquier tema que no sea liquid) ──
+   *
+   * El usuario quiere que el efecto sutil de "frosted glass" del
+   * primer pass global aparezca en modo claro. Ya no aplica el
+   * efecto fuerte (eso solo bajo theme=liquid), pero las mismas
+   * cards que tienen .lg-surface mantienen un toque de cristal.
+   * En modo oscuro normal no aplica — el dark sin liquid mantiene
+   * su look opaco. */
+  html[data-mode="light"]:not([data-theme="liquid"]) .lg-surface {
+    background-color: var(--lg-light-bg) !important;
+    backdrop-filter: blur(var(--lg-light-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--lg-light-blur)) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 var(--lg-light-border),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 8px 24px rgba(0, 0, 0, 0.06) !important;
+  }
 
   /* Shells transparentes — la imagen del html se ve en TODA la página. */
   html[data-theme="liquid"] .bg-bg-50,
