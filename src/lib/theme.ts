@@ -38,6 +38,43 @@ const KEY_LIQUID_BG = "psm.theme.liquid.bg";
 
 const DARK_ONLY_THEMES: ReadonlySet<ThemeFamily> = new Set(["aurora", "liquid"]);
 
+/**
+ * Whitelist de emails autorizados a usar el tema Liquid Glass.
+ *
+ * Mientras Liquid Glass está en beta interna, solo el psicólogo de
+ * pruebas puede activarlo. A los demás usuarios la opción no aparece
+ * en Configuración → Apariencia, y si tuvieran "liquid" guardado en
+ * localStorage (por ej. la cuenta cambió de dueño), el tema se cae
+ * silenciosamente al default "clinico" sin romper la sesión.
+ *
+ * Para liberar el tema a todos: comentar este array (o vaciar) y
+ * isLiquidGlassAllowed() devolverá true siempre.
+ */
+const LIQUID_GLASS_WHITELIST: readonly string[] = [
+  "psicologo.demo@psicomorfosis.co",
+];
+
+/** Lee el usuario guardado en localStorage SIN importar de api.ts
+ *  (cíclico). Devuelve el email o null. */
+function getCurrentUserEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem("psm.user");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return typeof u?.email === "string" ? u.email : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isLiquidGlassAllowed(): boolean {
+  if (LIQUID_GLASS_WHITELIST.length === 0) return true; // open beta
+  const email = getCurrentUserEmail();
+  if (!email) return false;
+  return LIQUID_GLASS_WHITELIST.includes(email.toLowerCase());
+}
+
 // ─── Catálogo: fuente → URL de Google Fonts y CSS variables ─────────
 //
 // Cada fuente carga un <link rel="stylesheet"> con la URL de Google
@@ -165,7 +202,15 @@ export function getTheme(): ThemePreference {
 export function getThemeFamily(): ThemeFamily {
   if (typeof window === "undefined") return "clinico";
   const v = window.localStorage.getItem(KEY_FAMILY);
-  if (v && (v in THEME_FAMILIES)) return v as ThemeFamily;
+  if (v && (v in THEME_FAMILIES)) {
+    // Liquid Glass está restringido al whitelist. Si el localStorage
+    // dice "liquid" pero el user actual no está autorizado, caemos
+    // silenciosamente a "clinico" — sin tocar la key para no
+    // sobreescribir la preferencia del psicólogo de pruebas si
+    // alguna vez vuelve a loguearse.
+    if (v === "liquid" && !isLiquidGlassAllowed()) return "clinico";
+    return v as ThemeFamily;
+  }
   return "clinico";
 }
 
@@ -285,6 +330,13 @@ export function setTheme(pref: ThemePreference): void {
 }
 
 export function setThemeFamily(family: ThemeFamily): void {
+  // Liquid Glass está restringido por whitelist. Rechazamos
+  // silenciosamente si el user no tiene permiso (la UI ya oculta
+  // el botón, esto es defensa en profundidad).
+  if (family === "liquid" && !isLiquidGlassAllowed()) {
+    console.warn("[theme] Liquid Glass no disponible para este usuario.");
+    return;
+  }
   // Si saliendo de un tema dark-only (Aurora) hacia uno que sí soporta
   // modo claro: forzamos mode="claro" porque el usuario quedaba atrapado
   // en oscuro. Al elegir Aurora habíamos forzado mode=oscuro (porque

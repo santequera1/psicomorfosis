@@ -24,6 +24,7 @@ import {
   setFontFamily,
   getLiquidBg,
   setLiquidBg,
+  isLiquidGlassAllowed,
   LIQUID_BG_CATALOG,
   THEME_FAMILIES,
   FONT_FAMILIES,
@@ -1029,7 +1030,13 @@ function AparienciaPanel() {
     return () => mq.removeEventListener?.("change", handler);
   }, [mode]);
 
-  const familyEntries = Object.entries(THEME_FAMILIES) as Array<[ThemeFamily, typeof THEME_FAMILIES[ThemeFamily]]>;
+  // Liquid Glass está restringido por whitelist (ver theme.ts). Si el
+  // usuario actual no está autorizado, omitimos la opción de la lista
+  // para que no aparezca en el grid de temas. La función rechaza
+  // también desde setThemeFamily como defensa en profundidad.
+  const liquidAllowed = isLiquidGlassAllowed();
+  const familyEntries = (Object.entries(THEME_FAMILIES) as Array<[ThemeFamily, typeof THEME_FAMILIES[ThemeFamily]]>)
+    .filter(([id]) => liquidAllowed || id !== "liquid");
   const fontEntries = Object.entries(FONT_FAMILIES) as Array<[FontFamily, typeof FONT_FAMILIES[FontFamily]]>;
 
   return (

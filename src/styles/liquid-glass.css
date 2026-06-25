@@ -66,12 +66,16 @@ html[data-theme="liquid"] body {
   /* ─── Frosted suave en MODO CLARO (cualquier tema que no sea liquid) ──
    *
    * El usuario quiere que el efecto sutil de "frosted glass" del
-   * primer pass global aparezca en modo claro. Ya no aplica el
-   * efecto fuerte (eso solo bajo theme=liquid), pero las mismas
-   * cards que tienen .lg-surface mantienen un toque de cristal.
+   * primer pass global aparezca en modo claro. Aplica solo a las
+   * cards de CONTENIDO con .lg-surface — NO a las variantes
+   * estructurales (--sidebar, --header, --drawer, --risk) que
+   * tienen sus propios bg/borde/color de texto pensados para su
+   * contexto. Si lo aplicáramos al sidebar, por ejemplo, su bg
+   * blanco translúcido pelearía con el color del texto del menú.
+   *
    * En modo oscuro normal no aplica — el dark sin liquid mantiene
    * su look opaco. */
-  html[data-mode="light"]:not([data-theme="liquid"]) .lg-surface {
+  html[data-mode="light"]:not([data-theme="liquid"]) .lg-surface:not(.lg-surface--sidebar):not(.lg-surface--header):not(.lg-surface--drawer):not(.lg-surface--solid):not(.lg-surface--risk) {
     background-color: var(--lg-light-bg) !important;
     backdrop-filter: blur(var(--lg-light-blur)) saturate(160%);
     -webkit-backdrop-filter: blur(var(--lg-light-blur)) saturate(160%);
@@ -118,13 +122,15 @@ html[data-theme="liquid"] body {
   }
 
   /* Drawer del LauraChat: el chat es contenido de lectura intensa
-     (mensajes, prompts). Aumentamos blur a 40px y bg a 0.72 para
-     que el texto del chat sea cómodo de leer sobre la imagen del
-     fondo. Variante específica que sobrescribe --solid. */
+     (mensajes, prompts, código). El texto se PERDÍA sobre el
+     fondo fotográfico con bg 0.72 — subimos a 0.92 (casi opaco)
+     y blur a 60px para que el contraste sea cómodo de leer.
+     Aún translúcido lo suficiente para sentir el cristal, pero
+     suficientemente denso para que el texto blanco se lea bien. */
   html[data-theme="liquid"] .lg-surface--drawer {
-    background-color: rgba(10, 14, 18, 0.72) !important;
-    backdrop-filter: blur(40px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    background-color: rgba(8, 12, 16, 0.92) !important;
+    backdrop-filter: blur(60px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(60px) saturate(180%) !important;
   }
   html[data-theme="liquid"] .lg-surface--header {
     background-color: rgba(15, 18, 24, 0.55) !important;
