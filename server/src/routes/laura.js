@@ -26,11 +26,25 @@ import {
 } from "../lib/laura.js";
 
 const router = Router();
-router.use(requireAuth);
+
+// IMPORTANTE: NO usar `router.use(requireAuth)` global.
+//
+// Este router se monta en `app.use("/api", lauraRoutes)` en index.js,
+// que va ANTES de portalRoutes y errorReportsRoutes (que tienen
+// endpoints públicos como /api/patient-invite/:token o /api/auth/patient/login).
+//
+// Cuando un router con `router.use(middleware)` se monta sin prefijo
+// específico, Express ejecuta el middleware en TODA request a /api/*
+// — aunque el path no matchee ninguna ruta del router. requireAuth no
+// llama next() en 401, así que cualquier path bajo /api/ sin token
+// devolvía "Missing token" antes de llegar a portalRoutes. Esto rompía
+// el flujo de activación de pacientes (caso real reportado 2026-06-25).
+//
+// Solución: aplicar requireAuth EN CADA endpoint individual.
 
 // ── Health ────────────────────────────────────────────────────────────
 
-router.get("/laura/health", async (_req, res) => {
+router.get("/laura/health", requireAuth, async (_req, res) => {
   const [h, ds] = await Promise.all([healthCheck(), darioStatus()]);
   res.json({
     ...h,
@@ -47,7 +61,7 @@ router.get("/laura/health", async (_req, res) => {
 // Cuota real de Claude (sesión + semanal %) — endpoint separado del
 // health porque el comando subyacente (claude -p /usage) tarda ~3-5s
 // la primera vez. Cache 5min interna; siguientes calls instantáneos.
-router.get("/laura/quota", async (_req, res) => {
+router.get("/laura/quota", requireAuth, async (_req, res) => {
   const q = await claudeUsage();
   res.json(q);
 });
@@ -57,7 +71,7 @@ router.get("/laura/quota", async (_req, res) => {
 // Devuelve cuántos mensajes y tokens consumió el usuario hoy. Útil para
 // el banner de cuota del chat: "Estás en beta — usado X mensajes hoy".
 
-router.get("/laura/usage", (req, res) => {
+router.get("/laura/usage", requireAuth, (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const stats = db.prepare(`
     SELECT
@@ -80,7 +94,7 @@ router.get("/laura/usage", (req, res) => {
 
 // ── Conversations CRUD ────────────────────────────────────────────────
 
-router.get("/laura/conversations", (req, res) => {
+router.get("/laura/conversations", requireAuth, (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 30), 100);
   const rows = db.prepare(`
     SELECT c.id, c.title, c.patient_id, c.created_at, c.updated_at,
@@ -95,7 +109,7 @@ router.get("/laura/conversations", (req, res) => {
   res.json({ items: rows });
 });
 
-router.post("/laura/conversations", (req, res) => {
+router.post("/laura/conversations", requireAuth, (req, res) => {
   const { patient_id, title } = req.body ?? {};
   // Validar que el paciente (si vino) pertenece al workspace del user.
   if (patient_id) {
@@ -110,7 +124,7 @@ router.post("/laura/conversations", (req, res) => {
   res.status(201).json({ id: r.lastInsertRowid });
 });
 
-router.get("/laura/conversations/:id", (req, res) => {
+router.get("/laura/conversations/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "id inválido" });
   const c = db.prepare(`
@@ -139,7 +153,7 @@ router.get("/laura/conversations/:id", (req, res) => {
   res.json({ conversation: c, messages });
 });
 
-router.delete("/laura/conversations/:id", (req, res) => {
+router.delete("/laura/conversations/:id", requireAuth, (req, res) => {
   const id = Number(req.params.id);
   const r = db.prepare(`
     UPDATE laura_conversations SET archived_at = CURRENT_TIMESTAMP
@@ -167,7 +181,7 @@ router.delete("/laura/conversations/:id", (req, res) => {
 //     message: string             // texto del usuario
 //   }
 
-router.post("/laura/chat", async (req, res) => {
+router.post("/laura/chat", requireAuth, async (req, res) => {
   const { conversation_id, patient_id, current_path, message, images } = req.body ?? {};
   const imgCount = Array.isArray(images) ? images.length : 0;
   console.log(`[laura/chat] user=${req.user?.id} ws=${req.user?.workspace_id} conv=${conversation_id ?? "new"} patient=${patient_id ?? "—"} msg.len=${(message ?? "").length} images=${imgCount}`);
@@ -395,7 +409,7 @@ router.post("/laura/chat", async (req, res) => {
 // Body: { appointment_id: number }
 // Stream SSE: { type: "delta" | "done" | "error", ... }
 
-router.post("/laura/briefing", async (req, res) => {
+router.post("/laura/briefing", requireAuth, async (req, res) => {
   const apptId = Number(req.body?.appointment_id);
   if (!Number.isFinite(apptId) || apptId <= 0) {
     return res.status(400).json({ error: "appointment_id requerido" });
@@ -497,7 +511,7 @@ router.post("/laura/briefing", async (req, res) => {
 // evolución del paciente en los últimos N meses (default 6).
 // Body: { patient_id: string, months?: number }
 
-router.post("/laura/progress", async (req, res) => {
+router.post("/laura/progress", requireAuth, async (req, res) => {
   const patientId = String(req.body?.patient_id ?? "").trim();
   const months = Number.isFinite(Number(req.body?.months)) ? Number(req.body.months) : 6;
   if (!patientId) {
@@ -573,7 +587,7 @@ router.post("/laura/progress", async (req, res) => {
 // Response: { rewritten: string }
 const REWRITE_MODES = new Set(["clinical", "concise", "soap", "humanize", "expand"]);
 
-router.post("/laura/rewrite", async (req, res) => {
+router.post("/laura/rewrite", requireAuth, async (req, res) => {
   const { text, mode } = req.body ?? {};
   if (typeof text !== "string" || text.trim().length === 0) {
     return res.status(400).json({ error: "Falta el texto a reescribir" });
