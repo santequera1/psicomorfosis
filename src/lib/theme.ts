@@ -223,11 +223,11 @@ export function getFontFamily(): FontFamily {
 
 // ─── Liquid Glass — fondo fotográfico ──────────────────────────────
 
-export type LiquidBg = "fondo1" | "fondo2";
+export type LiquidBg = "fondo1" | "flor-de-loto";
 
 export const LIQUID_BG_CATALOG: Record<LiquidBg, { label: string; path: string }> = {
   fondo1: { label: "Hojas con gotas", path: "/fondo1.jpg" },
-  fondo2: { label: "Alternativo", path: "/fondo2.jpg" },
+  "flor-de-loto": { label: "Flor de loto", path: "/flor-de-loto.jpg" },
 };
 
 export function getLiquidBg(): LiquidBg {
