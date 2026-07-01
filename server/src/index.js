@@ -42,6 +42,7 @@ import landingRoutes from "./routes/landing.js";
 import voiceRoutes from "./routes/voice.js";
 import messagingRoutes from "./routes/messaging.js";
 import lauraRoutes from "./routes/laura.js";
+import botRoutes from "./routes/bot.js";
 
 const PORT = Number(process.env.PORT ?? 3002);
 
@@ -136,6 +137,10 @@ app.use("/api", lauraRoutes);
 // (/api/patient-invite/*, /api/auth/patient/login). notesRoutes aplica
 // requireAuth global, así que si va primero intercepta cualquier /api/*.
 app.use("/api", portalRoutes); // /patients/:id/invite, /patient-invite/*, /auth/patient/login, /portal/*
+// Bot de Laura (WhatsApp): usa X-Bot-Api-Key en lugar de JWT. Endpoint
+// /bot/identify resuelve phone → user context; el resto llama a
+// endpoints normales con X-Bot-Actor-User-Id (ver auth.js).
+app.use("/api", botRoutes);    // /bot/identify, /bot/health
 // Reportes de errores: público (no exige token) — un usuario en pantalla
 // "Something went wrong" puede no tener sesión válida y aún así queremos
 // recibirlo. Mismo razonamiento que portalRoutes: ir antes que notesRoutes.

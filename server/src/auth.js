@@ -116,15 +116,76 @@ function maybeRefresh(res, payload) {
   }
 }
 
+/**
+ * Autenticación del bot de Laura (WhatsApp).
+ *
+ * El bot NO usa JWT — usa una API key global (BOT_API_KEY del .env) +
+ * un header `X-Bot-Actor-User-Id` que indica "estoy actuando como
+ * este user". requireAuth acepta este esquema como alternativa al JWT:
+ *
+ *   Authorization: Bearer <JWT>                 ← usuario normal
+ *
+ *   X-Bot-Api-Key: <BOT_API_KEY>                ← bot actuando como user
+ *   X-Bot-Actor-User-Id: <id>
+ *
+ * En el segundo caso, req.user queda seteado al actor real. Todo el
+ * downstream (filtros por workspace_id, ownership, etc.) sigue
+ * funcionando idéntico. La auditoría queda intacta.
+ */
+function tryBotAuth(req) {
+  const key = req.headers["x-bot-api-key"];
+  const actorHeader = req.headers["x-bot-actor-user-id"];
+  if (!key || !actorHeader) return null;
+
+  const expected = process.env.BOT_API_KEY?.trim();
+  if (!expected || key !== expected) return "invalid_bot_key";
+
+  const actorId = Number(actorHeader);
+  if (!Number.isFinite(actorId) || actorId <= 0) return "invalid_actor_id";
+
+  const actor = db.prepare(`
+    SELECT id, workspace_id, role, name, email, professional_id, patient_id
+    FROM users WHERE id = ?
+  `).get(actorId);
+  if (!actor) return "actor_not_found";
+
+  // Mismo shape que un payload JWT — el resto del código no diferencia.
+  return {
+    id: actor.id,
+    workspace_id: actor.workspace_id,
+    role: actor.role,
+    name: actor.name,
+    email: actor.email,
+    professional_id: actor.professional_id,
+    patient_id: actor.patient_id,
+    _bot: true, // marker por si algún endpoint quiere bloquear al bot
+  };
+}
+
 export function requireAuth(req, res, next) {
+  // 1. Intento JWT primero (path normal)
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
-  const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
-  req.user = payload;
-  maybeRefresh(res, payload);
-  next();
+  if (token) {
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+    req.user = payload;
+    maybeRefresh(res, payload);
+    return next();
+  }
+
+  // 2. Fallback: bot con API key + actor header
+  const botAuth = tryBotAuth(req);
+  if (botAuth && typeof botAuth === "object") {
+    req.user = botAuth;
+    return next();
+  }
+  if (typeof botAuth === "string") {
+    // headers de bot presentes pero inválidos → 401 con hint específico
+    return res.status(401).json({ error: `Bot auth: ${botAuth}` });
+  }
+
+  return res.status(401).json({ error: "Missing token" });
 }
 
 export function requireRole(...roles) {
