@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
+import { sendTestAssignedEmail } from "../mailer.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -371,6 +372,28 @@ router.post("/applications", (req, res) => {
       INSERT INTO test_applications (id, workspace_id, patient_id, patient_name, test_code, test_name, status, applied_by, assigned_at, professional, total_items, answered_items)
       VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 'paciente', ?, ?, ?, 0)
     `).run(id, req.user.workspace_id, patient.id, patient.name, test.code, test.name, now(), req.user.name ?? "", totalItems);
+
+    // Notificación al paciente (best-effort, no bloquea)
+    if (patient.email) {
+      const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+      const prof = req.user.professional_id
+        ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+        : { name: req.user.name ?? null, email: null };
+      const base = req.headers["x-forwarded-host"]
+        ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`
+        : `${req.protocol}://${req.get("host")}`;
+      const portalUrl = `${base}/p/tests`;
+      setImmediate(() => {
+        sendTestAssignedEmail({
+          patient,
+          test: { test_name: test.name, total_items: totalItems },
+          professional: prof,
+          workspaceName: ws?.name,
+          portalUrl,
+          replyTo: prof?.email || undefined,
+        }).catch((e) => console.warn(`[tests] email falló: ${e?.message ?? e}`));
+      });
+    }
 
     return res.status(201).json(parseApplication(db.prepare("SELECT * FROM test_applications WHERE id = ?").get(id)));
   }

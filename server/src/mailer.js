@@ -893,6 +893,243 @@ export async function sendAccountRejectedEmail({ fullName, email, reason, replyT
 
 export { sendAccountRequestNotificationEmail };
 
+// ═══════════════════════════════════════════════════════════════════════
+// NOTIFICACIONES AL PACIENTE — Tareas / Tests / Documentos
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Antes solo notificábamos citas (created/rescheduled/cancelled). Ahora
+// también cuando el psicólogo asigna:
+//   - Tarea terapéutica (sendTaskAssignedEmail)
+//   - Test psicométrico (sendTestAssignedEmail)
+//   - Documento compartido con firma opcional (sendDocumentShareEmail)
+//
+// Todas siguen el mismo patrón: validar email + smtp, mandar con retry,
+// loguear en email_log. Best-effort — nunca bloquean el flujo del staff.
+
+/**
+ * Helper genérico: valida email + smtp, envía y loguea. Devuelve el
+ * status para que el endpoint del staff decida qué informar al frontend.
+ */
+async function sendPatientNotificationInternal({ patient, kind, subject, html, replyTo, workspaceId }) {
+  const start = Date.now();
+  const result = {
+    workspace_id: workspaceId ?? patient?.workspace_id ?? null,
+    appointment_id: null,
+    to_email: patient?.email ?? "",
+    kind,
+    status: "failed",
+    error: null,
+    ms: 0,
+  };
+
+  if (!patient?.email || !patient.email.includes("@")) {
+    result.status = "skipped_no_email";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+  if (!smtpConfigured()) {
+    result.status = "skipped_no_smtp";
+    result.error = "SMTP_HOST/USER/PASS no configurados";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+
+  try {
+    const c = getSmtpConfig();
+    const fromAddress = `${c.fromName} <${c.user}>`;
+    await sendMailWithRetry({
+      from: fromAddress,
+      to: patient.email,
+      replyTo: replyTo || undefined,
+      subject,
+      html,
+    });
+    result.status = "sent";
+  } catch (err) {
+    result.error = String(err?.message ?? err).slice(0, 500);
+    console.warn(`[mailer] ${kind} falló para ${patient.email}: ${result.error}`);
+  }
+
+  result.ms = Date.now() - start;
+  logEmail(result);
+  return result;
+}
+
+function templatePatientNotification({ patient, title, introHtml, ctaText, ctaUrl, footerHtml }) {
+  const firstName = (patient?.preferred_name?.trim() || patient?.name?.split(" ")[0] || "").trim();
+  const saludo = firstName ? `Hola ${escapeHtml(firstName)},` : "Hola,";
+  const cta = ctaText && ctaUrl ? `
+<p style="text-align:center;margin:22px 0;">
+  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;padding:14px 28px;background:#14685b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+    ${escapeHtml(ctaText)}
+  </a>
+</p>
+<p style="margin:0 0 8px 0;font-size:12px;color:#78716c;">
+Si el botón no funciona, copia y pega esta dirección:
+</p>
+<p style="margin:0 0 18px 0;font-size:12px;color:#57534e;word-break:break-all;">
+${escapeHtml(ctaUrl)}
+</p>` : "";
+
+  const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">${saludo}</p>
+${introHtml}
+${cta}
+${footerHtml ? `<p style="margin:14px 0 0 0;font-size:12px;color:#78716c;">${footerHtml}</p>` : ""}`;
+  return emailLayout({ title, bodyHtml: body });
+}
+
+/**
+ * Notifica al paciente que se le asignó una nueva tarea terapéutica.
+ * @param {object} opts
+ * @param {object} opts.patient
+ * @param {object} opts.task - { title, description, type, due_at }
+ * @param {object} [opts.professional] - { name, email }
+ * @param {string} [opts.workspaceName]
+ * @param {string} opts.portalUrl - URL absoluta al portal del paciente (/p/tareas)
+ * @param {string} [opts.replyTo]
+ */
+export async function sendTaskAssignedEmail(opts) {
+  const { patient, task, professional, workspaceName, portalUrl, replyTo } = opts;
+  const profName = professional?.name ?? workspaceName ?? "tu psicóloga/o";
+  const dueLine = task?.due_at
+    ? `<p style="margin:8px 0 14px 0;font-size:13px;color:#78716c;">📅 Vence: <strong>${escapeHtml(new Date(task.due_at).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" }))}</strong></p>`
+    : "";
+  const descriptionLine = task?.description
+    ? `<div style="margin:14px 0;padding:14px;background:#f5f5f4;border-left:3px solid #14685b;border-radius:4px;font-size:14px;color:#44403c;white-space:pre-wrap;">${escapeHtml(task.description.slice(0, 800))}${task.description.length > 800 ? "…" : ""}</div>`
+    : "";
+
+  const introHtml = `
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+${escapeHtml(profName)} te asignó una nueva tarea terapéutica:
+</p>
+<p style="margin:12px 0 4px 0;font-size:16px;color:#1c1917;font-weight:600;">${escapeHtml(task?.title ?? "Tarea sin título")}</p>
+${dueLine}
+${descriptionLine}
+<p style="margin:14px 0;font-size:14px;color:#44403c;">
+Puedes verla y marcarla como completada desde tu portal.
+</p>`;
+
+  const html = templatePatientNotification({
+    patient,
+    title: "Nueva tarea asignada",
+    introHtml,
+    ctaText: "Ver mi tarea",
+    ctaUrl: portalUrl,
+    footerHtml: `Si tienes dudas sobre la tarea, responde este correo y le llegará a ${escapeHtml(profName)}.`,
+  });
+
+  return sendPatientNotificationInternal({
+    patient, kind: "task_assigned",
+    subject: `Nueva tarea de ${profName} · Psicomorfosis`,
+    html, replyTo,
+    workspaceId: patient?.workspace_id,
+  });
+}
+
+/**
+ * Notifica al paciente que se le asignó un test psicométrico para responder.
+ * @param {object} opts
+ * @param {object} opts.patient
+ * @param {object} opts.test - { test_name, total_items }
+ * @param {object} [opts.professional]
+ * @param {string} [opts.workspaceName]
+ * @param {string} opts.portalUrl - URL al portal del paciente (/p/tests)
+ * @param {string} [opts.replyTo]
+ */
+export async function sendTestAssignedEmail(opts) {
+  const { patient, test, professional, workspaceName, portalUrl, replyTo } = opts;
+  const profName = professional?.name ?? workspaceName ?? "tu psicóloga/o";
+  const itemsLine = test?.total_items
+    ? `<p style="margin:6px 0 14px 0;font-size:13px;color:#78716c;">${test.total_items} preguntas · aprox ${Math.max(5, Math.round(test.total_items / 8))} minutos</p>`
+    : "";
+
+  const introHtml = `
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+${escapeHtml(profName)} te asignó un cuestionario clínico para responder:
+</p>
+<p style="margin:12px 0 4px 0;font-size:16px;color:#1c1917;font-weight:600;">${escapeHtml(test?.test_name ?? "Test psicométrico")}</p>
+${itemsLine}
+<p style="margin:14px 0;font-size:14px;color:#44403c;">
+No hay respuestas "buenas" o "malas" — solo importa que respondas con honestidad. Puedes pausar y retomar cuando quieras.
+</p>`;
+
+  const html = templatePatientNotification({
+    patient,
+    title: "Cuestionario asignado",
+    introHtml,
+    ctaText: "Responder el cuestionario",
+    ctaUrl: portalUrl,
+    footerHtml: `Los resultados solo los ve ${escapeHtml(profName)}. Cualquier duda, responde este correo.`,
+  });
+
+  return sendPatientNotificationInternal({
+    patient, kind: "test_assigned",
+    subject: `Cuestionario asignado por ${profName} · Psicomorfosis`,
+    html, replyTo,
+    workspaceId: patient?.workspace_id,
+  });
+}
+
+/**
+ * Notifica al paciente que hay un documento nuevo compartido (con o sin
+ * solicitud de firma).
+ *
+ * @param {object} opts
+ * @param {object} opts.patient
+ * @param {object} opts.doc - { name, type }
+ * @param {object} [opts.professional]
+ * @param {string} [opts.workspaceName]
+ * @param {string} opts.url - URL de firma pública o del portal (según requiresSignature)
+ * @param {boolean} opts.requiresSignature - true si es signatureRequest, false si solo shared
+ * @param {number} [opts.daysValid] - días de validez del token de firma
+ * @param {string} [opts.replyTo]
+ */
+export async function sendDocumentShareEmail(opts) {
+  const { patient, doc, professional, workspaceName, url, requiresSignature, daysValid, replyTo } = opts;
+  const profName = professional?.name ?? workspaceName ?? "tu psicóloga/o";
+
+  const introHtml = requiresSignature ? `
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+${escapeHtml(profName)} te comparte un documento que necesita <strong>tu firma</strong>:
+</p>
+<p style="margin:12px 0 14px 0;font-size:16px;color:#1c1917;font-weight:600;">📄 ${escapeHtml(doc?.name ?? "Documento")}</p>
+<p style="margin:14px 0;font-size:14px;color:#44403c;">
+El enlace es único, seguro y no requiere descargar nada — puedes leerlo y firmarlo directo en el navegador desde tu celular o computador.
+</p>` : `
+<p style="margin:0 0 14px 0;font-size:14px;color:#44403c;">
+${escapeHtml(profName)} te compartió un nuevo documento:
+</p>
+<p style="margin:12px 0 14px 0;font-size:16px;color:#1c1917;font-weight:600;">📄 ${escapeHtml(doc?.name ?? "Documento")}</p>
+<p style="margin:14px 0;font-size:14px;color:#44403c;">
+Puedes verlo y descargarlo desde tu portal cuando quieras.
+</p>`;
+
+  const footerHtml = requiresSignature && daysValid
+    ? `El enlace es válido por ${daysValid} día${daysValid === 1 ? "" : "s"}. Si vence, pídele a ${escapeHtml(profName)} uno nuevo.`
+    : `Cualquier duda, responde este correo y le llegará a ${escapeHtml(profName)}.`;
+
+  const html = templatePatientNotification({
+    patient,
+    title: requiresSignature ? "Documento para firmar" : "Nuevo documento compartido",
+    introHtml,
+    ctaText: requiresSignature ? "Leer y firmar" : "Ver documento",
+    ctaUrl: url,
+    footerHtml,
+  });
+
+  return sendPatientNotificationInternal({
+    patient, kind: requiresSignature ? "document_sign_request" : "document_shared",
+    subject: requiresSignature
+      ? `${profName} te envió un documento para firmar · Psicomorfosis`
+      : `${profName} te compartió un documento · Psicomorfosis`,
+    html, replyTo,
+    workspaceId: patient?.workspace_id,
+  });
+}
+
 function escapeHtmlMail(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")

@@ -178,6 +178,34 @@ export function LauraChat({ open, onClose }: Props) {
     }
   }, [open, mounted]);
 
+  // Auto-grow del textarea: sin resize-y, ajustamos la altura al
+  // contenido para que crezca cuando el usuario escribe varias líneas.
+  // Máximo 40 (max-h-40 = 160px) para no comerse la pantalla.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
+
+  // Body scroll lock: evita que el body scrolle detrás del drawer en
+  // mobile y evita el "salto" horizontal cuando el drawer entra desde
+  // la derecha con translate-x-full (algunos browsers muestran ese
+  // contenido "fuera" como scroll disponible por un instante). Se
+  // aplica solo cuando el drawer está montado.
+  useEffect(() => {
+    if (!mounted) return;
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    const prevOverflowX = body.style.overflowX;
+    body.style.overflow = "hidden";
+    body.style.overflowX = "hidden";
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.overflowX = prevOverflowX;
+    };
+  }, [mounted]);
+
   // Auto-detect: si estamos en /pacientes/<id> esa es la ficha activa.
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
@@ -607,21 +635,23 @@ export function LauraChat({ open, onClose }: Props) {
         role="dialog"
         aria-label="Asistente Laura"
       >
-        {/* Header */}
-        <header className="flex items-center gap-3 p-4 border-b border-line-100 shrink-0">
+        {/* Header — compacto en mobile (avatar más chico, gaps menores,
+            botones 8x8 apretados). En sm+ vuelve al tamaño original. */}
+        <header className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b border-line-100 shrink-0">
           <img
             src={hasSpoken ? AVATAR_ACTIVE : AVATAR_INITIAL}
             alt=""
-            className="h-10 w-10 rounded-full object-cover bg-brand-50"
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full object-cover bg-brand-50 shrink-0"
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h2 className="font-serif text-base text-ink-900">Laura</h2>
-              <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-800 font-semibold">
+              <h2 className="font-serif text-base text-ink-900 truncate">Laura</h2>
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-800 font-semibold shrink-0">
                 Beta
               </span>
             </div>
-            <p className="text-[11px] text-ink-500 leading-tight">
+            {/* Subtítulo oculto en mobile para dar aire al header */}
+            <p className="hidden sm:block text-[11px] text-ink-500 leading-tight truncate">
               Asistente clínica · Memoria de tu consulta
             </p>
           </div>
@@ -629,25 +659,27 @@ export function LauraChat({ open, onClose }: Props) {
             type="button"
             onClick={() => setShowHistory((v) => !v)}
             className={cn(
-              "h-8 w-8 rounded-md inline-flex items-center justify-center",
+              "h-8 w-8 rounded-md inline-flex items-center justify-center shrink-0",
               showHistory ? "bg-brand-50 text-brand-800" : "text-ink-500 hover:bg-bg-50",
             )}
             title="Historial de conversaciones"
+            aria-label="Historial"
           >
             <History className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={newConversation}
-            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center"
+            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center shrink-0"
             title="Nueva conversación"
+            aria-label="Nueva conversación"
           >
             <Plus className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center"
+            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center shrink-0"
             aria-label="Cerrar"
           >
             <X className="h-4 w-4" />
@@ -714,9 +746,11 @@ export function LauraChat({ open, onClose }: Props) {
           )}
         </div>
 
-        {/* Input + attachments */}
+        {/* Input + attachments. padding-bottom respeta el safe area
+            del iPhone (barra de home / notch). Sin esto los botones
+            del footer quedaban tapados por la barra de indicador. */}
         <form
-          className="border-t border-line-100 p-3 shrink-0"
+          className="border-t border-line-100 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0"
           onSubmit={(e) => { e.preventDefault(); void send(); }}
           onDragEnter={(e) => {
             if (isResting) return;
@@ -794,13 +828,14 @@ export function LauraChat({ open, onClose }: Props) {
             ) : transcribing ? (
               <TranscribingPanel onCancel={() => setTranscribing(false)} />
             ) : (
-            <div className="flex items-end gap-2">
-              {/* Botón adjuntar — paperclip */}
+            <div className="flex items-end gap-1.5 sm:gap-2">
+              {/* Botón adjuntar — paperclip. En mobile 40x40 (vs 44 desktop)
+                  para dejar más espacio al textarea. */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || isResting || attachedImages.length >= MAX_IMAGES}
-                className="h-11 w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Adjuntar imagen"
                 title={
                   attachedImages.length >= MAX_IMAGES
@@ -828,14 +863,18 @@ export function LauraChat({ open, onClose }: Props) {
                 onChange={(e) => setInput(e.target.value)}
                 onPaste={onPaste}
                 onFocus={() => {
-                  // En mobile el teclado virtual oculta el último
-                  // mensaje. Scrolleamos al fondo tras un beat para
-                  // que el browser termine de medir el nuevo viewport.
+                  // Solo scrolleamos al fondo si el usuario YA estaba
+                  // cerca del fondo (dentro de 120px). Si estaba leyendo
+                  // más arriba, respetamos su posición — antes forzaba
+                  // scroll al fondo aunque el usuario estuviera arriba.
                   window.setTimeout(() => {
-                    if (scrollRef.current) {
-                      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                    const el = scrollRef.current;
+                    if (!el) return;
+                    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                    if (distFromBottom < 120) {
+                      el.scrollTop = el.scrollHeight;
                     }
-                  }, 250);
+                  }, 300);
                 }}
                 placeholder={
                   isResting
@@ -846,7 +885,7 @@ export function LauraChat({ open, onClose }: Props) {
                         ? "Pregúntame sobre este paciente o sobre la app…"
                         : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
                 }
-                rows={2}
+                rows={1}
                 maxLength={8000}
                 disabled={sending || isResting}
                 onKeyDown={(e) => {
@@ -855,14 +894,17 @@ export function LauraChat({ open, onClose }: Props) {
                     void send();
                   }
                 }}
-                className="flex-1 min-h-[44px] max-h-40 px-3 py-2 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                // resize-none: en mobile el resize-y agarraba con drag
+                // accidental y ampliaba el textarea saliendo del viewport.
+                // rows=1 + max-h para que crezca solo cuando hay contenido.
+                className="flex-1 min-w-0 min-h-11 max-h-40 px-3 py-2.5 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
               />
               {/* Botón dictado por voz — Whisper */}
               <button
                 type="button"
                 onClick={() => void startDictation()}
                 disabled={sending || isResting}
-                className="h-11 w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Dictar por voz"
                 title="Dictar por voz — Laura puede convertir el dictado a SOAP o cualquier otro formato si se lo pedís"
               >
@@ -871,7 +913,7 @@ export function LauraChat({ open, onClose }: Props) {
               <button
                 type="submit"
                 disabled={(!input.trim() && attachedImages.length === 0) || sending || isResting}
-                className="h-11 w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Enviar"
                 title={isResting ? "Laura está descansando" : "Enviar"}
               >

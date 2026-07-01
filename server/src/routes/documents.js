@@ -8,6 +8,7 @@ import mammoth from "mammoth";
 import { db } from "../db.js";
 import { requireAuth, verifyToken } from "../auth.js";
 import { buildPdfStream } from "../lib/pdfRenderer.js";
+import { sendDocumentShareEmail } from "../mailer.js";
 
 const router = Router();
 
@@ -955,12 +956,42 @@ router.patch("/:id/share", (req, res) => {
     return res.status(400).json({ error: "El documento no está vinculado a un paciente" });
   }
   const shared = req.body?.shared ? 1 : 0;
+  const wasShared = !!d.shared_with_patient;
   db.prepare(`
     UPDATE documents SET shared_with_patient = ?, updated_at = ?
     WHERE id = ? AND workspace_id = ?
   `).run(shared, now(), req.params.id, ws(req));
   const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
   req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:updated", rowToDoc(row));
+
+  // Notificación al paciente: solo cuando pasa de "no compartido" → "compartido".
+  // El toggle a "no compartido" no necesita email.
+  if (shared && !wasShared) {
+    const patient = db.prepare("SELECT id, name, preferred_name, email, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
+      .get(d.patient_id, ws(req));
+    if (patient?.email) {
+      const wsRow = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(ws(req));
+      const prof = req.user.professional_id
+        ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+        : { name: req.user.name ?? null, email: null };
+      const base = req.headers["x-forwarded-host"]
+        ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`
+        : `${req.protocol}://${req.get("host")}`;
+      const url = `${base}/p/documentos`;
+      setImmediate(() => {
+        sendDocumentShareEmail({
+          patient,
+          doc: { name: d.name, type: d.type },
+          professional: prof,
+          workspaceName: wsRow?.name,
+          url,
+          requiresSignature: false,
+          replyTo: prof?.email || undefined,
+        }).catch((e) => console.warn(`[documents/share] email falló: ${e?.message ?? e}`));
+      });
+    }
+  }
+
   res.json(rowToDoc(row));
 });
 
@@ -1174,6 +1205,27 @@ router.post("/:id/sign-request", (req, res) => {
     `No requiere descargar nada — funciona directo en el navegador.`,
     `Cualquier duda, me cuentas.`,
   ].join("\n");
+
+  // Notificación por email al paciente con el link de firma (best-effort).
+  const patientRow = db.prepare("SELECT id, name, preferred_name, email, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
+    .get(doc.patient_id, wsId(req));
+  if (patientRow?.email) {
+    const prof = req.user.professional_id
+      ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+      : { name: req.user.name ?? null, email: null };
+    setImmediate(() => {
+      sendDocumentShareEmail({
+        patient: patientRow,
+        doc: { name: doc.name, type: doc.type },
+        professional: prof,
+        workspaceName: ws?.name,
+        url,
+        requiresSignature: true,
+        daysValid: SIGN_REQUEST_DAYS,
+        replyTo: prof?.email || undefined,
+      }).catch((e) => console.warn(`[documents/sign-request] email falló: ${e?.message ?? e}`));
+    });
+  }
 
   res.status(201).json({
     token,
