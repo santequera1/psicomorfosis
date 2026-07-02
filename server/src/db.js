@@ -1109,6 +1109,71 @@ function runMigrations() {
     // assistant. Permite renderizar la conversación al recargar sin
     // perder las tarjetas de propuesta.
     "ALTER TABLE laura_messages ADD COLUMN proposed_actions_json TEXT",
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BOT / WhatsApp — risk flags + reschedule requests
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // risk_flags: evento clínico registrado cuando el bot de WhatsApp
+    // detecta señales de riesgo en un mensaje del paciente (ideación,
+    // crisis). NO es diagnóstico — es una marca temporal que dispara
+    // notificación al psicólogo y queda en la traza del paciente.
+    //
+    // severity: 'low' | 'medium' | 'high' | 'critical' (según snippet y
+    // señales explícitas vs implícitas).
+    // category: taxonomía libre (suicidal_ideation, self_harm, crisis,
+    // hopelessness, abandonment, etc.).
+    // snippet: extracto anonimizado del mensaje que disparó la alerta.
+    // confidence: 0-1, cuán seguro está el detector.
+    // resolved_at / resolved_by / resolution: el psicólogo cierra el
+    // flag desde la app con una nota.
+    `CREATE TABLE IF NOT EXISTS risk_flags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      patient_id TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'whatsapp_bot',
+      severity TEXT NOT NULL,
+      category TEXT,
+      snippet TEXT,
+      confidence REAL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TEXT,
+      resolved_by_user_id INTEGER,
+      resolution TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_risk_flags_patient ON risk_flags(patient_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_risk_flags_open ON risk_flags(workspace_id, resolved_at)",
+
+    // reschedule_requests: pedidos de reagenda hechos por el paciente
+    // vía WhatsApp. El psicólogo los revisa y aprueba/rechaza desde la
+    // agenda; al aprobar se aplica un PATCH al appointment y se cierra
+    // el request con approved_at.
+    //
+    // preferred_slots: JSON con opciones que el paciente propuso
+    // ["2026-07-05 10:00", "2026-07-06 15:00"]. Puede ser null si el
+    // paciente solo dijo "no puedo" sin proponer horarios.
+    `CREATE TABLE IF NOT EXISTS reschedule_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id INTEGER NOT NULL,
+      appointment_id INTEGER NOT NULL,
+      patient_id TEXT NOT NULL,
+      reason TEXT,
+      preferred_slots TEXT,
+      source TEXT NOT NULL DEFAULT 'whatsapp_bot',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      resolved_at TEXT,
+      resolved_by_user_id INTEGER,
+      resolution_note TEXT,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_reschedule_req_pending ON reschedule_requests(workspace_id, status, created_at DESC)",
   ];
   for (const sql of migrations) {
     try {

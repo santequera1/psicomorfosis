@@ -299,12 +299,193 @@ curl "https://psico.wailus.co/api/appointments?date=2026-07-01" \
 
 ---
 
-## 8. Roadmap
+## 8. Endpoints operativos del bot
+
+Todos usan `X-Bot-Api-Key` (no requieren actor porque el phone en el
+body identifica al paciente). Devuelven `patient_id` + `workspace_id`
+por si el bot quiere después llamar endpoints regulares actuando como
+el paciente.
+
+### 8.1 Risk flag — escalamiento clínico
+
+```
+POST /api/bot/risk-flag
+Headers: X-Bot-Api-Key
+Body: {
+  "phone": "+57 310 482 1290",
+  "severity": "critical",           // "low" | "medium" | "high" | "critical"
+  "category": "suicidal_ideation",  // taxonomía libre
+  "snippet": "ya no aguanto más",   // extracto anonimizado, max 500 chars
+  "confidence": 0.87                // 0-1
+}
+```
+
+**Efectos**:
+- Inserta fila en `risk_flags` (nueva tabla) con timestamp.
+- Si severity es `high` o `critical` y el paciente no estaba en
+  riesgo alto: escala `patients.risk` a ese nivel.
+- Crea `notifications` urgente (bell icon del psicólogo).
+- Manda email al psicólogo (best-effort).
+
+**Respuesta**:
+```json
+{
+  "ok": true,
+  "flag_id": 123,
+  "patient_id": "P-1013",
+  "workspace_id": 1,
+  "professional": {
+    "id": 1,
+    "name": "Nathaly Ferrer",
+    "phone": "+57 304 219 0650",
+    "email": "nathaly@..."
+  },
+  "notified": true,
+  "escalated_patient_risk": true
+}
+```
+
+**IMPORTANTE**: este endpoint NO manda mensajes al paciente. La
+contención + líneas de emergencia las hace el bot directo desde el
+protocolo §6.2 de la personalidad.
+
+### 8.2 Vocabulario de appointment status
+
+```
+GET /api/bot/appointment-vocab
+Headers: X-Bot-Api-Key
+```
+
+**Respuesta**:
+```json
+{
+  "statuses": {
+    "pending": "pendiente",
+    "confirmed": "confirmada",
+    "attended": "atendida"
+  },
+  "actions": {
+    "confirm":       { "method": "PATCH",  "body_hint": { "status": "confirmada" } },
+    "mark_attended": { "method": "PATCH",  "body_hint": { "status": "atendida" } },
+    "cancel":        { "method": "DELETE", "body_hint": { "notify": true, "reason": "opcional" } },
+    "reschedule":    { "method": "PATCH",  "body_hint": { "date": "YYYY-MM-DD", "time": "HH:MM" } }
+  },
+  "modalities": ["individual", "pareja", "familiar", "grupal", "tele"],
+  "duration_default_min": 50
+}
+```
+
+**Ojo con cancelar**: NO uses `PATCH status='cancelada'` — usá
+`DELETE /api/appointments/:id`. Es la convención de la app. El delete
+acepta `{ notify: false }` en el body para saltear el email de aviso.
+
+### 8.3 Reschedule request — pedido de reagenda del paciente
+
+Como el scope del paciente indica `requires_professional_approval`,
+NO aplicamos el cambio: registramos un pedido pendiente y notificamos
+al psicólogo.
+
+```
+POST /api/bot/reschedule-request
+Headers: X-Bot-Api-Key
+Body: {
+  "phone": "+57 310 482 1290",
+  "appointment_id": 42,
+  "reason": "Tengo una reunión de trabajo",
+  "preferred_slots": [
+    { "date": "2026-07-05", "time": "10:00" },
+    { "date": "2026-07-06", "time": "15:00" }
+  ]
+}
+```
+
+`preferred_slots` es opcional — si el paciente no propuso horarios
+(solo dijo "no puedo"), el bot manda `null` y el psicólogo lo
+contacta.
+
+**Respuesta**:
+```json
+{
+  "ok": true,
+  "request_id": 7,
+  "appointment_id": 42,
+  "patient_id": "P-1013",
+  "workspace_id": 1,
+  "status": "pending",
+  "original": { "date": "2026-07-04", "time": "10:00" }
+}
+```
+
+**Efectos**:
+- Inserta en `reschedule_requests` (nueva tabla).
+- Crea notificación no-urgente al psicólogo.
+- **NO modifica la cita**. El psicólogo aprueba desde la app.
+
+### 8.4 Opt-out / opt-in de WhatsApp
+
+Cuando el paciente dice "STOP", "no me escribas más", "BAJA":
+
+```
+POST /api/bot/opt-out
+Headers: X-Bot-Api-Key
+Body: { "phone": "+57 310 482 1290" }
+```
+
+**Efectos**:
+- `patients.whatsapp_opt_in = 0`
+- `patients.whatsapp_opt_out_at = now()`
+
+La plataforma consulta este flag antes de mandar cualquier
+recordatorio automático a WhatsApp. Los emails NO están afectados
+(el paciente puede opt-out de un canal sin bloquear el otro).
+
+Contraparte:
+```
+POST /api/bot/opt-in
+Body: { "phone": "..." }
+```
+
+### 8.5 Marcar test como enviado offline
+
+Caso: el paciente respondió el test por otro canal (papel, Google
+Forms) y le dice al bot "ya lo hice".
+
+```
+POST /api/bot/tests/:application_id/mark-submitted
+Headers: X-Bot-Api-Key
+Body: {
+  "phone": "+57 310 482 1290",
+  "note": "Lo entregué en la sesión pasada"   // opcional
+}
+```
+
+**Efectos**:
+- `test_applications.status = 'entregado_offline'`
+- `completed_at = now()`
+- Agrega la nota al campo `interpretation`.
+- Crea notificación no-urgente para que el psicólogo revise si quiere
+  digitalizar las respuestas para score.
+
+**NO calcula score** — el test se marca como completado pero sin
+puntuación. Para score, el psicólogo digitaliza las respuestas y usa
+`POST /api/tests/applications/:id/submit` desde la web.
+
+Valida que el phone corresponde al paciente del test. Si el phone
+no matchea, 403.
+
+---
+
+## 9. Roadmap
 
 **v1 (ya listo)**
 - ✅ `POST /bot/identify` — phone → user context + scope
 - ✅ `GET /bot/health`
 - ✅ Auth via API key + actor header en TODOS los endpoints existentes
+- ✅ `POST /bot/risk-flag` — escalamiento clínico
+- ✅ `GET /bot/appointment-vocab` — strings exactos de status/acciones
+- ✅ `POST /bot/reschedule-request` — pedido del paciente
+- ✅ `POST /bot/opt-out` / `POST /bot/opt-in` — comunicaciones
+- ✅ `POST /bot/tests/:id/mark-submitted` — test offline
 
 **v2 (cuando escale)**
 - OTP one-time al primer vínculo phone ↔ workspace

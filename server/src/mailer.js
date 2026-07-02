@@ -1130,6 +1130,94 @@ Puedes verlo y descargarlo desde tu portal cuando quieras.
   });
 }
 
+/**
+ * Notificación al psicólogo cuando el bot de WhatsApp detectó riesgo
+ * en un mensaje del paciente. NO se manda al paciente — el bot ya
+ * hizo la contención directa (protocolo de crisis §6.2). Este email
+ * es señal para el profesional.
+ */
+export async function sendRiskFlagEmail({ to, professionalName, patient, severity, category, snippet, workspaceName }) {
+  const start = Date.now();
+  const result = {
+    workspace_id: null,
+    appointment_id: null,
+    to_email: to ?? "",
+    kind: `risk_flag_${severity}`,
+    status: "failed",
+    error: null,
+    ms: 0,
+  };
+  if (!to || !to.includes("@")) {
+    result.status = "skipped_no_email";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+  if (!smtpConfigured()) {
+    result.status = "skipped_no_smtp";
+    result.ms = Date.now() - start;
+    logEmail(result);
+    return result;
+  }
+
+  try {
+    const c = getSmtpConfig();
+    const fromAddress = `${c.fromName} <${c.user}>`;
+    const displayName = patient?.preferred_name || patient?.name || "el paciente";
+    const isCritical = severity === "critical";
+    const severityLabel = { low: "Baja", medium: "Media", high: "Alta", critical: "CRÍTICA" }[severity] ?? severity;
+    const emoji = isCritical ? "🚨" : "⚠️";
+    const subject = isCritical
+      ? `🚨 CRISIS detectada — ${displayName}`
+      : `⚠️ Riesgo ${severityLabel.toLowerCase()} — ${displayName}`;
+    const bg = isCritical ? "#fef2f2" : "#fffbeb";
+    const border = isCritical ? "#dc2626" : "#d97706";
+
+    const body = `
+<p style="margin:0 0 14px 0;font-size:15px;">Hola ${escapeHtml(professionalName ?? "")},</p>
+<div style="margin:14px 0;padding:14px;background:${bg};border-left:4px solid ${border};border-radius:4px;">
+  <p style="margin:0 0 6px 0;font-size:14px;font-weight:600;color:${border};">
+    ${emoji} Bot de WhatsApp marcó ${severityLabel} riesgo — ${escapeHtml(category ?? "sin categoría")}
+  </p>
+  <p style="margin:0;font-size:14px;color:#44403c;">
+    Paciente: <strong>${escapeHtml(displayName)}</strong>${patient?.id ? ` (${escapeHtml(patient.id)})` : ""}
+  </p>
+</div>
+<p style="margin:10px 0 6px 0;font-size:13px;color:#57534e;font-weight:600;">Extracto del mensaje:</p>
+<div style="margin:0 0 14px 0;padding:12px;background:#f5f5f4;border-radius:4px;font-size:13px;color:#44403c;font-style:italic;white-space:pre-wrap;">${escapeHtml(snippet ?? "(sin extracto)")}</div>
+<p style="margin:14px 0;font-size:14px;color:#44403c;">
+  Ya está registrado como <strong>risk_flag</strong> en su ficha. El bot le ofreció líneas de emergencia y contención — <strong>tu seguimiento humano es lo importante ahora</strong>.
+</p>
+${isCritical ? `
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:4px;font-size:13px;color:#7f1d1d;">
+  <strong>Severidad crítica:</strong> revisá el mensaje del paciente cuanto antes. Si hay indicadores de riesgo inminente, seguí el protocolo de crisis de tu consulta.
+</div>` : ""}
+<p style="margin:14px 0 0 0;font-size:12px;color:#78716c;">
+  Este email es una alerta automática del bot de Laura. No responde al paciente ni reemplaza tu criterio profesional.
+</p>`;
+
+    const html = emailLayout({
+      title: isCritical ? "CRISIS detectada" : "Alerta de riesgo",
+      bodyHtml: body,
+    });
+
+    await sendMailWithRetry({
+      from: fromAddress,
+      to,
+      subject,
+      html,
+    });
+    result.status = "sent";
+  } catch (err) {
+    result.error = String(err?.message ?? err).slice(0, 500);
+    console.warn(`[mailer] risk-flag falló para ${to}: ${result.error}`);
+  }
+
+  result.ms = Date.now() - start;
+  logEmail(result);
+  return result;
+}
+
 function escapeHtmlMail(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
