@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { sendTaskAssignedEmail } from "../mailer.js";
+import { notifyTaskAssigned } from "../lib/psicobot.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -38,26 +39,38 @@ router.post("/", (req, res) => {
          t.professional ?? "", t.sessions_remaining ?? 1);
   const created = db.prepare("SELECT * FROM therapy_tasks WHERE id = ?").get(id);
 
-  // Notificación al paciente (best-effort, no bloquea la respuesta).
-  // Solo si la tarea tiene paciente asociado con email.
+  // Notificaciones al paciente (email + WhatsApp, ambos best-effort).
   if (patientId) {
-    const patient = db.prepare("SELECT id, name, preferred_name, email, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
+    // Traemos phone + whatsapp_opt_in para el push del bot.
+    const patient = db.prepare("SELECT id, name, preferred_name, email, phone, whatsapp_opt_in, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
       .get(patientId, req.user.workspace_id);
-    if (patient?.email) {
+    if (patient) {
       const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
       const prof = req.user.professional_id
         ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
         : { name: req.user.name ?? null, email: null };
       const portalUrl = portalTasksUrl(req);
-      setImmediate(() => {
-        sendTaskAssignedEmail({
-          patient,
-          task: created,
-          professional: prof,
-          workspaceName: ws?.name,
-          portalUrl,
-          replyTo: prof?.email || undefined,
-        }).catch((e) => console.warn(`[tasks] email falló: ${e?.message ?? e}`));
+
+      // Email — si tiene email
+      if (patient.email) {
+        setImmediate(() => {
+          sendTaskAssignedEmail({
+            patient,
+            task: created,
+            professional: prof,
+            workspaceName: ws?.name,
+            portalUrl,
+            replyTo: prof?.email || undefined,
+          }).catch((e) => console.warn(`[tasks] email falló: ${e?.message ?? e}`));
+        });
+      }
+
+      // WhatsApp — la función interna valida opt-in y phone
+      notifyTaskAssigned({
+        patient,
+        task: created,
+        professionalName: prof?.name,
+        portalUrl,
       });
     }
   }

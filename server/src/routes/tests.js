@@ -3,6 +3,7 @@ import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
 import { sendTestAssignedEmail } from "../mailer.js";
+import { notifyTestAssigned } from "../lib/psicobot.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -373,16 +374,17 @@ router.post("/applications", (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 'paciente', ?, ?, ?, 0)
     `).run(id, req.user.workspace_id, patient.id, patient.name, test.code, test.name, now(), req.user.name ?? "", totalItems);
 
-    // Notificación al paciente (best-effort, no bloquea)
+    // Notificaciones al paciente (email + WhatsApp — best-effort).
+    const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
+    const prof = req.user.professional_id
+      ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+      : { name: req.user.name ?? null, email: null };
+    const base = req.headers["x-forwarded-host"]
+      ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`
+      : `${req.protocol}://${req.get("host")}`;
+    const portalUrl = `${base}/p/tests`;
+
     if (patient.email) {
-      const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(req.user.workspace_id);
-      const prof = req.user.professional_id
-        ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
-        : { name: req.user.name ?? null, email: null };
-      const base = req.headers["x-forwarded-host"]
-        ? `${req.headers["x-forwarded-proto"] ?? "https"}://${req.headers["x-forwarded-host"]}`
-        : `${req.protocol}://${req.get("host")}`;
-      const portalUrl = `${base}/p/tests`;
       setImmediate(() => {
         sendTestAssignedEmail({
           patient,
@@ -394,6 +396,15 @@ router.post("/applications", (req, res) => {
         }).catch((e) => console.warn(`[tests] email falló: ${e?.message ?? e}`));
       });
     }
+
+    // WhatsApp — patient tiene phone y whatsapp_opt_in via el SELECT
+    // completo de arriba (línea 366). notifyTestAssigned valida ambos.
+    notifyTestAssigned({
+      patient,
+      test: { id, test_code: test.code, test_name: test.name, total_items: totalItems },
+      professionalName: prof?.name,
+      portalUrl,
+    });
 
     return res.status(201).json(parseApplication(db.prepare("SELECT * FROM test_applications WHERE id = ?").get(id)));
   }

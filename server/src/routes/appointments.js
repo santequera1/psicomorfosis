@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { sendAppointmentEmail } from "../mailer.js";
+import { notifyAppointmentCreated, notifyAppointmentCancelled } from "../lib/psicobot.js";
 
 /**
  * Dispara una notificación por email de manera asíncrona y NO bloqueante.
@@ -40,8 +41,10 @@ function buildAppointmentLocation({ appointment, sede, settings }) {
 function notifyAsync({ kind, appointment, previous }) {
   setImmediate(() => {
     try {
+      // Traemos phone y whatsapp_opt_in además de email para poder
+      // pushear al bot de WhatsApp también (best-effort, respeta opt-in).
       const patient = appointment.patient_id
-        ? db.prepare("SELECT id, name, preferred_name, email FROM patients WHERE id = ? AND workspace_id = ?")
+        ? db.prepare("SELECT id, name, preferred_name, email, phone, whatsapp_opt_in, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
             .get(appointment.patient_id, appointment.workspace_id)
         : null;
       if (!patient) return; // sin paciente no hay a quién notificar
@@ -51,6 +54,24 @@ function notifyAsync({ kind, appointment, previous }) {
         : null;
       const workspace = db.prepare("SELECT name FROM workspaces WHERE id = ?")
         .get(appointment.workspace_id);
+
+      // Push al bot de Laura (WhatsApp). La función internamente valida
+      // opt-in y phone; si no aplica se saltea silenciosamente.
+      if (kind === "appointment_created") {
+        notifyAppointmentCreated({
+          patient,
+          appointment,
+          professionalName: professional?.name,
+        });
+      } else if (kind === "appointment_cancelled") {
+        notifyAppointmentCancelled({
+          patient,
+          appointment,
+          professionalName: professional?.name,
+        });
+      }
+      // appointment_rescheduled se cubre con el email por ahora. Cuando
+      // haya scheduler de reminders, incluir un evento propio.
 
       // Resolver "lugar" para que el email lo muestre completo (nombre
       // del consultorio + dirección). Sin esto, el paciente solo recibía

@@ -10,6 +10,7 @@ import { signToken, requireAuth, requirePatient, verifyToken, invalidateUserToke
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
 import { sendPatientInviteEmail } from "../mailer.js";
+import { notifyPortalInvite } from "../lib/psicobot.js";
 // Reutilizamos el mismo limiter que el login del staff — misma política
 // (10 intentos/15min por IP) es apropiada para ambos.
 import { loginLimiter } from "./auth.js";
@@ -107,11 +108,12 @@ router.post("/patients/:id/invite", requireAuth, (req, res) => {
   // Enviar el email DESPUÉS de responder al frontend — la red al servidor
   // SMTP puede tardar 500ms-2s y el psicólogo no debería esperar por eso.
   // El paciente ya quedó invitado en la DB; el email es notificación.
+  const profRow = req.user.professional_id
+    ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
+    : null;
+  const professionalForEmail = profRow ?? { name: req.user.name ?? null, email: null };
+
   if (smtpReady) {
-    const profRow = req.user.professional_id
-      ? db.prepare("SELECT name, email FROM professionals WHERE id = ?").get(req.user.professional_id)
-      : null;
-    const professionalForEmail = profRow ?? { name: req.user.name ?? null, email: null };
     setImmediate(() => {
       sendPatientInviteEmail({
         patient,
@@ -123,6 +125,17 @@ router.post("/patients/:id/invite", requireAuth, (req, res) => {
       }).catch((e) => console.warn(`[invite] sendPatientInviteEmail rejected: ${e?.message ?? e}`));
     });
   }
+
+  // WhatsApp — patient viene del SELECT * de la línea 41, incluye
+  // phone y whatsapp_opt_in. notifyPortalInvite tiene lógica propia:
+  // no requiere opt-in porque el psicólogo autorizó al agregar el
+  // paciente, pero SÍ respeta opt-out explícito previo.
+  notifyPortalInvite({
+    patient,
+    url,
+    professionalName: professionalForEmail.name,
+    daysValid: INVITE_DAYS,
+  });
 
   res.status(201).json({
     token,
