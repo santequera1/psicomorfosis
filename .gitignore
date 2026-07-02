@@ -71,3 +71,6 @@ test-millon/
 # Videos pesados de la landing — se suben manual al VPS, no van a git.
 public/landing/*.mp4
 public/landing/*.webm
+
+# Smoke tests config (credenciales)
+smoke/smoke.env
