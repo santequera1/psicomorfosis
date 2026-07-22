@@ -103,6 +103,8 @@ app.use("/api/uploads", express.static(UPLOADS_DIR, {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/platform", platformRoutes);
+// Diagnóstico de sesión (temporal, soporte) — página pública autocontenida.
+app.use("/api/debug", (await import("./routes/debug-session.js")).default);
 // Landing pública (/api/landing/demo-request) — sin auth, con rate limit.
 app.use("/api", landingRoutes);
 // Documentos legales: rutas públicas (/public/*), del usuario (/me/*) y

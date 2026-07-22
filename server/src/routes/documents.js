@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import mammoth from "mammoth";
 import { db } from "../db.js";
-import { requireAuth, verifyToken } from "../auth.js";
+import { requireAuth, verifyToken, logAuthFail, diagnoseToken } from "../auth.js";
 import { buildPdfStream } from "../lib/pdfRenderer.js";
 import { sendDocumentShareEmail } from "../mailer.js";
 import { notifyDocumentShared } from "../lib/psicobot.js";
@@ -20,9 +20,15 @@ function requireAuthOrToken(req, res, next) {
   const header = req.headers.authorization ?? "";
   const headerToken = header.startsWith("Bearer ") ? header.slice(7) : null;
   const token = headerToken ?? req.query.t ?? null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) {
+    logAuthFail(req, "missing(doc-file)");
+    return res.status(401).json({ error: "Missing token" });
+  }
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload) {
+    logAuthFail(req, "invalid(doc-file)", diagnoseToken(token));
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
   req.user = payload;
   next();
 }

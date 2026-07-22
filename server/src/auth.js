@@ -56,6 +56,44 @@ function refreshFromPayload(payload) {
   return signToken(rest);
 }
 
+/**
+ * Diagnóstico de por qué un token falló. Solo para logging — no usar
+ * para decisiones de auth. Devuelve un string corto con la causa.
+ */
+export function diagnoseToken(token) {
+  try {
+    const payload = jwt.verify(token, getSecret());
+    // Firma y expiración OK → el rechazo vino de tokens_invalidated_at
+    if (payload?.id && typeof payload?.iat === "number") {
+      const u = db.prepare("SELECT tokens_invalidated_at FROM users WHERE id = ?").get(payload.id);
+      if (u?.tokens_invalidated_at) {
+        const invalidatedAt = new Date(u.tokens_invalidated_at).getTime();
+        if (payload.iat * 1000 < invalidatedAt) {
+          return `invalidated(user=${payload.id} iat=${new Date(payload.iat * 1000).toISOString()} inv_at=${u.tokens_invalidated_at})`;
+        }
+      }
+    }
+    return "verify_ok_unknown_reject";
+  } catch (e) {
+    // TokenExpiredError | JsonWebTokenError (bad signature / malformed) | otros
+    const dec = jwt.decode(token);
+    const who = dec?.id ? ` user=${dec.id}` : "";
+    const iat = dec?.iat ? ` iat=${new Date(dec.iat * 1000).toISOString()}` : "";
+    return `${e.name}:${e.message}${who}${iat}`;
+  }
+}
+
+/**
+ * Log de fallos de auth — temporal para diagnosticar sesiones que "se
+ * cierran solas". Un 401 en cualquier request borra la sesión del
+ * cliente, así que cada línea de estas es un candidato a culpable.
+ */
+export function logAuthFail(req, kind, detail = "") {
+  const ua = String(req.headers["user-agent"] ?? "").slice(0, 70);
+  const ref = String(req.headers.referer ?? "");
+  console.warn(`[auth-diag] 401 ${kind} ${req.method} ${req.originalUrl}${detail ? ` | ${detail}` : ""} | ref=${ref} | ua=${ua}`);
+}
+
 export function verifyToken(token) {
   try {
     const payload = jwt.verify(token, getSecret());
@@ -168,7 +206,10 @@ export function requireAuth(req, res, next) {
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (token) {
     const payload = verifyToken(token);
-    if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+    if (!payload) {
+      logAuthFail(req, "invalid", diagnoseToken(token));
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
     req.user = payload;
     maybeRefresh(res, payload);
     return next();
@@ -185,6 +226,7 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: `Bot auth: ${botAuth}` });
   }
 
+  logAuthFail(req, "missing");
   return res.status(401).json({ error: "Missing token" });
 }
 
@@ -203,9 +245,15 @@ export function requireRole(...roles) {
 export function requirePatient(req, res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) {
+    logAuthFail(req, "missing");
+    return res.status(401).json({ error: "Missing token" });
+  }
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload) {
+    logAuthFail(req, "invalid", diagnoseToken(token));
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
   if (payload.role !== "paciente" || !payload.patient_id) {
     // Log estructurado: nos dice si el problema es role incorrecto (usuario
     // logueado como staff intentando acceder al portal) o patient_id ausente
@@ -233,9 +281,15 @@ export function requirePatient(req, res, next) {
 export function requirePlatformAdmin(req, res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) {
+    logAuthFail(req, "missing");
+    return res.status(401).json({ error: "Missing token" });
+  }
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload) {
+    logAuthFail(req, "invalid", diagnoseToken(token));
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
   if (!payload.is_platform_admin) {
     return res.status(403).json({ error: "Acceso solo para administradores de plataforma" });
   }
@@ -252,9 +306,15 @@ export function requirePlatformAdmin(req, res, next) {
 export function requireLegalAdmin(req, res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) {
+    logAuthFail(req, "missing");
+    return res.status(401).json({ error: "Missing token" });
+  }
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload) {
+    logAuthFail(req, "invalid", diagnoseToken(token));
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
   if (!payload.is_legal_admin) {
     return res.status(403).json({ error: "Acceso solo para asesores legales" });
   }
@@ -267,10 +327,20 @@ export function requireLegalAdmin(req, res, next) {
 export function requireStaff(req, res, next) {
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) {
+    logAuthFail(req, "missing");
+    return res.status(401).json({ error: "Missing token" });
+  }
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: "Invalid or expired token" });
+  if (!payload) {
+    logAuthFail(req, "invalid", diagnoseToken(token));
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
   if (payload.role === "paciente") {
+    // Un token de PACIENTE pegándole a rutas de staff = mezcla de sesiones
+    // en el mismo navegador (mismo localStorage). Pista clave para el bug
+    // de "se me cierra la sesión sola".
+    console.warn(`[auth-diag] 403 staff-route-with-patient-token user=${payload.id} ${req.method} ${req.originalUrl}`);
     return res.status(403).json({ error: "Acceso solo para staff" });
   }
   req.user = payload;
