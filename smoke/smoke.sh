@@ -141,6 +141,68 @@ test_case() {
   return 1
 }
 
+# test_body NAME EXPECTED_STATUS EXPECTED_BODY_SUBSTRING METHOD URL [HEADERS...] [-- BODY]
+# Como test_case pero además exige que el body contenga un substring.
+# Necesario cuando el status no basta para distinguir el origen de la
+# respuesta (p.ej. dos middlewares distintos que devuelven 401).
+test_body() {
+  local name="$1"; shift
+  local expected="$1"; shift
+  local expected_substr="$1"; shift
+  local method="$1"; shift
+  local path="$1"; shift
+
+  local -a headers=()
+  local body=""
+  local in_body=false
+  for arg in "$@"; do
+    if [[ "$arg" == "--" ]]; then in_body=true; continue; fi
+    if $in_body; then body="$arg"; else headers+=("-H" "$arg"); fi
+  done
+
+  TOTAL+=1
+  local idx; idx=$(printf "%3d" "$TOTAL")
+  local url="${BASE_URL}${path}"
+  local tmp_body; tmp_body=$(mktemp)
+  local curl_args=(-sS -o "$tmp_body" -w "%{http_code}" -m "$TIMEOUT_SEC" -X "$method")
+  curl_args+=("${headers[@]}")
+  if [[ -n "$body" ]]; then curl_args+=(-d "$body"); fi
+  curl_args+=("$url")
+  local response_code; response_code=$(curl "${curl_args[@]}" 2>/dev/null || echo "000")
+  local response_body; response_body=$(tr -d '\0' < "$tmp_body")
+  rm -f "$tmp_body"
+
+  if [[ "$response_code" == "$expected" && "$response_body" == *"$expected_substr"* ]]; then
+    PASSED+=1
+    if $JSON_OUTPUT; then
+      printf '{"n":%d,"status":"pass","name":%s,"method":"%s","path":"%s","http":%s}\n' \
+        "$TOTAL" "$(jq -Rn --arg s "$name" '$s' 2>/dev/null || echo "\"$name\"")" \
+        "$method" "$path" "$response_code"
+    else
+      printf "[%s] %s%s ✓%s %s (%s + body ok)\n" \
+        "$idx" "$C_GREEN" "PASS" "$C_RESET" "$name" "$response_code"
+    fi
+    return 0
+  fi
+
+  FAILED+=1
+  FAILURES+=("$name")
+  if $JSON_OUTPUT; then
+    printf '{"n":%d,"status":"fail","name":%s,"method":"%s","path":"%s","expected":%s,"actual":%s,"body":%s}\n' \
+      "$TOTAL" "$(jq -Rn --arg s "$name" '$s' 2>/dev/null || echo "\"$name\"")" \
+      "$method" "$path" "$expected" "$response_code" \
+      "$(jq -Rn --arg b "$(echo "$response_body" | head -c 300)" '$b' 2>/dev/null || echo "\"?\"")"
+  else
+    printf "[%s] %s✗ FAIL%s %s\n" "$idx" "$C_RED" "$C_RESET" "$name"
+    printf "%s      %s %s%s\n" "$C_DIM" "$method" "$path" "$C_RESET"
+    printf "      expected: %s + body con «%s», got: %s%s%s\n" \
+      "$expected" "$expected_substr" "$C_RED" "$response_code" "$C_RESET"
+    [[ -n "$response_body" ]] && printf "%s      body: %s%s\n" \
+      "$C_DIM" "$(echo "$response_body" | head -c 300)" "$C_RESET"
+  fi
+  return 1
+}
+
 skip_case() {
   local name="$1"; shift
   local reason="$1"; shift
@@ -217,6 +279,24 @@ test_case "Login paciente PÚBLICO (creds vacías → 400)" 400 \
   POST "/api/auth/patient/login" \
   "Content-Type: application/json" \
   -- '{}'
+
+# CRÍTICO: guardia contra INTERCEPTACIÓN de routers montados en /api a
+# secas (misma clase de bug dos veces: laura.js jul-2026 con requireAuth
+# global, bot.js jul-2026 con requireBotApiKey global). notes y diagnoses
+# van montados al FINAL de la cadena — si algún router intermedio mete un
+# router.use(middleware) sin scope, estos requests devuelven el error del
+# interceptor en vez de "Missing token" del requireAuth legítimo.
+# Se valida el BODY, no solo el status (ambos casos son 401).
+test_body "notes sin token llega a requireAuth (no interceptado)" 401 "Missing token" \
+  GET "/api/patients/P-0000-smoke/notes"
+test_body "diagnoses sin token llega a requireAuth (no interceptado)" 401 "Missing token" \
+  GET "/api/patients/P-0000-smoke/diagnoses"
+# error-reports es PÚBLICO por diseño (reporta errores de usuarios sin
+# sesión) y también va al final de la cadena — 401 = interceptado.
+test_case "error-reports PÚBLICO (no interceptado)" 201 \
+  POST "/api/error-reports" \
+  "Content-Type: application/json" \
+  -- '{"message":"[smoke] canary de interceptación de routers","source":"smoke.sh"}'
 
 # ─── 2. Bot API ──────────────────────────────────────────────────────
 section "2. Bot Laura (WhatsApp)"
