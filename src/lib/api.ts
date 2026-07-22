@@ -740,6 +740,41 @@ export function getToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
+/**
+ * ¿El JWT está vencido (o es ilegible)? Chequeo CLIENT-side del claim
+ * `exp` — no valida la firma (eso es del server), solo evita tratar un
+ * token muerto como sesión activa. Margen de 30s para desfases de reloj.
+ *
+ * Por qué existe: un token de hace semanas en localStorage hacía que el
+ * boot script y el login te "dejaran entrar" al dashboard, y la sesión
+ * colapsaba en la primera request real (401 → clearSession → expulsión
+ * en la siguiente navegación). Con este check, token vencido = no hay
+ * sesión, directo al login.
+ */
+export function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (typeof payload.exp !== "number") return true;
+    return payload.exp * 1000 < Date.now() + 30_000;
+  } catch {
+    return true; // ilegible = tan inútil como vencido
+  }
+}
+
+/**
+ * Token vigente o null. Si el almacenado está vencido, limpia la sesión
+ * de una vez — así ningún caller vuelve a tratarlo como sesión válida.
+ */
+export function getValidToken(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  if (isTokenExpired(token)) {
+    clearSession();
+    return null;
+  }
+  return token;
+}
+
 export function getStoredUser(): ApiUser | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(USER_KEY);
@@ -835,18 +870,37 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const msg = typeof body === "string" ? body : body.error ?? "Error en la solicitud";
-    if (res.status === 401) clearSession();
+    // 401 → limpiar sesión, PERO solo si el token que enviamos sigue siendo
+    // el vigente. Un request disparado ANTES del login puede responder 401
+    // DESPUÉS de que el login guardó un token fresco — sin este guard, esa
+    // respuesta tardía borraba el token nuevo y la sesión "se cerraba sola".
+    // Además: redirigir a login en vez de dejar al usuario en una página
+    // "zombie" donde cada click da "Missing token". El path del login
+    // depende de si estamos en el portal del paciente o en el staff.
+    if (res.status === 401 && token && token === getToken()) {
+      clearSession();
+      if (typeof window !== "undefined") {
+        const p = window.location.pathname;
+        const loginPath = p.startsWith("/p") ? "/p/login" : "/login";
+        if (!p.startsWith("/login") && !p.startsWith("/p/login")) {
+          window.location.href = loginPath;
+        }
+      }
+    }
     // 403 con hint=wrong_role en endpoints del portal: el token actual no es
     // de paciente (típicamente, staff logueado abrió el portal con su token).
     // Limpiamos sesión para que el guard del PortalShell mande a /p/login y
     // no quedemos en loop pidiendo /api/portal/* y recibiendo 403 forever.
+    // SOLO si estamos parados en el portal (/p/...) — una pestaña de staff
+    // no debe perder su sesión por una llamada errante a /api/portal/*.
     if (
       res.status === 403 &&
       typeof body === "object" && body && (body as any).hint === "wrong_role" &&
-      path.startsWith("/api/portal/")
+      path.startsWith("/api/portal/") &&
+      typeof window !== "undefined" && window.location.pathname.startsWith("/p")
     ) {
       clearSession();
-      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/p/login")) {
+      if (!window.location.pathname.startsWith("/p/login")) {
         window.location.href = "/p/login";
       }
     }
@@ -1388,7 +1442,7 @@ export const api = {
       body: form,
       signal: opts?.signal,
     });
-    if (res.status === 401) clearSession();
+    if (res.status === 401 && token && token === getToken()) clearSession();
     maybeStoreRefreshedToken(res);
     let body: any = null;
     try { body = await res.json(); } catch { /* noop */ }
@@ -1898,7 +1952,7 @@ export const api = {
       headers,
       body: form,
     });
-    if (res.status === 401) clearSession();
+    if (res.status === 401 && token && token === getToken()) clearSession();
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body?.error ?? "No se pudo subir la imagen");
     return body;

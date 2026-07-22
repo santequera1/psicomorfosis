@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { api, setSession, getToken, ApiError } from "@/lib/api";
+import { api, setSession, getValidToken, ApiError } from "@/lib/api";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check, Heart, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -23,10 +23,13 @@ function LoginPage() {
   // CTA explícito para llevarlo al portal en vez de un mensaje seco.
   const [redirectToPortal, setRedirectToPortal] = useState(false);
 
-  // Si ya hay sesión activa, saltar directo al dashboard. Evita que un usuario
-  // logueado vea el formulario de login si pone /login manualmente en la URL.
+  // Si ya hay sesión activa Y VIGENTE, saltar directo al dashboard. Evita que
+  // un usuario logueado vea el formulario si pone /login manualmente en la URL.
+  // getValidToken() descarta (y limpia) tokens vencidos — antes, un token
+  // muerto en localStorage te "colaba" al dashboard y la sesión colapsaba en
+  // la primera request real.
   useEffect(() => {
-    if (getToken()) window.location.replace("/");
+    if (getValidToken()) window.location.replace("/");
   }, []);
 
   async function onSubmit(e: React.FormEvent) {

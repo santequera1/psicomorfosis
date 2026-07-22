@@ -4,7 +4,7 @@ import { Topbar } from "./Topbar";
 import { SidebarProvider } from "./SidebarContext";
 import { Fab } from "./Fab";
 import { LauraFab } from "@/components/laura/LauraFab";
-import { getToken } from "@/lib/api";
+import { getValidToken } from "@/lib/api";
 import { PendingLegalGate } from "@/components/legal/PendingLegalGate";
 
 /**
@@ -42,7 +42,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [firstPaint] = useState(() => !FIRST_PAINT_DONE);
 
   useEffect(() => {
-    if (!getToken()) {
+    // getValidToken(): token presente Y no vencido. Un JWT muerto en
+    // localStorage ya no cuenta como sesión — antes simulaba una sesión
+    // válida que colapsaba en la primera request protegida.
+    if (!getValidToken()) {
       window.location.replace("/login");
       return;
     }

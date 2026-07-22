@@ -129,6 +129,23 @@ const BOOTSTRAP_SCRIPT = `
   } catch(e) {}
   try {
     var token = localStorage.getItem('psm.token');
+    // Token vencido = no hay sesión. Sin este check, un JWT muerto en
+    // localStorage "colaba" al usuario al dashboard y la sesión colapsaba
+    // en la primera request real (401 → limpieza → expulsión a mitad de uso).
+    if (token) {
+      try {
+        var claims = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        if (typeof claims.exp !== 'number' || claims.exp * 1000 < Date.now() + 30000) {
+          localStorage.removeItem('psm.token');
+          localStorage.removeItem('psm.user');
+          token = null;
+        }
+      } catch(e2) {
+        localStorage.removeItem('psm.token');
+        localStorage.removeItem('psm.user');
+        token = null;
+      }
+    }
     var user = JSON.parse(localStorage.getItem('psm.user') || 'null');
     var path = location.pathname;
     // Las rutas /p/* son del portal del paciente — viven con sus propias reglas.
