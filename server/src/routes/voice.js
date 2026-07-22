@@ -23,7 +23,7 @@
 
 import { Router } from "express";
 import multer from "multer";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { requireAuth } from "../auth.js";
 
 const router = Router();
@@ -43,8 +43,10 @@ const transcribeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // keyGenerator: por user (no solo IP) — un consultorio multi-staff
-  // detrás de una sola IP no debe pisarse entre sí.
-  keyGenerator: (req) => `voice:${req.user?.id ?? req.ip}`,
+  // detrás de una sola IP no debe pisarse entre sí. Cuando no hay user
+  // (llamada anónima antes de auth), usamos ipKeyGenerator para que
+  // express-rate-limit v7 no emita warning por IPv6.
+  keyGenerator: (req) => req.user?.id ? `voice:${req.user.id}` : `voice:${ipKeyGenerator(req)}`,
   message: { success: false, error: "Demasiadas transcripciones. Espera unos minutos." },
 });
 
