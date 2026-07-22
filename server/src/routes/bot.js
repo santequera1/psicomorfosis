@@ -47,7 +47,12 @@ function requireBotApiKey(req, res, next) {
   next();
 }
 
-router.use(requireBotApiKey);
+// SCOPE al prefijo /bot — este router está montado en /api a secas, y un
+// router.use() global interceptaba TODO /api/* que cayera hasta aquí
+// (p.ej. /patients/:id/notes y /diagnoses, montados después) devolviendo
+// 401 "X-Bot-Api-Key inválida" a usuarios con sesión válida. Misma clase
+// de bug que el de laura.js con requireAuth global (jul 2026).
+router.use("/bot", requireBotApiKey);
 
 /**
  * POST /api/bot/identify
