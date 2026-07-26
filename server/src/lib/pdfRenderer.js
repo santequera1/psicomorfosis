@@ -27,15 +27,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // pdfmake necesita fuentes TTF en disk. Las TTF de Roboto están commiteadas
 // en server/fonts/ (Apache 2.0, ~1.2MB total).
 const FONTS_DIR = path.join(__dirname, "..", "..", "fonts");
+// Bold REAL (Roboto-Bold, peso 700). Antes "bold" mapeaba a Roboto-Medium
+// (peso 500) y los títulos del PDF se veían planos, casi iguales al body.
+// Fallback a Medium si el TTF Bold no está en disk (deploys viejos).
+const boldTtf = fs.existsSync(path.join(FONTS_DIR, "Roboto-Bold.ttf"))
+  ? "Roboto-Bold.ttf" : "Roboto-Medium.ttf";
+const boldItalicTtf = fs.existsSync(path.join(FONTS_DIR, "Roboto-BoldItalic.ttf"))
+  ? "Roboto-BoldItalic.ttf" : "Roboto-MediumItalic.ttf";
 const fonts = {
   Roboto: {
     normal:      path.join(FONTS_DIR, "Roboto-Regular.ttf"),
-    bold:        path.join(FONTS_DIR, "Roboto-Medium.ttf"),
+    bold:        path.join(FONTS_DIR, boldTtf),
     italics:     path.join(FONTS_DIR, "Roboto-Italic.ttf"),
-    bolditalics: path.join(FONTS_DIR, "Roboto-MediumItalic.ttf"),
+    bolditalics: path.join(FONTS_DIR, boldItalicTtf),
   },
 };
 const printer = new PdfPrinter(fonts);
+
+// Color de marca (teal clínico de Psicomorfosis) para títulos, variables
+// y links del PDF. Antes era un púrpura (#4a3a8c) fuera de la paleta.
+const BRAND = "#2e5f66";
+const INK = "#1f2937";
+const MUTED = "#6b7280";
 
 // Directorio donde están las imágenes inline (assets) subidas desde el editor.
 const ASSETS_DIR = path.join(__dirname, "..", "..", "uploads", "assets");
@@ -83,7 +96,7 @@ function textWithMarks(text, marks) {
     else if (m.type === "code") { node.font = undefined; node.background = "#f1efea"; }
     else if (m.type === "link") {
       const href = m.attrs?.href;
-      if (href) { node.link = href; node.color = "#4a3a8c"; node.decoration = "underline"; }
+      if (href) { node.link = href; node.color = BRAND; node.decoration = "underline"; }
     }
   }
   return node;
@@ -99,7 +112,7 @@ function inlineFromContent(contentArr, ctx) {
       out.push(textWithMarks(ch.text ?? "", ch.marks));
     } else if (ch.type === "variable") {
       const key = ch.attrs?.key ?? "";
-      out.push({ text: resolveVar(key, ctx), color: "#4a3a8c", bold: true });
+      out.push({ text: resolveVar(key, ctx), color: BRAND, bold: true });
     } else if (ch.type === "hardBreak") {
       out.push({ text: "\n" });
     } else if (ch.type === "image") {
@@ -122,16 +135,22 @@ function blockToPdf(node, ctx, workspaceId) {
     }
     case "heading": {
       const level = node.attrs?.level ?? 1;
-      const sizes = { 1: 20, 2: 16, 3: 13 };
+      // Jerarquía tipográfica clara: H1 grande en tinta, H2 en color de
+      // marca (separa secciones de un vistazo), H3 compacto en mayúsculas
+      // con tracking — el patrón "overline" clásico de informes.
       const align = node.attrs?.textAlign;
-      return {
-        text: inlineFromContent(node.content, ctx),
-        fontSize: sizes[level] ?? 13,
-        bold: true,
-        margin: [0, 12, 0, 6],
-        color: "#1f1f1f",
-        alignment: align || undefined,
-      };
+      const inline = inlineFromContent(node.content, ctx);
+      if (level === 3) {
+        const upper = inline.map((n) => ({ ...n, text: String(n.text ?? "").toUpperCase() }));
+        return {
+          text: upper, fontSize: 10, bold: true, characterSpacing: 0.8,
+          color: MUTED, margin: [0, 14, 0, 5], alignment: align || undefined,
+        };
+      }
+      const style = level === 1
+        ? { fontSize: 19, color: INK, margin: [0, 18, 0, 8] }
+        : { fontSize: 14.5, color: BRAND, margin: [0, 16, 0, 6] };
+      return { text: inline, bold: true, alignment: align || undefined, ...style };
     }
     case "bulletList": {
       return {
@@ -209,7 +228,7 @@ function blockToPdf(node, ctx, workspaceId) {
     case "callout": {
       const variant = node.attrs?.variant ?? "info";
       const colors = {
-        info:    { bg: "#e9e6f5", fg: "#4a3a8c" },
+        info:    { bg: "#e9e6f5", fg: BRAND },
         warning: { bg: "#fff4d6", fg: "#7a5b00" },
         danger:  { bg: "#fde8e8", fg: "#9b1c1c" },
         success: { bg: "#e2f4ec", fg: "#1f6b46" },
@@ -235,7 +254,7 @@ function blockToPdf(node, ctx, workspaceId) {
       const name = node.attrs?.name ?? "archivo";
       const url = node.attrs?.url ?? "";
       return {
-        text: [{ text: "📎 ", bold: true }, { text: name, link: url, color: "#4a3a8c", decoration: "underline" }],
+        text: [{ text: "📎 ", bold: true }, { text: name, link: url, color: BRAND, decoration: "underline" }],
         margin: [0, 4, 0, 8],
       };
     }
@@ -300,7 +319,7 @@ export function buildPdfStream(doc, ctx, header, workspaceId) {
       creator: "Psicomorfosis",
       producer: "Psicomorfosis",
     },
-    defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.4, color: "#1f1f1f" },
+    defaultStyle: { font: "Roboto", fontSize: 10.5, lineHeight: 1.45, color: INK },
     header: () => ({
       columns: [
         { text: header.clinicName ?? "Psicomorfosis", style: "headerClinic", margin: [42, 24, 0, 0] },
@@ -315,18 +334,28 @@ export function buildPdfStream(doc, ctx, header, workspaceId) {
       margin: [0, 16, 0, 0],
     }),
     content: [
-      // Bloque de cabecera del doc
-      { text: doc.name, fontSize: 18, bold: true, color: "#4a3a8c", margin: [0, 0, 0, 4] },
-      header.patientName
-        ? { text: `Paciente: ${header.patientName}${header.patientId ? ` (${header.patientId})` : ""}`, fontSize: 9, color: "#666", margin: [0, 0, 0, 4] }
-        : null,
-      header.professional
-        ? { text: `Profesional: ${header.professional}`, fontSize: 9, color: "#666", margin: [0, 0, 0, 14] }
-        : null,
+      // Cabecera del doc: título grande + metadatos en línea + filete de
+      // marca que separa el membrete del cuerpo (look de informe formal).
+      { text: doc.name, fontSize: 21, bold: true, color: BRAND, margin: [0, 0, 0, 6] },
+      (header.patientName || header.professional) ? {
+        columns: [
+          header.patientName
+            ? { text: [{ text: "Paciente  ", bold: true, color: MUTED }, { text: `${header.patientName}${header.patientId ? ` (${header.patientId})` : ""}`, color: INK }], fontSize: 9 }
+            : { text: "" },
+          header.professional
+            ? { text: [{ text: "Profesional  ", bold: true, color: MUTED }, { text: header.professional, color: INK }], fontSize: 9, alignment: "right" }
+            : { text: "" },
+        ],
+        margin: [0, 0, 0, 8],
+      } : null,
+      {
+        canvas: [{ type: "line", x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 1.2, lineColor: BRAND }],
+        margin: [0, 0, 0, 16],
+      },
       ...blocks,
     ].filter(Boolean),
     styles: {
-      headerClinic: { font: "Roboto", fontSize: 10, bold: true, color: "#4a3a8c" },
+      headerClinic: { font: "Roboto", fontSize: 10, bold: true, color: BRAND },
     },
   };
 
