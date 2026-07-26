@@ -25,11 +25,18 @@ import { ConfirmDialog } from "@/components/app/ConfirmDialog";
 
 export const Route = createFileRoute("/documentos_/$id")({
   head: ({ params }) => ({ meta: [{ title: `Documento ${params.id} — Psicomorfosis` }] }),
+  // ?from=documentos: la lista global lo pasa para que, si este doc
+  // resulta ser un PDF y redirigimos a la biblioteca del paciente, el
+  // "volver" de allá regrese a Documentos y no al perfil del paciente.
+  validateSearch: (s): { from?: "documentos" } => {
+    return (s as { from?: unknown }).from === "documentos" ? { from: "documentos" } : {};
+  },
   component: DocumentDetailPage,
 });
 
 function DocumentDetailPage() {
   const { id } = Route.useParams();
+  const { from } = Route.useSearch() as { from?: "documentos" };
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -53,11 +60,13 @@ function DocumentDetailPage() {
       navigate({
         to: "/pacientes/$id/biblioteca",
         params: { id: doc.patient_id },
-        search: { doc: doc.id },
+        // Propagamos el origen para que el "volver" de la biblioteca
+        // regrese a Documentos si se vino de allá.
+        search: from === "documentos" ? { doc: doc.id, from } : { doc: doc.id },
         replace: true,
       });
     }
-  }, [doc, navigate]);
+  }, [doc, navigate, from]);
 
   // Contexto de variables: paciente vinculado al doc + profesional + clínica + fecha.
   // Se refetchea cuando cambia el patient_id (vincular/desvincular paciente).

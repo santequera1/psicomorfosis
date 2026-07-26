@@ -12,7 +12,7 @@ import {
   FileCheck2, FileClock, FileWarning, FileArchive, ArrowRight, ShieldCheck,
   MoreHorizontal, X, Eye, Loader2, Trash2, Archive, FilePen, Sparkles,
   ScrollText, ClipboardList, ChevronRight, ChevronLeft, Pencil, Copy,
-  EyeOff, Share2,
+  EyeOff, Share2, FileSpreadsheet, Image as ImageIcon,
 } from "lucide-react";
 import { cn, displayPatientName } from "@/lib/utils";
 import { ViewToggle, usePersistedViewMode, type ViewMode } from "@/components/app/ViewToggle";
@@ -59,6 +59,59 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string; Ic
   pendiente_firma: { bg: "bg-warning-soft", text: "text-risk-moderate",  label: "Pendiente firma", Icon: FileClock },
   firmado:         { bg: "bg-success-soft", text: "text-success",        label: "Firmado",         Icon: FileCheck2 },
 };
+
+/**
+ * Ícono "PDF" al estilo del glyph clásico de Acrobat: hoja con esquina
+ * doblada y las letras PDF. SVG propio (no el logo de Adobe — trademark),
+ * pero lee igual de rápido: rojo + hoja + "PDF".
+ */
+function PdfGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="currentColor" opacity="0.18" />
+      <path d="M15 2v5h5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <text x="12" y="17.5" textAnchor="middle" fontSize="7" fontWeight="800" fill="currentColor" fontFamily="system-ui,sans-serif">PDF</text>
+    </svg>
+  );
+}
+
+/**
+ * Formato REAL del documento, derivado de mime + extensión del archivo.
+ * Responde la pregunta que la UI no respondía: "¿esto es un PDF, un Word,
+ * un Excel? ¿lo puedo editar o solo verlo?". Los docs `kind=editor` son
+ * nativos y editables; los `kind=file` son subidos y solo se ven/descargan.
+ */
+function formatBadge(doc: PsmDocument): {
+  label: string; bg: string; text: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  editable: boolean; title: string;
+} {
+  if (doc.kind !== "file") {
+    return { label: "Editable", bg: "bg-brand-50", text: "text-brand-800", Icon: Pencil, editable: true, title: "Documento nativo — editable en la plataforma" };
+  }
+  const name = (doc.original_name ?? doc.filename ?? doc.name ?? "").toLowerCase();
+  const mime = doc.mime ?? "";
+  const ext = name.includes(".") ? name.split(".").pop()! : "";
+  const viewTitle = (fmt: string) => `Archivo ${fmt} subido — solo visualización y descarga`;
+
+  if (mime === "application/pdf" || ext === "pdf") {
+    return { label: "PDF", bg: "bg-rose-500/10", text: "text-rose-700 dark:text-rose-400", Icon: PdfGlyph, editable: false, title: viewTitle("PDF") };
+  }
+  if (mime.includes("wordprocessingml") || mime === "application/msword" || ext === "docx" || ext === "doc") {
+    return { label: ext === "doc" ? "DOC" : "DOCX", bg: "bg-blue-500/10", text: "text-blue-700 dark:text-blue-400", Icon: FileText, editable: false, title: viewTitle("Word") };
+  }
+  if (mime.includes("spreadsheetml") || mime === "application/vnd.ms-excel" || ext === "xlsx" || ext === "xls" || ext === "csv") {
+    return { label: ext ? ext.toUpperCase() : "EXCEL", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", Icon: FileSpreadsheet, editable: false, title: viewTitle("Excel") };
+  }
+  if (mime.startsWith("image/")) {
+    return { label: ext ? ext.toUpperCase() : "IMAGEN", bg: "bg-violet-500/10", text: "text-violet-700 dark:text-violet-400", Icon: ImageIcon, editable: false, title: viewTitle("de imagen") };
+  }
+  if (mime === "text/plain" || ext === "txt") {
+    return { label: "TXT", bg: "bg-bg-100", text: "text-ink-500", Icon: FileText, editable: false, title: viewTitle("de texto") };
+  }
+  return { label: ext ? ext.toUpperCase() : "Archivo", bg: "bg-bg-100", text: "text-ink-500", Icon: FileArchive, editable: false, title: viewTitle("") };
+}
 
 function DocumentosPage() {
   // Tour de documentos — auto la primera vez en /documentos.
@@ -568,6 +621,7 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
+  const fmt = formatBadge(doc);
   const isImage = isFile && (doc.mime?.startsWith("image/") ?? false);
   const [downloading, setDownloading] = useState(false);
 
@@ -595,7 +649,10 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
   // un lightbox modal directamente.
   function goToDoc() {
     if (isImage) onPreviewImage();
-    else navigate({ to: "/documentos/$id", params: { id: doc.id } });
+    // from=documentos: si el doc es PDF, el detalle redirige a la
+    // biblioteca del paciente — este param hace que su "volver"
+    // regrese acá y no al perfil del paciente.
+    else navigate({ to: "/documentos/$id", params: { id: doc.id }, search: { from: "documentos" } as any });
   }
 
   // Bloque de botones de acción (Abrir, Descargar, Menú). Lo extraemos
@@ -731,8 +788,13 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
           <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
             <s.Icon className="h-3 w-3" /> {s.label}
           </span>
-          <span className="inline-flex items-center text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-bg-100 text-ink-500">
-            {isFile ? "Archivo" : "Editor"}
+          {/* Formato real (PDF/DOCX/XLSX/…) + si es editable o solo lectura */}
+          <span
+            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium", fmt.bg, fmt.text)}
+            title={fmt.title}
+          >
+            <fmt.Icon className="h-3 w-3" /> {fmt.label}
+            {!fmt.editable && <Eye className="h-3 w-3 opacity-60" />}
           </span>
           {doc.shared_with_patient && doc.patient_id && (
             <span
@@ -759,6 +821,13 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
         <div className="flex items-center gap-1 flex-wrap">
           <span className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium", s.bg, s.text)}>
             <s.Icon className="h-3 w-3" /> {s.label}
+          </span>
+          <span
+            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium", fmt.bg, fmt.text)}
+            title={fmt.title}
+          >
+            <fmt.Icon className="h-3 w-3" /> {fmt.label}
+            {!fmt.editable && <Eye className="h-3 w-3 opacity-60" />}
           </span>
           {doc.shared_with_patient && doc.patient_id && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
@@ -787,6 +856,7 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
   const s = STATUS_STYLE[doc.status ?? "borrador"] ?? STATUS_STYLE.borrador;
   const TIcon = TYPE_ICON[doc.type] ?? FileText;
   const isFile = doc.kind === "file";
+  const fmt = formatBadge(doc);
   const isImage = isFile && (doc.mime?.startsWith("image/") ?? false);
   const [downloading, setDownloading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -810,7 +880,10 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
   // abrimos un modal lightbox en vez del editor.
   function goToDoc() {
     if (isImage) onPreviewImage();
-    else navigate({ to: "/documentos/$id", params: { id: doc.id } });
+    // from=documentos: si el doc es PDF, el detalle redirige a la
+    // biblioteca del paciente — este param hace que su "volver"
+    // regrese acá y no al perfil del paciente.
+    else navigate({ to: "/documentos/$id", params: { id: doc.id }, search: { from: "documentos" } as any });
   }
 
   // Preview de las primeras palabras del cuerpo. Si es un archivo (kind=
@@ -869,7 +942,7 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
         <div className="relative h-full flex flex-col p-4 sm:p-5">
           {/* Header: badge tipo (left) + icono pequeño decorativo (right).
               Tono "etiqueta" gris para no competir con el título. */}
-          <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-start justify-between gap-2 mb-3 shrink-0">
             <span className="inline-flex items-center gap-1 text-[10px] text-ink-500 font-medium">
               <span className="h-1 w-1 rounded-full bg-brand-700" />
               {TYPE_LABEL[doc.type] ?? doc.type}
@@ -883,21 +956,30 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
               título 18px se ve gigante y se trunca a 2 palabras.
               line-clamp-2 reserva 2 líneas siempre para que el grid
               se mantenga alineado. */}
-          <h3 className="text-[12px] sm:text-[13px] leading-snug font-semibold text-ink-900 line-clamp-2 tracking-tight">
+          {/* shrink-0: el título NUNCA se comprime. Cuando la card queda
+              angosta (sidebar expandido) y el contenido excede el alto
+              4:5, el flex repartía la falta de espacio entre todos los
+              hijos y el título quedaba cortado a media línea. Ahora el
+              que cede es el preview (flex-1 min-h-0 abajo). */}
+          <h3 className="shrink-0 text-[12px] sm:text-[13px] leading-snug font-semibold text-ink-900 line-clamp-2 tracking-tight">
             {doc.name}
           </h3>
 
-          {/* Preview del contenido. line-clamp-3 = 3 líneas máximo.
-              Tono ink-700 con opacidad ligera para sentirse "secundario". */}
+          {/* Preview del contenido. line-clamp-3 = 3 líneas máximo, pero
+              además vive en un wrapper flexible que absorbe TODO el
+              déficit de altura de la card — si no cabe, se recorta el
+              preview (contenido secundario), jamás el título o el footer. */}
           {previewText && (
-            <p className="mt-2 text-[11px] text-ink-700/85 leading-relaxed line-clamp-3">
-              {previewText}
-            </p>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <p className="mt-2 text-[11px] text-ink-700/85 leading-relaxed line-clamp-3">
+                {previewText}
+              </p>
+            </div>
           )}
 
           {/* Tags pills + meta — al fondo de la card. mt-auto empuja al
               bottom independiente del largo del preview. */}
-          <div className="mt-auto pt-3 space-y-2">
+          <div className="mt-auto pt-3 space-y-2 shrink-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className={cn(
                 "inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium",
@@ -905,11 +987,13 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
               )}>
                 {s.label}
               </span>
-              {isFile && (
-                <span className="inline-flex items-center text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-bg-100 text-ink-700">
-                  Archivo
-                </span>
-              )}
+              <span
+                className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium", fmt.bg, fmt.text)}
+                title={fmt.title}
+              >
+                <fmt.Icon className="h-2.5 w-2.5" /> {fmt.label}
+                {!fmt.editable && <Eye className="h-2.5 w-2.5 opacity-60" />}
+              </span>
               {doc.shared_with_patient && doc.patient_id && (
                 <span
                   className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800"

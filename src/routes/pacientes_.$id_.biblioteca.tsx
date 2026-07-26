@@ -23,9 +23,16 @@ export const Route = createFileRoute("/pacientes_/$id_/biblioteca")({
   // ?doc=<id> permite deep-link a un PDF específico desde la lista de
   // documentos del paciente. Si no viene, la biblioteca abre el primer
   // PDF disponible automáticamente.
-  validateSearch: (s): { doc?: string } => {
+  // ?from=documentos indica que se llegó desde la vista global de
+  // Documentos — el botón "volver" regresa allá en vez de al perfil
+  // del paciente (que es el default cuando se entra desde la ficha).
+  validateSearch: (s): { doc?: string; from?: "documentos" } => {
     const v = (s as { doc?: unknown }).doc;
-    return typeof v === "string" && v.length > 0 ? { doc: v } : {};
+    const f = (s as { from?: unknown }).from;
+    return {
+      ...(typeof v === "string" && v.length > 0 ? { doc: v } : {}),
+      ...(f === "documentos" ? { from: "documentos" as const } : {}),
+    };
   },
   component: BibliotecaPage,
 });
@@ -74,9 +81,17 @@ function BibliotecaPage() {
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              onClick={() => navigate({ to: "/pacientes/$id", params: { id } })}
+              onClick={() => {
+                // Volver a DONDE se vino: la vista global de Documentos
+                // (si se abrió el PDF desde allá) o el perfil del paciente
+                // (si se entró desde la ficha). Sin esto, abrir un PDF
+                // desde Documentos te "teletransportaba" al perfil al
+                // regresar.
+                if (search.from === "documentos") navigate({ to: "/documentos" });
+                else navigate({ to: "/pacientes/$id", params: { id } });
+              }}
               className="h-9 w-9 rounded-md border border-line-200 text-ink-500 hover:border-brand-400 inline-flex items-center justify-center"
-              aria-label="Volver al paciente"
+              aria-label={search.from === "documentos" ? "Volver a documentos" : "Volver al paciente"}
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
