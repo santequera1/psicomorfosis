@@ -339,7 +339,7 @@ function Hero() {
             transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
             className="relative rounded-[2rem] overflow-hidden border border-line-200 shadow-card"
           >
-            <img src={FOTO} alt="Psic. Nathaly Ferrer Pacheco" className="w-full h-64 sm:h-auto object-cover object-[50%_18%] sm:object-none block" />
+            <img src={FOTO} alt="Psic. Nathaly Ferrer Pacheco" className="w-full h-64 sm:h-auto object-cover object-[50%_18%] sm:object-center block" />
             <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-ink-900/30 to-transparent" />
             <div className="absolute bottom-4 left-5 text-white">
               <div className="font-serif text-lg leading-none">Nathaly Ferrer</div>
