@@ -514,7 +514,7 @@ function DayView({ date, onPick, filterAppts }: {
           <div
             className={
               "pointer-events-none absolute left-19 top-4.5 h-2 w-2 rounded-full ring-4 ring-surface " +
-              (s.status === "en_curso" ? "bg-brand-700" : s.status === "atendida" ? "bg-success" : s.status === "confirmada" ? "bg-brand-400" : "bg-ink-300")
+              (s.status === "en_curso" ? "bg-brand-700" : s.status === "atendida" ? "bg-success" : s.status === "confirmada" ? "bg-brand-400" : s.status === "solicitada" ? "bg-warning" : "bg-ink-300")
             }
           />
           <button
@@ -858,6 +858,7 @@ function ListView({ onPick, filterAppts }: {
                       (s.status === "atendida" ? "bg-success-soft text-success" :
                        s.status === "en_curso" ? "bg-brand-50 text-brand-800" :
                        s.status === "confirmada" ? "bg-brand-50 text-brand-800" :
+                       s.status === "solicitada" ? "bg-warning-soft text-warning" :
                        "bg-bg-100 text-ink-500")
                     }>{String(s.status).replace("_", " ")}</span>
                     <ChevronRight className="h-4 w-4 text-ink-300 shrink-0" />
@@ -964,6 +965,32 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
           </div>
         </header>
         <div className="p-5 space-y-2">
+          {slot.status === "solicitada" && (
+            <div className="rounded-lg bg-warning-soft border border-warning/20 p-3 mb-1">
+              <p className="text-xs text-warning font-medium mb-2">
+                Solicitud desde tu perfil público — el paciente espera tu confirmación.
+              </p>
+              <button
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await api.updateAppointment(slot.id, { status: "confirmada" });
+                    qc.invalidateQueries({ queryKey: ["appointments"] });
+                    toast.success("Cita confirmada — Laura le avisa al paciente por WhatsApp");
+                    onClose();
+                  } catch (e: any) {
+                    toast.error("No se pudo confirmar: " + (e?.message ?? e));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+                className="w-full h-10 rounded-md bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <CalendarDays className="h-4 w-4" /> Confirmar cita
+              </button>
+            </div>
+          )}
           <button
             onClick={startSession}
             disabled={busy}

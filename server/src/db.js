@@ -1174,6 +1174,16 @@ function runMigrations() {
       FOREIGN KEY (resolved_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_reschedule_req_pending ON reschedule_requests(workspace_id, status, created_at DESC)",
+    // Perfil público tipo linktree con reserva de citas (agosto 2026).
+    // Opt-in por profesional: public_enabled=0 hasta que lo active.
+    "ALTER TABLE professionals ADD COLUMN slug TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_enabled INTEGER DEFAULT 0",
+    "ALTER TABLE professionals ADD COLUMN public_bio TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_photo_url TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_location TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_instagram TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_areas TEXT", // CSV: "Ansiedad,Depresión,Duelo"
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug) WHERE slug IS NOT NULL",
   ];
   for (const sql of migrations) {
     try {

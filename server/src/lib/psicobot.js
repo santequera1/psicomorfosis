@@ -321,6 +321,48 @@ export function notifyPortalInvite({ patient, url, professionalName, daysValid }
   setImmediate(() => pushAndLog(payload));
 }
 
+/**
+ * Solicitud de cita desde el perfil público (linktree). El destinatario
+ * es el PROFESIONAL — el staff no requiere opt-in (es su herramienta de
+ * trabajo). Le avisa al instante para que acepte/rechace desde su agenda.
+ */
+export function notifyBookingRequested({ professional, patient, appointment, motivo }) {
+  if (!configured()) return;
+  if (!professional?.phone || String(professional.phone).replace(/\D/g, "").length < 6) return;
+
+  const fecha = fmtDate(appointment.date);
+  const mod = appointment.modality === "tele" ? "online" : "presencial";
+  const rendered =
+    `📥 *Nueva solicitud de cita* desde tu perfil público\n\n` +
+    `👤 ${patient.name}\n📱 ${patient.phone}\n` +
+    `📅 ${fecha} · ${appointment.time} · ${mod}` +
+    (motivo ? `\n📝 "${motivo}"` : "") +
+    `\n\nEntra a tu agenda para *confirmarla o proponer otro horario*.`;
+
+  const payload = {
+    event: "booking.requested",
+    idempotency_key: `evt_booking_req_${appointment.id}`,
+    recipient: {
+      phone: professional.phone,
+      name: professional.name,
+      role: "psicologo",
+      workspace_id: professional.workspace_id ?? null,
+    },
+    data: {
+      appointment: {
+        id: appointment.id,
+        date: appointment.date,
+        time: appointment.time,
+        modality: appointment.modality,
+      },
+      patient: { name: patient.name, phone: patient.phone },
+      motivo: motivo || null,
+    },
+    rendered_message: rendered,
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
 // Export helpers para tests y para el health-check
 export const _internals = {
   configured,

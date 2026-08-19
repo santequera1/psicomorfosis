@@ -234,6 +234,20 @@ router.patch("/:id", (req, res) => {
       previous: { date: existing.date, time: existing.time },
     });
   }
+  // Solicitud web aceptada (solicitada → confirmada): el paciente dejó su
+  // número esperando exactamente esta confirmación — Laura se la manda.
+  if (existing.status === "solicitada" && row.status === "confirmada" && req.body?.notify !== false) {
+    const patient = row.patient_id
+      ? db.prepare("SELECT * FROM patients WHERE id = ?").get(row.patient_id)
+      : null;
+    if (patient) {
+      notifyAppointmentCreated({
+        patient,
+        appointment: row,
+        professionalName: row.professional,
+      });
+    }
+  }
   res.json(row);
 });
 
