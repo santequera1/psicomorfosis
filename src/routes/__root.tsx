@@ -109,7 +109,7 @@ const BOOTSTRAP_SCRIPT = `
     // o dark, no aplicamos esos atributos para evitar que la
     // landing herede tokens oscuros antes de hidratar y se vea
     // con textos casi invisibles + chrome negro.
-    var FORCE_LIGHT_PATHS = ['/inicio'];
+    var FORCE_LIGHT_PATHS = ['/inicio', '/nathaly-ferrer'];
     var forceLight = FORCE_LIGHT_PATHS.indexOf(path) !== -1;
 
     var mode = localStorage.getItem('psm.theme') || 'claro';
@@ -151,7 +151,7 @@ const BOOTSTRAP_SCRIPT = `
     // Las rutas /p/* son del portal del paciente — viven con sus propias reglas.
     // Las páginas públicas (/login y /p/activar/* y /p/login) no requieren token.
     var isPatientPortal = path === '/p' || path.indexOf('/p/') === 0;
-    var publicPaths = ['/login', '/p/login', '/privacidad', '/terminos', '/inicio'];
+    var publicPaths = ['/login', '/p/login', '/privacidad', '/terminos', '/inicio', '/nathaly-ferrer'];
     var isPublic = publicPaths.indexOf(path) !== -1
       || path.indexOf('/p/activar/') === 0
       || path.indexOf('/firmar/') === 0;
