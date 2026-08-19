@@ -5,7 +5,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   ArrowRight, ArrowDown, Brain, Heart, Footprints, Leaf, Hourglass,
-  MessageCircle, Video, MapPin, GraduationCap, Sparkles, Quote,
+  Video, MapPin, GraduationCap, Sparkles, Quote,
 } from "lucide-react";
 import { easeOutExpo, fadeUp, staggerParent } from "@/components/landing/motion";
 
@@ -157,6 +157,15 @@ function NathalyPage() {
   );
 }
 
+/* ─── Ícono de WhatsApp (glyph oficial — lucide no trae marcas) ─────────── */
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.1-.198.05-.371-.025-.52-.074-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+    </svg>
+  );
+}
+
 /* ─── Barra de progreso de lectura ──────────────────────────────────────── */
 function ScrollProgress() {
   const { scrollYProgress } = useScroll();
@@ -198,7 +207,7 @@ function Nav() {
           rel="noreferrer"
           className="h-9 px-3.5 sm:px-4 rounded-full bg-brand-700 text-white text-xs sm:text-[13px] font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 whitespace-nowrap transition-colors"
         >
-          <MessageCircle className="h-3.5 w-3.5" /> Agendar
+          <WhatsAppIcon className="h-3.5 w-3.5" /> Agendar
         </a>
       </div>
     </motion.header>
@@ -211,7 +220,7 @@ const H1_L2 = ["aprender", "otro", "camino."];
 
 function Hero() {
   return (
-    <section id="top" className="relative min-h-[100svh] flex items-center overflow-hidden pt-24 pb-16">
+    <section id="top" className="relative lg:min-h-[100svh] flex items-center overflow-hidden pt-24 pb-12 lg:pb-16">
       {/* Fondo: wash radial teal muy suave, mismo espíritu del backdrop de /inicio */}
       <div
         aria-hidden
@@ -222,7 +231,7 @@ function Hero() {
             "radial-gradient(700px 500px at 5% 90%, oklch(0.96 0.012 150 / 0.8), transparent 60%)",
         }}
       />
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-[1.15fr_0.85fr] gap-10 lg:gap-16 items-center w-full">
+      <div className="max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-[1.15fr_0.85fr] gap-8 lg:gap-16 items-center w-full">
         <div>
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -288,7 +297,7 @@ function Hero() {
               whileHover={{ y: -2, scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.3, ease: easeOutExpo }}
-              className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2 shadow-lg shadow-brand-700/20"
+              className="h-12 px-6 rounded-lg bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-2 shadow-lg shadow-brand-700/20 w-full sm:w-auto"
             >
               Agenda tu consulta <ArrowRight className="h-4 w-4" />
             </motion.a>
@@ -296,7 +305,7 @@ function Hero() {
               href="#enfoque"
               whileHover={{ y: -2 }}
               transition={{ duration: 0.3, ease: easeOutExpo }}
-              className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center gap-2"
+              className="h-12 px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-2 w-full sm:w-auto"
             >
               <ArrowDown className="h-4 w-4" /> Conoce mi enfoque
             </motion.a>
@@ -318,7 +327,7 @@ function Hero() {
           initial={{ opacity: 0, scale: 0.95, filter: "blur(12px)" }}
           animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
           transition={{ duration: 1.1, ease: easeOutExpo, delay: 0.7 }}
-          className="relative max-w-sm mx-auto lg:max-w-none"
+          className="relative w-full sm:max-w-sm sm:mx-auto lg:max-w-none"
         >
           <div
             aria-hidden
@@ -330,7 +339,7 @@ function Hero() {
             transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
             className="relative rounded-[2rem] overflow-hidden border border-line-200 shadow-card"
           >
-            <img src={FOTO} alt="Psic. Nathaly Ferrer Pacheco" className="w-full h-auto block" />
+            <img src={FOTO} alt="Psic. Nathaly Ferrer Pacheco" className="w-full h-64 sm:h-auto object-cover object-[50%_18%] sm:object-none block" />
             <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-ink-900/30 to-transparent" />
             <div className="absolute bottom-4 left-5 text-white">
               <div className="font-serif text-lg leading-none">Nathaly Ferrer</div>
@@ -444,12 +453,12 @@ function TrianguloTCC() {
   }, []);
 
   return (
-    <section id="enfoque" ref={sectionRef} className="relative h-[100svh] overflow-hidden bg-[#0e181d] text-white">
+    <section id="enfoque" ref={sectionRef} className="relative h-[100svh] overflow-hidden bg-brand-700 text-white">
       {/* Glow ambiental */}
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{ background: "radial-gradient(800px 500px at 50% 45%, oklch(0.45 0.07 200 / 0.35), transparent 70%)" }}
+        style={{ background: "radial-gradient(800px 500px at 50% 45%, oklch(0.98 0.005 110 / 0.12), transparent 70%)" }}
       />
       <div className="relative h-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-4 lg:gap-8 items-center py-14 lg:py-0">
         {/* Columna izquierda: pasos que se intercambian */}
@@ -461,7 +470,7 @@ function TrianguloTCC() {
             <div key={v.key} data-tcc-step className="absolute inset-0 opacity-0 flex flex-col justify-center">
               <div className="flex items-center gap-3">
                 <span className="h-10 w-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
-                  <v.Icon className="h-5 w-5 text-brand-400" />
+                  <v.Icon className="h-5 w-5 text-brand-100" />
                 </span>
                 <h3 className="font-serif text-3xl sm:text-4xl">{v.titulo}</h3>
               </div>
@@ -470,7 +479,7 @@ function TrianguloTCC() {
           ))}
           <div data-tcc-finale className="absolute inset-0 opacity-0 flex flex-col justify-center">
             <h3 className="font-serif text-3xl sm:text-5xl leading-tight">
-              La terapia trabaja <span className="text-brand-400">las tres puntas.</span>
+              La terapia trabaja <span className="text-brand-100">las tres puntas.</span>
             </h3>
             <p className="mt-4 text-white/70 text-sm sm:text-base leading-relaxed max-w-md">
               En sesión aprendes a detectar el pensamiento, regular la emoción y
@@ -480,7 +489,7 @@ function TrianguloTCC() {
               href={WHATSAPP}
               target="_blank"
               rel="noreferrer"
-              className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand-400 hover:text-brand-100 transition-colors w-fit"
+              className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-white underline underline-offset-4 decoration-white/40 hover:decoration-white transition-colors w-fit"
             >
               Empezar mi proceso <ArrowRight className="h-4 w-4" />
             </a>
@@ -491,14 +500,14 @@ function TrianguloTCC() {
         <div className="order-1 lg:order-2 flex justify-center">
           <svg data-tcc-svg viewBox="0 0 400 360" className="w-52 sm:w-80 lg:w-[26rem] h-auto" fill="none" aria-hidden>
             {/* Aristas (se dibujan con scrub): pensamiento→emoción→conducta→pensamiento */}
-            <line data-tcc-line x1="200" y1="60" x2="60" y2="300" stroke="oklch(0.76 0.035 200)" strokeWidth="2" strokeLinecap="round" />
-            <line data-tcc-line x1="60" y1="300" x2="340" y2="300" stroke="oklch(0.76 0.035 200)" strokeWidth="2" strokeLinecap="round" />
-            <line data-tcc-line x1="340" y1="300" x2="200" y2="60" stroke="oklch(0.76 0.035 200)" strokeWidth="2" strokeLinecap="round" />
+            <line data-tcc-line x1="200" y1="60" x2="60" y2="300" stroke="oklch(1 0 0 / 0.85)" strokeWidth="2" strokeLinecap="round" />
+            <line data-tcc-line x1="60" y1="300" x2="340" y2="300" stroke="oklch(1 0 0 / 0.85)" strokeWidth="2" strokeLinecap="round" />
+            <line data-tcc-line x1="340" y1="300" x2="200" y2="60" stroke="oklch(1 0 0 / 0.85)" strokeWidth="2" strokeLinecap="round" />
             {VERTICES.map((v) => (
               <g key={v.key} data-tcc-node style={{ transformOrigin: `${v.cx}px ${v.cy}px` }}>
-                <circle cx={v.cx} cy={v.cy} r="34" fill="oklch(0.2 0.03 210)" stroke="oklch(0.76 0.035 200 / 0.5)" strokeWidth="1.5" />
-                <circle cx={v.cx} cy={v.cy} r="46" fill="none" stroke="oklch(0.76 0.035 200 / 0.15)" strokeWidth="1" />
-                <v.Icon x={v.cx - 12} y={v.cy - 12} width={24} height={24} color="oklch(0.85 0.05 195)" />
+                <circle cx={v.cx} cy={v.cy} r="34" fill="oklch(0.36 0.027 200)" stroke="oklch(1 0 0 / 0.35)" strokeWidth="1.5" />
+                <circle cx={v.cx} cy={v.cy} r="46" fill="none" stroke="oklch(1 0 0 / 0.14)" strokeWidth="1" />
+                <v.Icon x={v.cx - 12} y={v.cy - 12} width={24} height={24} color="oklch(0.96 0.01 180)" />
               </g>
             ))}
           </svg>
@@ -749,12 +758,6 @@ function CierreFullscreen() {
         aria-hidden
       />
       <div className="absolute inset-0 bg-black/25" aria-hidden />
-      {/* Transición suave desde la sección anterior: el borde superior del
-          video se funde con el crema de la página en vez de cortar en seco. */}
-      <div
-        aria-hidden
-        className="absolute top-0 inset-x-0 h-36 sm:h-56 bg-gradient-to-b from-bg-50 via-bg-50/40 to-transparent"
-      />
 
       <div className="relative h-full flex flex-col items-center justify-center text-center px-5">
         <motion.div
@@ -803,7 +806,7 @@ function CierreFullscreen() {
             rel="noreferrer"
             className="px-6 py-3 bg-white text-gray-900 text-sm font-semibold rounded-full hover:bg-white/90 transition-colors inline-flex items-center gap-2"
           >
-            <MessageCircle className="h-4 w-4" /> Agendar por WhatsApp
+            <WhatsAppIcon className="h-4 w-4" /> Agendar por WhatsApp
           </a>
           <a
             href="#enfoque"
