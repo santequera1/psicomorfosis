@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, useScroll, useSpring } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
@@ -36,15 +36,28 @@ export const Route = createFileRoute("/nathaly-ferrer")({
         content:
           "Psicóloga clínica, Mg. en Terapia Cognitivo-Conductual. Acompaño procesos de ansiedad, depresión y duelo. Consulta online y presencial.",
       },
+      // OG afinado para WhatsApp: URL absoluta, dimensiones y tipo
+      // declarados (sin esto WhatsApp a veces no muestra la imagen),
+      // y secure_url porque su crawler lo prefiere en https.
+      { property: "og:site_name", content: "Nathaly Ferrer · Psicóloga" },
+      { property: "og:locale", content: "es_CO" },
       { property: "og:title", content: "Nathaly Ferrer · Psicóloga Clínica" },
       {
         property: "og:description",
-        content: "Terapia cognitivo-conductual para ansiedad, depresión y duelo. Consulta online y presencial.",
+        content: "Mg. en Terapia Cognitivo-Conductual. Ansiedad 🍂 Depresión 👣 Duelo ⏳ · Consulta online y presencial. Agenda por WhatsApp.",
       },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://psico.wailus.co/nathaly-ferrer" },
       { property: "og:image", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
+      { property: "og:image:secure_url", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
+      { property: "og:image:type", content: "image/jpeg" },
+      { property: "og:image:width", content: "1000" },
+      { property: "og:image:height", content: "1333" },
+      { property: "og:image:alt", content: "Psic. Nathaly Ferrer Pacheco — Psicóloga clínica, terapia cognitivo-conductual" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Nathaly Ferrer · Psicóloga Clínica" },
+      { name: "twitter:description", content: "Terapia cognitivo-conductual para ansiedad, depresión y duelo. Online y presencial." },
+      { name: "twitter:image", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
     ],
   }),
   component: NathalyPage,
@@ -77,6 +90,23 @@ const PAGE_CSS = `
   mask-composite: exclude;
   pointer-events: none;
 }
+
+/* Scrollbar propia de la landing — delgada, teal, sin flechas.
+   Se aplica al html solo mientras esta página está montada (el <style>
+   vive dentro del componente). */
+html { scrollbar-width: thin; scrollbar-color: oklch(0.53 0.045 200 / 0.55) transparent; }
+html::-webkit-scrollbar { width: 9px; }
+html::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, oklch(0.61 0.04 200 / 0.65), oklch(0.45 0.035 200 / 0.65));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, oklch(0.61 0.04 200), oklch(0.45 0.035 200));
+  background-clip: padding-box;
+}
 `;
 
 function NathalyPage() {
@@ -107,6 +137,7 @@ function NathalyPage() {
   return (
     <div className="min-h-screen bg-bg-50 text-ink-900 overflow-x-clip">
       <style dangerouslySetInnerHTML={{ __html: PAGE_CSS }} />
+      <ScrollProgress />
       <Nav />
       <main>
         <Hero />
@@ -123,6 +154,21 @@ function NathalyPage() {
         </a>
       </footer>
     </div>
+  );
+}
+
+/* ─── Barra de progreso de lectura ──────────────────────────────────────── */
+function ScrollProgress() {
+  const { scrollYProgress } = useScroll();
+  // Spring para que la barra siga el scroll con inercia suave en vez
+  // de saltar pixel a pixel.
+  const scaleX = useSpring(scrollYProgress, { stiffness: 120, damping: 28, restDelta: 0.001 });
+  return (
+    <motion.div
+      aria-hidden
+      style={{ scaleX, transformOrigin: "0% 50%" }}
+      className="fixed top-0 inset-x-0 z-[60] h-[3px] bg-gradient-to-r from-brand-400 via-brand-700 to-brand-900"
+    />
   );
 }
 
@@ -165,7 +211,7 @@ const H1_L2 = ["aprender", "otro", "camino."];
 
 function Hero() {
   return (
-    <section id="top" className="relative min-h-screen flex items-center overflow-hidden pt-24 pb-16">
+    <section id="top" className="relative min-h-[100svh] flex items-center overflow-hidden pt-24 pb-16">
       {/* Fondo: wash radial teal muy suave, mismo espíritu del backdrop de /inicio */}
       <div
         aria-hidden
@@ -398,17 +444,17 @@ function TrianguloTCC() {
   }, []);
 
   return (
-    <section id="enfoque" ref={sectionRef} className="relative h-screen overflow-hidden bg-[#0e181d] text-white">
+    <section id="enfoque" ref={sectionRef} className="relative h-[100svh] overflow-hidden bg-[#0e181d] text-white">
       {/* Glow ambiental */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{ background: "radial-gradient(800px 500px at 50% 45%, oklch(0.45 0.07 200 / 0.35), transparent 70%)" }}
       />
-      <div className="relative h-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-8 items-center">
+      <div className="relative h-full max-w-6xl mx-auto px-5 sm:px-8 grid lg:grid-cols-2 gap-4 lg:gap-8 items-center py-14 lg:py-0">
         {/* Columna izquierda: pasos que se intercambian */}
-        <div className="relative h-64 sm:h-72 order-2 lg:order-1">
-          <div className="absolute -top-14 left-0 text-[11px] uppercase tracking-[0.2em] text-white/40 font-medium">
+        <div className="relative h-56 sm:h-72 order-2 lg:order-1">
+          <div className="absolute -top-8 lg:-top-14 left-0 text-[11px] uppercase tracking-[0.2em] text-white/40 font-medium">
             El ciclo que la TCC interrumpe
           </div>
           {VERTICES.map((v) => (
@@ -443,7 +489,7 @@ function TrianguloTCC() {
 
         {/* Columna derecha: el triángulo SVG */}
         <div className="order-1 lg:order-2 flex justify-center">
-          <svg data-tcc-svg viewBox="0 0 400 360" className="w-64 sm:w-80 lg:w-[26rem] h-auto" fill="none" aria-hidden>
+          <svg data-tcc-svg viewBox="0 0 400 360" className="w-52 sm:w-80 lg:w-[26rem] h-auto" fill="none" aria-hidden>
             {/* Aristas (se dibujan con scrub): pensamiento→emoción→conducta→pensamiento */}
             <line data-tcc-line x1="200" y1="60" x2="60" y2="300" stroke="oklch(0.76 0.035 200)" strokeWidth="2" strokeLinecap="round" />
             <line data-tcc-line x1="60" y1="300" x2="340" y2="300" stroke="oklch(0.76 0.035 200)" strokeWidth="2" strokeLinecap="round" />
@@ -685,7 +731,7 @@ function SobreMi() {
 /* ─── Cierre fullscreen — video + liquid glass (referencia flowpath) ────── */
 function CierreFullscreen() {
   return (
-    <section className="relative h-screen w-full overflow-hidden bg-[#0c1418]">
+    <section className="relative h-[100svh] w-full overflow-hidden bg-[#0c1418]">
       {/* Video de fondo con fallback de gradiente si no carga */}
       <div
         aria-hidden
@@ -703,6 +749,12 @@ function CierreFullscreen() {
         aria-hidden
       />
       <div className="absolute inset-0 bg-black/25" aria-hidden />
+      {/* Transición suave desde la sección anterior: el borde superior del
+          video se funde con el crema de la página en vez de cortar en seco. */}
+      <div
+        aria-hidden
+        className="absolute top-0 inset-x-0 h-36 sm:h-56 bg-gradient-to-b from-bg-50 via-bg-50/40 to-transparent"
+      />
 
       <div className="relative h-full flex flex-col items-center justify-center text-center px-5">
         <motion.div
