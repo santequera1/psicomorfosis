@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api, setSession, getValidToken, ApiError } from "@/lib/api";
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check, Heart, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -31,6 +32,23 @@ function LoginPage() {
   // la primera request real.
   useEffect(() => {
     if (getValidToken()) window.location.replace("/");
+  }, []);
+
+  // El backend redirige con ?google_error=<codigo> cuando el flujo de
+  // Google falla (cancelado, state inválido, cuenta deshabilitada...).
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("google_error");
+    if (!code) return;
+    const msgs: Record<string, string> = {
+      cancelado: "Cancelaste el ingreso con Google.",
+      no_configurado: "El ingreso con Google no está disponible por ahora.",
+      state_invalido: "El enlace expiró. Intenta de nuevo.",
+      cuenta_deshabilitada: "Tu cuenta está deshabilitada. Contacta a soporte.",
+      usa_portal_paciente: "Esa cuenta es de paciente. Entra por el portal de pacientes.",
+    };
+    setErr(msgs[code] ?? "No pudimos completar el ingreso con Google.");
+    setTab("login");
+    window.history.replaceState({}, "", "/login");
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -119,6 +137,11 @@ function LoginPage() {
               Registrarse
             </button>
           </div>
+
+          {/* Google primero: para la mayoría es el camino de un clic, y
+              sirve tanto para entrar como para crear cuenta. */}
+          <GoogleButton label={tab === "login" ? "Continuar con Google" : "Registrarme con Google"} />
+          <AuthDivider text={tab === "login" ? "o con tu correo" : "o con tus datos"} />
 
           {tab === "login" ? (
             <LoginForm

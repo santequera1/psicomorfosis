@@ -102,6 +102,8 @@ app.use("/api/uploads", express.static(UPLOADS_DIR, {
 }));
 
 app.use("/api/auth", authRoutes);
+// Login/registro con Google (OAuth). Rutas públicas bajo /api/auth/google*.
+app.use("/api/auth", (await import("./routes/google-auth.js")).default);
 app.use("/api/platform", platformRoutes);
 // Diagnóstico de sesión (temporal, soporte) — página pública autocontenida.
 app.use("/api/debug", (await import("./routes/debug-session.js")).default);

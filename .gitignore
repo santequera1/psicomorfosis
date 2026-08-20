@@ -74,3 +74,7 @@ public/landing/*.webm
 
 # Smoke tests config (credenciales)
 smoke/smoke.env
+
+# Credenciales OAuth de Google — NUNCA al repo
+g/
+client_secret_*.json
