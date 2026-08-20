@@ -1184,6 +1184,13 @@ function runMigrations() {
     "ALTER TABLE professionals ADD COLUMN public_instagram TEXT",
     "ALTER TABLE professionals ADD COLUMN public_areas TEXT", // CSV: "Ansiedad,Depresión,Duelo"
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug) WHERE slug IS NOT NULL",
+    // Registro público + suscripciones (agosto 2026). Todo workspace nuevo
+    // nace en plan 'free'; 'plan' se usará cuando se habilite el cobro.
+    "ALTER TABLE workspaces ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'",
+    "ALTER TABLE workspaces ADD COLUMN plan_since TEXT",
+    "ALTER TABLE workspaces ADD COLUMN signup_source TEXT",
+    "ALTER TABLE users ADD COLUMN email_verified_at TEXT",
+    "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'",
   ];
   for (const sql of migrations) {
     try {

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api, setSession, getValidToken, ApiError } from "@/lib/api";
+import { SignUpForm } from "@/components/auth/SignUpForm";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check, Heart, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -136,7 +137,7 @@ function LoginPage() {
               goToPatientPortal={goToPatientPortal}
             />
           ) : (
-            <SignUpBlocked />
+            <SignUpForm onDone={() => window.location.assign("/")} />
           )}
 
           {/* CTA discreto pero claro hacia el portal del paciente. Evita la
@@ -314,35 +315,6 @@ function LoginForm({
   );
 }
 
-function SignUpBlocked() {
-  return (
-    <div className="py-4 space-y-4">
-      <div className="rounded-2xl border border-brand-700/20 bg-brand-50/50 p-5 text-center">
-        <div className="h-12 w-12 rounded-full bg-brand-100 text-brand-800 inline-flex items-center justify-center mb-3">
-          <Info className="h-5 w-5" />
-        </div>
-        <h3 className="font-serif text-lg text-ink-900">Acceso controlado</h3>
-        <p className="text-sm text-ink-700 mt-2 leading-relaxed">
-          Las cuentas de profesionales se crean desde el panel de administración.
-          Contacta a tu super admin para obtener credenciales de acceso al workspace clínico.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={() => window.open("mailto:admin@psicomorfosis.co?subject=Solicitud%20de%20acceso%20Psicomorfosis")}
-        className="w-full h-12 rounded-full text-primary-foreground text-sm font-semibold bg-brand-700 hover:bg-brand-800 shadow-[0_8px_20px_-8px_oklch(0.53_0.045_200/0.5)] hover:-translate-y-0.5 transition-all"
-      >
-        Solicitar acceso por correo
-      </button>
-      <p className="text-center text-xs text-ink-500">
-        ¿Eres paciente?{" "}
-        <Link to="/p/login" className="text-brand-700 font-medium hover:underline">
-          Accede al portal del paciente
-        </Link>
-      </p>
-    </div>
-  );
-}
 
 function GoogleIcon() {
   return (

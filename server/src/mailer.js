@@ -831,6 +831,58 @@ async function sendAccountRequestNotificationEmail({ request, toEmail }) {
 /**
  * Envío del acuse de recibo al solicitante. Best-effort.
  */
+/**
+ * Bienvenida al registrarse por su cuenta desde la web. Best-effort:
+ * si el SMTP falla, el registro NO se cae (lo llama con .catch()).
+ */
+export async function sendWelcomeEmail({ to, name, username }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  const appUrl = process.env.PUBLIC_APP_URL || "https://psicomorfosis.co";
+  const firstName = String(name || "").split(" ")[0] || "";
+  const html = `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1f2937">
+    <div style="background:#2E5F66;padding:28px 32px;border-radius:14px 14px 0 0">
+      <div style="color:#fff;font-size:20px;font-weight:600;letter-spacing:-.01em">Psicomorfosis</div>
+      <div style="color:#C9E0E1;font-size:13px;margin-top:2px">Tu consulta, organizada</div>
+    </div>
+    <div style="border:1px solid #E3E8E6;border-top:none;border-radius:0 0 14px 14px;padding:30px 32px">
+      <h1 style="font-size:21px;margin:0 0 12px;color:#1f2937">Bienvenido/a${firstName ? ", " + firstName : ""} 👋</h1>
+      <p style="font-size:15px;line-height:1.6;margin:0 0 18px">
+        Tu espacio de trabajo ya está listo. Desde ahora puedes registrar pacientes,
+        agendar sesiones, escribir historias clínicas y aplicar tests — todo en un solo lugar.
+      </p>
+      <div style="background:#F7F8F6;border:1px solid #E3E8E6;border-radius:10px;padding:14px 16px;margin:0 0 22px">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:4px">Tus datos de acceso</div>
+        <div style="font-size:14px"><strong>Usuario:</strong> ${username}</div>
+        <div style="font-size:14px"><strong>Correo:</strong> ${to}</div>
+      </div>
+      <a href="${appUrl}/login" style="display:inline-block;background:#2E5F66;color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:600;font-size:14px">
+        Entrar a mi consulta
+      </a>
+      <p style="font-size:13px;line-height:1.6;color:#6b7280;margin:24px 0 0">
+        Tu cuenta es <strong>gratuita</strong> mientras estamos en fase inicial.
+        Si necesitas ayuda para empezar, responde a este correo.
+      </p>
+    </div>
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin:16px 0 0">
+      Psicomorfosis · Plataforma clínica para psicólogos
+    </p>
+  </div>`;
+  try {
+    await sendMailWithRetry({
+      from: `${c.fromName} <${c.user}>`,
+      to,
+      subject: "Bienvenido/a a Psicomorfosis — tu cuenta está lista",
+      html,
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] bienvenida falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
+}
+
 export async function sendAccountRequestReceivedEmail({ fullName, email, username, replyTo }) {
   if (!smtpConfigured()) return { status: "skipped_no_smtp" };
   const c = getSmtpConfig();

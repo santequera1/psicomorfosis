@@ -932,6 +932,17 @@ export const api = {
       body: JSON.stringify({ identifier, password }),
     }),
   me: () => request<{ user: ApiUser }>("/api/auth/me"),
+  /** Registro público: crea workspace + profesional + usuario y devuelve sesión. */
+  register: (body: {
+    name: string; email: string; password: string;
+    phone?: string; workspaceName?: string; acceptedTerms: boolean;
+  }) =>
+    request<{ token: string; user: ApiUser }>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** ¿Está abierto el registro público? (permite cerrarlo sin redeploy) */
+  signupStatus: () => request<{ enabled: boolean }>("/api/auth/signup-status"),
   /** Logout server-side: invalida TODOS los tokens del usuario actual. */
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   /** Logout del paciente — equivalente del portal. */

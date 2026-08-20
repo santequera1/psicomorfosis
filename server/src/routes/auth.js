@@ -1,9 +1,10 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import { db } from "../db.js";
+import { db, seedTaskColumns } from "../db.js";
 import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
+import { sendWelcomeEmail } from "../mailer.js";
 
 const router = Router();
 
@@ -374,6 +375,149 @@ router.post("/update-credentials", requireAuth, (req, res) => {
       workspaceMode: fresh.workspace_mode,
     },
   });
+});
+
+/**
+ * Rate limiter del registro público. Más estricto que el login: crear una
+ * cuenta es caro (workspace + professional + user + columnas kanban) y es
+ * el vector obvio de abuso. 5 registros por IP cada 6 horas.
+ */
+const registerLimiter = rateLimit({
+  windowMs: 6 * 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados registros desde esta conexión. Intenta más tarde." },
+});
+
+/** ¿Está abierto el registro público? Se puede cerrar sin redeploy. */
+function publicSignupEnabled() {
+  return String(process.env.ALLOW_PUBLIC_SIGNUP ?? "true").toLowerCase() !== "false";
+}
+
+/** Deriva un username libre desde el email (ana.perez@x.com -> ana.perez, ana.perez2...). */
+function deriveUsername(email) {
+  const base = String(email).split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "") || "user";
+  let candidate = base;
+  let n = 1;
+  while (db.prepare("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)").get(candidate)) {
+    n += 1;
+    candidate = base + n;
+    if (n > 999) return null;
+  }
+  return candidate;
+}
+
+/**
+ * POST /api/auth/register — registro público de un psicólogo.
+ *
+ * Crea su espacio de trabajo (workspace individual) + su ficha de
+ * profesional + su usuario super_admin, y devuelve la sesión ya iniciada.
+ * El plan arranca en 'free'; cuando exista cobro se cambia desde ahí.
+ *
+ * Público a propósito (nadie tiene cuenta todavía). Protegido con rate
+ * limit, validación estricta y unicidad de correo.
+ */
+router.post("/register", registerLimiter, (req, res) => {
+  if (!publicSignupEnabled()) {
+    return res.status(403).json({ error: "El registro está cerrado por ahora." });
+  }
+
+  const b = req.body ?? {};
+  const name = String(b.name ?? "").trim();
+  const email = String(b.email ?? "").trim().toLowerCase();
+  const password = String(b.password ?? "");
+  const phone = String(b.phone ?? "").trim() || null;
+  const nameFirst = name.split(" ")[0] || "";
+  const workspaceName = String(b.workspaceName ?? "").trim() || ("Consulta " + nameFirst).trim();
+  const acceptedTerms = b.acceptedTerms === true || b.acceptedTerms === "true";
+
+  if (name.length < 3) return res.status(400).json({ error: "Escribe tu nombre completo" });
+  if (!looksLikeEmail(email)) return res.status(400).json({ error: "Correo inválido" });
+  if (password.length < 8) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
+  }
+  if (!acceptedTerms) {
+    return res.status(400).json({ error: "Debes aceptar los términos y el aviso de privacidad" });
+  }
+  if (db.prepare("SELECT 1 FROM users WHERE LOWER(email) = LOWER(?)").get(email)) {
+    return res.status(409).json({
+      error: "Ya existe una cuenta con ese correo. Inicia sesión o recupera tu contraseña.",
+      hint: "email_taken",
+    });
+  }
+
+  const username = deriveUsername(email);
+  if (!username) return res.status(400).json({ error: "No pudimos generar un usuario para ese correo" });
+
+  const tx = db.transaction(() => {
+    const wsId = db.prepare(
+      "INSERT INTO workspaces (name, mode, plan, plan_since, signup_source) VALUES (?, 'individual', 'free', datetime('now'), ?)"
+    ).run(workspaceName, "web").lastInsertRowid;
+
+    // Sin esto el kanban de Tareas queda sin columnas y las tareas se crean
+    // pero no se ven (bug histórico de workspaces creados en runtime).
+    seedTaskColumns(wsId);
+
+    const profId = db.prepare(
+      "INSERT INTO professionals (workspace_id, name, title, email, phone, active) VALUES (?, ?, 'Psicólogo/a', ?, ?, 1)"
+    ).run(wsId, name, email, phone).lastInsertRowid;
+
+    const userId = db.prepare(
+      "INSERT INTO users (workspace_id, username, password_hash, name, email, role, professional_id, auth_provider) VALUES (?, ?, ?, ?, ?, 'super_admin', ?, 'password')"
+    ).run(wsId, username, bcrypt.hashSync(password, 10), name, email, profId).lastInsertRowid;
+
+    return { wsId, userId, profId };
+  });
+
+  let created;
+  try {
+    created = tx();
+  } catch (err) {
+    console.error("[register] fallo:", err?.message);
+    return res.status(500).json({ error: "No pudimos crear tu cuenta. Intenta de nuevo." });
+  }
+
+  console.log("[register] nueva cuenta ws=" + created.wsId + " user=" + created.userId + " email=" + email);
+
+  // Bienvenida best-effort: si el correo falla, el registro NO se cae.
+  try {
+    sendWelcomeEmail({ to: email, name, username }).catch((e) =>
+      console.warn("[register] welcome mail:", e?.message));
+  } catch { /* noop */ }
+
+  // Sesión iniciada de una: el usuario acaba de definir su contraseña.
+  const token = signToken({
+    id: created.userId,
+    workspace_id: created.wsId,
+    username,
+    role: "super_admin",
+    name,
+    professional_id: created.profId,
+    is_platform_admin: false,
+    is_legal_admin: false,
+  });
+
+  res.status(201).json({
+    token,
+    user: {
+      id: created.userId,
+      username,
+      name,
+      email,
+      role: "super_admin",
+      isPlatformAdmin: false,
+      isLegalAdmin: false,
+      workspaceId: created.wsId,
+      workspaceName,
+      workspaceMode: "individual",
+    },
+  });
+});
+
+/** GET /api/auth/signup-status — el front consulta si mostrar el formulario. */
+router.get("/signup-status", (_req, res) => {
+  res.json({ enabled: publicSignupEnabled() });
 });
 
 export default router;
