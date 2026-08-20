@@ -877,7 +877,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     // Además: redirigir a login en vez de dejar al usuario en una página
     // "zombie" donde cada click da "Missing token". El path del login
     // depende de si estamos en el portal del paciente o en el staff.
-    if (res.status === 401 && token && token === getToken()) {
+    // 403 + hint=token_expired: el server ya no usa 401 para tokens
+    // vencidos (ver auth.js rejectInvalidToken) — lo tratamos igual que
+    // un 401 de sesión muerta, con el mismo race guard.
+    const sessionDead =
+      res.status === 401 ||
+      (res.status === 403 && typeof body === "object" && body && (body as any).hint === "token_expired");
+    if (sessionDead && token && token === getToken()) {
       clearSession();
       if (typeof window !== "undefined") {
         const p = window.location.pathname;

@@ -91,7 +91,27 @@ export function diagnoseToken(token) {
 export function logAuthFail(req, kind, detail = "") {
   const ua = String(req.headers["user-agent"] ?? "").slice(0, 70);
   const ref = String(req.headers.referer ?? "");
-  console.warn(`[auth-diag] 401 ${kind} ${req.method} ${req.originalUrl}${detail ? ` | ${detail}` : ""} | ref=${ref} | ua=${ua}`);
+  console.warn(`[auth-diag] ${new Date().toISOString()} 401 ${kind} ${req.method} ${req.originalUrl}${detail ? ` | ${detail}` : ""} | ref=${ref} | ua=${ua}`);
+}
+
+
+/**
+ * Rechazo de token inválido. Distingue EXPIRADO (403 + hint) de
+ * malformado/firma inválida (401). Por qué 403 para expirado: los
+ * bundles viejos del cliente hacen clearSession() ante CUALQUIER 401 —
+ * un tab zombie con token vencido borraba el localStorage compartido y
+ * mataba la sesión fresca de los otros tabs ("se me cierra sola"). Con
+ * 403 el tab zombie falla en silencio y no toca el storage. El cliente
+ * nuevo entiende el hint y limpia/redirige solo si ese token sigue
+ * siendo el vigente.
+ */
+export function rejectInvalidToken(req, res, token) {
+  const diag = diagnoseToken(token);
+  logAuthFail(req, "invalid", diag);
+  if (diag.startsWith("TokenExpiredError")) {
+    return res.status(403).json({ error: "Sesión expirada", hint: "token_expired" });
+  }
+  return res.status(401).json({ error: "Invalid or expired token" });
 }
 
 export function verifyToken(token) {
@@ -207,8 +227,7 @@ export function requireAuth(req, res, next) {
   if (token) {
     const payload = verifyToken(token);
     if (!payload) {
-      logAuthFail(req, "invalid", diagnoseToken(token));
-      return res.status(401).json({ error: "Invalid or expired token" });
+      return rejectInvalidToken(req, res, token);
     }
     req.user = payload;
     maybeRefresh(res, payload);
@@ -251,8 +270,7 @@ export function requirePatient(req, res, next) {
   }
   const payload = verifyToken(token);
   if (!payload) {
-    logAuthFail(req, "invalid", diagnoseToken(token));
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return rejectInvalidToken(req, res, token);
   }
   if (payload.role !== "paciente" || !payload.patient_id) {
     // Log estructurado: nos dice si el problema es role incorrecto (usuario
@@ -287,8 +305,7 @@ export function requirePlatformAdmin(req, res, next) {
   }
   const payload = verifyToken(token);
   if (!payload) {
-    logAuthFail(req, "invalid", diagnoseToken(token));
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return rejectInvalidToken(req, res, token);
   }
   if (!payload.is_platform_admin) {
     return res.status(403).json({ error: "Acceso solo para administradores de plataforma" });
@@ -312,8 +329,7 @@ export function requireLegalAdmin(req, res, next) {
   }
   const payload = verifyToken(token);
   if (!payload) {
-    logAuthFail(req, "invalid", diagnoseToken(token));
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return rejectInvalidToken(req, res, token);
   }
   if (!payload.is_legal_admin) {
     return res.status(403).json({ error: "Acceso solo para asesores legales" });
@@ -333,8 +349,7 @@ export function requireStaff(req, res, next) {
   }
   const payload = verifyToken(token);
   if (!payload) {
-    logAuthFail(req, "invalid", diagnoseToken(token));
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return rejectInvalidToken(req, res, token);
   }
   if (payload.role === "paciente") {
     // Un token de PACIENTE pegándole a rutas de staff = mezcla de sesiones

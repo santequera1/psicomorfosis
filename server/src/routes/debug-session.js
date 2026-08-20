@@ -56,6 +56,9 @@ async function analizar(){
   try{const regs=await (navigator.serviceWorker?navigator.serviceWorker.getRegistrations():Promise.resolve([]));r.service_workers=regs.map(x=>x.scope)}catch(e){r.service_workers='error: '+e.message}
   // caches API
   try{r.caches=await (window.caches?caches.keys():Promise.resolve([]))}catch(e){r.caches='error: '+e.message}
+  // Desfase de reloj: si el PC tiene la fecha mal, el chequeo de
+  // expiración client-side cree que todo token está vencido.
+  try{const t0=Date.now();const sr=await fetch('/api/debug/time',{cache:'no-store'});const sj=await sr.json();const skewMs=Date.now()-new Date(sj.now).getTime();r.reloj_pc=new Date().toString();r.reloj_servidor=sj.now;r.desfase_minutos=Math.round(skewMs/60000);r.reloj_ok=Math.abs(skewMs)<120000;if(!r.reloj_ok){r.ALERTA='EL RELOJ DE ESTE COMPUTADOR ESTA MAL (desfase '+r.desfase_minutos+' min). Corrige fecha y hora del sistema.'}}catch(e){r.reloj_error=String(e)}
   document.getElementById('out').textContent=JSON.stringify(r,null,2);
   // reportar al server
   try{await fetch('/api/debug/session-report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(r)})}catch(e){}
@@ -80,6 +83,11 @@ document.getElementById('reparar').onclick=reparar;
 router.get("/session", (_req, res) => {
   res.set("Cache-Control", "no-store");
   res.type("html").send(PAGE);
+});
+
+router.get("/time", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ now: new Date().toISOString() });
 });
 
 router.post("/session-report", (req, res) => {

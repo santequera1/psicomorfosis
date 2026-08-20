@@ -94,6 +94,9 @@ router.post("/login", loginLimiter, (req, res) => {
     db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), user.id);
   } catch { /* no bloquear login si falla tracking */ }
 
+  // Log de login exitoso con navegador: permite correlacionar desde QUÉ
+  // contexto entró el usuario cuando después aparecen 401 de otro token.
+  console.log(`[auth-diag] ${new Date().toISOString()} LOGIN OK user=${user.id} ua=${String(req.headers["user-agent"] ?? "").slice(0, 70)}`);
   const token = signToken({
     id: user.id,
     workspace_id: user.workspace_id,
