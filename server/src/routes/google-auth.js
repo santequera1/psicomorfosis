@@ -27,6 +27,7 @@ import crypto from "node:crypto";
 import { db, seedTaskColumns } from "../db.js";
 import { signToken, requireAuth } from "../auth.js";
 import { sendWelcomeEmail } from "../mailer.js";
+import { recordSignupAcceptances } from "./legal.js";
 
 const router = Router();
 
@@ -285,6 +286,12 @@ router.get("/google/callback", async (req, res) => {
       })();
 
       console.log(`[google] alta nueva ws=${created.wsId} user=${created.userId} email=${email}`);
+
+      // El botón lleva el aviso "Al continuar aceptas los términos y el
+      // aviso de privacidad" al lado: pulsarlo es el acto de aceptación
+      // (clickwrap). Lo dejamos registrado con IP y user-agent, igual
+      // que la casilla del formulario de registro.
+      recordSignupAcceptances(created.userId, req);
       try {
         sendWelcomeEmail({ to: email, name: fullName, username: created.username })
           .catch((e) => console.warn("[google] welcome mail:", e?.message));

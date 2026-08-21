@@ -10,7 +10,7 @@ import { ReceiptFormModal } from "@/routes/facturacion";
 import {
   CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video,
   FilePen, Brain, ClipboardList, FileSignature, ListTodo,
-  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail, Receipt,
+  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail, Receipt, Sparkles,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -75,7 +75,7 @@ export function AdminDashboard() {
   const isOrg = (workspace?.mode ?? user?.workspaceMode) === "organization";
 
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
-  const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
+  const { data: patients = [], isSuccess: patientsLoaded } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const { data: invoicesSummary } = useQuery({ queryKey: ["invoices-summary"], queryFn: () => api.invoicesSummary() });
   const { data: todayAppointments = [] } = useQuery({
     queryKey: ["appointments", today],
@@ -161,6 +161,48 @@ export function AdminDashboard() {
           (label oculto vía hidden sm:inline en QuickAction); en desktop se
           ven los 6 con icon + label. Una sola fila evita robar vertical entre
           saludo y KPIs y mantiene la fila como una "barra de acciones" clara. */}
+      {/* Consultorio vacío: el dashboard entero está en ceros y no dice
+          qué hacer. Un psicólogo que acaba de registrarse necesita UNA
+          instrucción, no cuatro KPIs en cero. Desaparece sola al crear
+          el primer paciente. */}
+      {patientsLoaded && patients.length === 0 && (
+        <section
+          className="rounded-xl border border-brand-400/40 bg-brand-50/60 p-5 sm:p-6 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
+          style={{ animationDelay: "80ms" }}
+        >
+          <div className="flex items-start gap-4">
+            <span className="hidden sm:flex h-11 w-11 shrink-0 rounded-xl bg-brand-700 items-center justify-center">
+              <Sparkles className="h-5 w-5 text-primary-foreground" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-serif text-lg text-ink-900">
+                Tu consultorio está listo{firstName ? `, ${firstName}` : ""}
+              </h2>
+              <p className="text-sm text-ink-700 mt-1 leading-relaxed">
+                Lo primero es crear un paciente. A partir de ahí puedes agendarle
+                sesiones, escribir notas de historia clínica, aplicarle tests y
+                emitir recibos.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewPatientOpen(true)}
+                  className="h-10 px-4 rounded-lg bg-brand-700 hover:bg-brand-800 text-primary-foreground text-sm font-medium inline-flex items-center gap-2 transition-colors"
+                >
+                  <UserPlus className="h-4 w-4" /> Crear mi primer paciente
+                </button>
+                <Link
+                  to="/configuracion"
+                  className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2 transition-colors"
+                >
+                  Completar mi perfil <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section
         className="lg-surface rounded-xl border border-line-200 bg-surface p-3 sm:p-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
         style={{ animationDelay: "120ms" }}

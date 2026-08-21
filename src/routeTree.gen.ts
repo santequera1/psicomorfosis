@@ -18,6 +18,7 @@ import { Route as PrivacidadRouteImport } from './routes/privacidad'
 import { Route as PrescripcionRouteImport } from './routes/prescripcion'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PacientesRouteImport } from './routes/pacientes'
+import { Route as NathalyFerrerRouteImport } from './routes/nathaly-ferrer'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LegalAdminRouteImport } from './routes/legal-admin'
 import { Route as InicioRouteImport } from './routes/inicio'
@@ -32,6 +33,7 @@ import { Route as PlatformTestRequestsRouteImport } from './routes/platform_.tes
 import { Route as PlatformSolicitudesRouteImport } from './routes/platform_.solicitudes'
 import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
 import { Route as PlatformAnunciosRouteImport } from './routes/platform_.anuncios'
+import { Route as PerfilSlugRouteImport } from './routes/perfil_.$slug'
 import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as PTestsRouteImport } from './routes/p_.tests'
 import { Route as PTareasRouteImport } from './routes/p_.tareas'
@@ -40,10 +42,12 @@ import { Route as PLoginRouteImport } from './routes/p_.login'
 import { Route as PInicioRouteImport } from './routes/p_.inicio'
 import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
 import { Route as PCitasRouteImport } from './routes/p_.citas'
+import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as LegalAdminAceptacionesRouteImport } from './routes/legal-admin_.aceptaciones'
 import { Route as LegalAdminSlugRouteImport } from './routes/legal-admin_.$slug'
 import { Route as FirmarTokenRouteImport } from './routes/firmar.$token'
 import { Route as DocumentosIdRouteImport } from './routes/documentos_.$id'
+import { Route as AuthGoogleRouteImport } from './routes/auth_.google'
 import { Route as PacientesIdBibliotecaRouteImport } from './routes/pacientes_.$id_.biblioteca'
 import { Route as PFirmarDocIdRouteImport } from './routes/p_.firmar.$docId'
 import { Route as PDocumentosIdRouteImport } from './routes/p_.documentos_.$id'
@@ -93,6 +97,11 @@ const PlatformRoute = PlatformRouteImport.update({
 const PacientesRoute = PacientesRouteImport.update({
   id: '/pacientes',
   path: '/pacientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NathalyFerrerRoute = NathalyFerrerRouteImport.update({
+  id: '/nathaly-ferrer',
+  path: '/nathaly-ferrer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -165,6 +174,11 @@ const PlatformAnunciosRoute = PlatformAnunciosRouteImport.update({
   path: '/platform/anuncios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PerfilSlugRoute = PerfilSlugRouteImport.update({
+  id: '/perfil_/$slug',
+  path: '/perfil/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PacientesIdRoute = PacientesIdRouteImport.update({
   id: '/pacientes_/$id',
   path: '/pacientes/$id',
@@ -205,6 +219,11 @@ const PCitasRoute = PCitasRouteImport.update({
   path: '/p/citas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LegalSlugRoute = LegalSlugRouteImport.update({
+  id: '/legal/$slug',
+  path: '/legal/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LegalAdminAceptacionesRoute = LegalAdminAceptacionesRouteImport.update({
   id: '/legal-admin_/aceptaciones',
   path: '/legal-admin/aceptaciones',
@@ -223,6 +242,11 @@ const FirmarTokenRoute = FirmarTokenRouteImport.update({
 const DocumentosIdRoute = DocumentosIdRouteImport.update({
   id: '/documentos_/$id',
   path: '/documentos/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthGoogleRoute = AuthGoogleRouteImport.update({
+  id: '/auth_/google',
+  path: '/auth/google',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PacientesIdBibliotecaRoute = PacientesIdBibliotecaRouteImport.update({
@@ -262,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
+  '/nathaly-ferrer': typeof NathalyFerrerRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
@@ -271,10 +296,12 @@ export interface FileRoutesByFullPath {
   '/tareas': typeof TareasRoute
   '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
+  '/auth/google': typeof AuthGoogleRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -283,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/perfil/$slug': typeof PerfilSlugRoute
   '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/solicitudes': typeof PlatformSolicitudesRoute
@@ -304,6 +332,7 @@ export interface FileRoutesByTo {
   '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
+  '/nathaly-ferrer': typeof NathalyFerrerRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
@@ -313,10 +342,12 @@ export interface FileRoutesByTo {
   '/tareas': typeof TareasRoute
   '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
+  '/auth/google': typeof AuthGoogleRoute
   '/documentos/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -325,6 +356,7 @@ export interface FileRoutesByTo {
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
   '/pacientes/$id': typeof PacientesIdRoute
+  '/perfil/$slug': typeof PerfilSlugRoute
   '/platform/anuncios': typeof PlatformAnunciosRoute
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/solicitudes': typeof PlatformSolicitudesRoute
@@ -347,6 +379,7 @@ export interface FileRoutesById {
   '/inicio': typeof InicioRoute
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
+  '/nathaly-ferrer': typeof NathalyFerrerRoute
   '/pacientes': typeof PacientesRoute
   '/platform': typeof PlatformRoute
   '/prescripcion': typeof PrescripcionRoute
@@ -356,10 +389,12 @@ export interface FileRoutesById {
   '/tareas': typeof TareasRoute
   '/terminos': typeof TerminosRoute
   '/tests': typeof TestsRoute
+  '/auth_/google': typeof AuthGoogleRoute
   '/documentos_/$id': typeof DocumentosIdRoute
   '/firmar/$token': typeof FirmarTokenRoute
   '/legal-admin_/$slug': typeof LegalAdminSlugRoute
   '/legal-admin_/aceptaciones': typeof LegalAdminAceptacionesRoute
+  '/legal/$slug': typeof LegalSlugRoute
   '/p_/citas': typeof PCitasRoute
   '/p_/documentos': typeof PDocumentosRoute
   '/p_/inicio': typeof PInicioRoute
@@ -368,6 +403,7 @@ export interface FileRoutesById {
   '/p_/tareas': typeof PTareasRoute
   '/p_/tests': typeof PTestsRoute
   '/pacientes_/$id': typeof PacientesIdRoute
+  '/perfil_/$slug': typeof PerfilSlugRoute
   '/platform_/anuncios': typeof PlatformAnunciosRoute
   '/platform_/reportes': typeof PlatformReportesRoute
   '/platform_/solicitudes': typeof PlatformSolicitudesRoute
@@ -391,6 +427,7 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/legal-admin'
     | '/login'
+    | '/nathaly-ferrer'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
@@ -400,10 +437,12 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/terminos'
     | '/tests'
+    | '/auth/google'
     | '/documentos/$id'
     | '/firmar/$token'
     | '/legal-admin/$slug'
     | '/legal-admin/aceptaciones'
+    | '/legal/$slug'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -412,6 +451,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/perfil/$slug'
     | '/platform/anuncios'
     | '/platform/reportes'
     | '/platform/solicitudes'
@@ -433,6 +473,7 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/legal-admin'
     | '/login'
+    | '/nathaly-ferrer'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
@@ -442,10 +483,12 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/terminos'
     | '/tests'
+    | '/auth/google'
     | '/documentos/$id'
     | '/firmar/$token'
     | '/legal-admin/$slug'
     | '/legal-admin/aceptaciones'
+    | '/legal/$slug'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -454,6 +497,7 @@ export interface FileRouteTypes {
     | '/p/tareas'
     | '/p/tests'
     | '/pacientes/$id'
+    | '/perfil/$slug'
     | '/platform/anuncios'
     | '/platform/reportes'
     | '/platform/solicitudes'
@@ -475,6 +519,7 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/legal-admin'
     | '/login'
+    | '/nathaly-ferrer'
     | '/pacientes'
     | '/platform'
     | '/prescripcion'
@@ -484,10 +529,12 @@ export interface FileRouteTypes {
     | '/tareas'
     | '/terminos'
     | '/tests'
+    | '/auth_/google'
     | '/documentos_/$id'
     | '/firmar/$token'
     | '/legal-admin_/$slug'
     | '/legal-admin_/aceptaciones'
+    | '/legal/$slug'
     | '/p_/citas'
     | '/p_/documentos'
     | '/p_/inicio'
@@ -496,6 +543,7 @@ export interface FileRouteTypes {
     | '/p_/tareas'
     | '/p_/tests'
     | '/pacientes_/$id'
+    | '/perfil_/$slug'
     | '/platform_/anuncios'
     | '/platform_/reportes'
     | '/platform_/solicitudes'
@@ -518,6 +566,7 @@ export interface RootRouteChildren {
   InicioRoute: typeof InicioRoute
   LegalAdminRoute: typeof LegalAdminRoute
   LoginRoute: typeof LoginRoute
+  NathalyFerrerRoute: typeof NathalyFerrerRoute
   PacientesRoute: typeof PacientesRoute
   PlatformRoute: typeof PlatformRoute
   PrescripcionRoute: typeof PrescripcionRoute
@@ -527,10 +576,12 @@ export interface RootRouteChildren {
   TareasRoute: typeof TareasRoute
   TerminosRoute: typeof TerminosRoute
   TestsRoute: typeof TestsRoute
+  AuthGoogleRoute: typeof AuthGoogleRoute
   DocumentosIdRoute: typeof DocumentosIdRoute
   FirmarTokenRoute: typeof FirmarTokenRoute
   LegalAdminSlugRoute: typeof LegalAdminSlugRoute
   LegalAdminAceptacionesRoute: typeof LegalAdminAceptacionesRoute
+  LegalSlugRoute: typeof LegalSlugRoute
   PCitasRoute: typeof PCitasRoute
   PDocumentosRoute: typeof PDocumentosRoute
   PInicioRoute: typeof PInicioRoute
@@ -539,6 +590,7 @@ export interface RootRouteChildren {
   PTareasRoute: typeof PTareasRoute
   PTestsRoute: typeof PTestsRoute
   PacientesIdRoute: typeof PacientesIdRoute
+  PerfilSlugRoute: typeof PerfilSlugRoute
   PlatformAnunciosRoute: typeof PlatformAnunciosRoute
   PlatformReportesRoute: typeof PlatformReportesRoute
   PlatformSolicitudesRoute: typeof PlatformSolicitudesRoute
@@ -613,6 +665,13 @@ declare module '@tanstack/react-router' {
       path: '/pacientes'
       fullPath: '/pacientes'
       preLoaderRoute: typeof PacientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nathaly-ferrer': {
+      id: '/nathaly-ferrer'
+      path: '/nathaly-ferrer'
+      fullPath: '/nathaly-ferrer'
+      preLoaderRoute: typeof NathalyFerrerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -713,6 +772,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformAnunciosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/perfil_/$slug': {
+      id: '/perfil_/$slug'
+      path: '/perfil/$slug'
+      fullPath: '/perfil/$slug'
+      preLoaderRoute: typeof PerfilSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pacientes_/$id': {
       id: '/pacientes_/$id'
       path: '/pacientes/$id'
@@ -769,6 +835,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PCitasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/legal/$slug': {
+      id: '/legal/$slug'
+      path: '/legal/$slug'
+      fullPath: '/legal/$slug'
+      preLoaderRoute: typeof LegalSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/legal-admin_/aceptaciones': {
       id: '/legal-admin_/aceptaciones'
       path: '/legal-admin/aceptaciones'
@@ -795,6 +868,13 @@ declare module '@tanstack/react-router' {
       path: '/documentos/$id'
       fullPath: '/documentos/$id'
       preLoaderRoute: typeof DocumentosIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth_/google': {
+      id: '/auth_/google'
+      path: '/auth/google'
+      fullPath: '/auth/google'
+      preLoaderRoute: typeof AuthGoogleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pacientes_/$id_/biblioteca': {
@@ -846,6 +926,7 @@ const rootRouteChildren: RootRouteChildren = {
   InicioRoute: InicioRoute,
   LegalAdminRoute: LegalAdminRoute,
   LoginRoute: LoginRoute,
+  NathalyFerrerRoute: NathalyFerrerRoute,
   PacientesRoute: PacientesRoute,
   PlatformRoute: PlatformRoute,
   PrescripcionRoute: PrescripcionRoute,
@@ -855,10 +936,12 @@ const rootRouteChildren: RootRouteChildren = {
   TareasRoute: TareasRoute,
   TerminosRoute: TerminosRoute,
   TestsRoute: TestsRoute,
+  AuthGoogleRoute: AuthGoogleRoute,
   DocumentosIdRoute: DocumentosIdRoute,
   FirmarTokenRoute: FirmarTokenRoute,
   LegalAdminSlugRoute: LegalAdminSlugRoute,
   LegalAdminAceptacionesRoute: LegalAdminAceptacionesRoute,
+  LegalSlugRoute: LegalSlugRoute,
   PCitasRoute: PCitasRoute,
   PDocumentosRoute: PDocumentosRoute,
   PInicioRoute: PInicioRoute,
@@ -867,6 +950,7 @@ const rootRouteChildren: RootRouteChildren = {
   PTareasRoute: PTareasRoute,
   PTestsRoute: PTestsRoute,
   PacientesIdRoute: PacientesIdRoute,
+  PerfilSlugRoute: PerfilSlugRoute,
   PlatformAnunciosRoute: PlatformAnunciosRoute,
   PlatformReportesRoute: PlatformReportesRoute,
   PlatformSolicitudesRoute: PlatformSolicitudesRoute,

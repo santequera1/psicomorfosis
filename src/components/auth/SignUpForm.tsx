@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Check,
   ArrowRight, User, Sparkles, Phone,
@@ -22,6 +23,17 @@ export function SignUpForm({ onDone }: { onDone: () => void }) {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Los documentos que exigen aceptación los define el asesor legal, no
+  // el front. Los pedimos para nombrarlos en la casilla: aceptar algo
+  // que no se puede leer no es aceptar. Si la petición falla, el registro
+  // sigue funcionando con los dos enlaces fijos.
+  const { data: requiredDocs = [] } = useQuery({
+    queryKey: ["legal-signup-required"],
+    queryFn: () => api.legalSignupRequired(),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   const pwdOk = password.length >= 8;
   const emailOk = /\S+@\S+\.\S+/.test(email);
@@ -158,11 +170,24 @@ export function SignUpForm({ onDone }: { onDone: () => void }) {
           Acepto los{" "}
           <a href="/terminos" target="_blank" rel="noreferrer" className="text-brand-700 underline underline-offset-2">
             términos y condiciones
-          </a>{" "}
-          y el{" "}
+          </a>
+          , el{" "}
           <a href="/privacidad" target="_blank" rel="noreferrer" className="text-brand-700 underline underline-offset-2">
             aviso de privacidad
           </a>
+          {requiredDocs.map((d, i) => (
+            <span key={d.slug}>
+              {i === requiredDocs.length - 1 ? " y " : ", "}
+              <a
+                href={`/legal/${d.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-700 underline underline-offset-2"
+              >
+                {d.title.toLowerCase()}
+              </a>
+            </span>
+          ))}
           . Manejaré datos clínicos conforme a la Ley 1581 de 2012.
         </span>
       </button>

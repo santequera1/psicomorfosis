@@ -5,8 +5,15 @@
  * autorización con el state anti-CSRF. Menos JS de terceros en una app
  * que maneja datos clínicos, y funciona igual.
  */
-export function GoogleButton({ label = "Continuar con Google" }: { label?: string }) {
+export function GoogleButton({
+  label = "Continuar con Google",
+  /** Muestra el aviso legal bajo el botón. Solo donde se puede crear
+   *  cuenta: pulsar el botón es el acto de aceptación (clickwrap), y el
+   *  backend lo registra con IP y user-agent al dar de alta. */
+  showTerms = false,
+}: { label?: string; showTerms?: boolean }) {
   return (
+    <>
     <a
       href="/api/auth/google"
       className="w-full h-12 rounded-full border border-line-200 bg-surface text-ink-900 text-sm font-medium hover:border-brand-400 hover:bg-bg-50 inline-flex items-center justify-center gap-3 transition-colors"
@@ -19,6 +26,19 @@ export function GoogleButton({ label = "Continuar con Google" }: { label?: strin
       </svg>
       {label}
     </a>
+    {showTerms && (
+      <p className="mt-2.5 text-[11px] text-ink-500 leading-relaxed text-center">
+        Al continuar aceptas los{" "}
+        <a href="/terminos" target="_blank" rel="noreferrer" className="text-brand-700 underline underline-offset-2">
+          términos y condiciones
+        </a>{" "}
+        y el{" "}
+        <a href="/privacidad" target="_blank" rel="noreferrer" className="text-brand-700 underline underline-offset-2">
+          aviso de privacidad
+        </a>.
+      </p>
+    )}
+    </>
   );
 }
 

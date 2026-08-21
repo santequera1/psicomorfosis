@@ -3,21 +3,39 @@ import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles, X, Bug, FileText, MessageCircle, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, getStoredUser } from "@/lib/api";
+import { hasCompletedTour } from "@/lib/tour";
+import { TOUR_NAMES } from "@/lib/tours";
 
 /**
  * Botón "Novedades" en el Topbar: icono Sparkles con badge de no
  * leídas. Al hacer click abre el modal con la lista de anuncios.
  *
- * Auto-show: si el user tiene anuncios sin leer y no los ha visto en
- * esta sesión del browser, el modal se abre automáticamente al cargar.
+ * Auto-show: si el user tiene anuncios RECIENTES sin leer y no los ha
+ * visto en esta sesión del browser, el modal se abre automáticamente.
  * Usamos sessionStorage (no localStorage) para que abra UNA vez por
  * pestaña — si el user cierra y vuelve, los ve de nuevo si todavía no
  * marcó leído. Para no abrir en cada navegación dentro de la sesión.
  *
+ * Tres condiciones frenan el auto-show, y las tres existen por la misma
+ * razón: no apilar ventanas encima del usuario que acaba de entrar.
+ *
+ *   1. Antigüedad. Una cuenta nueva tiene TODO sin leer, incluidos
+ *      anuncios de hace meses. Abrirle "Dictado por voz disponible"
+ *      (mayo) como si fuera noticia es ruido. Solo auto-abrimos lo
+ *      publicado en los últimos 30 días; lo viejo sigue en la lista,
+ *      accesible desde el botón, pero no interrumpe.
+ *   2. Términos pendientes. El gate legal es bloqueante; un modal
+ *      encima de otro es inusable.
+ *   3. Tour de bienvenida sin completar. Quien entra por primera vez
+ *      está haciendo el tour — las novedades esperan a la próxima.
+ *
  * El estado isRead lo persiste el backend (tabla announcement_reads).
  */
 const SESSION_AUTOSHOW_KEY = "psm.announcements.shownThisSession";
+
+/** Ventana de "esto todavía es noticia". */
+const AUTOSHOW_MAX_AGE_DAYS = 30;
 
 export function AnnouncementsButton() {
   const qc = useQueryClient();
@@ -34,14 +52,36 @@ export function AnnouncementsButton() {
   const unreadCount = data?.unreadCount ?? 0;
   const items = data?.items ?? [];
 
-  // Auto-show la primera vez en la sesión si hay no leídas.
+  // Mismo queryKey que PendingLegalGate → sale de caché, sin request extra.
+  const user = getStoredUser();
+  const { data: legal, isLoading: legalLoading } = useQuery({
+    queryKey: ["legal-pending", user?.id],
+    queryFn: () => api.legalMyPending(),
+    enabled: !!user && !user.isLegalAdmin,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const hasPendingLegal = (legal?.pending ?? []).length > 0;
+
+  const hasFreshUnread = items.some(
+    (a) => !a.isRead && Date.now() - new Date(a.publishedAt).getTime()
+      < AUTOSHOW_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  // Auto-show la primera vez en la sesión, si nada más está ocupando
+  // la pantalla y hay algo que de verdad sea nuevo.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (unreadCount === 0) return;
+    if (!hasFreshUnread) return;
+    if (legalLoading || hasPendingLegal) return;
+    // La asesora legal aterriza en /legal-admin, donde el tour de
+    // bienvenida no corre nunca — si la condicionáramos a completarlo,
+    // no vería jamás un anuncio.
+    if (!user?.isLegalAdmin && !hasCompletedTour(TOUR_NAMES.welcome)) return;
     if (sessionStorage.getItem(SESSION_AUTOSHOW_KEY) === "1") return;
     setOpen(true);
     sessionStorage.setItem(SESSION_AUTOSHOW_KEY, "1");
-  }, [unreadCount]);
+  }, [hasFreshUnread, legalLoading, hasPendingLegal, user?.isLegalAdmin]);
 
   const markAllRead = useMutation({
     mutationFn: async () => {

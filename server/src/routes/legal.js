@@ -173,6 +173,34 @@ function userAudience(user) {
 // Endpoints sin auth para que el sitio público y el portal del paciente
 // los puedan leer. NO devuelve drafts — solo la última versión `published`.
 
+/**
+ * GET /api/legal/public/signup-required
+ *
+ * Documentos que un profesional debe aceptar para crear cuenta. El
+ * formulario de registro los pinta con enlace en la casilla "Acepto…",
+ * en vez de nombrar a mano "términos y condiciones".
+ *
+ * Va antes de /public/:slug a propósito: si se registra después, Express
+ * hace match de "signup-required" contra :slug y devuelve 404.
+ *
+ * Sale de la misma consulta que usa recordSignupAcceptances, así que lo
+ * que el usuario lee es exactamente lo que se le registra. Si el asesor
+ * legal publica mañana un documento nuevo con requires_acceptance=1,
+ * aparece aquí solo — sin tocar el front.
+ */
+router.get("/public/signup-required", (_req, res) => {
+  const rows = db.prepare(`
+    SELECT d.slug, d.title, v.version_label
+    FROM legal_documents d
+    JOIN legal_document_versions v ON v.document_id = d.id AND v.status = 'published'
+    WHERE d.requires_acceptance = 1
+      AND (d.acceptance_audience = 'both' OR d.acceptance_audience = 'staff')
+    ORDER BY d.title
+  `).all();
+  res.set("Cache-Control", "public, max-age=300");
+  res.json(rows.map((r) => ({ slug: r.slug, title: r.title, versionLabel: r.version_label })));
+});
+
 router.get("/public/:slug", (req, res) => {
   const v = getLatestPublished(req.params.slug);
   if (!v) {
@@ -792,5 +820,49 @@ router.get("/admin/acceptances", (req, res) => {
 
   res.json({ rows, total, limit, offset });
 });
+
+/**
+ * Registra la aceptación de los documentos legales vigentes para un
+ * usuario recién creado.
+ *
+ * Existe para que el "Acepto los términos y condiciones" del formulario
+ * de registro cuente como la aceptación real. Sin esto, la casilla del
+ * signup no dejaba rastro y `GET /me/pending` devolvía los documentos
+ * como pendientes: el usuario aceptaba en el registro y, un segundo
+ * después, la app le abría un modal bloqueante pidiéndole lo mismo.
+ *
+ * Guarda IP y user-agent igual que la aceptación interactiva — el audit
+ * log de la SIC no distingue entre una y otra.
+ *
+ * Nunca lanza: si algo falla, el peor caso es que el gate legal aparezca
+ * una vez. Un alta de cuenta no se cae por esto.
+ */
+export function recordSignupAcceptances(userId, req) {
+  try {
+    const docs = db.prepare(`
+      SELECT d.id AS document_id, v.id AS version_id
+      FROM legal_documents d
+      JOIN legal_document_versions v ON v.document_id = d.id AND v.status = 'published'
+      WHERE d.requires_acceptance = 1
+        AND (d.acceptance_audience = 'both' OR d.acceptance_audience = 'staff')
+    `).all();
+    if (docs.length === 0) return 0;
+
+    const ip = req?.headers?.["x-forwarded-for"]?.toString().split(",")[0].trim()
+      || req?.ip || null;
+    const userAgent = req?.headers?.["user-agent"] ?? null;
+    const ins = db.prepare(`
+      INSERT INTO legal_acceptances (user_id, patient_id, document_id, version_id, ip, user_agent)
+      VALUES (?, NULL, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const d of docs) ins.run(userId, d.document_id, d.version_id, ip, userAgent);
+    })();
+    return docs.length;
+  } catch (e) {
+    console.warn("[legal] no se pudo registrar la aceptación del signup:", e?.message);
+    return 0;
+  }
+}
 
 export default router;

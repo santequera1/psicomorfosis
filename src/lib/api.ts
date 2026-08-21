@@ -948,6 +948,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /** Documentos que hay que aceptar para crear cuenta (para el signup). */
+  legalSignupRequired: () =>
+    request<Array<{ slug: string; title: string; versionLabel: string }>>(
+      "/api/legal/public/signup-required",
+    ),
   /** ¿Está abierto el registro público? (permite cerrarlo sin redeploy) */
   signupStatus: () => request<{ enabled: boolean }>("/api/auth/signup-status"),
 

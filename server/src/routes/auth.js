@@ -5,6 +5,7 @@ import { db, seedTaskColumns } from "../db.js";
 import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
 import { sendWelcomeEmail } from "../mailer.js";
+import { recordSignupAcceptances } from "./legal.js";
 
 const router = Router();
 
@@ -479,6 +480,13 @@ router.post("/register", registerLimiter, (req, res) => {
   }
 
   console.log("[register] nueva cuenta ws=" + created.wsId + " user=" + created.userId + " email=" + email);
+
+  // La casilla "Acepto los términos y condiciones" del formulario es la
+  // aceptación real: la dejamos registrada con IP y user-agent. Sin esto
+  // el usuario aceptaba en el registro y la app le abría acto seguido el
+  // modal bloqueante pidiéndole exactamente lo mismo.
+  const nAcc = recordSignupAcceptances(created.userId, req);
+  if (nAcc) console.log("[register] " + nAcc + " documento(s) legal(es) aceptado(s) en el alta");
 
   // Bienvenida best-effort: si el correo falla, el registro NO se cae.
   try {

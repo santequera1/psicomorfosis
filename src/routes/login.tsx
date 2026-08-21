@@ -140,7 +140,10 @@ function LoginPage() {
 
           {/* Google primero: para la mayoría es el camino de un clic, y
               sirve tanto para entrar como para crear cuenta. */}
-          <GoogleButton label={tab === "login" ? "Continuar con Google" : "Registrarme con Google"} />
+          <GoogleButton
+            label={tab === "login" ? "Continuar con Google" : "Registrarme con Google"}
+            showTerms={tab !== "login"}
+          />
           <AuthDivider text={tab === "login" ? "o con tu correo" : "o con tus datos"} />
 
           {tab === "login" ? (

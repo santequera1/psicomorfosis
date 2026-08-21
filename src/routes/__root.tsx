@@ -156,6 +156,7 @@ const BOOTSTRAP_SCRIPT = `
       || path.indexOf('/p/activar/') === 0
       || path.indexOf('/firmar/') === 0
       || path.indexOf('/perfil/') === 0
+      || path.indexOf('/legal/') === 0
       || path === '/auth/google';
     if (isPatientPortal) {
       // Portal del paciente: si requiere auth y no hay token o el token no es de paciente → /p/login
