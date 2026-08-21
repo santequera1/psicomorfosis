@@ -29,9 +29,20 @@ export function NewPatientModal({
   const mainProfessional = professionals[0];
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({
-    pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [], tags: [],
-    ...(initial ?? {}),
+  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>(() => {
+    // El formulario separa nombres y apellidos; `initial.name` llega
+    // junto (p. ej. desde Laura). Partimos por el último espacio para
+    // que "María José Pérez" quede como "María José" / "Pérez".
+    const full = String(initial?.name ?? "").trim();
+    const cut = full.lastIndexOf(" ");
+    const split = full
+      ? { firstName: cut > 0 ? full.slice(0, cut) : full, lastName: cut > 0 ? full.slice(cut + 1) : "" }
+      : {};
+    return {
+      pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [], tags: [],
+      ...(initial ?? {}),
+      ...split,
+    } as Partial<Patient> & { professionalId?: number };
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -168,14 +179,14 @@ export function NewPatientModal({
           {step === 1 && (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <Labeled label="Nombres"><input onChange={(e) => setForm((p) => ({ ...p, ...(p as any), firstName: e.target.value } as any))} placeholder="Nombre(s)" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
-                <Labeled label="Apellidos"><input onChange={(e) => setForm((p) => ({ ...p, ...(p as any), lastName: e.target.value } as any))} placeholder="Apellido(s)" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+                <Labeled label="Nombres"><input defaultValue={(form as any).firstName ?? ""} onChange={(e) => setForm((p) => ({ ...p, ...(p as any), firstName: e.target.value } as any))} placeholder="Nombre(s)" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+                <Labeled label="Apellidos"><input defaultValue={(form as any).lastName ?? ""} onChange={(e) => setForm((p) => ({ ...p, ...(p as any), lastName: e.target.value } as any))} placeholder="Apellido(s)" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Documento">
-                  <input onChange={(e) => updateField("doc", e.target.value)} placeholder="CC 1.024.587.XXX" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
+                  <input defaultValue={form.doc ?? ""} onChange={(e) => updateField("doc", e.target.value)} placeholder="CC 1.024.587.XXX" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" />
                 </Labeled>
-                <Labeled label="Edad"><input type="number" onChange={(e) => updateField("age", Number(e.target.value))} placeholder="28" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" /></Labeled>
+                <Labeled label="Edad"><input type="number" defaultValue={form.age ?? ""} onChange={(e) => updateField("age", Number(e.target.value))} placeholder="28" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700 tabular" /></Labeled>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Pronombres">
@@ -191,7 +202,7 @@ export function NewPatientModal({
                     ]}
                   />
                 </Labeled>
-                <Labeled label="Teléfono"><input onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+                <Labeled label="Teléfono"><input defaultValue={form.phone ?? ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Sexo asignado al nacer">
@@ -208,7 +219,7 @@ export function NewPatientModal({
                   />
                 </Labeled>
               </div>
-              <Labeled label="Correo"><input type="email" onChange={(e) => updateField("email", e.target.value)} placeholder="paciente@correo.co" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+              <Labeled label="Correo"><input type="email" defaultValue={form.email ?? ""} onChange={(e) => updateField("email", e.target.value)} placeholder="paciente@correo.co" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               <Labeled label="Dirección (opcional)">
                 <input
                   value={(form as any).address ?? ""}

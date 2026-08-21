@@ -305,7 +305,19 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   // El orden importa: si alguien vinculó su Gmail personal a su cuenta de
   // staff, ese vínculo debe pesar más que una coincidencia de correo con
   // otro registro (p. ej. su propia ficha de paciente).
-  let user = findBySub(sub) || findByEmail(email, sub);
+  // Pre-vinculación: un admin puede dejar `google_email` puesto en la
+  // cuenta de staff ANTES de que la persona entre por primera vez con
+  // Google (caso: su correo de plataforma es @psicomorfosis.co y su
+  // Gmail personal ya figura como paciente). Va antes que la búsqueda
+  // por correo para que gane sobre esa ficha de paciente. Al entrar,
+  // se guarda el `sub` y desde ahí manda el vínculo fuerte.
+  const findPreLinked = (val) => db.prepare(`
+    SELECT u.*, w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
+    FROM users u JOIN workspaces w ON w.id = u.workspace_id
+    WHERE LOWER(u.google_email) = LOWER(?) AND u.google_sub IS NULL AND u.role <> 'paciente'
+    ORDER BY u.id ASC
+  `).get(val);
+  let user = findBySub(sub) || findPreLinked(email) || findByEmail(email, sub);
   if (user && !user.google_sub && countByEmail(email) > 1) {
     // Ocurre si la misma persona figura en dos workspaces. Entramos al
     // que manda la prioridad de findByEmail, pero queda en el log: si
@@ -440,7 +452,9 @@ router.get("/google/link", requireAuth, (req, res) => {
   ).get(req.user.id);
   res.json({
     enabled: configured(),
-    linked: Boolean(u?.google_sub),
+    // google_email sin sub = pre-vinculada por un admin; cuenta como
+    // vinculada para la UI (ya puede entrar con ese Gmail).
+    linked: Boolean(u?.google_sub || u?.google_email),
     email: u?.google_email ?? null,
     linkedAt: u?.google_linked_at ?? null,
     // Para que Configuración ofrezca "Definir contraseña" en vez de

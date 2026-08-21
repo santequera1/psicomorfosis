@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2,
+  Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2, ChevronRight,
   MessageSquarePlus, ChevronLeft, Plus, History,
   Paperclip, Image as ImageIcon, Mic, Square,
 } from "lucide-react";
@@ -180,6 +180,48 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     }
   }, [open, mounted]);
 
+  // Composer plegable (ver patrón Messenger en el JSX). `toolsExpanded`
+  // es el "›" pulsado a propósito; se resetea al seguir escribiendo.
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  const hasContent = input.trim().length > 0 || attachedImages.length > 0;
+  const toolsCollapsed = isMobile && hasContent && !toolsExpanded;
+
+  // Teclado en móvil: el drawer mide h-dvh, pero en iOS el teclado NO
+  // cambia el viewport de layout — solo el visual — y Safari "empuja"
+  // la página para dejar el campo a la vista. Eso es el "se me mueve
+  // toda la pantalla". Ajustamos la altura del drawer al visualViewport
+  // real y devolvemos el scroll de la ventana a 0 cada vez que cambia.
+  const asideRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      const el = asideRef.current;
+      if (!el) return;
+      // Solo en pantallas chicas: en desktop el viewport no se encoge.
+      if (window.innerWidth >= 640) { el.style.height = ""; return; }
+      el.style.height = `${Math.round(vv.height)}px`;
+      if (window.scrollY !== 0) window.scrollTo(0, 0);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      if (asideRef.current) asideRef.current.style.height = "";
+    };
+  }, [open, mounted]);
+
   // Auto-grow del textarea: sin resize-y, ajustamos la altura al
   // contenido para que crezca cuando el usuario escribe varias líneas.
   // Máximo 56 (max-h-56 = 224px): cabe un párrafo dictado entero sin
@@ -188,8 +230,8 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 224)}px`;
-  }, [input]);
+    el.style.height = `${Math.min(el.scrollHeight, isMobile ? 144 : 224)}px`;
+  }, [input, isMobile]);
 
   // Body scroll lock: evita que el body scrolle detrás del drawer en
   // mobile y evita el "salto" horizontal cuando el drawer entra desde
@@ -613,6 +655,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
           backdrop. Easing levemente "spring-y" con cubic-bezier para
           que se sienta orgánico, no robótico. */}
       <aside
+        ref={asideRef}
         className={cn(
           // h-[100dvh] = "dynamic viewport height": en mobile se ajusta
           // automáticamente cuando aparece el teclado virtual y no deja
@@ -624,7 +667,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
           // lectura intensa).
           "lg-surface lg-surface--drawer rounded-none! border-l!",
           "fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl",
-          "flex flex-col",
+          "flex flex-col overscroll-contain",
           "transition-transform duration-300",
           entering
             ? "translate-x-0"
@@ -653,9 +696,12 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
                 Beta
               </span>
             </div>
-            {/* Subtítulo oculto en mobile para dar aire al header */}
-            <p className="hidden sm:block text-[11px] text-ink-500 leading-tight truncate">
-              Asistente clínica · Memoria de tu consulta
+            {/* El aviso de confianza vivía como pie del composer, donde
+                robaba altura justo donde el teclado aprieta. Aquí queda
+                visible siempre sin estorbar. */}
+            <p className="text-[10px] sm:text-[11px] text-ink-500 leading-tight truncate inline-flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3 shrink-0" />
+              Nunca toca tus pacientes ni tu historia sin tu visto bueno
             </p>
           </div>
           <button
@@ -833,13 +879,26 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               <TranscribingPanel onCancel={() => setTranscribing(false)} />
             ) : (
             <div className="flex items-end gap-1.5 sm:gap-2">
-              {/* Botón adjuntar — paperclip. En mobile 40x40 (vs 44 desktop)
-                  para dejar más espacio al textarea. */}
+              {/* Patrón Messenger: con el campo vacío se ven adjuntar y
+                  micrófono; en cuanto escribes se pliegan en un "›" para
+                  que el texto tenga todo el ancho, y aparece Enviar. El
+                  "›" los vuelve a mostrar si hacen falta. */}
+              {toolsCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => setToolsExpanded(true)}
+                  className="h-9 w-9 sm:h-11 sm:w-11 rounded-full sm:rounded-lg text-ink-500 hover:text-brand-700 hover:bg-bg-50 inline-flex items-center justify-center shrink-0"
+                  aria-label="Mostrar adjuntar y dictado"
+                  title="Más opciones"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              ) : (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || isResting || attachedImages.length >= MAX_IMAGES}
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                className="h-9 w-9 sm:h-11 sm:w-11 rounded-full sm:rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Adjuntar imagen"
                 title={
                   attachedImages.length >= MAX_IMAGES
@@ -849,6 +908,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               >
                 <Paperclip className="h-4 w-4" />
               </button>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -864,7 +924,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); if (e.target.value) setToolsExpanded(false); }}
                 onPaste={onPaste}
                 onFocus={() => {
                   // Solo scrolleamos al fondo si el usuario YA estaba
@@ -907,36 +967,41 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
                 // min-h-12 / max-h-56: más alto arriba y abajo — con 160px
                 // de tope, al dictar o pegar un párrafo largo el texto se
                 // perdía por encima del borde.
-                className="flex-1 min-w-0 min-h-12 sm:min-h-11 max-h-56 px-3 py-3 sm:py-2.5 rounded-lg border border-line-200 bg-bg text-base sm:text-sm leading-snug text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+                // En móvil: píldora de 36px de alto con 16px de letra (sin
+                // zoom de iOS); crece hasta 144px. Más alto que eso empuja
+                // la conversación fuera de la vista cuando el teclado ya
+                // se llevó media pantalla. En desktop, 44px y hasta 224px.
+                className="flex-1 min-w-0 min-h-9 sm:min-h-11 max-h-36 sm:max-h-56 px-3.5 sm:px-3 py-[7px] sm:py-2.5 rounded-[18px] sm:rounded-lg border border-line-200 bg-bg text-base sm:text-sm leading-snug text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
               />
-              {/* Botón dictado por voz — Whisper */}
+              {/* Micrófono: solo con el campo vacío (o tras el "›"). */}
+              {!toolsCollapsed && (
               <button
                 type="button"
                 onClick={() => void startDictation()}
                 disabled={sending || isResting}
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                className="h-9 w-9 sm:h-11 sm:w-11 rounded-full sm:rounded-lg border border-line-200 text-ink-600 hover:border-brand-400 hover:text-brand-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Dictar por voz"
                 title="Dictar por voz — Laura puede convertir el dictado a SOAP o cualquier otro formato si se lo pedís"
               >
                 <Mic className="h-4 w-4" />
               </button>
+              )}
+              {/* Enviar: solo cuando hay algo que enviar (en desktop siempre). */}
+              {(hasContent || !isMobile) && (
               <button
                 type="submit"
-                disabled={(!input.trim() && attachedImages.length === 0) || sending || isResting}
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
+                disabled={!hasContent || sending || isResting}
+                className="h-9 w-9 sm:h-11 sm:w-11 rounded-full sm:rounded-lg bg-brand-700 text-white hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center shrink-0"
                 aria-label="Enviar"
                 title={isResting ? "Laura está descansando" : "Enviar"}
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
+              )}
             </div>
             )}
           </div>
 
-          <p className="mt-2 text-[10px] text-ink-500 inline-flex items-center gap-1">
-            <ShieldCheck className="h-3 w-3" />
-            Laura nunca toca tus pacientes ni tu historia sin tu visto bueno.
-          </p>
         </form>
       </aside>
     </>
@@ -1543,13 +1608,16 @@ function ConversationHistory({
                 <p className="text-xs font-medium text-ink-900 truncate flex-1">
                   {c.title ?? "(sin título)"}
                 </p>
+                {/* En táctil no hay hover: el botón se ve siempre y con
+                    área de toque de 32px. En desktop aparece al pasar. */}
                 <button
                   type="button"
                   onClick={(e) => handleDelete(c.id, e)}
-                  className="opacity-0 group-hover:opacity-100 h-6 w-6 rounded text-ink-400 hover:text-rose-700 inline-flex items-center justify-center"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 h-8 w-8 sm:h-6 sm:w-6 -my-1 rounded text-ink-400 hover:text-rose-700 active:text-rose-700 inline-flex items-center justify-center shrink-0"
                   title="Eliminar"
+                  aria-label="Eliminar conversación"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                 </button>
               </div>
               <p className="text-[10px] text-ink-500 mt-0.5">

@@ -35,7 +35,10 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      // interactive-widget=resizes-content: en Android Chrome el teclado
+      // encoge el viewport (como iOS con visualViewport) en vez de tapar
+      // el pie del chat de Laura.
+      { name: "viewport", content: "width=device-width, initial-scale=1, interactive-widget=resizes-content" },
       { name: "color-scheme", content: "light dark" },
       { title: "Psicomorfosis · App para psicólogos" },
       {
