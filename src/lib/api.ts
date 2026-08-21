@@ -950,6 +950,17 @@ export const api = {
     }),
   /** ¿Está abierto el registro público? (permite cerrarlo sin redeploy) */
   signupStatus: () => request<{ enabled: boolean }>("/api/auth/signup-status"),
+
+  /** Estado del vínculo con Google del usuario actual. */
+  googleLinkStatus: () =>
+    request<{ enabled: boolean; linked: boolean; email: string | null; linkedAt: string | null }>(
+      "/api/auth/google/link",
+    ),
+  /** Arranca el flujo de vinculación: devuelve la URL de Google a la que ir. */
+  googleLinkStart: () =>
+    request<{ url: string }>("/api/auth/google/link-start", { method: "POST" }),
+  /** Quita el vínculo. Falla si la cuenta no tiene contraseña propia. */
+  googleUnlink: () => request<{ ok: true }>("/api/auth/google/link", { method: "DELETE" }),
   /** Logout server-side: invalida TODOS los tokens del usuario actual. */
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   /** Logout del paciente — equivalente del portal. */

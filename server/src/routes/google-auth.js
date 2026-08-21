@@ -7,9 +7,14 @@
  * Qué hace el callback:
  *   1. Canjea el `code` por un `id_token` (JWT firmado por Google).
  *   2. Valida el token contra las claves públicas de Google (aud, iss, exp).
- *   3. Busca al usuario por correo:
+ *   3. Identifica al usuario: primero por `sub` (el id estable de Google,
+ *      guardado al vincular), y si no, por correo.
  *        - existe  → inicia sesión
  *        - no existe → crea su workspace igual que el registro normal
+ *      POST /api/auth/google/link-start arranca un flujo distinto: en vez
+ *      de iniciar sesión, conecta esa cuenta de Google al usuario logueado.
+ *      Eso permite entrar con Google aunque el correo de la plataforma
+ *      no sea de Google (p. ej. una casilla propia @psicomorfosis.co).
  *   4. Redirige al front con el token en el fragmento (#), no en la query:
  *      el fragmento no viaja al servidor ni queda en logs/Referer.
  *
@@ -20,7 +25,7 @@
 import { Router } from "express";
 import crypto from "node:crypto";
 import { db, seedTaskColumns } from "../db.js";
-import { signToken } from "../auth.js";
+import { signToken, requireAuth } from "../auth.js";
 import { sendWelcomeEmail } from "../mailer.js";
 
 const router = Router();
@@ -45,19 +50,20 @@ const configured = () => Boolean(cfg().clientId && cfg().clientSecret);
  * podría inducir un callback y enlazar su cuenta de Google con otra sesión.
  */
 const states = new Map();
-function issueState() {
+/** `linkUserId` presente = flujo de VINCULAR (usuario ya autenticado). */
+function issueState(linkUserId = null) {
   const s = crypto.randomBytes(24).toString("hex");
-  states.set(s, Date.now());
-  // Limpieza oportunista de expirados
+  states.set(s, { at: Date.now(), linkUserId });
   const cutoff = Date.now() - 10 * 60 * 1000;
-  for (const [k, t] of states) if (t < cutoff) states.delete(k);
+  for (const [k, v] of states) if (v.at < cutoff) states.delete(k);
   return s;
 }
+/** Devuelve null si es inválido/expirado, o { linkUserId } si es válido. */
 function consumeState(s) {
-  if (!s || !states.has(s)) return false;
-  const t = states.get(s);
+  if (!s || !states.has(s)) return null;
+  const v = states.get(s);
   states.delete(s);
-  return Date.now() - t < 10 * 60 * 1000;
+  return Date.now() - v.at < 10 * 60 * 1000 ? v : null;
 }
 
 /** Cache de las claves públicas de Google (rotan cada pocas horas). */
@@ -125,28 +131,43 @@ function fail(res, code) {
   return res.redirect(`${cfg().appUrl}/login?google_error=${encodeURIComponent(code)}`);
 }
 
-// ─── Paso 1: mandar al usuario a Google ──────────────────────────────
-router.get("/google", (req, res) => {
-  if (!configured()) return fail(res, "no_configurado");
-  const state = issueState();
+/** Arma la URL de autorización de Google con un state fresco. */
+function authorizeUrl(linkUserId = null) {
   const params = new URLSearchParams({
     client_id: cfg().clientId,
     redirect_uri: cfg().redirectUri,
     response_type: "code",
     scope: "openid email profile",
-    state,
+    state: issueState(linkUserId),
     // Pide seleccionar cuenta siempre: evita entrar con la sesión de
     // Google equivocada sin darse cuenta (típico en equipos compartidos).
     prompt: "select_account",
   });
-  res.redirect(`${GOOGLE_AUTH}?${params}`);
+  return `${GOOGLE_AUTH}?${params}`;
+}
+
+// ─── Paso 1: mandar al usuario a Google ──────────────────────────────
+router.get("/google", (_req, res) => {
+  if (!configured()) return fail(res, "no_configurado");
+  res.redirect(authorizeUrl());
+});
+
+/**
+ * Paso 1 del flujo de VINCULAR. Devuelve la URL en vez de redirigir para
+ * que el JWT viaje en la cabecera Authorization y no en la query — un
+ * token en la URL queda escrito en los logs de nginx y en el Referer.
+ */
+router.post("/google/link-start", requireAuth, (req, res) => {
+  if (!configured()) return res.status(503).json({ error: "Google no está configurado" });
+  res.json({ url: authorizeUrl(req.user.id) });
 });
 
 // ─── Paso 2: Google vuelve con el código ─────────────────────────────
 router.get("/google/callback", async (req, res) => {
   if (!configured()) return fail(res, "no_configurado");
   if (req.query.error) return fail(res, "cancelado");
-  if (!consumeState(req.query.state)) return fail(res, "state_invalido");
+  const stateData = consumeState(req.query.state);
+  if (!stateData) return fail(res, "state_invalido");
 
   const code = String(req.query.code ?? "");
   if (!code) return fail(res, "sin_codigo");
@@ -176,13 +197,41 @@ router.get("/google/callback", async (req, res) => {
 
   const email = String(profile.email).toLowerCase();
   const fullName = profile.name || email.split("@")[0];
+  const sub = String(profile.sub);
 
-  // ¿Ya existe? → iniciar sesión con esa cuenta.
-  let user = db.prepare(`
+  const findByCol = (col, val) => db.prepare(`
     SELECT u.*, w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
     FROM users u JOIN workspaces w ON w.id = u.workspace_id
-    WHERE LOWER(u.email) = LOWER(?)
-  `).get(email);
+    WHERE ${col} = ?
+  `).get(val);
+
+  // ─── Modo VINCULAR ─────────────────────────────────────────────────
+  // El usuario ya está dentro y quiere poder entrar con Google. Aquí NO
+  // se busca por correo: se conecta esta cuenta de Google a SU usuario,
+  // aunque el correo de la plataforma sea otro (p. ej. @psicomorfosis.co).
+  if (stateData.linkUserId) {
+    const owner = findByCol("u.google_sub", sub);
+    if (owner && owner.id !== stateData.linkUserId) {
+      return res.redirect(`${cfg().appUrl}/configuracion?google_error=google_ya_vinculado`);
+    }
+    try {
+      db.prepare(
+        "UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = ?, auth_provider = 'password+google' WHERE id = ?",
+      ).run(sub, email, new Date().toISOString(), stateData.linkUserId);
+    } catch (e) {
+      console.error("[google] vinculación falló:", e?.message);
+      return res.redirect(`${cfg().appUrl}/configuracion?google_error=vinculacion_fallida`);
+    }
+    console.log(`[google] vinculada user=${stateData.linkUserId} google=${email}`);
+    return res.redirect(`${cfg().appUrl}/configuracion?google_ok=vinculada`);
+  }
+
+  // ─── Modo LOGIN ────────────────────────────────────────────────────
+  // Primero por `sub` (vínculo explícito, gana siempre), luego por correo.
+  // El orden importa: si alguien vinculó su Gmail personal a su cuenta de
+  // staff, ese vínculo debe pesar más que una coincidencia de correo con
+  // otro registro (p. ej. su propia ficha de paciente).
+  let user = findByCol("u.google_sub", sub) || findByCol("LOWER(u.email)", email);
 
   if (user) {
     if (user.role === "paciente") {
@@ -192,12 +241,19 @@ router.get("/google/callback", async (req, res) => {
     if (user.disabled_at && !user.is_platform_admin && !user.is_legal_admin) {
       return fail(res, "cuenta_deshabilitada");
     }
-    // Marcar el correo como verificado: Google ya lo comprobó.
+    // Marcar el correo como verificado: Google ya lo comprobó. Y dejar
+    // el vínculo guardado para que siga funcionando si luego cambia de
+    // correo en la plataforma (a menos que ese `sub` ya sea de otro).
     try {
       db.prepare(
         "UPDATE users SET last_login_at = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?",
       ).run(new Date().toISOString(), new Date().toISOString(), user.id);
-    } catch { /* tracking no bloquea el login */ }
+      if (!user.google_sub) {
+        db.prepare(
+          "UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = ? WHERE id = ?",
+        ).run(sub, email, new Date().toISOString(), user.id);
+      }
+    } catch { /* tracking/vínculo no bloquean el login */ }
   } else {
     // No existe → alta automática, misma forma que el registro normal.
     const username = deriveUsername(email);
@@ -217,11 +273,13 @@ router.get("/google/callback", async (req, res) => {
         // con "olvidé mi contraseña").
         const userId = db.prepare(`
           INSERT INTO users (workspace_id, username, password_hash, name, email, role,
-                             professional_id, auth_provider, email_verified_at, photo_url)
-          VALUES (?, ?, ?, ?, ?, 'super_admin', ?, 'google', ?, ?)
+                             professional_id, auth_provider, email_verified_at, photo_url,
+                             google_sub, google_email, google_linked_at)
+          VALUES (?, ?, ?, ?, ?, 'super_admin', ?, 'google', ?, ?, ?, ?, ?)
         `).run(
           wsId, username, `!google!${crypto.randomBytes(24).toString("hex")}`,
           fullName, email, profId, new Date().toISOString(), profile.picture ?? null,
+          sub, email, new Date().toISOString(),
         ).lastInsertRowid;
         return { wsId, userId, profId, username, wsName };
       })();
@@ -271,5 +329,37 @@ router.get("/google/callback", async (req, res) => {
 
 /** El front pregunta si mostrar el botón. */
 router.get("/google/status", (_req, res) => res.json({ enabled: configured() }));
+
+/** Estado del vínculo del usuario actual (para Configuración → Seguridad). */
+router.get("/google/link", requireAuth, (req, res) => {
+  const u = db.prepare(
+    "SELECT google_sub, google_email, google_linked_at FROM users WHERE id = ?",
+  ).get(req.user.id);
+  res.json({
+    enabled: configured(),
+    linked: Boolean(u?.google_sub),
+    email: u?.google_email ?? null,
+    linkedAt: u?.google_linked_at ?? null,
+  });
+});
+
+/**
+ * Desvincular. Solo si queda otra forma de entrar: una cuenta creada con
+ * Google no tiene contraseña utilizable, así que desvincular la dejaría
+ * sin acceso.
+ */
+router.delete("/google/link", requireAuth, (req, res) => {
+  const u = db.prepare("SELECT auth_provider, password_hash FROM users WHERE id = ?").get(req.user.id);
+  if (!u) return res.status(404).json({ error: "No encontrado" });
+  if (String(u.password_hash ?? "").startsWith("!google!")) {
+    return res.status(409).json({
+      error: "Esta cuenta solo entra con Google. Define una contraseña antes de desvincular.",
+    });
+  }
+  db.prepare(
+    "UPDATE users SET google_sub = NULL, google_email = NULL, google_linked_at = NULL, auth_provider = 'password' WHERE id = ?",
+  ).run(req.user.id);
+  res.json({ ok: true });
+});
 
 export default router;

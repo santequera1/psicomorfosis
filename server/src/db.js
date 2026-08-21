@@ -1191,6 +1191,13 @@ function runMigrations() {
     "ALTER TABLE workspaces ADD COLUMN signup_source TEXT",
     "ALTER TABLE users ADD COLUMN email_verified_at TEXT",
     "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'password'",
+    // Vinculación con Google. Guardamos el `sub` (id estable de Google,
+    // no cambia aunque el usuario cambie de correo) para poder entrar con
+    // Google aunque el correo de la cuenta sea distinto al del Gmail.
+    "ALTER TABLE users ADD COLUMN google_sub TEXT",
+    "ALTER TABLE users ADD COLUMN google_email TEXT",
+    "ALTER TABLE users ADD COLUMN google_linked_at TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL",
   ];
   for (const sql of migrations) {
     try {
