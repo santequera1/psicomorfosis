@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { LauraChat } from "./LauraChat";
+import type { PatientPrefill } from "./LauraProposalCard";
+import { NewPatientModal } from "@/components/app/NewPatientModal";
+import type { Patient } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,8 +51,20 @@ export function LauraFab() {
     }
   }, [open]);
 
+  // Paciente propuesto por Laura. Al aprobar, el chat se minimiza y se
+  // abre el formulario de alta normal con los datos puestos: la persona
+  // solo revisa y guarda, sin digitar. El modal es el mismo que usa el
+  // resto de la app — una sola fuente de verdad para crear pacientes.
+  const [patientPrefill, setPatientPrefill] = useState<Partial<Patient> | null>(null);
+
   return (
     <>
+      {patientPrefill && (
+        <NewPatientModal
+          initial={patientPrefill}
+          onClose={() => setPatientPrefill(null)}
+        />
+      )}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -81,7 +96,14 @@ export function LauraFab() {
         />
       </button>
 
-      <LauraChat open={open} onClose={() => setOpen(false)} />
+      <LauraChat
+        open={open}
+        onClose={() => setOpen(false)}
+        onProposePatient={(p: PatientPrefill) => {
+          setOpen(false);
+          setPatientPrefill(p as Partial<Patient>);
+        }}
+      />
     </>
   );
 }

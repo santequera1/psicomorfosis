@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, setSession, getValidToken, ApiError } from "@/lib/api";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
@@ -221,6 +221,14 @@ function LoginForm({
   redirectToPortal: boolean;
   goToPatientPortal: () => void;
 }) {
+  const usernameRef = useRef<HTMLInputElement>(null);
+  // Foco automático solo con puntero fino (ratón/trackpad). En táctil,
+  // enfocar = abrir el teclado, y eso lo decide la persona.
+  useEffect(() => {
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      usernameRef.current?.focus();
+    }
+  }, []);
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
@@ -229,7 +237,11 @@ function LoginForm({
           <div className="mt-1.5 flex items-center gap-3 h-12 pl-4 pr-3 rounded-full border border-line-200 bg-bg-50/60 focus-within:border-brand-700 focus-within:bg-surface transition-colors">
             <Mail className="h-4 w-4 text-ink-400 shrink-0" />
             <input
-              autoFocus
+              // Sin autoFocus: en móvil levantaba el teclado nada más
+              // abrir la página, tapando el formulario y el botón de
+              // Google antes de que la persona leyera nada. En desktop
+              // lo enfocamos por efecto (ver abajo).
+              ref={usernameRef}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"

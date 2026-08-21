@@ -46,23 +46,14 @@ export function Fab() {
   const [active, setActive] = useState<Action | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // El menú se cierra al hacer clic afuera o presionar Esc.
+  // Esc cierra el menú. El clic afuera lo maneja el backdrop de abajo.
   useEffect(() => {
     if (!menuOpen) return;
-    function onClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setMenuOpen(false);
     }
-    window.addEventListener("mousedown", onClick);
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onClick);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
   // Patients se carga lazy; solo cuando se abre el modal de cita lo necesita
@@ -88,6 +79,22 @@ export function Fab() {
   if (typeof document === "undefined") return null;
   return createPortal(
     <>
+      {/* Backdrop transparente mientras el menú está abierto. Antes el
+          cierre dependía de un listener `mousedown` en window, y en
+          táctil ese evento no se dispara al hacer scroll ni siempre tras
+          un toque que re-renderiza la página: el menú se quedaba abierto
+          encima del contenido. En Configuración → Apariencia, un toque
+          que caía en el "+" abría el menú y el siguiente toque "en el
+          tema" aterrizaba en "Soporte directo" (abría WhatsApp) o en
+          "Nuevo paciente". Con el backdrop, cualquier toque fuera del
+          menú lo cierra y NO llega a lo que hay debajo. */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          aria-hidden
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
       {/* El contenedor solo ocupa el tamaño del botón circular. Los items
           quedan posicionados absolutamente arriba para no reservar espacio
           ni capturar hover cuando el menú está cerrado. */}

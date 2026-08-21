@@ -1,9 +1,12 @@
-﻿import { Link, useRouterState } from "@tanstack/react-router";
+﻿import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { useWorkspace } from "@/lib/workspace";
+import { shareProfileUrl } from "@/routes/configuracion";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
   PanelLeftClose, PanelLeftOpen, X, Shield, LogOut, Bug,
-  Scale, FileText, ClipboardCheck, Sparkles,
+  Scale, FileText, ClipboardCheck, Sparkles, Share2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn, roleLabel } from "@/lib/utils";
@@ -80,6 +83,18 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
   }, []);
 
   const myPhoto = useMyPhoto();
+  const navigate = useNavigate();
+  // Perfil público del profesional vinculado a este usuario (por correo;
+  // si no coincide, el principal del workspace). Mismo criterio que
+  // Configuración → Perfil público.
+  const { data: workspace } = useWorkspace();
+  const publicProfile = (() => {
+    const list = workspace?.professionals ?? [];
+    const mine = list.find((p) => p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()) ?? list[0];
+    if (!mine?.public_enabled || !mine.slug) return null;
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://psicomorfosis.co";
+    return { url: `${origin}/perfil/${mine.slug}`, name: mine.name };
+  })();
 
 
   // Sidebar exclusivo para platform admin. Su trabajo es administrar
@@ -319,22 +334,52 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
           {user && (
             <div
               className={cn(
-                "flex items-center gap-3 rounded-md px-2 py-2",
+                "flex items-center gap-2 rounded-md px-2 py-2",
                 collapsed && "sm:hidden",
                 animateEntrance && "animate-in slide-in-from-left-4 fade-in duration-400 fill-mode-backwards",
               )}
               style={animateEntrance ? { animationDelay: `${footerStart}ms` } : undefined}
             >
-              <UserAvatar
-                name={user.name ?? "?"}
-                photoUrl={myPhoto}
-                size="sm"
-                fallbackClassName="bg-brand-400/30 text-sidebar-accent-foreground"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-sidebar-accent-foreground truncate">{user.name}</div>
-                <div className="text-[11px] text-sidebar-foreground/65 truncate">{roleLabel(user)}</div>
-              </div>
+              {/* La foto lleva al perfil: es lo que cualquiera espera al
+                  tocarla, y hasta ahora no hacía nada. */}
+              <Link
+                to="/configuracion"
+                search={{ s: "perfil" }}
+                title="Mi perfil"
+                className="flex items-center gap-3 flex-1 min-w-0 rounded-md -mx-1 px-1 py-0.5 hover:bg-sidebar-accent transition-colors"
+              >
+                <UserAvatar
+                  name={user.name ?? "?"}
+                  photoUrl={myPhoto}
+                  size="sm"
+                  fallbackClassName="bg-brand-400/30 text-sidebar-accent-foreground"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-sidebar-accent-foreground truncate">{user.name}</div>
+                  <div className="text-[11px] text-sidebar-foreground/65 truncate">{roleLabel(user)}</div>
+                </div>
+              </Link>
+              {/* Compartir mi perfil público. Si ya está activo, abre el
+                  diálogo nativo de compartir (o copia el enlace); si no,
+                  lleva a la sección para activarlo. */}
+              {!user.isLegalAdmin && (
+                <button
+                  type="button"
+                  title={publicProfile ? "Compartir mi perfil público" : "Activar mi perfil público"}
+                  aria-label="Compartir mi perfil"
+                  onClick={async () => {
+                    if (publicProfile) {
+                      const r = await shareProfileUrl(publicProfile.url, publicProfile.name);
+                      if (r === "copied") toast.success("Enlace de tu perfil copiado");
+                    } else {
+                      navigate({ to: "/configuracion", search: { s: "perfil-publico" } });
+                    }
+                  }}
+                  className="h-8 w-8 shrink-0 rounded-md text-sidebar-foreground/70 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent flex items-center justify-center transition-colors"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           )}
           {/* Reportar problema — visible para todos los usuarios staff;

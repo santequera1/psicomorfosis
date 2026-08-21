@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin, Instagram, Calendar, ChevronLeft, ChevronRight, X, Video,
-  Building2, Check, Loader2, ArrowRight, Sparkles,
+  Building2, Check, Loader2, ArrowRight, Sparkles, ExternalLink,
 } from "lucide-react";
 import { easeOutExpo } from "@/components/landing/motion";
 
@@ -33,6 +33,7 @@ type PublicProfile = {
   slug: string; name: string; title: string | null; bio: string;
   photo_url: string | null; location: string | null; instagram: string | null;
   areas: string[]; whatsapp: string | null;
+  links: Array<{ label: string; url: string }>;
 };
 type Availability = { days: Array<{ date: string; slots: string[] }>; duration_min: number };
 
@@ -178,6 +179,29 @@ function PerfilPublico() {
             </a>
           )}
         </motion.div>
+
+        {/* Enlaces libres (web, YouTube, LinkedIn, artículos…) */}
+        {(profile.links ?? []).length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: easeOutExpo, delay: 0.45 }}
+            className="mt-6 w-full space-y-2"
+          >
+            {profile.links.map((l) => (
+              <a
+                key={l.url}
+                href={l.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex items-center justify-between gap-3 w-full h-12 px-4 rounded-2xl bg-surface border border-line-200 shadow-xs text-sm font-medium text-ink-900 hover:border-brand-400 hover:-translate-y-0.5 transition-all"
+              >
+                <span className="truncate">{l.label}</span>
+                <ExternalLink className="h-4 w-4 text-ink-400 shrink-0" />
+              </a>
+            ))}
+          </motion.div>
+        )}
 
         {/* CTA principal */}
         <motion.button

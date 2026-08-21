@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { LauraProposalCard, type ProposedAction } from "./LauraProposalCard";
+import { LauraProposalCard, type ProposedAction, type PatientPrefill } from "./LauraProposalCard";
 import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 import { toast } from "sonner";
 
@@ -67,6 +67,8 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB por imagen
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Laura propuso un paciente nuevo y el usuario aprobó. */
+  onProposePatient?: (prefill: PatientPrefill) => void;
 };
 
 /**
@@ -78,7 +80,7 @@ type Props = {
  */
 const STORAGE_CONV_ID = "laura.activeConvId";
 
-export function LauraChat({ open, onClose }: Props) {
+export function LauraChat({ open, onClose, onProposePatient }: Props) {
   const [conversationId, setConversationId] = useState<number | null>(() => {
     if (typeof window === "undefined") return null;
     const raw = window.sessionStorage.getItem(STORAGE_CONV_ID);
@@ -180,12 +182,13 @@ export function LauraChat({ open, onClose }: Props) {
 
   // Auto-grow del textarea: sin resize-y, ajustamos la altura al
   // contenido para que crezca cuando el usuario escribe varias líneas.
-  // Máximo 40 (max-h-40 = 160px) para no comerse la pantalla.
+  // Máximo 56 (max-h-56 = 224px): cabe un párrafo dictado entero sin
+  // que se pierda el principio, y sigue dejando ver la conversación.
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 224)}px`;
   }, [input]);
 
   // Body scroll lock: evita que el body scrolle detrás del drawer en
@@ -737,6 +740,7 @@ export function LauraChat({ open, onClose }: Props) {
                         action={action}
                         decision={toolDecisions[action.tool_id] ?? null}
                         onDecide={decideTool}
+                        onProposePatient={onProposePatient}
                       />
                     ))}
                   </div>
@@ -897,7 +901,13 @@ export function LauraChat({ open, onClose }: Props) {
                 // resize-none: en mobile el resize-y agarraba con drag
                 // accidental y ampliaba el textarea saliendo del viewport.
                 // rows=1 + max-h para que crezca solo cuando hay contenido.
-                className="flex-1 min-w-0 min-h-11 max-h-40 px-3 py-2.5 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+                // text-base en móvil: iOS hace zoom a toda la página cuando
+                // enfoca un campo con fuente < 16px. Con 16px no hay zoom y
+                // el drawer se queda quieto. En desktop volvemos a 14px.
+                // min-h-12 / max-h-56: más alto arriba y abajo — con 160px
+                // de tope, al dictar o pegar un párrafo largo el texto se
+                // perdía por encima del borde.
+                className="flex-1 min-w-0 min-h-12 sm:min-h-11 max-h-56 px-3 py-3 sm:py-2.5 rounded-lg border border-line-200 bg-bg text-base sm:text-sm leading-snug text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
               />
               {/* Botón dictado por voz — Whisper */}
               <button

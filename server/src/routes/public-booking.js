@@ -20,6 +20,7 @@ import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "../db.js";
 import { notifyBookingRequested } from "../lib/psicobot.js";
+import { sendBookingRequestEmails } from "../mailer.js";
 
 const router = Router();
 
@@ -38,13 +39,29 @@ const bookLimiter = rateLimit({
 
 /** Profesional público por slug, o null. */
 function publicProfessional(slug) {
+  // La foto pública cae a la foto de perfil del usuario vinculado: así
+  // nadie tiene que subir una segunda imagen para activar su perfil.
   return db.prepare(`
-    SELECT p.id, p.workspace_id, p.name, p.title, p.approach, p.phone,
-           p.slug, p.public_bio, p.public_photo_url, p.public_location,
-           p.public_instagram, p.public_areas
+    SELECT p.id, p.workspace_id, p.name, p.title, p.approach, p.phone, p.email,
+           p.slug, p.public_bio, p.public_location,
+           p.public_instagram, p.public_areas, p.public_links,
+           COALESCE(p.public_photo_url, (
+             SELECT u.photo_url FROM users u
+             WHERE u.professional_id = p.id AND u.photo_url IS NOT NULL
+             ORDER BY u.id LIMIT 1
+           )) AS public_photo_url
     FROM professionals p
     WHERE p.slug = ? AND p.public_enabled = 1 AND p.active = 1
   `).get(String(slug || "").toLowerCase());
+}
+
+function parseLinks(raw) {
+  try {
+    const arr = JSON.parse(raw ?? "[]");
+    return Array.isArray(arr)
+      ? arr.filter((l) => l && typeof l.label === "string" && /^https?:\/\//i.test(String(l.url)))
+      : [];
+  } catch { return []; }
 }
 
 // ─── GET perfil ──────────────────────────────────────────────────────
@@ -62,6 +79,7 @@ router.get("/professionals/:slug", readLimiter, (req, res) => {
     instagram: p.public_instagram,
     areas: (p.public_areas ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     whatsapp: waDigits.length >= 10 ? waDigits : null,
+    links: parseLinks(p.public_links),
   });
 });
 
@@ -172,6 +190,13 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   } catch (e) {
     console.warn(`[public-booking] notify fail: ${e?.message}`);
   }
+  // Y por correo (profesional + visitante). Best-effort, no bloquea.
+  sendBookingRequestEmails({
+    professional: { name: p.name, email: p.email },
+    patient: { name: patient.name, phone, email },
+    appointment: { date, time, modality },
+    motivo,
+  }).catch((e) => console.warn(`[public-booking] mail fail: ${e?.message}`));
 
   res.status(201).json({
     ok: true,

@@ -16,7 +16,12 @@ import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
  * y desde el FAB global. Idéntico funcionalmente al original que vivía en
  * pacientes.tsx — extraído para poder reutilizarlo.
  */
-export function NewPatientModal({ onClose }: { onClose: () => void }) {
+export function NewPatientModal({
+  onClose,
+  /** Valores pre-cargados (p. ej. los que propone Laura). El formulario
+   *  se abre con ellos puestos; la persona revisa, corrige y guarda. */
+  initial,
+}: { onClose: () => void; initial?: Partial<Patient> }) {
   const qc = useQueryClient();
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
@@ -24,7 +29,10 @@ export function NewPatientModal({ onClose }: { onClose: () => void }) {
   const mainProfessional = professionals[0];
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({ pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [], tags: [] });
+  const [form, setForm] = useState<Partial<Patient> & { professionalId?: number }>({
+    pronouns: "ella", modality: "individual", status: "activo", risk: "none", riskTypes: [], tags: [],
+    ...(initial ?? {}),
+  });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 

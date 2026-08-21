@@ -225,12 +225,79 @@ router.post("/professionals", (req, res) => {
   res.status(201).json(db.prepare("SELECT * FROM professionals WHERE id = ?").get(profId));
 });
 
+/**
+ * Slug público: minúsculas, sin tildes, guiones. Lo que va en la URL
+ * /perfil/<slug>. Se valida aquí y no solo en el front porque es lo
+ * que identifica al profesional de cara al público.
+ */
+export function normalizeSlug(raw) {
+  return String(raw ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+const RESERVED_SLUGS = new Set(["admin", "login", "inicio", "api", "p", "perfil", "legal", "platform", "psicomorfosis"]);
+
 router.patch("/professionals/:id", (req, res) => {
   const existing = db.prepare("SELECT * FROM professionals WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Profesional no encontrado" });
   const m = { ...existing, ...req.body };
   db.prepare("UPDATE professionals SET name = ?, title = ?, email = ?, phone = ?, approach = ?, active = ? WHERE id = ?")
     .run(m.name, m.title, m.email, m.phone, m.approach, m.active ? 1 : 0, req.params.id);
+
+  // Perfil público (linktree). Solo se toca si el body trae alguno de
+  // estos campos, para que el PATCH de "Perfil profesional" (nombre,
+  // título…) no pise lo que la persona configuró en "Perfil público".
+  const PUBLIC_FIELDS = ["slug", "public_enabled", "public_bio", "public_location", "public_instagram", "public_areas", "public_links", "public_photo_url"];
+  if (PUBLIC_FIELDS.some((k) => k in (req.body ?? {}))) {
+    const b = req.body;
+    let slug = existing.slug;
+    if ("slug" in b) {
+      slug = normalizeSlug(b.slug) || null;
+      if (slug && slug.length < 3) return res.status(400).json({ error: "El enlace debe tener al menos 3 caracteres" });
+      if (slug && RESERVED_SLUGS.has(slug)) return res.status(400).json({ error: "Ese enlace está reservado, elige otro" });
+      if (slug) {
+        const taken = db.prepare("SELECT id FROM professionals WHERE slug = ? AND id <> ?").get(slug, existing.id);
+        if (taken) return res.status(409).json({ error: "Ese enlace ya lo usa otro profesional" });
+      }
+    }
+    const enabled = "public_enabled" in b ? (b.public_enabled ? 1 : 0) : existing.public_enabled;
+    if (enabled && !slug) return res.status(400).json({ error: "Define el enlace de tu perfil antes de publicarlo" });
+
+    // Enlaces: lista corta de {label,url}, solo http(s). Nada de javascript:.
+    let links = existing.public_links;
+    if ("public_links" in b) {
+      const arr = Array.isArray(b.public_links) ? b.public_links : [];
+      const clean = arr
+        .map((l) => ({ label: String(l?.label ?? "").trim().slice(0, 40), url: String(l?.url ?? "").trim().slice(0, 300) }))
+        .filter((l) => l.label && /^https?:\/\//i.test(l.url))
+        .slice(0, 8);
+      links = JSON.stringify(clean);
+    }
+    const instagram = "public_instagram" in b
+      ? String(b.public_instagram ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 60) || null
+      : existing.public_instagram;
+    const areas = "public_areas" in b
+      ? (Array.isArray(b.public_areas) ? b.public_areas : String(b.public_areas ?? "").split(","))
+          .map((a) => String(a).trim()).filter(Boolean).slice(0, 12).join(",") || null
+      : existing.public_areas;
+
+    db.prepare(`
+      UPDATE professionals
+      SET slug = ?, public_enabled = ?, public_bio = ?, public_location = ?,
+          public_instagram = ?, public_areas = ?, public_links = ?, public_photo_url = ?
+      WHERE id = ?
+    `).run(
+      slug, enabled,
+      "public_bio" in b ? (String(b.public_bio ?? "").trim().slice(0, 600) || null) : existing.public_bio,
+      "public_location" in b ? (String(b.public_location ?? "").trim().slice(0, 80) || null) : existing.public_location,
+      instagram, areas, links,
+      "public_photo_url" in b ? (b.public_photo_url || null) : existing.public_photo_url,
+      existing.id,
+    );
+  }
   // Actualizar sedes si vino el campo
   if (Array.isArray(req.body?.sedeIds)) {
     db.prepare("DELETE FROM professional_sedes WHERE professional_id = ?").run(req.params.id);

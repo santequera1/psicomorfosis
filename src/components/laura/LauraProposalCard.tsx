@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight, MapPin, User as UserIcon, FileText, Check,
-  X as XIcon, ShieldCheck, CalendarPlus, ListChecks,
+  X as XIcon, ShieldCheck, CalendarPlus, ListChecks, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,14 +31,22 @@ export type ProposedAction = {
   input: Record<string, unknown>;
 };
 
+export type PatientPrefill = {
+  name?: string; pronouns?: string; age?: number; phone?: string; email?: string;
+  doc?: string; modality?: string; reason?: string; tags?: string[];
+};
+
 type Props = {
   action: ProposedAction;
   /** Estado de la decisión del usuario. Si null, la tarjeta es interactiva. */
   decision?: "approved" | "dismissed" | null;
   onDecide?: (tool_id: string, decision: "approved" | "dismissed") => void;
+  /** propose_patient: en vez de navegar, quien nos monta abre el
+   *  formulario de alta con estos datos y minimiza el chat. */
+  onProposePatient?: (prefill: PatientPrefill) => void;
 };
 
-export function LauraProposalCard({ action, decision, onDecide }: Props) {
+export function LauraProposalCard({ action, decision, onDecide, onProposePatient }: Props) {
   const navigate = useNavigate();
   const isMuted = decision != null;
 
@@ -366,6 +374,63 @@ export function LauraProposalCard({ action, decision, onDecide }: Props) {
           actions={
             <>
               <ApproveButton label="Revisar y crear" onClick={handleApprove} />
+              <DismissButton onClick={dismiss} />
+            </>
+          }
+        />
+      </Card>
+    );
+  }
+
+  // ── propose_patient ─────────────────────────────────────────────────
+  if (action.name === "propose_patient") {
+    const name = String(action.input.name ?? "").trim();
+    const age = Number(action.input.age);
+    const prefill: PatientPrefill = {
+      name,
+      pronouns: ["ella", "él", "elle"].includes(String(action.input.pronouns)) ? String(action.input.pronouns) : undefined,
+      age: Number.isFinite(age) && age > 0 ? age : undefined,
+      phone: action.input.phone ? String(action.input.phone) : undefined,
+      email: action.input.email ? String(action.input.email) : undefined,
+      doc: action.input.doc ? String(action.input.doc) : undefined,
+      modality: ["individual", "pareja", "familiar", "grupal", "tele"].includes(String(action.input.modality))
+        ? String(action.input.modality) : undefined,
+      reason: action.input.reason ? String(action.input.reason) : undefined,
+      tags: Array.isArray(action.input.tags) ? action.input.tags.map(String).filter(Boolean) : undefined,
+    };
+    const detalles: Array<[string, string | undefined]> = [
+      ["Edad", prefill.age ? `${prefill.age} años` : undefined],
+      ["Teléfono", prefill.phone],
+      ["Correo", prefill.email],
+      ["Documento", prefill.doc],
+      ["Motivo", prefill.reason],
+    ];
+
+    return (
+      <Card icon={<UserPlus className="h-3.5 w-3.5" />} title="Propuesta de paciente nuevo" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-ink-900">{name || "Sin nombre"}</p>
+          <div className="text-[11px] text-ink-700 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 space-y-0.5">
+            {detalles.filter(([, v]) => v).map(([k, v]) => (
+              <p key={k}><span className="font-medium text-ink-900">{k}:</span> {v}</p>
+            ))}
+            {detalles.every(([, v]) => !v) && <p className="text-ink-500">Solo el nombre — completas el resto en el formulario.</p>}
+          </div>
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            Al aprobar, te abro el formulario de paciente con esto pre-cargado.
+            Tú revisas y guardas.
+          </p>
+        </div>
+        <Footer
+          muted={isMuted}
+          decision={decision}
+          actions={
+            <>
+              <ApproveButton
+                label="Revisar y crear"
+                onClick={() => approve(() => onProposePatient?.(prefill))}
+              />
               <DismissButton onClick={dismiss} />
             </>
           }

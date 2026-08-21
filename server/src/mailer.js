@@ -1278,3 +1278,92 @@ function escapeHtmlMail(s) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+/**
+ * Reserva desde el perfil público: dos correos best-effort.
+ *   1. Al profesional — "tienes una solicitud", con enlace a la agenda.
+ *   2. Al visitante — confirmación de que su solicitud llegó y que el
+ *      profesional la confirmará. Sin esto, quien reserva desde un
+ *      enlace público no recibe nada por escrito y duda si funcionó.
+ *
+ * El aviso por WhatsApp (Laura) sigue existiendo; este es el canal que
+ * no depende de que el profesional tenga el bot activo.
+ */
+export async function sendBookingRequestEmails({ professional, patient, appointment, motivo }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  const appUrl = process.env.PUBLIC_APP_URL || "https://psicomorfosis.co";
+  const fecha = formatHumanDateTime(appointment.date, appointment.time);
+  const mod = formatModality(appointment.modality);
+  const profFirst = String(professional.name || "").split(" ")[0];
+
+  const shell = (title, body) => `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1f2937">
+    <div style="background:#2E5F66;padding:24px 32px;border-radius:14px 14px 0 0">
+      <div style="color:#fff;font-size:20px;font-weight:600;letter-spacing:-.01em">Psicomorfosis</div>
+    </div>
+    <div style="border:1px solid #E3E8E6;border-top:none;border-radius:0 0 14px 14px;padding:28px 32px">
+      <h1 style="font-size:20px;margin:0 0 12px;color:#1f2937">${title}</h1>
+      ${body}
+    </div>
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin:16px 0 0">Psicomorfosis · Plataforma clínica para psicólogos</p>
+  </div>`;
+
+  const detalle = `
+    <div style="background:#F7F8F6;border:1px solid #E3E8E6;border-radius:10px;padding:14px 16px;margin:14px 0 20px;font-size:14px;line-height:1.7">
+      <div><strong>Cuándo:</strong> ${escapeHtml(fecha)}</div>
+      <div><strong>Modalidad:</strong> ${escapeHtml(mod)}</div>
+      ${motivo ? `<div><strong>Motivo:</strong> ${escapeHtml(motivo)}</div>` : ""}
+    </div>`;
+
+  const results = {};
+  if (professional.email && professional.email.includes("@")) {
+    try {
+      await sendMailWithRetry({
+        from: `${c.fromName} <${c.user}>`,
+        to: professional.email,
+        subject: `Nueva solicitud de cita: ${patient.name} · ${appointment.date} ${appointment.time}`,
+        html: shell("Tienes una solicitud de cita 📥", `
+          <p style="font-size:15px;line-height:1.6;margin:0">
+            <strong>${escapeHtml(patient.name)}</strong> pidió una cita desde tu perfil público.
+          </p>
+          ${detalle}
+          <div style="font-size:14px;line-height:1.7;margin:0 0 20px">
+            <div><strong>Teléfono:</strong> ${escapeHtml(patient.phone || "—")}</div>
+            ${patient.email ? `<div><strong>Correo:</strong> ${escapeHtml(patient.email)}</div>` : ""}
+          </div>
+          <a href="${appUrl}/agenda" style="display:inline-block;background:#2E5F66;color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:600;font-size:14px">Confirmar en mi agenda</a>
+          <p style="font-size:13px;line-height:1.6;color:#6b7280;margin:22px 0 0">La cita queda como <strong>solicitada</strong> hasta que la confirmes o propongas otro horario.</p>
+        `),
+      });
+      results.professional = "sent";
+    } catch (err) {
+      console.warn("[mailer] aviso de reserva al profesional falló:", err?.message);
+      results.professional = "failed";
+    }
+  }
+  if (patient.email && patient.email.includes("@")) {
+    try {
+      await sendMailWithRetry({
+        from: `${c.fromName} <${c.user}>`,
+        to: patient.email,
+        replyTo: professional.email || undefined,
+        subject: `Recibimos tu solicitud de cita con ${professional.name}`,
+        html: shell("Tu solicitud llegó ✅", `
+          <p style="font-size:15px;line-height:1.6;margin:0">
+            Hola ${escapeHtml(String(patient.name || "").split(" ")[0])}, ${escapeHtml(profFirst)} recibió tu solicitud y te confirmará por WhatsApp o correo.
+          </p>
+          ${detalle}
+          <p style="font-size:13px;line-height:1.6;color:#6b7280;margin:0">
+            Si necesitas cambiar algo, responde a este correo.
+          </p>
+        `),
+      });
+      results.patient = "sent";
+    } catch (err) {
+      console.warn("[mailer] confirmación de reserva al visitante falló:", err?.message);
+      results.patient = "failed";
+    }
+  }
+  return { status: "done", ...results };
+}

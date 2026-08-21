@@ -155,6 +155,8 @@ export interface Sede {
   active: boolean | number;
 }
 
+export type PublicLink = { label: string; url: string };
+
 export interface Professional {
   id: number;
   name: string;
@@ -164,6 +166,17 @@ export interface Professional {
   approach: string | null;
   active: boolean | number;
   sedeIds: number[];
+  // Perfil público (linktree). Ver Configuración → Perfil público.
+  slug?: string | null;
+  public_enabled?: number | boolean | null;
+  public_bio?: string | null;
+  public_location?: string | null;
+  public_instagram?: string | null;
+  /** CSV en BD; el panel lo edita como lista. */
+  public_areas?: string | null;
+  /** JSON en BD: PublicLink[] serializado. */
+  public_links?: string | null;
+  public_photo_url?: string | null;
 }
 
 export interface Workspace {
@@ -1279,7 +1292,8 @@ export const api = {
   listProfessionals: () => request<Professional[]>("/api/workspace/professionals"),
   createProfessional: (body: Partial<Professional>) =>
     request<Professional>("/api/workspace/professionals", { method: "POST", body: JSON.stringify(body) }),
-  updateProfessional: (id: number, body: Partial<Professional>) =>
+  // public_links viaja como lista; el servidor la serializa a JSON.
+  updateProfessional: (id: number, body: Partial<Omit<Professional, "public_links">> & { public_links?: PublicLink[] | string }) =>
     request<Professional>(`/api/workspace/professionals/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteProfessional: (id: number) => request<void>(`/api/workspace/professionals/${id}`, { method: "DELETE" }),
 

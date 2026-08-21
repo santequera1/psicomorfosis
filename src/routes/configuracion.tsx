@@ -1,17 +1,17 @@
 ﻿import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
 import { LegalAdminShell } from "./legal-admin";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
-  ShieldAlert, Clock, ArrowLeft,
+  ShieldAlert, Clock, ArrowLeft, Share2, Copy, ExternalLink, Link2, Instagram,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api, type Sede, type Professional, type WorkspaceMode, getStoredUser, setSession, getToken, clearSession, refreshToken } from "@/lib/api";
+import { api, type Sede, type Professional, type WorkspaceMode, type PublicLink, getStoredUser, setSession, getToken, clearSession, refreshToken } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
 import {
@@ -36,11 +36,17 @@ import {
 
 export const Route = createFileRoute("/configuracion")({
   head: () => ({ meta: [{ title: "Configuración — Psicomorfosis" }] }),
+  // ?s=<id de sección>: permite enlazar directo a una sección (la foto
+  // del sidebar abre "perfil"; "Compartir mi perfil" abre "perfil-publico").
+  validateSearch: (raw: Record<string, unknown>): { s?: string } => ({
+    s: typeof raw.s === "string" && raw.s ? raw.s : undefined,
+  }),
   component: ConfiguracionPage,
 });
 
 const SECCIONES = [
   { id: "perfil",       label: "Perfil profesional", icon: User,         desc: "Datos personales y credenciales" },
+  { id: "perfil-publico", label: "Perfil público",   icon: Share2,       desc: "Tu enlace para compartir y recibir citas" },
   { id: "horario",      label: "Horario de atención", icon: Clock,       desc: "Días y horas en que atiendes pacientes" },
   { id: "workspace",    label: "Workspace",          icon: Home,         desc: "Modo individual u organización" },
   { id: "sedes",        label: "Sedes",              icon: Building2,    desc: "Consultorios y ubicaciones" },
@@ -76,7 +82,10 @@ function ConfiguracionPage() {
   // Reemplaza el scroll horizontal anterior, que era invisible para
   // muchos usuarios y dejaba opciones escondidas en mobile.
   const defaultActive = isLegal ? "apariencia" : "perfil";
-  const [active, setActive] = useState<string | null>(null);
+  const search = Route.useSearch();
+  const [active, setActive] = useState<string | null>(() =>
+    search.s && SECCIONES.some((x) => x.id === search.s) ? search.s : null,
+  );
   const { data: workspace } = useWorkspace();
   const isOrg = workspace?.mode === "organization";
 
@@ -108,6 +117,7 @@ function ConfiguracionPage() {
   const renderPanel = () => {
     switch (effectiveActive) {
       case "perfil":         return <PerfilPanel />;
+      case "perfil-publico": return <PerfilPublicoPanel />;
       case "horario":        return <HorarioPanel />;
       case "workspace":      return <WorkspacePanel />;
       case "sedes":          return <SedesPanel />;
@@ -2159,6 +2169,282 @@ function IntegracionesPanel() {
             </div>
           </article>
         ))}
+      </div>
+    </>
+  );
+}
+
+/** Mismo criterio que normalizeSlug del servidor: la vista previa del
+ *  enlace debe coincidir con lo que se guardará. */
+function slugify(raw: string): string {
+  return raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+}
+
+/** Comparte una URL con el diálogo nativo si existe; si no, la copia. */
+export async function shareProfileUrl(url: string, name: string) {
+  const text = `Agenda una cita con ${name} desde aquí`;
+  if (typeof navigator !== "undefined" && "share" in navigator) {
+    try {
+      await navigator.share({ title: name, text, url });
+      return "shared";
+    } catch (e) {
+      // Cancelado por la persona: no es un error.
+      if ((e as Error)?.name === "AbortError") return "cancelled";
+    }
+  }
+  await navigator.clipboard.writeText(url);
+  return "copied";
+}
+
+/**
+ * Perfil público tipo linktree (/perfil/<slug>).
+ *
+ * Opt-in: el perfil no existe de cara al público hasta que la persona
+ * lo activa aquí. Todo lo que se muestra es lo que ella decide escribir
+ * en esta pantalla, más su foto de perfil (la misma de la app) — no se
+ * expone ningún dato clínico ni del workspace.
+ *
+ * La reserva de citas desde ese enlace no requiere que el visitante
+ * tenga cuenta: deja nombre, teléfono y correo, elige un hueco real de
+ * la agenda, y la cita entra como "solicitada". El profesional recibe
+ * aviso por WhatsApp (Laura) y por correo.
+ */
+function PerfilPublicoPanel() {
+  const qc = useQueryClient();
+  const { data: workspace } = useWorkspace();
+  const user = getStoredUser();
+  // El profesional "mío": por correo si coincide, si no el principal.
+  // Mismo criterio que PerfilPanel.
+  const mine = useMemo(() => {
+    const list = workspace?.professionals ?? [];
+    return list.find((p) => p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()) ?? list[0];
+  }, [workspace?.professionals, user?.email]);
+
+  const [form, setForm] = useState({
+    enabled: false, slug: "", bio: "", location: "", instagram: "",
+    areas: [] as string[], links: [] as PublicLink[],
+  });
+  const [areaInput, setAreaInput] = useState("");
+  const [newLink, setNewLink] = useState<PublicLink>({ label: "", url: "" });
+  const [loadedFor, setLoadedFor] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!mine || loadedFor === mine.id) return;
+    let links: PublicLink[] = [];
+    try { links = JSON.parse(mine.public_links || "[]"); } catch { links = []; }
+    setForm({
+      enabled: !!mine.public_enabled,
+      slug: mine.slug || slugify(mine.name || ""),
+      bio: mine.public_bio || "",
+      location: mine.public_location || "",
+      instagram: mine.public_instagram || "",
+      areas: (mine.public_areas || "").split(",").map((a) => a.trim()).filter(Boolean),
+      links: Array.isArray(links) ? links : [],
+    });
+    setLoadedFor(mine.id);
+  }, [mine, loadedFor]);
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://psicomorfosis.co";
+  const publicUrl = `${origin}/perfil/${form.slug || "tu-enlace"}`;
+  const isLive = !!mine?.public_enabled && !!mine?.slug;
+
+  const save = useMutation({
+    mutationFn: () => {
+      if (!mine) throw new Error("Sin profesional");
+      return api.updateProfessional(mine.id, {
+        slug: form.slug,
+        public_enabled: form.enabled ? 1 : 0,
+        public_bio: form.bio,
+        public_location: form.location,
+        public_instagram: form.instagram,
+        public_areas: form.areas.join(","),
+        public_links: form.links,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workspace"] });
+      toast.success(form.enabled ? "Perfil público guardado y visible." : "Guardado. Tu perfil sigue privado.");
+    },
+    onError: (e: Error) => toast.error(e.message || "No se pudo guardar"),
+  });
+
+  function addArea() {
+    const a = areaInput.trim();
+    if (!a || form.areas.includes(a) || form.areas.length >= 12) return;
+    setForm((f) => ({ ...f, areas: [...f.areas, a] }));
+    setAreaInput("");
+  }
+  function addLink() {
+    const label = newLink.label.trim();
+    let url = newLink.url.trim();
+    if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+    if (!label || !/^https?:\/\/.+\..+/i.test(url)) { toast.error("Pon un nombre y una URL válida"); return; }
+    if (form.links.length >= 8) { toast.error("Máximo 8 enlaces"); return; }
+    setForm((f) => ({ ...f, links: [...f.links, { label, url }] }));
+    setNewLink({ label: "", url: "" });
+  }
+
+  const field = "w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400";
+
+  if (!mine) {
+    return (
+      <>
+        <SectionHeader title="Perfil público" desc="Tu enlace para compartir y recibir citas." />
+        <p className="text-sm text-ink-500">Tu usuario no está vinculado a un profesional del workspace.</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SectionHeader title="Perfil público" desc="Una página tipo linktree con tu foto, tus redes y un botón para que cualquier persona te pida cita — sin registrarse." />
+
+      {/* Estado + enlace */}
+      <div className={cn("rounded-xl border p-5 mb-6", isLive ? "border-brand-400/50 bg-brand-50/40" : "border-line-200 bg-surface")}>
+        <Toggle
+          label="Perfil público activo"
+          desc={isLive ? "Cualquiera con el enlace puede ver tu perfil y pedir cita." : "Nadie puede ver tu perfil hasta que lo actives y guardes."}
+          on={form.enabled}
+          onChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
+        />
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-ink-700 mb-1.5">Tu enlace</label>
+          <div className="flex items-center gap-0 rounded-lg border border-line-200 bg-bg overflow-hidden focus-within:border-brand-400">
+            <span className="pl-3 pr-1 text-xs text-ink-500 whitespace-nowrap hidden sm:inline">{origin.replace(/^https?:\/\//, "")}/perfil/</span>
+            <span className="pl-3 pr-1 text-xs text-ink-500 whitespace-nowrap sm:hidden">/perfil/</span>
+            <input
+              value={form.slug}
+              onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value.replace(/\s/g, "-")) }))}
+              placeholder="tu-nombre"
+              className="flex-1 min-w-0 h-10 px-1 bg-transparent text-sm text-ink-900 focus:outline-none font-mono"
+            />
+          </div>
+          <p className="text-[11px] text-ink-400 mt-1.5">Solo letras, números y guiones. Si lo cambias, el enlace anterior deja de funcionar.</p>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!isLive}
+            onClick={async () => {
+              const r = await shareProfileUrl(publicUrl, mine.name);
+              if (r === "copied") toast.success("Enlace copiado");
+            }}
+            className="h-9 px-3 rounded-lg bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 disabled:opacity-40"
+          >
+            <Share2 className="h-3.5 w-3.5" /> Compartir
+          </button>
+          <button
+            type="button"
+            onClick={async () => { await navigator.clipboard.writeText(publicUrl); toast.success("Enlace copiado"); }}
+            className="h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 inline-flex items-center gap-1.5"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copiar
+          </button>
+          <a
+            href={isLive ? publicUrl : undefined}
+            target="_blank"
+            rel="noreferrer"
+            aria-disabled={!isLive}
+            className={cn("h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 inline-flex items-center gap-1.5", !isLive && "opacity-40 pointer-events-none")}
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Abrir
+          </a>
+        </div>
+        {!isLive && form.enabled && (
+          <p className="text-[11px] text-amber-700 mt-3">Guarda los cambios para que el enlace quede activo.</p>
+        )}
+      </div>
+
+      {/* Contenido del perfil */}
+      <div className="rounded-xl border border-line-200 bg-surface p-5 mb-6 space-y-4">
+        <h3 className="text-sm font-medium text-ink-900">Lo que verán</h3>
+        <p className="text-xs text-ink-500 -mt-2">
+          Se muestran tu nombre, tu título y tu foto de perfil (los de la sección «Perfil profesional»), más lo que pongas aquí.
+        </p>
+        <label className="block">
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Presentación <span className="text-ink-400 font-normal">(máx. 600)</span></span>
+          <textarea
+            value={form.bio}
+            maxLength={600}
+            onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+            rows={4}
+            placeholder="Psicóloga clínica con enfoque cognitivo-conductual. Acompaño procesos de ansiedad, duelo y autoestima…"
+            className="w-full px-3 py-2.5 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
+          />
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="block text-xs font-medium text-ink-700 mb-1.5">Ubicación</span>
+            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Cartagena · Online" className={field} />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-ink-700 mb-1.5">Instagram</span>
+            <div className="relative">
+              <Instagram className="h-4 w-4 text-ink-400 absolute left-3 top-3" />
+              <input value={form.instagram} onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))} placeholder="@usuario" className={cn(field, "pl-9")} />
+            </div>
+          </label>
+        </div>
+
+        <div>
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Áreas de trabajo</span>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {form.areas.map((a) => (
+              <span key={a} className="inline-flex items-center gap-1 px-2.5 h-7 rounded-full bg-brand-50 border border-brand-200/70 text-xs text-brand-800">
+                {a}
+                <button type="button" onClick={() => setForm((f) => ({ ...f, areas: f.areas.filter((x) => x !== a) }))} aria-label={`Quitar ${a}`}><X className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={areaInput}
+              onChange={(e) => setAreaInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addArea(); } }}
+              placeholder="Ansiedad, duelo, pareja… (Enter para añadir)"
+              className={field}
+            />
+            <button type="button" onClick={addArea} className="h-10 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 shrink-0"><Plus className="h-4 w-4" /></button>
+          </div>
+        </div>
+
+        <div>
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Enlaces <span className="text-ink-400 font-normal">(web, LinkedIn, YouTube, artículos…)</span></span>
+          <div className="space-y-1.5 mb-2">
+            {form.links.map((l, i) => (
+              <div key={l.url + i} className="flex items-center gap-2 rounded-lg border border-line-100 bg-bg-50/60 px-3 h-10">
+                <Link2 className="h-3.5 w-3.5 text-ink-400 shrink-0" />
+                <span className="text-sm text-ink-900 truncate">{l.label}</span>
+                <span className="text-[11px] text-ink-400 truncate hidden sm:inline">{l.url}</span>
+                <button type="button" className="ml-auto text-ink-400 hover:text-rose-700" onClick={() => setForm((f) => ({ ...f, links: f.links.filter((_, j) => j !== i) }))} aria-label="Quitar enlace"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr_auto] gap-2">
+            <input value={newLink.label} onChange={(e) => setNewLink((l) => ({ ...l, label: e.target.value }))} placeholder="Nombre (Mi web)" className={field} />
+            <input value={newLink.url} onChange={(e) => setNewLink((l) => ({ ...l, url: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} placeholder="https://…" className={field} />
+            <button type="button" onClick={addLink} className="h-10 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400">Añadir</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-line-100 bg-bg-50/60 p-4 mb-6 text-xs text-ink-600 leading-relaxed">
+        <strong className="text-ink-900">Cómo funciona la reserva.</strong> El visitante elige un hueco libre de tu agenda real y deja sus datos; no necesita cuenta.
+        La cita entra como <em>solicitada</em> y te avisamos por WhatsApp y por correo. Tú la confirmas o propones otro horario desde Agenda.
+        Las citas online no crean aún la reunión de Google Meet automáticamente — compartes tu enlace al confirmar.
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="h-10 px-5 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+        >
+          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Guardar perfil público
+        </button>
       </div>
     </>
   );
