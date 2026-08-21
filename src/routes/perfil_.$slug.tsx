@@ -3,10 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MapPin, Instagram, Calendar, ChevronLeft, ChevronRight, X, Video,
+  MapPin, Instagram, Facebook, Youtube, Linkedin, Calendar, ChevronLeft, ChevronRight, X, Video,
   Building2, Check, Loader2, ArrowRight, Sparkles, ExternalLink,
 } from "lucide-react";
 import { easeOutExpo } from "@/components/landing/motion";
+import { bgByKey } from "@/lib/public-profile";
+
+/** lucide no trae logos de TikTok; SVG oficial simplificado. */
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.59 2.59 0 0 1-2.59-2.59 2.59 2.59 0 0 1 3.4-2.46V9.7a5.73 5.73 0 0 0-.81-.06A5.66 5.66 0 0 0 4.2 15.3 5.66 5.66 0 0 0 9.86 21a5.66 5.66 0 0 0 5.66-5.66V9.01a7.35 7.35 0 0 0 4.28 1.37V7.3a4.27 4.27 0 0 1-3.2-1.48z" />
+    </svg>
+  );
+}
 
 /**
  * Perfil público tipo linktree por profesional + wizard de reserva.
@@ -34,6 +44,8 @@ type PublicProfile = {
   photo_url: string | null; location: string | null; instagram: string | null;
   areas: string[]; whatsapp: string | null;
   links: Array<{ label: string; url: string }>;
+  socials: Partial<Record<"instagram" | "tiktok" | "facebook" | "youtube" | "linkedin", string | null>>;
+  bg: string | null;
 };
 type Availability = { days: Array<{ date: string; slots: string[] }>; duration_min: number };
 
@@ -91,15 +103,12 @@ function PerfilPublico() {
 
   return (
     <div className="min-h-[100svh] bg-bg-50 text-ink-900 relative overflow-x-clip">
-      {/* Fondo con washes suaves de marca */}
+      {/* Fondo elegido en Configuración → Perfil público (catálogo en
+          src/lib/public-profile.ts). Por defecto, los washes de marca. */}
       <div
         aria-hidden
         className="absolute inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(600px 400px at 85% 0%, oklch(0.93 0.018 200 / 0.8), transparent 60%)," +
-            "radial-gradient(500px 400px at 0% 100%, oklch(0.96 0.012 150 / 0.9), transparent 60%)",
-        }}
+        style={{ background: bgByKey(profile.bg).css }}
       />
 
       <main className="max-w-md mx-auto px-5 pt-12 pb-10 flex flex-col items-center text-center">
@@ -172,12 +181,22 @@ function PerfilPublico() {
               </svg>
             </a>
           )}
-          {profile.instagram && (
-            <a href={`https://instagram.com/${profile.instagram.replace(/^@/, "")}`} target="_blank" rel="noreferrer" aria-label="Instagram"
-               className="h-11 w-11 rounded-full bg-surface border border-line-200 shadow-xs flex items-center justify-center text-ink-700 hover:border-brand-400 transition-colors">
-              <Instagram className="h-5 w-5" />
-            </a>
-          )}
+          {([
+            ["instagram", "Instagram", <Instagram className="h-5 w-5" />],
+            ["tiktok", "TikTok", <TikTokIcon className="h-5 w-5" />],
+            ["facebook", "Facebook", <Facebook className="h-5 w-5" />],
+            ["youtube", "YouTube", <Youtube className="h-5 w-5" />],
+            ["linkedin", "LinkedIn", <Linkedin className="h-5 w-5" />],
+          ] as const).map(([key, label, icon]) => {
+            const href = profile.socials?.[key];
+            if (!href) return null;
+            return (
+              <a key={key} href={href} target="_blank" rel="noreferrer noopener" aria-label={label}
+                 className="h-11 w-11 rounded-full bg-surface border border-line-200 shadow-xs flex items-center justify-center text-ink-700 hover:border-brand-400 transition-colors">
+                {icon}
+              </a>
+            );
+          })}
         </motion.div>
 
         {/* Enlaces libres (web, YouTube, LinkedIn, artículos…) */}

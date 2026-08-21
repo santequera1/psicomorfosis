@@ -177,6 +177,10 @@ export interface Professional {
   /** JSON en BD: PublicLink[] serializado. */
   public_links?: string | null;
   public_photo_url?: string | null;
+  /** JSON en BD: redes predeterminadas (ver src/lib/public-profile.ts). */
+  public_socials?: string | null;
+  /** Clave del catálogo de fondos. */
+  public_bg?: string | null;
 }
 
 export interface Workspace {
@@ -1293,7 +1297,7 @@ export const api = {
   createProfessional: (body: Partial<Professional>) =>
     request<Professional>("/api/workspace/professionals", { method: "POST", body: JSON.stringify(body) }),
   // public_links viaja como lista; el servidor la serializa a JSON.
-  updateProfessional: (id: number, body: Partial<Omit<Professional, "public_links">> & { public_links?: PublicLink[] | string }) =>
+  updateProfessional: (id: number, body: Partial<Omit<Professional, "public_links" | "public_socials">> & { public_links?: PublicLink[] | string; public_socials?: Record<string, string> | string }) =>
     request<Professional>(`/api/workspace/professionals/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteProfessional: (id: number) => request<void>(`/api/workspace/professionals/${id}`, { method: "DELETE" }),
 

@@ -1185,6 +1185,10 @@ function runMigrations() {
     "ALTER TABLE professionals ADD COLUMN public_areas TEXT", // CSV: "Ansiedad,Depresión,Duelo"
     // Enlaces libres del linktree: JSON [{"label":"Mi web","url":"https://..."}]
     "ALTER TABLE professionals ADD COLUMN public_links TEXT",
+    // Redes predeterminadas (JSON {instagram,tiktok,facebook,youtube,linkedin,whatsapp})
+    // y fondo elegido del catálogo (src/lib/public-profile.ts).
+    "ALTER TABLE professionals ADD COLUMN public_socials TEXT",
+    "ALTER TABLE professionals ADD COLUMN public_bg TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_professionals_slug ON professionals(slug) WHERE slug IS NOT NULL",
     // Registro público + suscripciones (agosto 2026). Todo workspace nuevo
     // nace en plan 'free'; 'plan' se usará cuando se habilite el cobro.

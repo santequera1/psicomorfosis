@@ -250,7 +250,7 @@ router.patch("/professionals/:id", (req, res) => {
   // Perfil público (linktree). Solo se toca si el body trae alguno de
   // estos campos, para que el PATCH de "Perfil profesional" (nombre,
   // título…) no pise lo que la persona configuró en "Perfil público".
-  const PUBLIC_FIELDS = ["slug", "public_enabled", "public_bio", "public_location", "public_instagram", "public_areas", "public_links", "public_photo_url"];
+  const PUBLIC_FIELDS = ["slug", "public_enabled", "public_bio", "public_location", "public_instagram", "public_areas", "public_links", "public_photo_url", "public_socials", "public_bg"];
   if (PUBLIC_FIELDS.some((k) => k in (req.body ?? {}))) {
     const b = req.body;
     let slug = existing.slug;
@@ -276,9 +276,47 @@ router.patch("/professionals/:id", (req, res) => {
         .slice(0, 8);
       links = JSON.stringify(clean);
     }
-    const instagram = "public_instagram" in b
-      ? String(b.public_instagram ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 60) || null
-      : existing.public_instagram;
+    // Redes predeterminadas. Instagram y TikTok se guardan como usuario
+    // (acepta @usuario o el enlace); el resto como URL completa; WhatsApp
+    // como dígitos. Lo que no encaja se descarta en silencio — el
+    // formulario ya avisa del formato.
+    const handleOf = (v, host) => String(v ?? "").trim()
+      .replace(new RegExp(`^https?://(www\\.)?${host}/`, "i"), "")
+      .replace(/^@/, "").replace(/[/?#].*$/, "").slice(0, 60);
+    const urlOf = (v, host) => {
+      let x = String(v ?? "").trim();
+      if (!x) return "";
+      if (!/^https?:\/\//i.test(x)) x = "https://" + x;
+      try {
+        const u = new URL(x);
+        return u.hostname.replace(/^www\./, "").endsWith(host) ? u.href.slice(0, 300) : "";
+      } catch { return ""; }
+    };
+    let socials = existing.public_socials;
+    if ("public_socials" in b && b.public_socials && typeof b.public_socials === "object") {
+      const src = b.public_socials;
+      const out = {
+        instagram: handleOf(src.instagram, "instagram\\.com"),
+        tiktok: handleOf(src.tiktok, "tiktok\\.com"),
+        facebook: urlOf(src.facebook, "facebook.com") || urlOf(src.facebook, "fb.com"),
+        youtube: urlOf(src.youtube, "youtube.com") || urlOf(src.youtube, "youtu.be"),
+        linkedin: urlOf(src.linkedin, "linkedin.com"),
+        whatsapp: String(src.whatsapp ?? "").replace(/\D/g, "").slice(0, 15),
+      };
+      for (const k of Object.keys(out)) if (!out[k]) delete out[k];
+      socials = JSON.stringify(out);
+    }
+    // public_instagram se mantiene sincronizado por compatibilidad.
+    let instagram = existing.public_instagram;
+    if (socials !== existing.public_socials) {
+      try { instagram = JSON.parse(socials || "{}").instagram || null; } catch { /* noop */ }
+    } else if ("public_instagram" in b) {
+      instagram = handleOf(b.public_instagram, "instagram\\.com") || null;
+    }
+    const BG_KEYS = new Set(["marca", "bruma", "salvia", "arena", "lavanda", "oceano", "terracota", "aurora", "papel"]);
+    const bg = "public_bg" in b
+      ? (BG_KEYS.has(String(b.public_bg)) ? String(b.public_bg) : null)
+      : existing.public_bg;
     const areas = "public_areas" in b
       ? (Array.isArray(b.public_areas) ? b.public_areas : String(b.public_areas ?? "").split(","))
           .map((a) => String(a).trim()).filter(Boolean).slice(0, 12).join(",") || null
@@ -287,7 +325,8 @@ router.patch("/professionals/:id", (req, res) => {
     db.prepare(`
       UPDATE professionals
       SET slug = ?, public_enabled = ?, public_bio = ?, public_location = ?,
-          public_instagram = ?, public_areas = ?, public_links = ?, public_photo_url = ?
+          public_instagram = ?, public_areas = ?, public_links = ?, public_photo_url = ?,
+          public_socials = ?, public_bg = ?
       WHERE id = ?
     `).run(
       slug, enabled,
@@ -295,6 +334,7 @@ router.patch("/professionals/:id", (req, res) => {
       "public_location" in b ? (String(b.public_location ?? "").trim().slice(0, 80) || null) : existing.public_location,
       instagram, areas, links,
       "public_photo_url" in b ? (b.public_photo_url || null) : existing.public_photo_url,
+      socials, bg,
       existing.id,
     );
   }

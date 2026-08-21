@@ -8,10 +8,11 @@ import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
-  ShieldAlert, Clock, ArrowLeft, Share2, Copy, ExternalLink, Link2, Instagram,
+  ShieldAlert, Clock, ArrowLeft, Share2, Copy, ExternalLink, Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode, type PublicLink, getStoredUser, setSession, getToken, clearSession, refreshToken } from "@/lib/api";
+import { PROFILE_BGS, DEFAULT_BG, SOCIAL_KEYS, SOCIAL_META, type Socials } from "@/lib/public-profile";
 import { useWorkspace } from "@/lib/workspace";
 import { resetAllTours } from "@/lib/tour";
 import {
@@ -2221,10 +2222,17 @@ function PerfilPublicoPanel() {
     return list.find((p) => p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()) ?? list[0];
   }, [workspace?.professionals, user?.email]);
 
-  const [form, setForm] = useState({
-    enabled: false, slug: "", bio: "", location: "", instagram: "",
-    areas: [] as string[], links: [] as PublicLink[],
-  });
+  type PublicForm = {
+    enabled: boolean; slug: string; bio: string; location: string;
+    areas: string[]; links: PublicLink[]; socials: Socials; bg: string;
+  };
+  const EMPTY: PublicForm = {
+    enabled: false, slug: "", bio: "", location: "", areas: [], links: [], socials: {}, bg: DEFAULT_BG,
+  };
+  const [form, setForm] = useState<PublicForm>(EMPTY);
+  // Instantánea de lo guardado: con ella sabemos si hay cambios sin
+  // guardar, y la barra pegajosa de abajo solo aparece cuando los hay.
+  const [saved, setSaved] = useState<PublicForm>(EMPTY);
   const [areaInput, setAreaInput] = useState("");
   const [newLink, setNewLink] = useState<PublicLink>({ label: "", url: "" });
   const [loadedFor, setLoadedFor] = useState<number | null>(null);
@@ -2233,17 +2241,25 @@ function PerfilPublicoPanel() {
     if (!mine || loadedFor === mine.id) return;
     let links: PublicLink[] = [];
     try { links = JSON.parse(mine.public_links || "[]"); } catch { links = []; }
-    setForm({
+    let socials: Socials = {};
+    try { socials = JSON.parse(mine.public_socials || "{}") || {}; } catch { socials = {}; }
+    if (!socials.instagram && mine.public_instagram) socials.instagram = mine.public_instagram;
+    const loaded: PublicForm = {
       enabled: !!mine.public_enabled,
       slug: mine.slug || slugify(mine.name || ""),
       bio: mine.public_bio || "",
       location: mine.public_location || "",
-      instagram: mine.public_instagram || "",
       areas: (mine.public_areas || "").split(",").map((a) => a.trim()).filter(Boolean),
       links: Array.isArray(links) ? links : [],
-    });
+      socials,
+      bg: mine.public_bg || DEFAULT_BG,
+    };
+    setForm(loaded);
+    setSaved(loaded);
     setLoadedFor(mine.id);
   }, [mine, loadedFor]);
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(saved);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://psicomorfosis.co";
   const publicUrl = `${origin}/perfil/${form.slug || "tu-enlace"}`;
@@ -2257,13 +2273,15 @@ function PerfilPublicoPanel() {
         public_enabled: form.enabled ? 1 : 0,
         public_bio: form.bio,
         public_location: form.location,
-        public_instagram: form.instagram,
         public_areas: form.areas.join(","),
         public_links: form.links,
+        public_socials: form.socials as Record<string, string>,
+        public_bg: form.bg,
       });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workspace"] });
+      setSaved(form);
       toast.success(form.enabled ? "Perfil público guardado y visible." : "Guardado. Tu perfil sigue privado.");
     },
     onError: (e: Error) => toast.error(e.message || "No se pudo guardar"),
@@ -2351,9 +2369,6 @@ function PerfilPublicoPanel() {
             <ExternalLink className="h-3.5 w-3.5" /> Abrir
           </a>
         </div>
-        {!isLive && form.enabled && (
-          <p className="text-[11px] text-amber-700 mt-3">Guarda los cambios para que el enlace quede activo.</p>
-        )}
       </div>
 
       {/* Contenido del perfil */}
@@ -2373,18 +2388,50 @@ function PerfilPublicoPanel() {
             className="w-full px-3 py-2.5 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none"
           />
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-xs font-medium text-ink-700 mb-1.5">Ubicación</span>
-            <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Cartagena · Online" className={field} />
-          </label>
-          <label className="block">
-            <span className="block text-xs font-medium text-ink-700 mb-1.5">Instagram</span>
-            <div className="relative">
-              <Instagram className="h-4 w-4 text-ink-400 absolute left-3 top-3" />
-              <input value={form.instagram} onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))} placeholder="@usuario" className={cn(field, "pl-9")} />
-            </div>
-          </label>
+        <label className="block">
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Ubicación</span>
+          <input value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} placeholder="Cartagena · Online" className={field} />
+        </label>
+
+        <div>
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Redes</span>
+          <p className="text-[11px] text-ink-400 mb-2">Solo se muestran las que llenes. Para otras páginas usa «Enlaces» más abajo.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {SOCIAL_KEYS.map((k) => (
+              <label key={k} className="block">
+                <span className="block text-[11px] font-medium text-ink-600 mb-1">{SOCIAL_META[k].label}</span>
+                <input
+                  value={form.socials[k] ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, socials: { ...f.socials, [k]: e.target.value } }))}
+                  placeholder={SOCIAL_META[k].placeholder}
+                  title={SOCIAL_META[k].hint}
+                  inputMode={k === "whatsapp" ? "tel" : "url"}
+                  className={field}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="block text-xs font-medium text-ink-700 mb-1.5">Fondo</span>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {PROFILE_BGS.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, bg: b.key }))}
+                className={cn(
+                  "rounded-xl border-2 p-1 text-left transition-all",
+                  form.bg === b.key ? "border-brand-700" : "border-line-200 hover:border-brand-400",
+                )}
+                aria-pressed={form.bg === b.key}
+              >
+                <div className="h-14 rounded-lg border border-line-100" style={{ background: b.css }} />
+                <div className="text-[11px] text-ink-700 mt-1 px-1">{b.label}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -2435,16 +2482,41 @@ function PerfilPublicoPanel() {
         Las citas online no crean aún la reunión de Google Meet automáticamente — compartes tu enlace al confirmar.
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          className="h-10 px-5 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
-        >
-          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Guardar perfil público
-        </button>
+      {/* Barra de guardar pegajosa: el botón vivía al final de una
+          página larga y, al activar el perfil arriba, nadie sabía que
+          faltaba guardar. Ahora, en cuanto hay cambios, la barra queda
+          fija al pie de la ventana y dice exactamente qué falta. */}
+      <div
+        className={cn(
+          "sticky bottom-3 z-20 transition-all duration-200",
+          dirty ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none",
+        )}
+      >
+        <div className="rounded-xl border border-brand-400/50 bg-surface/95 backdrop-blur shadow-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-ink-700">
+            <span className="font-medium text-ink-900">Cambios sin guardar.</span>{" "}
+            {form.enabled && !isLive ? "Tu perfil será visible al guardar." : form.enabled ? "Se actualizará tu perfil público." : "Tu perfil seguirá privado."}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setForm(saved)}
+              disabled={save.isPending}
+              className="h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-brand-400 disabled:opacity-50"
+            >
+              Descartar
+            </button>
+            <button
+              type="button"
+              onClick={() => save.mutate()}
+              disabled={save.isPending || !dirty}
+              className="h-9 px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Guardar perfil público
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

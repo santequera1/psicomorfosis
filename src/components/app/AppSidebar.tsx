@@ -1,7 +1,6 @@
 ﻿import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useWorkspace } from "@/lib/workspace";
-import { shareProfileUrl } from "@/routes/configuracion";
 import {
   LayoutDashboard, Users, CalendarDays, ClipboardList, Brain,
   Folder, Receipt, BarChart3, Settings, ListTodo,
@@ -365,12 +364,20 @@ export function AppSidebar({ animateEntrance = false }: { animateEntrance?: bool
               {!user.isLegalAdmin && (
                 <button
                   type="button"
-                  title={publicProfile ? "Compartir mi perfil público" : "Activar mi perfil público"}
-                  aria-label="Compartir mi perfil"
+                  title={publicProfile ? "Copiar el enlace de mi perfil público" : "Activar mi perfil público"}
+                  aria-label="Copiar enlace de mi perfil"
                   onClick={async () => {
                     if (publicProfile) {
-                      const r = await shareProfileUrl(publicProfile.url, publicProfile.name);
-                      if (r === "copied") toast.success("Enlace de tu perfil copiado");
+                      // Copia directa, sin diálogo: desde el sidebar se
+                      // quiere el enlace en el portapapeles y seguir.
+                      // El diálogo nativo de compartir está en
+                      // Configuración → Perfil público.
+                      try {
+                        await navigator.clipboard.writeText(publicProfile.url);
+                        toast.success("Enlace de tu perfil copiado", { description: publicProfile.url });
+                      } catch {
+                        toast.error("No se pudo copiar. Ábrelo desde Configuración → Perfil público.");
+                      }
                     } else {
                       navigate({ to: "/configuracion", search: { s: "perfil-publico" } });
                     }

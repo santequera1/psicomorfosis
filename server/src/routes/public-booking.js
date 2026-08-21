@@ -44,7 +44,7 @@ function publicProfessional(slug) {
   return db.prepare(`
     SELECT p.id, p.workspace_id, p.name, p.title, p.approach, p.phone, p.email,
            p.slug, p.public_bio, p.public_location,
-           p.public_instagram, p.public_areas, p.public_links,
+           p.public_instagram, p.public_areas, p.public_links, p.public_socials, p.public_bg,
            COALESCE(p.public_photo_url, (
              SELECT u.photo_url FROM users u
              WHERE u.professional_id = p.id AND u.photo_url IS NOT NULL
@@ -68,7 +68,11 @@ function parseLinks(raw) {
 router.get("/professionals/:slug", readLimiter, (req, res) => {
   const p = publicProfessional(req.params.slug);
   if (!p) return res.status(404).json({ error: "Perfil no encontrado" });
-  const waDigits = String(p.phone ?? "").replace(/\D/g, "");
+  let socials = {};
+  try { socials = JSON.parse(p.public_socials || "{}") || {}; } catch { socials = {}; }
+  // WhatsApp: el número puesto en redes manda; si no, el del perfil.
+  const waDigits = String(socials.whatsapp || p.phone || "").replace(/\D/g, "");
+  const instagram = socials.instagram || p.public_instagram || null;
   res.json({
     slug: p.slug,
     name: p.name,
@@ -76,10 +80,18 @@ router.get("/professionals/:slug", readLimiter, (req, res) => {
     bio: p.public_bio ?? p.approach ?? "",
     photo_url: p.public_photo_url,
     location: p.public_location,
-    instagram: p.public_instagram,
+    instagram,
     areas: (p.public_areas ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     whatsapp: waDigits.length >= 10 ? waDigits : null,
     links: parseLinks(p.public_links),
+    socials: {
+      instagram: instagram ? `https://instagram.com/${instagram}` : null,
+      tiktok: socials.tiktok ? `https://www.tiktok.com/@${socials.tiktok}` : null,
+      facebook: socials.facebook || null,
+      youtube: socials.youtube || null,
+      linkedin: socials.linkedin || null,
+    },
+    bg: p.public_bg || null,
   });
 });
 
