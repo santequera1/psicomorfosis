@@ -29,6 +29,7 @@ import { Route as DocumentosRouteImport } from './routes/documentos'
 import { Route as ConfiguracionRouteImport } from './routes/configuracion'
 import { Route as AgendaRouteImport } from './routes/agenda'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RestablecerTokenRouteImport } from './routes/restablecer.$token'
 import { Route as PlatformTestRequestsRouteImport } from './routes/platform_.test-requests'
 import { Route as PlatformSolicitudesRouteImport } from './routes/platform_.solicitudes'
 import { Route as PlatformReportesRouteImport } from './routes/platform_.reportes'
@@ -152,6 +153,11 @@ const AgendaRoute = AgendaRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RestablecerTokenRoute = RestablecerTokenRouteImport.update({
+  id: '/restablecer/$token',
+  path: '/restablecer/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlatformTestRequestsRoute = PlatformTestRequestsRouteImport.update({
@@ -315,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/solicitudes': typeof PlatformSolicitudesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
+  '/restablecer/$token': typeof RestablecerTokenRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/platform/reportes': typeof PlatformReportesRoute
   '/platform/solicitudes': typeof PlatformSolicitudesRoute
   '/platform/test-requests': typeof PlatformTestRequestsRoute
+  '/restablecer/$token': typeof RestablecerTokenRoute
   '/documentos/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p/activar/$token': typeof PActivarTokenRoute
   '/p/documentos/$id': typeof PDocumentosIdRoute
@@ -408,6 +416,7 @@ export interface FileRoutesById {
   '/platform_/reportes': typeof PlatformReportesRoute
   '/platform_/solicitudes': typeof PlatformSolicitudesRoute
   '/platform_/test-requests': typeof PlatformTestRequestsRoute
+  '/restablecer/$token': typeof RestablecerTokenRoute
   '/documentos_/plantilla/$id': typeof DocumentosPlantillaIdRoute
   '/p_/activar/$token': typeof PActivarTokenRoute
   '/p_/documentos_/$id': typeof PDocumentosIdRoute
@@ -456,6 +465,7 @@ export interface FileRouteTypes {
     | '/platform/reportes'
     | '/platform/solicitudes'
     | '/platform/test-requests'
+    | '/restablecer/$token'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/documentos/$id'
@@ -502,6 +512,7 @@ export interface FileRouteTypes {
     | '/platform/reportes'
     | '/platform/solicitudes'
     | '/platform/test-requests'
+    | '/restablecer/$token'
     | '/documentos/plantilla/$id'
     | '/p/activar/$token'
     | '/p/documentos/$id'
@@ -548,6 +559,7 @@ export interface FileRouteTypes {
     | '/platform_/reportes'
     | '/platform_/solicitudes'
     | '/platform_/test-requests'
+    | '/restablecer/$token'
     | '/documentos_/plantilla/$id'
     | '/p_/activar/$token'
     | '/p_/documentos_/$id'
@@ -595,6 +607,7 @@ export interface RootRouteChildren {
   PlatformReportesRoute: typeof PlatformReportesRoute
   PlatformSolicitudesRoute: typeof PlatformSolicitudesRoute
   PlatformTestRequestsRoute: typeof PlatformTestRequestsRoute
+  RestablecerTokenRoute: typeof RestablecerTokenRoute
   DocumentosPlantillaIdRoute: typeof DocumentosPlantillaIdRoute
   PActivarTokenRoute: typeof PActivarTokenRoute
   PDocumentosIdRoute: typeof PDocumentosIdRoute
@@ -742,6 +755,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/restablecer/$token': {
+      id: '/restablecer/$token'
+      path: '/restablecer/$token'
+      fullPath: '/restablecer/$token'
+      preLoaderRoute: typeof RestablecerTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/platform_/test-requests': {
@@ -955,6 +975,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlatformReportesRoute: PlatformReportesRoute,
   PlatformSolicitudesRoute: PlatformSolicitudesRoute,
   PlatformTestRequestsRoute: PlatformTestRequestsRoute,
+  RestablecerTokenRoute: RestablecerTokenRoute,
   DocumentosPlantillaIdRoute: DocumentosPlantillaIdRoute,
   PActivarTokenRoute: PActivarTokenRoute,
   PDocumentosIdRoute: PDocumentosIdRoute,

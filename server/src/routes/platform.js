@@ -1083,7 +1083,7 @@ router.post("/account-requests/:id/approve", async (req, res) => {
   // Email de bienvenida — fire-and-forget, no bloquea la respuesta.
   const loginUrl = process.env.PUBLIC_APP_URL
     ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, "")}/login`
-    : "https://psico.wailus.co/login";
+    : "https://psicomorfosis.co/login";
   sendAccountApprovedEmail({
     fullName: r.full_name, email: r.email, username: r.username,
     loginUrl,

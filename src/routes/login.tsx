@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api, setSession, getValidToken, ApiError } from "@/lib/api";
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronLeft, Info, Check, Heart, ArrowRight } from "lucide-react";
 
@@ -94,6 +95,7 @@ function LoginPage() {
   function goToPatientPortal() {
     navigate({ to: "/p/login" });
   }
+  const [forgot, setForgot] = useState(false);
 
   return (
     <div className="min-h-screen w-full bg-bg-50 flex flex-col items-center justify-center px-4 py-6 md:py-10">
@@ -157,7 +159,9 @@ function LoginPage() {
           />
           <AuthDivider text={tab === "login" ? "o con tu correo" : "o con tus datos"} />
 
-          {tab === "login" ? (
+          {tab === "login" && forgot ? (
+            <ForgotPasswordForm onBack={() => setForgot(false)} initialIdentifier={username} />
+          ) : tab === "login" ? (
             <LoginForm
               username={username}
               setUsername={setUsername}
@@ -172,6 +176,7 @@ function LoginPage() {
               onSubmit={onSubmit}
               redirectToPortal={redirectToPortal}
               goToPatientPortal={goToPatientPortal}
+              onForgot={() => setForgot(true)}
             />
           ) : (
             <SignUpForm onDone={() => window.location.assign("/")} />
@@ -210,7 +215,7 @@ function LoginForm({
   username, setUsername, password, setPassword,
   showPwd, setShowPwd, remember, setRemember,
   err, loading, onSubmit,
-  redirectToPortal, goToPatientPortal,
+  redirectToPortal, goToPatientPortal, onForgot,
 }: {
   username: string; setUsername: (v: string) => void;
   password: string; setPassword: (v: string) => void;
@@ -220,6 +225,7 @@ function LoginForm({
   onSubmit: (e: React.FormEvent) => void;
   redirectToPortal: boolean;
   goToPatientPortal: () => void;
+  onForgot: () => void;
 }) {
   const usernameRef = useRef<HTMLInputElement>(null);
   // Foco automático solo con puntero fino (ratón/trackpad). En táctil,
@@ -293,7 +299,7 @@ function LoginForm({
           </span>
           <span className="text-ink-700 leading-none">Recordarme</span>
         </label>
-        <button type="button" className="text-brand-700 hover:underline font-medium">
+        <button type="button" onClick={onForgot} className="text-brand-700 hover:underline font-medium">
           ¿Olvidaste la contraseña?
         </button>
       </div>

@@ -187,12 +187,16 @@ function generateIcs({ appointment, professional, workspaceName, method = "PUBLI
   };
   const fmtUtc = (dt) => `${fmt(new Date(dt.getTime() + dt.getTimezoneOffset() * 60_000))}Z`;
 
-  const uid = `psicomorfosis-appt-${appointment.id}@psico.wailus.co`;
+  const uid = `psicomorfosis-appt-${appointment.id}@psicomorfosis.co`;
   const summary = `Sesión con ${professional?.name ?? workspaceName ?? "Psicología"}`;
+  const meeting = appointment.meeting_url || "";
   const location = appointment.modality === "tele" || appointment.modality === "virtual"
-    ? "Telepsicología (videollamada)"
+    ? (meeting ? `Videollamada: ${meeting}` : "Telepsicología (videollamada)")
     : (appointment.room || workspaceName || "");
-  const description = appointment.notes ? appointment.notes.replace(/[\r\n]+/g, "\\n") : "";
+  // Las notas son del profesional, no van al calendario del paciente;
+  // la descripción lleva el enlace para que Google/Apple lo muestren
+  // como botón de "unirse".
+  const description = meeting ? `Enlace de la videollamada: ${meeting}` : "";
 
   // Cuerpo del ICS — líneas terminadas en CRLF según RFC 5545.
   const lines = [
@@ -218,6 +222,7 @@ function generateIcs({ appointment, professional, workspaceName, method = "PUBLI
     `SUMMARY:${summary}`,
     location ? `LOCATION:${location}` : null,
     description ? `DESCRIPTION:${description}` : null,
+    meeting ? `URL:${meeting}` : null,
     `STATUS:${status}`,
     "SEQUENCE:0",
     "TRANSP:OPAQUE",
@@ -283,13 +288,20 @@ function appointmentDetailsBlock({ appointment, professional, workspaceName, loc
     ? `<tr><td style="padding:6px 12px 6px 0;color:#78716c;font-size:13px;vertical-align:top;width:120px;">${label}</td><td style="padding:6px 0;color:#1a1a1a;font-size:14px;">${escapeHtml(value)}</td></tr>`
     : "";
 
+  const meetingBtn = appointment.meeting_url
+    ? `<div style="margin:16px 0 4px 0;">
+  <a href="${escapeHtml(appointment.meeting_url)}" style="display:inline-block;background:#14685b;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Unirme a la videollamada</a>
+  <div style="margin-top:8px;font-size:12px;color:#78716c;word-break:break-all;">${escapeHtml(appointment.meeting_url)}</div>
+  <div style="margin-top:6px;font-size:12px;color:#78716c;">Abre el enlace a la hora de la sesión, desde el celular o el computador. No necesitas instalar nada ni crear cuenta.</div>
+</div>`
+    : "";
   return `<table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:8px 0 4px 0;">
 ${row("Cuándo", cuando)}
 ${row("Duración", duracion)}
 ${row("Modalidad", modalidad)}
 ${row("Profesional", profesional)}
 ${row("Lugar", lugar)}
-</table>`;
+</table>${meetingBtn}`;
 }
 
 function templateCreated({ appointment, patient, professional, workspaceName, location }) {
@@ -643,7 +655,7 @@ export async function sendDemoRequestEmail(opts) {
             <p style="margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b7280;">Mensaje</p>
             <p style="margin: 0; white-space: pre-wrap; line-height: 1.55;">${escapeHtmlMail(safeMessage)}</p>
           </div>` : ""}
-        <p style="margin: 24px 0 0; font-size: 12px; color: #9ca3af;">Llegó desde https://psico.wailus.co/inicio · responde directo a este correo para contactar al lead.</p>
+        <p style="margin: 24px 0 0; font-size: 12px; color: #9ca3af;">Llegó desde https://psicomorfosis.co/inicio · responde directo a este correo para contactar al lead.</p>
       </div>
     `;
 
@@ -810,7 +822,7 @@ async function sendAccountRequestNotificationEmail({ request, toEmail }) {
           <p style="margin: 0; white-space: pre-wrap; line-height: 1.55;">${safeMessage}</p>
         </div>` : ""}
       <p style="margin: 24px 0 0; font-size: 13px; color: #6b7280;">
-        Revisa y aprueba en <a href="https://psico.wailus.co/platform/solicitudes" style="color:#1f6f6b;">/platform/solicitudes</a>.
+        Revisa y aprueba en <a href="https://psicomorfosis.co/platform/solicitudes" style="color:#1f6f6b;">/platform/solicitudes</a>.
       </p>
     </div>
   `;
@@ -1366,4 +1378,50 @@ export async function sendBookingRequestEmails({ professional, patient, appointm
     }
   }
   return { status: "done", ...results };
+}
+
+/**
+ * "Olvidé mi contraseña". El enlace vale 60 minutos y un solo uso.
+ * Incluimos el usuario porque una misma persona puede tener más de una
+ * cuenta con el mismo correo (p. ej. en dos workspaces): así sabe cuál
+ * está restableciendo.
+ */
+export async function sendPasswordResetEmail({ to, name, username, url }) {
+  if (!smtpConfigured()) return { status: "skipped_no_smtp" };
+  const c = getSmtpConfig();
+  const firstName = String(name || "").split(" ")[0] || "";
+  const html = `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1f2937">
+    <div style="background:#2E5F66;padding:24px 32px;border-radius:14px 14px 0 0">
+      <div style="color:#fff;font-size:20px;font-weight:600;letter-spacing:-.01em">Psicomorfosis</div>
+    </div>
+    <div style="border:1px solid #E3E8E6;border-top:none;border-radius:0 0 14px 14px;padding:28px 32px">
+      <h1 style="font-size:20px;margin:0 0 12px;color:#1f2937">Restablecer tu contraseña</h1>
+      <p style="font-size:15px;line-height:1.6;margin:0 0 18px">
+        Hola${firstName ? " " + escapeHtml(firstName) : ""}, recibimos una solicitud para cambiar la contraseña de la cuenta
+        <strong>${escapeHtml(username)}</strong>. Si fuiste tú, pulsa el botón; si no, ignora este correo y tu contraseña seguirá igual.
+      </p>
+      <a href="${url}" style="display:inline-block;background:#2E5F66;color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:600;font-size:14px">
+        Elegir nueva contraseña
+      </a>
+      <p style="font-size:13px;line-height:1.6;color:#6b7280;margin:22px 0 0">
+        El enlace vale <strong>60 minutos</strong> y se puede usar una sola vez.<br>
+        Si el botón no funciona, copia esta dirección en tu navegador:<br>
+        <span style="word-break:break-all;color:#2E5F66">${url}</span>
+      </p>
+    </div>
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin:16px 0 0">Psicomorfosis · Plataforma clínica para psicólogos</p>
+  </div>`;
+  try {
+    await sendMailWithRetry({
+      from: `${c.fromName} <${c.user}>`,
+      to,
+      subject: "Restablecer tu contraseña de Psicomorfosis",
+      html,
+    });
+    return { status: "sent" };
+  } catch (err) {
+    console.warn("[mailer] reset de contraseña falló:", err?.message);
+    return { status: "failed", error: String(err?.message ?? err).slice(0, 500) };
+  }
 }

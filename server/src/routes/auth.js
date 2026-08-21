@@ -1,10 +1,11 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { db, seedTaskColumns } from "../db.js";
 import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
-import { sendWelcomeEmail } from "../mailer.js";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
 
 const router = Router();
@@ -539,6 +540,132 @@ router.post("/register", registerLimiter, (req, res) => {
 });
 
 /** GET /api/auth/signup-status — el front consulta si mostrar el formulario. */
+// ─── Olvidé mi contraseña ─────────────────────────────────────────────
+
+const forgotLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Espera unos minutos e inténtalo de nuevo." },
+});
+const RESET_TTL_MIN = 60;
+const hashToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
+
+/**
+ * POST /api/auth/forgot-password  { identifier }
+ *
+ * Acepta correo o usuario. Responde SIEMPRE { ok: true }, exista o no la
+ * cuenta: la respuesta no puede servir para averiguar qué correos están
+ * registrados. El correo sale solo si hay una cuenta de staff con ese
+ * dato y tiene correo.
+ *
+ * Si el mismo correo está en varias cuentas (dos workspaces), se elige
+ * la que coincide por usuario exacto; si no, la de último acceso más
+ * reciente. El correo nombra el usuario para que la persona sepa cuál.
+ */
+router.post("/forgot-password", forgotLimiter, (req, res) => {
+  const identifier = String(req.body?.identifier ?? req.body?.email ?? "").trim();
+  res.json({ ok: true });
+  if (!identifier || identifier.length > 200) return;
+
+  const user = db.prepare(`
+    SELECT id, name, username, email, role
+    FROM users
+    WHERE role <> 'paciente' AND (LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?))
+    ORDER BY (LOWER(username) = LOWER(?)) DESC, last_login_at DESC NULLS LAST, id ASC
+    LIMIT 1
+  `).get(identifier, identifier, identifier);
+  if (!user?.email || !user.email.includes("@")) {
+    console.log(`[auth] forgot-password sin destinatario para "${identifier.slice(0, 60)}"`);
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  const expires = new Date(Date.now() + RESET_TTL_MIN * 60 * 1000).toISOString();
+  db.transaction(() => {
+    // Un enlace vigente por cuenta: los anteriores sin usar se anulan.
+    db.prepare("UPDATE password_resets SET used_at = COALESCE(used_at, ?) WHERE user_id = ?")
+      .run(new Date().toISOString(), user.id);
+    db.prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)")
+      .run(user.id, hashToken(token), expires);
+  })();
+
+  const appUrl = (process.env.PUBLIC_APP_URL || "https://psicomorfosis.co").replace(/\/$/, "");
+  const url = `${appUrl}/restablecer/${token}`;
+  console.log(`[auth] forgot-password user=${user.id} → correo enviado`);
+  sendPasswordResetEmail({ to: user.email, name: user.name, username: user.username, url })
+    .catch((e) => console.warn("[auth] reset mail:", e?.message));
+});
+
+/** GET /api/auth/reset-password/:token — ¿sigue vigente? (para la página). */
+router.get("/reset-password/:token", (req, res) => {
+  const row = db.prepare(`
+    SELECT pr.id, pr.expires_at, pr.used_at, u.name
+    FROM password_resets pr JOIN users u ON u.id = pr.user_id
+    WHERE pr.token_hash = ?
+  `).get(hashToken(req.params.token));
+  const valid = !!row && !row.used_at && new Date(row.expires_at).getTime() > Date.now();
+  res.json({ valid, name: valid ? row.name : null });
+});
+
+/**
+ * POST /api/auth/reset-password  { token, password }
+ *
+ * Cambia la contraseña, quema el token, revoca todas las sesiones
+ * previas (si el correo fue leído por quien no debía, aquí se corta) y
+ * devuelve una sesión nueva para que la persona entre de una.
+ */
+router.post("/reset-password", forgotLimiter, (req, res) => {
+  const token = String(req.body?.token ?? "");
+  const password = String(req.body?.password ?? "");
+  if (password.length < 8) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
+  }
+  const row = db.prepare(`
+    SELECT pr.id AS reset_id, pr.expires_at, pr.used_at, u.*,
+           w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
+    FROM password_resets pr
+    JOIN users u ON u.id = pr.user_id
+    JOIN workspaces w ON w.id = u.workspace_id
+    WHERE pr.token_hash = ?
+  `).get(hashToken(token));
+  if (!row || row.used_at || new Date(row.expires_at).getTime() <= Date.now()) {
+    return res.status(400).json({ error: "Este enlace ya no es válido. Pide uno nuevo desde «Olvidé mi contraseña»." });
+  }
+  if (row.disabled_at && !row.is_platform_admin && !row.is_legal_admin) {
+    return res.status(403).json({ error: "Esta cuenta está deshabilitada. Escríbenos a soporte." });
+  }
+
+  const hash = bcrypt.hashSync(password, 10);
+  db.transaction(() => {
+    db.prepare("UPDATE users SET password_hash = ?, auth_provider = CASE WHEN auth_provider = 'google' THEN 'password+google' ELSE auth_provider END WHERE id = ?")
+      .run(hash, row.id);
+    db.prepare("UPDATE password_resets SET used_at = ? WHERE id = ?").run(new Date().toISOString(), row.reset_id);
+  })();
+  const cutoff = invalidateUserTokens(row.id);
+  console.log(`[auth] reset-password OK user=${row.id}`);
+
+  const fresh = signToken({
+    id: row.id,
+    workspace_id: row.workspace_id,
+    username: row.username,
+    role: row.role,
+    name: row.name,
+    professional_id: row.professional_id ?? null,
+    is_platform_admin: !!row.is_platform_admin,
+    is_legal_admin: !!row.is_legal_admin,
+  }, { issuedAtMs: new Date(cutoff).getTime() });
+  res.json({
+    token: fresh,
+    user: {
+      id: row.id, username: row.username, name: row.name, email: row.email, role: row.role,
+      isPlatformAdmin: !!row.is_platform_admin, isLegalAdmin: !!row.is_legal_admin,
+      workspaceId: row.workspace_id, workspaceName: row.workspace_name, workspaceMode: row.workspace_mode,
+    },
+  });
+});
+
 router.get("/signup-status", (_req, res) => {
   res.json({ enabled: publicSignupEnabled() });
 });

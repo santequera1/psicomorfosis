@@ -1204,6 +1204,20 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN google_email TEXT",
     "ALTER TABLE users ADD COLUMN google_linked_at TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL",
+    // Restablecimiento de contraseña por correo. Guardamos el HASH del
+    // token, nunca el token: si alguien lee la BD no puede usarlos.
+    `CREATE TABLE IF NOT EXISTS password_resets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)",
+    // Videollamada de la cita (Jitsi). Se genera sola para modalidad tele.
+    "ALTER TABLE appointments ADD COLUMN meeting_url TEXT",
   ];
   for (const sql of migrations) {
     try {

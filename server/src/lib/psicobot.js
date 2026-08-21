@@ -149,7 +149,10 @@ export function notifyAppointmentCreated({ patient, appointment, professionalNam
   const name = firstName(patient) || "";
   const saludo = name ? `Hola ${name} 👋` : "Hola 👋";
   const profStr = professionalName ? ` con ${professionalName}` : "";
-  const rendered = `${saludo} Te agendé una cita${profStr}:\n\n📅 ${fmtDate(appointment.date)} · ${appointment.time}\n⏰ ${appointment.duration_min ?? 50} min · ${appointment.modality || "individual"}\n\nResponde *sí* para confirmar o *no puedo* si no podrás asistir.`;
+  const videoLine = appointment.meeting_url
+    ? `\n🎥 Videollamada: ${appointment.meeting_url}\n(ábrelo a la hora de la sesión, sin instalar nada)`
+    : "";
+  const rendered = `${saludo} Te agendé una cita${profStr}:\n\n📅 ${fmtDate(appointment.date)} · ${appointment.time}\n⏰ ${appointment.duration_min ?? 50} min · ${appointment.modality || "individual"}${videoLine}\n\nResponde *sí* para confirmar o *no puedo* si no podrás asistir.`;
 
   const payload = {
     event: "appointment.created",

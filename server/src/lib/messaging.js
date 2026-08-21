@@ -273,8 +273,8 @@ function renderForWorkspace({ workspace_id, event_type, data, recipient, sender_
   const ctx = {
     ...data,
     sender_label: sender_label ?? "tu psicóloga",
-    portal_url: env("PUBLIC_PORTAL_URL", "https://psico.wailus.co"),
-    app_url:    env("PUBLIC_APP_URL", "https://psico.wailus.co"),
+    portal_url: env("PUBLIC_PORTAL_URL", "https://psicomorfosis.co"),
+    app_url:    env("PUBLIC_APP_URL", "https://psicomorfosis.co"),
     recipient,
   };
   return renderTemplate(template, ctx);

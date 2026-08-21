@@ -144,10 +144,10 @@ portal) para que la salida quede organizada.
 ## Troubleshooting
 
 **Todo falla con `HTTP=000`**  
-El VPS está caído o hay problema de red. Verificá `curl -m 5 -o /dev/null -w "%{http_code}" https://psico.wailus.co`.
+El VPS está caído o hay problema de red. Verificá `curl -m 5 -o /dev/null -w "%{http_code}" https://psicomorfosis.co`.
 
 **Login staff falla (401)**  
-Probá el login manual desde `psico.wailus.co/login`. Si tampoco anda, la
+Probá el login manual desde `psicomorfosis.co/login`. Si tampoco anda, la
 password cambió; actualizá `smoke.env`.
 
 **Login paciente falla**  

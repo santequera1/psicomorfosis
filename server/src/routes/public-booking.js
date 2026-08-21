@@ -21,6 +21,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "../db.js";
 import { notifyBookingRequested } from "../lib/psicobot.js";
 import { sendBookingRequestEmails } from "../mailer.js";
+import { ensureMeetingUrl } from "../lib/video.js";
 
 const router = Router();
 
@@ -189,6 +190,8 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
          modality, modality === "tele" ? null : "Por confirmar",
          `[reserva-web]${motivo ? ` ${motivo}` : ""}`);
 
+  // Si es online, el enlace se crea ya; viajará en la confirmación.
+  ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(info.lastInsertRowid));
   console.log(`[public-booking] solicitud appt=${info.lastInsertRowid} prof=${p.slug} patient=${patient.id} ${date} ${time}`);
 
   // Aviso al PROFESIONAL por WhatsApp via Laura (best-effort, async).

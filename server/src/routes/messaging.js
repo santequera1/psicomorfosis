@@ -360,7 +360,7 @@ router.post("/messaging/test", requireAuth, async (req, res) => {
     test: { id: "TEST-001", name: "Test de prueba", code: "TEST", duration_min: 10 },
     invoice: { id: 0, concept: "Sesión de prueba", amount: 180000 },
     alert: { source: "test", detail: "Esto es una alerta de prueba" },
-    invite_url: "https://psico.wailus.co/p/activar/test",
+    invite_url: "https://psicomorfosis.co/p/activar/test",
     idempotency_key: `test-${event_type}-${Date.now()}`,
   };
 

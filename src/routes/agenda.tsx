@@ -21,6 +21,25 @@ import {
 } from "lucide-react";
 
 type AgendaSearch = { appt?: number; laura_appt?: string };
+
+/**
+ * Enlace a la videollamada de una cita online. Es un <a> dentro de un
+ * <button> (la tarjeta), así que frena la propagación para que abrir
+ * la llamada no abra además el detalle de la cita.
+ */
+function JoinCallLink({ url }: { url: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      onClick={(e) => e.stopPropagation()}
+      className="mt-1.5 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-brand-700 text-white text-[11px] font-medium hover:bg-brand-800"
+    >
+      <Video className="h-3 w-3" /> Unirse a la videollamada
+    </a>
+  );
+}
 export const Route = createFileRoute("/agenda")({
   head: () => ({
     meta: [
@@ -533,6 +552,7 @@ function DayView({ date, onPick, filterAppts }: {
                 <div className="text-xs text-ink-500 mt-0.5">
                   {MODALITY_LABEL[s.modality as Modality] ?? s.modality}{s.room ? ` · ${s.room}` : ""}{s.professional ? ` · ${s.professional}` : ""}
                 </div>
+                {s.meeting_url && <JoinCallLink url={s.meeting_url} />}
               </div>
               <ChevronRight className="h-4 w-4 text-ink-300 group-hover:text-brand-700 shrink-0" />
             </div>
@@ -852,6 +872,7 @@ function ListView({ onPick, filterAppts }: {
                       <div className="text-xs text-ink-500">
                         {MODALITY_LABEL[s.modality as Modality] ?? s.modality}{s.room ? ` · ${s.room}` : ""}{s.professional ? ` · ${s.professional}` : ""}
                       </div>
+                      {s.meeting_url && <JoinCallLink url={s.meeting_url} />}
                     </div>
                     <span className={
                       "text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium shrink-0 " +

@@ -47,9 +47,9 @@ export const Route = createFileRoute("/nathaly-ferrer")({
         content: "Mg. en Terapia Cognitivo-Conductual. Ansiedad 🍂 Depresión 👣 Duelo ⏳ · Consulta online y presencial. Agenda por WhatsApp.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://psico.wailus.co/nathaly-ferrer" },
-      { property: "og:image", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
-      { property: "og:image:secure_url", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
+      { property: "og:url", content: "https://psicomorfosis.co/nathaly-ferrer" },
+      { property: "og:image", content: "https://psicomorfosis.co/landing/nathaly-ferrer.jpg" },
+      { property: "og:image:secure_url", content: "https://psicomorfosis.co/landing/nathaly-ferrer.jpg" },
       { property: "og:image:type", content: "image/jpeg" },
       { property: "og:image:width", content: "1000" },
       { property: "og:image:height", content: "1333" },
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/nathaly-ferrer")({
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Nathaly Ferrer · Psicóloga Clínica" },
       { name: "twitter:description", content: "Terapia cognitivo-conductual para ansiedad, depresión y duelo. Online y presencial." },
-      { name: "twitter:image", content: "https://psico.wailus.co/landing/nathaly-ferrer.jpg" },
+      { name: "twitter:image", content: "https://psicomorfosis.co/landing/nathaly-ferrer.jpg" },
     ],
   }),
   component: NathalyPage,
@@ -149,7 +149,7 @@ function NathalyPage() {
       </main>
       <footer className="bg-[#0c1418] text-white/40 text-xs text-center py-6">
         Psic. Nathaly Ferrer Pacheco · Terapia cognitivo-conductual ·{" "}
-        <a href="https://psico.wailus.co/inicio" className="hover:text-white/70 underline underline-offset-2">
+        <a href="https://psicomorfosis.co/inicio" className="hover:text-white/70 underline underline-offset-2">
           con tecnología de Psicomorfosis
         </a>
       </footer>

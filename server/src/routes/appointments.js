@@ -3,6 +3,7 @@ import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
 import { sendAppointmentEmail } from "../mailer.js";
 import { notifyAppointmentCreated, notifyAppointmentCancelled } from "../lib/psicobot.js";
+import { ensureMeetingUrl } from "../lib/video.js";
 
 /**
  * Dispara una notificación por email de manera asíncrona y NO bloqueante.
@@ -23,7 +24,11 @@ import { notifyAppointmentCreated, notifyAppointmentCancelled } from "../lib/psi
  */
 function buildAppointmentLocation({ appointment, sede, settings }) {
   if (appointment.modality === "tele" || appointment.modality === "virtual") {
-    return "Telepsicología (videollamada — el enlace te lo compartirá tu psicóloga/o)";
+    // El enlace va aparte como botón en el correo (ver mailer); aquí
+    // solo el texto de la fila "Lugar".
+    return appointment.meeting_url
+      ? "Telepsicología (videollamada — botón más abajo)"
+      : "Telepsicología (videollamada — el enlace te lo compartirá tu psicóloga/o)";
   }
   if (sede) {
     return sede.address ? `${sede.name} · ${sede.address}` : sede.name;
@@ -202,7 +207,7 @@ router.post("/", (req, res) => {
     a.professional ?? "", a.modality ?? "individual", a.room ?? "",
     a.status ?? "pendiente", a.notes ?? ""
   );
-  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid);
+  const row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:created", row);
   // Email best-effort al paciente — async, no bloquea la respuesta. El
   // caller puede saltarlo enviando notify=false en body (útil cuando
@@ -221,7 +226,7 @@ router.patch("/:id", (req, res) => {
     UPDATE appointments SET date=?, time=?, duration_min=?, patient_id=?, patient_name=?, professional=?, professional_id=?, sede_id=?, modality=?, room=?, status=?, notes=?
     WHERE id = ? AND workspace_id = ?
   `).run(a.date, a.time, a.duration_min, a.patient_id, a.patient_name, a.professional, a.professional_id, a.sede_id, a.modality, a.room, a.status, a.notes, req.params.id, req.user.workspace_id);
-  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id);
+  const row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id));
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:updated", row);
   // Email de reprogramación solo si cambió fecha u hora. Otros cambios
   // (notas internas, status, etc.) no ameritan notificación al paciente.
@@ -234,19 +239,13 @@ router.patch("/:id", (req, res) => {
       previous: { date: existing.date, time: existing.time },
     });
   }
-  // Solicitud web aceptada (solicitada → confirmada): el paciente dejó su
-  // número esperando exactamente esta confirmación — Laura se la manda.
+  // Solicitud web aceptada (solicitada → confirmada): el paciente dejó
+  // sus datos esperando exactamente esta confirmación. notifyAsync manda
+  // WhatsApp (Laura) Y correo con .ics y enlace de videollamada — antes
+  // solo salía el WhatsApp, y quien no tenía el bot activo no recibía
+  // nada por escrito.
   if (existing.status === "solicitada" && row.status === "confirmada" && req.body?.notify !== false) {
-    const patient = row.patient_id
-      ? db.prepare("SELECT * FROM patients WHERE id = ?").get(row.patient_id)
-      : null;
-    if (patient) {
-      notifyAppointmentCreated({
-        patient,
-        appointment: row,
-        professionalName: row.professional,
-      });
-    }
+    notifyAsync({ kind: "appointment_created", appointment: row });
   }
   res.json(row);
 });

@@ -132,6 +132,11 @@ function buildEventData(type, raw) {
           // Sufijo opcional para que la plantilla pueda escribir "{{mod}}{{room_suffix}}"
           // y produzca "presencial individual · Consultorio 2" o solo "telepsicología".
           room_suffix: a.room ? ` · ${a.room}` : "",
+          // Videollamada (Jitsi) de la cita online. `video_suffix` es
+          // la línea lista para plantilla; vacío si no es online.
+          meeting_url: a.meeting_url ?? null,
+          video_suffix: a.meeting_url ? `
+🎥 Videollamada: ${a.meeting_url}` : "",
         },
       };
     }

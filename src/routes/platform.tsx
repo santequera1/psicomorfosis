@@ -1006,7 +1006,7 @@ function CreateWorkspaceModal({ onClose }: { onClose: () => void }) {
               <textarea
                 readOnly
                 rows={5}
-                value={`Hola ${form.ownerName.split(" ")[0]}, te creé tu cuenta en Psicomorfosis 🌱\n\nUsuario: ${created.username}\nContraseña: ${created.password}\nEntra en: https://psico.wailus.co/login\n\nCualquier duda, me cuentas.`}
+                value={`Hola ${form.ownerName.split(" ")[0]}, te creé tu cuenta en Psicomorfosis 🌱\n\nUsuario: ${created.username}\nContraseña: ${created.password}\nEntra en: https://psicomorfosis.co/login\n\nCualquier duda, me cuentas.`}
                 className="w-full px-3 py-2 rounded-md border border-line-200 bg-bg text-xs text-ink-700 font-mono resize-none"
               />
             </Field>
@@ -1575,7 +1575,7 @@ function ResetPasswordModal({
     );
   }
 
-  const waMessage = `Hola ${user.name.split(" ")[0]}, te restablecí tu contraseña en Psicomorfosis 🔑\n\nUsuario: ${user.username}\nNueva contraseña: ${password}\n\nIngresa en https://psico.wailus.co/login y luego cámbiala desde Configuración.`;
+  const waMessage = `Hola ${user.name.split(" ")[0]}, te restablecí tu contraseña en Psicomorfosis 🔑\n\nUsuario: ${user.username}\nNueva contraseña: ${password}\n\nIngresa en https://psicomorfosis.co/login y luego cámbiala desde Configuración.`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/40 backdrop-blur-sm pt-16 p-4">

@@ -25,7 +25,7 @@ export const DEFAULT_TEMPLATES = {
 
 📅 Sesión agendada
 {{appointment.date_human}} · {{appointment.time}}
-Modalidad: {{appointment.modality_human}}{{appointment.room_suffix}}
+Modalidad: {{appointment.modality_human}}{{appointment.room_suffix}}{{appointment.video_suffix}}
 
 Te enviaré recordatorios el día anterior y una hora antes.`,
 
@@ -34,13 +34,13 @@ Te enviaré recordatorios el día anterior y una hora antes.`,
 
 Te recuerdo tu sesión de mañana con {{sender_label}}:
 {{appointment.date_human}} · {{appointment.time}}
-{{appointment.modality_human}}{{appointment.room_suffix}}
+{{appointment.modality_human}}{{appointment.room_suffix}}{{appointment.video_suffix}}
 
 Responde SÍ para confirmar o NO si no podrás asistir.`,
 
   "appointment.reminder.1h":
 `{{patient.first_name}}, tu sesión con {{sender_label}} es en una hora ({{appointment.time}}).
-{{appointment.modality_human}}{{appointment.room_suffix}}
+{{appointment.modality_human}}{{appointment.room_suffix}}{{appointment.video_suffix}}
 
 ¡Te espero!`,
 

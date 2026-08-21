@@ -970,6 +970,14 @@ export const api = {
     request<Array<{ slug: string; title: string; versionLabel: string }>>(
       "/api/legal/public/signup-required",
     ),
+  /** Olvidé mi contraseña: siempre responde ok (no revela si existe). */
+  forgotPassword: (identifier: string) =>
+    request<{ ok: true }>("/api/auth/forgot-password", { method: "POST", body: JSON.stringify({ identifier }) }),
+  resetPasswordCheck: (token: string) =>
+    request<{ valid: boolean; name: string | null }>(`/api/auth/reset-password/${encodeURIComponent(token)}`),
+  resetPassword: (token: string, password: string) =>
+    request<{ token: string; user: ApiUser }>("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }),
+
   /** ¿Está abierto el registro público? (permite cerrarlo sin redeploy) */
   signupStatus: () => request<{ enabled: boolean }>("/api/auth/signup-status"),
 

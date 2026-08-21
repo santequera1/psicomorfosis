@@ -501,7 +501,7 @@ router.get("/portal/me/export", requirePatient, (req, res) => {
   // al paciente que no recibe "anotaciones clínicas de su psicóloga sobre
   // él"; entregarlo aquí violaba esa promesa y, peor, el secreto profesional.
   const appointments = db.prepare(`
-    SELECT id, date, time, duration_min, modality, room, status
+    SELECT id, date, time, duration_min, modality, room, status, meeting_url
     FROM appointments WHERE patient_id = ? AND workspace_id = ?
     ORDER BY date DESC, time DESC
   `).all(pid, wsid);
@@ -574,7 +574,7 @@ router.get("/portal/appointments", requirePatient, (req, res) => {
   // ESO no debe salir al paciente. Lista blanca explícita.
   const rows = db.prepare(`
     SELECT a.id, a.workspace_id, a.patient_id, a.sede_id, a.professional_id,
-           a.date, a.time, a.duration_min, a.modality, a.room, a.status,
+           a.date, a.time, a.duration_min, a.modality, a.room, a.status, a.meeting_url,
            pr.name AS professional_name,
            s.name AS sede_name, s.address AS sede_address
     FROM appointments a

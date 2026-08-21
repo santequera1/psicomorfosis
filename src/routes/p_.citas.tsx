@@ -110,7 +110,14 @@ function AppointmentRow({ appt, past }: { appt: any; past?: boolean }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500 mt-1.5">
             <span className="inline-flex items-center gap-1.5"><Clock className="h-3 w-3" /> {appt.time}{appt.duration_min ? ` · ${appt.duration_min} min` : ""}</span>
             {appt.modality === "tele" ? (
-              <span className="inline-flex items-center gap-1.5"><Video className="h-3 w-3" /> Telepsicología</span>
+              appt.meeting_url && !past ? (
+                <a href={appt.meeting_url} target="_blank" rel="noreferrer noopener"
+                   className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-brand-700 text-white text-[11px] font-medium hover:bg-brand-800">
+                  <Video className="h-3 w-3" /> Unirme a la videollamada
+                </a>
+              ) : (
+                <span className="inline-flex items-center gap-1.5"><Video className="h-3 w-3" /> Telepsicología</span>
+              )
             ) : appt.sede_name ? (
               <span className="inline-flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {appt.sede_name}</span>
             ) : null}

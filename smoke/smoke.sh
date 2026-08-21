@@ -27,7 +27,7 @@ if [[ -f "$ENV_FILE" ]]; then
   set -a; source "$ENV_FILE"; set +a
 fi
 
-: "${BASE_URL:=https://psico.wailus.co}"
+: "${BASE_URL:=https://psicomorfosis.co}"
 : "${TIMEOUT_SEC:=15}"
 : "${BOT_API_KEY:=}"
 : "${STAFF_EMAIL:=}"

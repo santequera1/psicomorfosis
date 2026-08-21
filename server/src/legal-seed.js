@@ -16,7 +16,7 @@ const RESPONSABLE = {
   rut: "1007418662-8",
   direccion: "Calle 31A - 107, Barrio 13 de Junio, Cartagena de Indias, Colombia (cód. postal 130001)",
   email: "santequera@wailus.co",
-  sitio: "https://psico.wailus.co",
+  sitio: "https://psicomorfosis.co",
 };
 
 // HTML del aviso de privacidad — réplica del contenido actual de
