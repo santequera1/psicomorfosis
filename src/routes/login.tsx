@@ -43,8 +43,19 @@ function LoginPage() {
       cancelado: "Cancelaste el ingreso con Google.",
       no_configurado: "El ingreso con Google no está disponible por ahora.",
       state_invalido: "El enlace expiró. Intenta de nuevo.",
-      cuenta_deshabilitada: "Tu cuenta está deshabilitada. Contacta a soporte.",
+      cuenta_deshabilitada: "Tu cuenta está deshabilitada. Escríbenos a soporte.",
       usa_portal_paciente: "Esa cuenta es de paciente. Entra por el portal de pacientes.",
+      sesion_invalida: "Tu sesión expiró. Vuelve a entrar e inténtalo de nuevo.",
+      registro_cerrado: "El registro de nuevas cuentas está cerrado por ahora. Si ya tienes cuenta, entra con tu usuario y contraseña.",
+      demasiados_intentos: "Demasiados intentos seguidos. Espera unos minutos y vuelve a probar.",
+      // Fallos del lado de Google o de red. No son culpa de quien entra,
+      // así que el mensaje pide reintentar en vez de sugerir un problema
+      // con su cuenta.
+      intercambio_fallido: "Google no completó el ingreso. Vuelve a intentarlo.",
+      verificacion_fallida: "No pudimos verificar tu cuenta de Google. Vuelve a intentarlo.",
+      sin_codigo: "Google no devolvió la confirmación. Vuelve a intentarlo.",
+      alta_fallida: "No pudimos crear tu cuenta. Inténtalo de nuevo o escríbenos a soporte.",
+      usuario_no_disponible: "No pudimos generar un usuario a partir de tu correo. Regístrate con el formulario.",
     };
     setErr(msgs[code] ?? "No pudimos completar el ingreso con Google.");
     setTab("login");

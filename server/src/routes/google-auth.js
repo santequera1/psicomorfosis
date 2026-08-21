@@ -28,6 +28,8 @@ import { db, seedTaskColumns } from "../db.js";
 import { signToken, requireAuth } from "../auth.js";
 import { sendWelcomeEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
+import { publicSignupEnabled } from "./auth.js";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
 
@@ -50,6 +52,46 @@ const configured = () => Boolean(cfg().clientId && cfg().clientSecret);
  * que un restart solo obliga a reintentar el login. Sin esto, un atacante
  * podría inducir un callback y enlazar su cuenta de Google con otra sesión.
  */
+/**
+ * Límites. El registro por formulario ya tenía tope (5 cada 6 h); sin
+ * esto, Google era la puerta sin cerradura: mismo efecto (crear cuentas)
+ * sin ningún freno. El del arranque además acota cuánto puede crecer el
+ * Map de states, que solo se purga al emitir uno nuevo.
+ */
+const googleStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => fail(res, "demasiados_intentos"),
+});
+/**
+ * link-start responde JSON, no una redirección: el front lo llama con
+ * fetch. Devolverle un 302 haría que el cliente siguiera el redirect,
+ * recibiera HTML y fallara al parsear, con un error que no dice nada.
+ */
+const linkStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => res.status(429).json({
+    error: "Demasiados intentos seguidos. Espera unos minutos.",
+  }),
+});
+// 60/h por IP. El callback se toca una vez por ingreso, así que a una
+// persona le sobra; el tope existe para el abuso con script, que haría
+// miles. Holgado a propósito: varios profesionales tras el NAT de un
+// mismo consultorio comparten IP, y quedarse fuera de tu propia agenda
+// por un límite antiabuso es peor que el abuso.
+const googleCallbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => fail(res, "demasiados_intentos"),
+});
+
 const states = new Map();
 /** `linkUserId` presente = flujo de VINCULAR (usuario ya autenticado). */
 function issueState(linkUserId = null) {
@@ -148,7 +190,7 @@ function authorizeUrl(linkUserId = null) {
 }
 
 // ─── Paso 1: mandar al usuario a Google ──────────────────────────────
-router.get("/google", (_req, res) => {
+router.get("/google", googleStartLimiter, (_req, res) => {
   if (!configured()) return fail(res, "no_configurado");
   res.redirect(authorizeUrl());
 });
@@ -158,13 +200,13 @@ router.get("/google", (_req, res) => {
  * que el JWT viaje en la cabecera Authorization y no en la query — un
  * token en la URL queda escrito en los logs de nginx y en el Referer.
  */
-router.post("/google/link-start", requireAuth, (req, res) => {
+router.post("/google/link-start", linkStartLimiter, requireAuth, (req, res) => {
   if (!configured()) return res.status(503).json({ error: "Google no está configurado" });
   res.json({ url: authorizeUrl(req.user.id) });
 });
 
 // ─── Paso 2: Google vuelve con el código ─────────────────────────────
-router.get("/google/callback", async (req, res) => {
+router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   if (!configured()) return fail(res, "no_configurado");
   if (req.query.error) return fail(res, "cancelado");
   const stateData = consumeState(req.query.state);
@@ -200,20 +242,51 @@ router.get("/google/callback", async (req, res) => {
   const fullName = profile.name || email.split("@")[0];
   const sub = String(profile.sub);
 
-  const findByCol = (col, val) => db.prepare(`
+  const findBySub = (val) => db.prepare(`
     SELECT u.*, w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
     FROM users u JOIN workspaces w ON w.id = u.workspace_id
-    WHERE ${col} = ?
+    WHERE u.google_sub = ?
   `).get(val);
+
+  /**
+   * Búsqueda por correo. `users.email` NO es único —dos workspaces
+   * pueden tener a la misma persona— así que sin ORDER BY el motor
+   * elegiría una fila arbitraria y el mismo clic podría entrar a un
+   * workspace distinto cada vez. Prioridad explícita:
+   *   1. la que ya tiene este `sub` vinculado,
+   *   2. staff antes que paciente (el portal es otra puerta),
+   *   3. la más antigua.
+   */
+  const findByEmail = (val, forSub) => db.prepare(`
+    SELECT u.*, w.name AS workspace_name, w.mode AS workspace_mode, w.disabled_at
+    FROM users u JOIN workspaces w ON w.id = u.workspace_id
+    WHERE LOWER(u.email) = LOWER(?)
+    ORDER BY (u.google_sub = ?) DESC, (u.role = 'paciente') ASC, u.id ASC
+  `).get(val, forSub);
+
+  const countByEmail = (val) => db.prepare(
+    "SELECT COUNT(*) AS n FROM users WHERE LOWER(email) = LOWER(?)",
+  ).get(val).n;
 
   // ─── Modo VINCULAR ─────────────────────────────────────────────────
   // El usuario ya está dentro y quiere poder entrar con Google. Aquí NO
   // se busca por correo: se conecta esta cuenta de Google a SU usuario,
   // aunque el correo de la plataforma sea otro (p. ej. @psicomorfosis.co).
   if (stateData.linkUserId) {
-    const owner = findByCol("u.google_sub", sub);
+    const owner = findBySub(sub);
     if (owner && owner.id !== stateData.linkUserId) {
       return res.redirect(`${cfg().appUrl}/configuracion?google_error=google_ya_vinculado`);
+    }
+    // El JWT puede seguir vivo aunque el workspace se haya deshabilitado
+    // entre el login y este momento. No dejamos que una cuenta suspendida
+    // se abra una segunda vía de acceso.
+    const me = db.prepare(`
+      SELECT u.id, w.disabled_at, u.is_platform_admin, u.is_legal_admin
+      FROM users u JOIN workspaces w ON w.id = u.workspace_id WHERE u.id = ?
+    `).get(stateData.linkUserId);
+    if (!me) return fail(res, "sesion_invalida");
+    if (me.disabled_at && !me.is_platform_admin && !me.is_legal_admin) {
+      return fail(res, "cuenta_deshabilitada");
     }
     try {
       db.prepare(
@@ -232,7 +305,13 @@ router.get("/google/callback", async (req, res) => {
   // El orden importa: si alguien vinculó su Gmail personal a su cuenta de
   // staff, ese vínculo debe pesar más que una coincidencia de correo con
   // otro registro (p. ej. su propia ficha de paciente).
-  let user = findByCol("u.google_sub", sub) || findByCol("LOWER(u.email)", email);
+  let user = findBySub(sub) || findByEmail(email, sub);
+  if (user && !user.google_sub && countByEmail(email) > 1) {
+    // Ocurre si la misma persona figura en dos workspaces. Entramos al
+    // que manda la prioridad de findByEmail, pero queda en el log: si
+    // alguien reporta "entré al consultorio equivocado", esto lo explica.
+    console.warn(`[google] ${email} existe en varias cuentas; entrando a user=${user.id} ws=${user.workspace_id}`);
+  }
 
   if (user) {
     if (user.role === "paciente") {
@@ -257,6 +336,12 @@ router.get("/google/callback", async (req, res) => {
     } catch { /* tracking/vínculo no bloquean el login */ }
   } else {
     // No existe → alta automática, misma forma que el registro normal.
+    // Y sujeta a la MISMA bandera: si el registro público está cerrado,
+    // Google no puede ser la puerta que quedó abierta.
+    if (!publicSignupEnabled()) {
+      console.warn(`[google] alta rechazada (registro cerrado) email=${email}`);
+      return fail(res, "registro_cerrado");
+    }
     const username = deriveUsername(email);
     if (!username) return fail(res, "usuario_no_disponible");
     const wsName = `Consulta ${fullName.split(" ")[0]}`.trim();
@@ -304,8 +389,19 @@ router.get("/google/callback", async (req, res) => {
         workspace_name: created.wsName, workspace_mode: "individual",
       };
     } catch (e) {
-      console.error("[google] alta falló:", e?.message);
-      return fail(res, "alta_fallida");
+      // Dos pestañas (o un doble clic) pueden llegar al callback casi a
+      // la vez: la primera crea la cuenta y la segunda choca contra el
+      // índice único de google_sub. Esa segunda persona SÍ tiene cuenta
+      // —acaba de crearse—, así que la buscamos en vez de decirle que
+      // el alta falló.
+      const raced = findBySub(sub);
+      if (raced) {
+        console.warn(`[google] alta simultánea para ${email}; reusando user=${raced.id}`);
+        user = raced;
+      } else {
+        console.error("[google] alta falló:", e?.message);
+        return fail(res, "alta_fallida");
+      }
     }
   }
 
@@ -340,13 +436,16 @@ router.get("/google/status", (_req, res) => res.json({ enabled: configured() }))
 /** Estado del vínculo del usuario actual (para Configuración → Seguridad). */
 router.get("/google/link", requireAuth, (req, res) => {
   const u = db.prepare(
-    "SELECT google_sub, google_email, google_linked_at FROM users WHERE id = ?",
+    "SELECT google_sub, google_email, google_linked_at, password_hash FROM users WHERE id = ?",
   ).get(req.user.id);
   res.json({
     enabled: configured(),
     linked: Boolean(u?.google_sub),
     email: u?.google_email ?? null,
     linkedAt: u?.google_linked_at ?? null,
+    // Para que Configuración ofrezca "Definir contraseña" en vez de
+    // "Cambiar contraseña" a quien entró por Google y nunca tuvo una.
+    hasPassword: !String(u?.password_hash ?? "").startsWith("!google!"),
   });
 });
 

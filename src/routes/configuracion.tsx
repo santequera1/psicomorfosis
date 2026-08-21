@@ -596,6 +596,12 @@ function SeguridadPanel() {
   const [pwOpen, setPwOpen] = useState(false);
   const [credsOpen, setCredsOpen] = useState(false);
   const me = getStoredUser();
+  // Mismo queryKey que GoogleLinkCard → sale de caché.
+  const { data: googleLink } = useQuery({
+    queryKey: ["google-link"],
+    queryFn: () => api.googleLinkStatus(),
+  });
+  const hasPassword = googleLink?.hasPassword ?? true;
   return (
     <>
       <SectionHeader title="Seguridad" desc="Cuida el acceso a información clínica protegida." />
@@ -640,10 +646,16 @@ function SeguridadPanel() {
           onClick={() => setPwOpen(true)}
           className="h-10 px-5 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400"
         >
-          Cambiar contraseña
+          {hasPassword ? "Cambiar contraseña" : "Definir contraseña"}
         </button>
+        {!hasPassword && (
+          <p className="text-xs text-ink-500 mt-2 max-w-prose leading-relaxed">
+            Entraste con Google y tu cuenta no tiene contraseña. Define una para
+            no depender de una sola forma de acceso.
+          </p>
+        )}
       </div>
-      {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} />}
+      {pwOpen && <ChangePasswordModal onClose={() => setPwOpen(false)} hasPassword={hasPassword} />}
       {credsOpen && <ChangeCredentialsModal onClose={() => setCredsOpen(false)} />}
     </>
   );
@@ -884,11 +896,17 @@ function GoogleLinkCard() {
     if (!ok && !err) return;
     if (ok) toast.success("Cuenta de Google vinculada. Ya puedes entrar con ella.");
     else {
-      toast.error(
-        err === "google_ya_vinculado"
-          ? "Esa cuenta de Google ya está vinculada a otro usuario."
-          : "No se pudo vincular la cuenta de Google.",
-      );
+      const msgs: Record<string, string> = {
+        google_ya_vinculado:
+          "Esa cuenta de Google ya está vinculada a otro usuario de Psicomorfosis. "
+          + "Desvincúlala desde ese usuario, o usa otra cuenta de Google.",
+        cuenta_deshabilitada: "Tu cuenta está deshabilitada. Escríbenos a soporte.",
+        sesion_invalida: "Tu sesión expiró. Vuelve a entrar e inténtalo de nuevo.",
+        state_invalido: "El enlace expiró. Inténtalo de nuevo.",
+        cancelado: "Cancelaste la vinculación.",
+        demasiados_intentos: "Demasiados intentos seguidos. Espera unos minutos.",
+      };
+      toast.error(msgs[err ?? ""] ?? "No se pudo vincular la cuenta de Google.", { duration: 8000 });
     }
     qc.invalidateQueries({ queryKey: ["google-link"] });
     window.history.replaceState({}, "", window.location.pathname);
@@ -974,7 +992,12 @@ function GoogleLinkCard() {
  * nueva (con confirmación visual de "mostrar"), valida mínimo 8 caracteres
  * y que coincidan; el backend valida que la actual sea correcta.
  */
-function ChangePasswordModal({ onClose }: { onClose: () => void }) {
+function ChangePasswordModal({
+  onClose,
+  /** false = la cuenta se creó con Google y nunca tuvo contraseña; no
+   *  se le puede pedir la "actual" porque no existe. */
+  hasPassword = true,
+}: { onClose: () => void; hasPassword?: boolean }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -983,13 +1006,19 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const mu = useMutation({
-    mutationFn: () => api.changePassword({ current_password: current, new_password: next }),
+    mutationFn: () => api.changePassword(
+      hasPassword ? { current_password: current, new_password: next } : { new_password: next },
+    ),
     onSuccess: (data) => {
       // El backend ahora invalida TODOS los tokens al cambiar contraseña y
       // emite uno nuevo. Lo guardamos para que esta pestaña no quede
       // deslogueada. El user object no cambió, solo refrescamos el token.
       if (data?.token) refreshToken(data.token);
-      toast.success("Contraseña actualizada. Otras sesiones quedaron cerradas.");
+      toast.success(
+        hasPassword
+          ? "Contraseña actualizada. Otras sesiones quedaron cerradas."
+          : "Contraseña definida. Ya puedes entrar también con usuario y contraseña.",
+      );
       onClose();
     },
   });
@@ -1005,7 +1034,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
       setLocalError("La confirmación no coincide");
       return;
     }
-    if (next === current) {
+    if (hasPassword && next === current) {
       setLocalError("La nueva contraseña debe ser distinta de la actual");
       return;
     }
@@ -1024,24 +1053,33 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
         <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Seguridad</p>
-            <h3 className="font-serif text-lg text-ink-900 mt-0.5">Cambiar contraseña</h3>
+            <h3 className="font-serif text-lg text-ink-900 mt-0.5">
+              {hasPassword ? "Cambiar contraseña" : "Definir contraseña"}
+            </h3>
           </div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400">
             <X className="h-4 w-4" />
           </button>
         </header>
         <div className="p-5 space-y-3">
-          <label className="block">
-            <span className="block text-xs font-medium text-ink-700 mb-1.5">Contraseña actual</span>
-            <input
-              type={show ? "text" : "password"}
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoFocus
-              required
-              className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
-            />
-          </label>
+          {hasPassword ? (
+            <label className="block">
+              <span className="block text-xs font-medium text-ink-700 mb-1.5">Contraseña actual</span>
+              <input
+                type={show ? "text" : "password"}
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                autoFocus
+                required
+                className="w-full h-10 px-3 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400"
+              />
+            </label>
+          ) : (
+            <p className="text-xs text-ink-500 leading-relaxed rounded-lg bg-bg-50 border border-line-100 p-3">
+              Tu cuenta se creó con Google, así que no tiene contraseña todavía.
+              Define una para poder entrar también sin Google.
+            </p>
+          )}
           <label className="block">
             <span className="block text-xs font-medium text-ink-700 mb-1.5">Nueva contraseña <span className="text-ink-400 font-normal">(mín 8 caracteres)</span></span>
             <input

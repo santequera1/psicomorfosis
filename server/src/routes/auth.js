@@ -213,28 +213,43 @@ router.get("/check-availability", (req, res) => {
  */
 router.post("/change-password", requireAuth, (req, res) => {
   const { current_password, new_password } = req.body ?? {};
-  if (typeof current_password !== "string" || typeof new_password !== "string") {
+  if (typeof new_password !== "string") {
     return res.status(400).json({ error: "Datos inválidos" });
   }
   if (new_password.length < 8) {
     return res.status(400).json({ error: "La nueva contraseña debe tener al menos 8 caracteres" });
   }
-  if (current_password === new_password) {
-    return res.status(400).json({ error: "La nueva contraseña debe ser distinta de la actual" });
-  }
   const user = db.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(req.user.id);
   if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
-  if (!bcrypt.compareSync(current_password, user.password_hash)) {
-    return res.status(401).json({ error: "La contraseña actual no es correcta" });
+
+  // Una cuenta creada con Google no tiene contraseña: guardamos un hash
+  // aleatorio con prefijo `!google!` para no dejar el campo vacío. Su
+  // dueño no puede conocerlo, así que exigirle la "actual" lo dejaba sin
+  // salida: no podía definir una, no podía desvincular Google, y perder
+  // el acceso a su Gmail significaba perder la cuenta. En ese caso el
+  // JWT ya prueba su identidad — es la misma garantía que respalda
+  // cualquier otra acción sensible de la sesión.
+  const sinPassword = String(user.password_hash ?? "").startsWith("!google!");
+  if (!sinPassword) {
+    if (typeof current_password !== "string") {
+      return res.status(400).json({ error: "Datos inválidos" });
+    }
+    if (current_password === new_password) {
+      return res.status(400).json({ error: "La nueva contraseña debe ser distinta de la actual" });
+    }
+    if (!bcrypt.compareSync(current_password, user.password_hash)) {
+      return res.status(401).json({ error: "La contraseña actual no es correcta" });
+    }
   }
   const newHash = bcrypt.hashSync(new_password, 10);
   db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, user.id);
   // Defensa en profundidad: al cambiar contraseña, invalidamos todos los
   // tokens previos. Si alguien tenía un JWT exfiltrado, deja de servir.
-  invalidateUserTokens(user.id);
+  const cutoff = invalidateUserTokens(user.id);
   // Emitimos un token nuevo para no forzar re-login en el mismo browser que
   // acaba de cambiar la contraseña — UX. El frontend debe usar este token
-  // en adelante; los viejos quedaron revocados.
+  // en adelante; los viejos quedaron revocados. El iat va anclado al corte:
+  // si no, el token nace por debajo del umbral y lo rechaza verifyToken.
   const fresh = db.prepare(`
     SELECT u.id, u.username, u.name, u.role, u.workspace_id,
            u.professional_id, u.is_platform_admin, u.is_legal_admin
@@ -249,7 +264,7 @@ router.post("/change-password", requireAuth, (req, res) => {
     professional_id: fresh.professional_id ?? null,
     is_platform_admin: !!fresh.is_platform_admin,
     is_legal_admin: !!fresh.is_legal_admin,
-  });
+  }, { issuedAtMs: new Date(cutoff).getTime() });
   res.json({ ok: true, token });
 });
 
@@ -392,7 +407,7 @@ const registerLimiter = rateLimit({
 });
 
 /** ¿Está abierto el registro público? Se puede cerrar sin redeploy. */
-function publicSignupEnabled() {
+export function publicSignupEnabled() {
   return String(process.env.ALLOW_PUBLIC_SIGNUP ?? "true").toLowerCase() !== "false";
 }
 

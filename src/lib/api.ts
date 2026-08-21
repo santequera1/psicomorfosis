@@ -958,9 +958,10 @@ export const api = {
 
   /** Estado del vínculo con Google del usuario actual. */
   googleLinkStatus: () =>
-    request<{ enabled: boolean; linked: boolean; email: string | null; linkedAt: string | null }>(
-      "/api/auth/google/link",
-    ),
+    request<{
+      enabled: boolean; linked: boolean; email: string | null;
+      linkedAt: string | null; hasPassword: boolean;
+    }>("/api/auth/google/link"),
   /** Arranca el flujo de vinculación: devuelve la URL de Google a la que ir. */
   googleLinkStart: () =>
     request<{ url: string }>("/api/auth/google/link-start", { method: "POST" }),
@@ -975,7 +976,7 @@ export const api = {
    * El backend invalida todos los tokens previos al hacer el cambio y
    * devuelve un token nuevo para que la pestaña actual no quede deslogueada.
    */
-  changePassword: (body: { current_password: string; new_password: string }) =>
+  changePassword: (body: { current_password?: string; new_password: string }) =>
     request<{ ok: true; token?: string }>("/api/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
 
   /**

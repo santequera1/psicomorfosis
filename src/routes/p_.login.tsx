@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, Heart } from "lucide-react";
 import { api, setSession } from "@/lib/api";
@@ -16,6 +16,22 @@ function PortalLoginPage() {
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Un paciente que pulsa "Continuar con Google" en el login del staff
+  // acaba aquí: el backend lo rebota a /p/login?google_error=…. Sin esto
+  // aterrizaba en el portal sin ninguna explicación de por qué se movió
+  // la pantalla bajo sus pies.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("google_error");
+    if (!code) return;
+    toast.info(
+      code === "usa_portal_paciente"
+        ? "Tu cuenta es de paciente: entra aquí con tu correo y contraseña."
+        : "No pudimos completar el ingreso con Google. Entra con tu correo y contraseña.",
+      { duration: 8000 },
+    );
+    window.history.replaceState({}, "", "/p/login");
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

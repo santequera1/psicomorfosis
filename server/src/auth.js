@@ -31,8 +31,20 @@ function getSecret() {
   return _cachedSecret;
 }
 
-export function signToken(payload) {
-  return jwt.sign(payload, getSecret(), { expiresIn: EXPIRES_IN });
+/**
+ * `issuedAtMs` fuerza el `iat` del token en vez de dejar que lo ponga
+ * el reloj. Hace falta después de invalidateUserTokens(): esa función
+ * marca el corte 1 segundo en el FUTURO (para tumbar también los
+ * tokens emitidos en el mismo segundo), así que un token firmado justo
+ * después nacía con iat < corte y verifyToken lo rechazaba siempre.
+ * El efecto era que cambiar la contraseña te expulsaba de tu propia
+ * pestaña, justo lo que el token fresco pretendía evitar.
+ */
+export function signToken(payload, { issuedAtMs } = {}) {
+  const body = issuedAtMs
+    ? { ...payload, iat: Math.ceil(issuedAtMs / 1000) }
+    : payload;
+  return jwt.sign(body, getSecret(), { expiresIn: EXPIRES_IN });
 }
 
 /**
