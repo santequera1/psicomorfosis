@@ -10,7 +10,7 @@ import { ReceiptFormModal } from "@/routes/facturacion";
 import {
   CalendarCheck2, Users, Wallet, Activity, ShieldAlert, Clock3, Video,
   FilePen, Brain, ClipboardList, FileSignature, ListTodo,
-  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail, Receipt, Sparkles,
+  UserPlus, CalendarPlus, Plus, ChevronRight, Phone, Mail, Receipt, Sparkles, X,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -69,6 +69,26 @@ export function AdminDashboard() {
   }
   const { data: workspace } = useWorkspace();
   const user = getStoredUser();
+
+  // Aviso de WhatsApp: Laura avisa al profesional (reservas desde su
+  // perfil público, confirmaciones, recordatorios) al teléfono de su
+  // ficha profesional. Quien entra por Google o se saltó el campo no
+  // tiene ninguno, y nunca se entera de por qué no le llega nada. Es
+  // un banner, no un popup: al entrar por primera vez ya compiten el
+  // tour y los términos. Se puede cerrar y no vuelve (por usuario).
+  const mine = (() => {
+    const list = workspace?.professionals ?? [];
+    return list.find((p) => p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()) ?? list[0];
+  })();
+  const WA_NUDGE_KEY = `psm.nudge.whatsapp.${user?.id ?? "x"}`;
+  const [waNudgeDismissed, setWaNudgeDismissed] = useState(() => {
+    try { return localStorage.getItem(WA_NUDGE_KEY) === "1"; } catch { return false; }
+  });
+  const showWaNudge = !!workspace && !!mine && !String(mine.phone ?? "").replace(/\D/g, "") && !waNudgeDismissed;
+  function dismissWaNudge() {
+    setWaNudgeDismissed(true);
+    try { localStorage.setItem(WA_NUDGE_KEY, "1"); } catch { /* noop */ }
+  }
   const firstName = user?.name.split(" ")[0] ?? "";
   // isOrg con fallback al user de localStorage (evita "salto" antes de que
   // termine de cargar el workspace).
@@ -165,6 +185,39 @@ export function AdminDashboard() {
           qué hacer. Un psicólogo que acaba de registrarse necesita UNA
           instrucción, no cuatro KPIs en cero. Desaparece sola al crear
           el primer paciente. */}
+      {showWaNudge && (
+        <section
+          className="rounded-xl border border-line-200 bg-surface p-4 sm:p-5 flex items-start gap-3 sm:gap-4 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
+          style={{ animationDelay: "60ms" }}
+          role="status"
+        >
+          <span className="hidden sm:flex h-10 w-10 shrink-0 rounded-xl bg-[#25D366]/15 text-[#128C7E] items-center justify-center">
+            <Phone className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-ink-900">Laura puede avisarte por WhatsApp</p>
+            <p className="text-xs text-ink-600 mt-0.5 leading-relaxed">
+              Reservas desde tu perfil público, confirmaciones y recordatorios te llegan al número de tu ficha profesional — y todavía no tienes uno.
+            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <Link
+                to="/configuracion"
+                search={{ s: "perfil" }}
+                className="h-8 px-3 rounded-lg bg-brand-700 hover:bg-brand-800 text-primary-foreground text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+              >
+                Poner mi número <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+              <button type="button" onClick={dismissWaNudge} className="h-8 px-3 rounded-lg text-xs text-ink-500 hover:text-ink-900 hover:bg-bg-50">
+                Ahora no
+              </button>
+            </div>
+          </div>
+          <button type="button" onClick={dismissWaNudge} aria-label="Cerrar" className="h-8 w-8 shrink-0 rounded-md text-ink-400 hover:text-ink-700 hover:bg-bg-50 flex items-center justify-center">
+            <X className="h-4 w-4" />
+          </button>
+        </section>
+      )}
+
       {patientsLoaded && patients.length === 0 && (
         <section
           className="rounded-xl border border-brand-400/40 bg-brand-50/60 p-5 sm:p-6 animate-in fade-in slide-in-from-bottom-1 duration-500 fill-mode-backwards"
