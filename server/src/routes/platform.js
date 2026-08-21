@@ -81,6 +81,10 @@ router.get("/workspaces", (req, res) => {
     SELECT
       w.id, w.name, w.mode, w.disabled_at, w.disabled_reason, w.created_at,
       w.specialties, w.max_patients,
+      -- Registro público (ago 2026): plan y por dónde entró la cuenta.
+      w.plan, w.plan_since, w.signup_source,
+      (SELECT auth_provider FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_auth_provider,
+      (SELECT email_verified_at FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_email_verified_at,
       (SELECT COUNT(*) FROM users WHERE workspace_id = w.id AND role != 'paciente') AS users_count,
       (SELECT COUNT(*) FROM patients WHERE workspace_id = w.id AND archived_at IS NULL) AS patients_count,
       (SELECT COUNT(*) FROM documents WHERE workspace_id = w.id AND archived_at IS NULL) AS documents_count,
@@ -164,6 +168,12 @@ router.get("/workspaces", (req, res) => {
       ownerName: r.owner_name,
       ownerEmail: r.owner_email,
       ownerUsername: r.owner_username,
+      // Cómo llegó la cuenta: 'web' (formulario), 'google' (OAuth) o
+      // null (creada a mano desde este panel, antes del registro público).
+      plan: r.plan ?? "free",
+      signupSource: r.signup_source,
+      ownerAuthProvider: r.owner_auth_provider ?? "password",
+      ownerEmailVerified: Boolean(r.owner_email_verified_at),
       members: membersByWs.get(r.id) ?? [],
     };
   }));

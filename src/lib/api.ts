@@ -73,6 +73,13 @@ export interface PlatformWorkspace {
   ownerName: string | null;
   ownerEmail: string | null;
   ownerUsername: string | null;
+  /** Plan comercial. Hoy todo es 'free'. */
+  plan: string;
+  /** Cómo se creó: 'web' | 'google' | null (creada a mano en el panel). */
+  signupSource: string | null;
+  /** Con qué autentica el dueño: 'password' | 'google'. */
+  ownerAuthProvider: string;
+  ownerEmailVerified: boolean;
   members: PlatformWorkspaceMember[];
 }
 

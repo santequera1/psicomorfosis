@@ -7,7 +7,7 @@ import {
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
-  ArrowUpDown, Sparkles, Inbox,
+  ArrowUpDown, Sparkles, Inbox, Mail,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -707,6 +707,28 @@ function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
           >
             <Tag className="h-3 w-3" /> Invitado
           </span>
+          {/* Cómo llegó la cuenta: registro público (correo/Google) o
+              creada a mano desde este panel. Solo lo mostramos para las
+              que entraron solas — las manuales son el caso por defecto. */}
+          {ws.signupSource === "google" && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-brand-50 text-brand-800"
+              title={`Se registró con Google${ws.ownerEmail ? ` (${ws.ownerEmail})` : ""}`}
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden>
+                <path fill="#EA4335" d="M12 10.8v3.6h5.04c-.22 1.16-1.64 3.4-5.04 3.4-3.02 0-5.48-2.5-5.48-5.6S8.98 6.6 12 6.6c1.72 0 2.88.74 3.54 1.36l2.4-2.32C16.4 4.18 14.42 3.2 12 3.2 7.02 3.2 3 7.22 3 12.2s4.02 9 9 9c5.2 0 8.64-3.66 8.64-8.8 0-.6-.06-1.04-.14-1.6H12z" />
+              </svg>
+              Google
+            </span>
+          )}
+          {ws.signupSource === "web" && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-sage-50 text-sage-700"
+              title={`Registro público con correo${ws.ownerEmail ? ` (${ws.ownerEmail})` : ""}`}
+            >
+              <Mail className="h-3 w-3" /> Registro web
+            </span>
+          )}
           {isInactive && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-warning-soft text-risk-moderate" title="Última actividad hace más de 30 días (o nunca entró)">
               <AlertTriangle className="h-3 w-3" />

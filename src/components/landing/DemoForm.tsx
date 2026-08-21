@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { CheckCircle2, Eye, EyeOff, Loader2, Lock, Send, ShieldCheck } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, setSession } from "@/lib/api";
 import { easeOutExpo } from "./motion";
 import { SectionHeader } from "./Features";
 
@@ -28,17 +28,24 @@ export function DemoForm() {
   const [showPwd, setShowPwd] = useState(false);
   const [sent, setSent] = useState(false);
 
+  // Registro público real: crea la cuenta y entra. Antes esto abría una
+  // "solicitud" que un admin tenía que aprobar a mano; desde que el
+  // registro es libre, ese paso intermedio solo agregaba fricción.
   const mu = useMutation({
-    mutationFn: () => api.submitRegistration({
-      fullName: fullName.trim(),
+    mutationFn: () => api.register({
+      name: fullName.trim(),
       email: email.trim().toLowerCase(),
-      username: username.trim().toLowerCase() || undefined,
       password,
       phone: phone.trim() || undefined,
-      message: message.trim() || undefined,
+      acceptedTerms: true,
     }),
-    onSuccess: () => setSent(true),
-    onError: (e: Error) => toast.error(e?.message ?? "No pudimos procesar tu solicitud"),
+    onSuccess: ({ token, user }) => {
+      setSession(token, user);
+      setSent(true);
+      // Pequeña pausa para que alcance a leerse el mensaje de éxito.
+      setTimeout(() => window.location.assign("/"), 1200);
+    },
+    onError: (e: Error) => toast.error(e?.message ?? "No pudimos crear tu cuenta"),
   });
 
   // Username sugerido a partir del email — solo display, no se envía
@@ -63,7 +70,7 @@ export function DemoForm() {
         <SectionHeader
           eyebrow="Empieza aquí"
           title="Crea tu cuenta en Psicomorfosis"
-          subtitle="Llenas el formulario, revisamos tu solicitud y te enviamos por correo el acceso a la plataforma — usualmente en menos de 24 horas."
+          subtitle="Creas tu cuenta y entras de una. Gratis mientras estamos en fase inicial — sin tarjeta de crédito."
         />
 
         <motion.div
@@ -247,10 +254,10 @@ function ThankYou() {
       <div className="h-14 w-14 mx-auto rounded-full bg-success-soft text-success flex items-center justify-center mb-4">
         <CheckCircle2 className="h-7 w-7" />
       </div>
-      <h3 className="font-serif text-2xl text-ink-900">Recibimos tu solicitud.</h3>
+      <h3 className="font-serif text-2xl text-ink-900">¡Tu consulta está lista!</h3>
       <p className="mt-2 text-sm text-ink-500 max-w-md mx-auto leading-relaxed">
-        Te enviamos un correo confirmando los datos. Cuando aprobemos tu acceso te avisaremos por
-        email, generalmente en menos de 24 horas.
+        Te llevamos a tu espacio de trabajo en un momento. También te enviamos
+        un correo de bienvenida con tus datos de acceso.
       </p>
     </div>
   );
