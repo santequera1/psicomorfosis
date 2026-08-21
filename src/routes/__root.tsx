@@ -56,9 +56,9 @@ export const Route = createRootRoute({
       },
       { property: "og:type", content: "website" },
       { property: "og:locale", content: "es_CO" },
-      { property: "og:url", content: "https://psico.wailus.co/" },
-      { property: "og:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
-      { property: "og:image:secure_url", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { property: "og:url", content: "https://psicomorfosis.co/" },
+      { property: "og:image", content: "https://psicomorfosis.co/landing/preview-psicoapp.jpg" },
+      { property: "og:image:secure_url", content: "https://psicomorfosis.co/landing/preview-psicoapp.jpg" },
       { property: "og:image:type", content: "image/jpeg" },
       { property: "og:image:width", content: "1920" },
       { property: "og:image:height", content: "1117" },
@@ -74,7 +74,7 @@ export const Route = createRootRoute({
         content:
           "Una plataforma diseñada para el día a día del psicólogo. Organiza sesiones, pacientes, evaluaciones y notas clínicas desde una única herramienta.",
       },
-      { name: "twitter:image", content: "https://psico.wailus.co/landing/preview-psicoapp.jpg" },
+      { name: "twitter:image", content: "https://psicomorfosis.co/landing/preview-psicoapp.jpg" },
       {
         name: "twitter:image:alt",
         content: "Psicomorfosis — App para psicólogos.",

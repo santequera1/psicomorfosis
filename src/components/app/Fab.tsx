@@ -70,6 +70,23 @@ export function Fab() {
     setActive(a);
   }
 
+  /**
+   * El tour de bienvenida destaca este botón, y el CSS de TourGuideJS
+   * deja el elemento destacado como LO ÚNICO clicable de la página
+   * (`.tg-active-element * { pointer-events: auto !important }`), con
+   * el foco puesto en él — así que un clic "para avanzar", o el Enter
+   * de keyboardControls, abrían el menú DEBAJO del velo del tour y ahí
+   * se quedaba. Al terminar, los ítems invisibles/visibles tapaban a
+   * Laura y el toque caía en "Nueva nota" o "Soporte directo".
+   * Mientras hay un tour activo, el botón no togglea.
+   */
+  function toggleMenu() {
+    if (document.querySelector(".tg-dialog") || document.body.classList.contains("tg-no-interaction")) {
+      return;
+    }
+    setMenuOpen((v) => !v);
+  }
+
   // Portal al body para evitar que un stacking context aislado del
   // <main> (que tiene `animate-in fade-in slide-in-from-bottom-2` →
   // crea su propio contexto vía transform/opacity) atrape el FAB y lo
@@ -99,11 +116,16 @@ export function Fab() {
           quedan posicionados absolutamente arriba para no reservar espacio
           ni capturar hover cuando el menú está cerrado. */}
       <div ref={containerRef} className="fixed bottom-5 right-5 z-40 h-14 w-14 print:hidden">
+        {/* Los ítems solo EXISTEN con el menú abierto. Antes quedaban
+            montados con opacity-0 + pointer-events-none, y cualquier CSS
+            externo con !important (el del tour, por ejemplo) los volvía
+            clicables siendo invisibles. Lo que no está en el DOM no se
+            puede clicar, con o sin !important. */}
+        {menuOpen && (
         <div
-          aria-hidden={!menuOpen}
           className={cn(
-            "absolute bottom-full right-0 mb-2 flex flex-col items-end gap-2 transition-all duration-200 ease-out",
-            menuOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-3 pointer-events-none"
+            "absolute bottom-full right-0 mb-2 flex flex-col items-end gap-2",
+            "animate-in fade-in slide-in-from-bottom-3 duration-200 ease-out",
           )}
         >
           {/* Orden top→bottom (stagger más alto = primero en el DOM = entra
@@ -129,8 +151,9 @@ export function Fab() {
           <FabItem icon={FilePen} label="Nueva nota" onClick={() => pick("note")} stagger={1} open={menuOpen} />
           <FabItem icon={Receipt} label="Nuevo recibo" onClick={() => pick("receipt")} stagger={0} open={menuOpen} />
         </div>
+        )}
         <button
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={toggleMenu}
           aria-label={menuOpen ? "Cerrar acciones" : "Abrir acciones"}
           aria-expanded={menuOpen}
           data-tour="fab-button"
