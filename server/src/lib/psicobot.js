@@ -337,7 +337,7 @@ export function notifyBookingRequested({ professional, patient, appointment, mot
   const mod = appointment.modality === "tele" ? "online" : "presencial";
   const rendered =
     `📥 *Nueva solicitud de cita* desde tu perfil público\n\n` +
-    `👤 ${patient.name}\n📱 ${patient.phone}\n` +
+    `👤 ${patient.name}${patient.age ? ` · ${patient.age} años` : ""}\n📱 ${patient.phone}\n` +
     `📅 ${fecha} · ${appointment.time} · ${mod}` +
     (motivo ? `\n📝 "${motivo}"` : "") +
     `\n\nEntra a tu agenda para *confirmarla o proponer otro horario*.`;

@@ -142,12 +142,16 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   const phone = String(b.phone ?? "").trim();
   const email = String(b.email ?? "").trim() || null;
   const motivo = String(b.motivo ?? "").trim().slice(0, 400);
+  // Edad: obligatoria. Muchos profesionales atienden por rango (niños,
+  // adolescentes, adultos) y necesitan saberlo ANTES de confirmar.
+  const age = Number.parseInt(String(b.age ?? ""), 10);
   const date = String(b.date ?? "");
   const time = String(b.time ?? "");
   const modality = b.modality === "tele" ? "tele" : "individual";
 
   if (name.length < 3) return res.status(400).json({ error: "Nombre requerido" });
   if (phone.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Teléfono válido requerido" });
+  if (!Number.isInteger(age) || age < 1 || age > 120) return res.status(400).json({ error: "Indica tu edad" });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !GRID.includes(time)) {
     return res.status(400).json({ error: "Fecha u hora inválida" });
   }
@@ -174,12 +178,15 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   if (!patient) {
     const pid = `P-${p.workspace_id}W${Date.now().toString(36).toUpperCase()}`;
     db.prepare(`
-      INSERT INTO patients (id, workspace_id, professional_id, name, phone, email,
+      INSERT INTO patients (id, workspace_id, professional_id, name, phone, email, age,
                             professional, modality, status, reason, whatsapp_opt_in, whatsapp_opt_in_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'activo', ?, 1, datetime('now'))
-    `).run(pid, p.workspace_id, p.id, name, phone, email, p.name, modality,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo', ?, 1, datetime('now'))
+    `).run(pid, p.workspace_id, p.id, name, phone, email, age, p.name, modality,
            motivo ? `[reserva-web] ${motivo}` : "[reserva-web] Solicitud desde perfil público");
     patient = { id: pid, name };
+  } else {
+    // Paciente ya existente por teléfono: completamos la edad si faltaba.
+    db.prepare("UPDATE patients SET age = COALESCE(age, ?) WHERE id = ?").run(age, patient.id);
   }
 
   const info = db.prepare(`
@@ -198,7 +205,7 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   try {
     notifyBookingRequested({
       professional: { name: p.name, phone: p.phone },
-      patient: { name: patient.name, phone },
+      patient: { name: patient.name, phone, age },
       appointment: { id: info.lastInsertRowid, date, time, modality },
       motivo,
     });
@@ -208,7 +215,7 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   // Y por correo (profesional + visitante). Best-effort, no bloquea.
   sendBookingRequestEmails({
     professional: { name: p.name, email: p.email },
-    patient: { name: patient.name, phone, email },
+    patient: { name: patient.name, phone, email, age },
     appointment: { date, time, modality },
     motivo,
   }).catch((e) => console.warn(`[public-booking] mail fail: ${e?.message}`));

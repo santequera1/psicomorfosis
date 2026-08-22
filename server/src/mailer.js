@@ -1341,6 +1341,7 @@ export async function sendBookingRequestEmails({ professional, patient, appointm
           </p>
           ${detalle}
           <div style="font-size:14px;line-height:1.7;margin:0 0 20px">
+            ${patient.age ? `<div><strong>Edad:</strong> ${escapeHtml(String(patient.age))} años</div>` : ""}
             <div><strong>Teléfono:</strong> ${escapeHtml(patient.phone || "—")}</div>
             ${patient.email ? `<div><strong>Correo:</strong> ${escapeHtml(patient.email)}</div>` : ""}
           </div>
