@@ -55,6 +55,26 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
 }
 
 export const getRouter = () => {
+  // Tras cada deploy los chunks cambian de nombre. Un navegador con el
+  // HTML o el chunk de entrada en caché pide chunks que ya no existen,
+  // el servidor responde 404 (HTML) y el módulo falla con "disallowed
+  // MIME type" — la app queda en blanco (visto en Firefox). Vite emite
+  // `vite:preloadError` justo en ese caso: recargamos UNA vez para que
+  // el navegador traiga el HTML nuevo con los nombres correctos.
+  if (typeof window !== "undefined") {
+    window.addEventListener("vite:preloadError", (event) => {
+      const KEY = "psm.reload-after-preload-error";
+      try {
+        if (sessionStorage.getItem(KEY) === "1") return; // ya lo intentamos: no entrar en bucle
+        sessionStorage.setItem(KEY, "1");
+      } catch { /* noop */ }
+      event.preventDefault();
+      window.location.reload();
+    });
+    // Si la carga fue bien, liberamos la marca para el próximo deploy.
+    window.addEventListener("load", () => { try { sessionStorage.removeItem("psm.reload-after-preload-error"); } catch { /* noop */ } });
+  }
+
   const router = createRouter({
     routeTree,
     context: {},

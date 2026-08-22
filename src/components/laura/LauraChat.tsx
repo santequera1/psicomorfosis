@@ -229,8 +229,13 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
+    const max = isMobile ? 144 : 240;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, isMobile ? 144 : 224)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    // La barra de scroll solo cuando de verdad hay más texto del que
+    // cabe; mientras crece, nada de barra (se veía una barra permanente
+    // en un campo de una línea).
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [input, isMobile]);
 
   // Body scroll lock: evita que el body scrolle detrás del drawer en
@@ -240,6 +245,11 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
   // aplica solo cuando el drawer está montado.
   useEffect(() => {
     if (!mounted) return;
+    // Solo en móvil: en desktop el chat es un panel lateral y la página
+    // debe seguir scrolleando. Bloquear el body ahí dejaba el sidebar
+    // sticky calculando contra un contenedor sin scroll y se pintaba
+    // roto (un "manchón" a la izquierda al hacer scroll).
+    if (window.innerWidth >= 640) return;
     const body = document.body;
     const prevOverflow = body.style.overflow;
     const prevOverflowX = body.style.overflowX;
@@ -944,10 +954,10 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
                   isResting
                     ? "Laura está descansando — escribir queda deshabilitado hasta la renovación"
                     : attachedImages.length > 0
-                      ? "Describe lo que ves, o envía solo la imagen…"
+                      ? "Describe la imagen (opcional)…"
                       : activePatientId
-                        ? "Pregúntame sobre este paciente o sobre la app…"
-                        : "¿En qué te ayudo? (uso de la plataforma, redacción clínica, etc.)"
+                        ? "Pregúntame sobre este paciente…"
+                        : "Escríbele a Laura…"
                 }
                 rows={1}
                 maxLength={8000}
@@ -971,7 +981,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
                 // zoom de iOS); crece hasta 144px. Más alto que eso empuja
                 // la conversación fuera de la vista cuando el teclado ya
                 // se llevó media pantalla. En desktop, 44px y hasta 224px.
-                className="flex-1 min-w-0 min-h-9 sm:min-h-11 max-h-36 sm:max-h-56 px-3.5 sm:px-3 py-[7px] sm:py-2.5 rounded-[18px] sm:rounded-lg border border-line-200 bg-bg text-base sm:text-sm leading-snug text-ink-900 outline-none focus:border-brand-400 resize-none disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 min-w-0 min-h-11 sm:min-h-[52px] max-h-36 sm:max-h-60 px-4 py-3 rounded-[22px] sm:rounded-xl border border-line-200 bg-bg text-base sm:text-sm leading-relaxed text-ink-900 outline-none focus:border-brand-400 resize-none overflow-y-hidden disabled:opacity-60 disabled:cursor-not-allowed"
               />
               {/* Micrófono: solo con el campo vacío (o tras el "›"). */}
               {!toolsCollapsed && (
