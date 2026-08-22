@@ -261,7 +261,9 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
   const [modality, setModality] = useState<"tele" | "individual" | null>(null);
   const [date, setDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", motivo: "", website: "" });
+  const [form, setForm] = useState({ name: "", age: "", phone: "", email: "", motivo: "", website: "" });
+  const ageNum = Number.parseInt(form.age, 10);
+  const ageOk = Number.isInteger(ageNum) && ageNum >= 1 && ageNum <= 120;
 
   const { data: avail, isLoading: loadingAvail } = useQuery({
     queryKey: ["public-availability", profile.slug],
@@ -287,7 +289,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
   const canContinue =
     step === 1 ? !!modality :
     step === 2 ? !!date && !!time :
-    step === 3 ? form.name.trim().length >= 3 && form.phone.replace(/\D/g, "").length >= 10 :
+    step === 3 ? form.name.trim().length >= 3 && ageOk && form.phone.replace(/\D/g, "").length >= 10 :
     true;
 
   function fmtDia(iso: string) {
@@ -466,6 +468,17 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                   />
                 </label>
                 <label className="block">
+                  <span className="text-xs font-medium text-ink-500">Edad *</span>
+                  <input
+                    value={form.age}
+                    onChange={(e) => setForm({ ...form, age: e.target.value.replace(/\D/g, "").slice(0, 3) })}
+                    placeholder="Ej. 28"
+                    inputMode="numeric"
+                    className="mt-1 w-full h-12 px-4 rounded-xl border border-line-200 bg-bg-50/50 text-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20"
+                  />
+                  <span className="block mt-1 text-[11px] text-ink-400">Si la cita es para otra persona (p. ej. tu hijo/a), pon la edad de quien asistirá.</span>
+                </label>
+                <label className="block">
                   <span className="text-xs font-medium text-ink-500">WhatsApp *</span>
                   <input
                     value={form.phone}
@@ -517,6 +530,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                   ["Fecha", fmtLargo(date!)],
                   ["Hora", `${fmtHora(time!)} · 50 min`],
                   ["Nombre", form.name],
+                  ["Edad", `${form.age} años`],
                   ["WhatsApp", form.phone],
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-4 px-4 py-3 text-sm">
