@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { notifyStaffWhatsappLinked } from "../lib/psicobot.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
@@ -246,6 +247,15 @@ router.patch("/professionals/:id", (req, res) => {
   const m = { ...existing, ...req.body };
   db.prepare("UPDATE professionals SET name = ?, title = ?, email = ?, phone = ?, approach = ?, active = ? WHERE id = ?")
     .run(m.name, m.title, m.email, m.phone, m.approach, m.active ? 1 : 0, req.params.id);
+
+  // WhatsApp nuevo o cambiado → Laura le da la bienvenida y lo suscribe
+  // a los avisos. Solo cuando el número queda con valor y es distinto.
+  const digitsOf = (v) => String(v ?? "").replace(/\D/g, "");
+  if (digitsOf(m.phone) && digitsOf(m.phone) !== digitsOf(existing.phone)) {
+    const owner = db.prepare("SELECT id, name, workspace_id FROM users WHERE professional_id = ? AND role <> 'paciente' ORDER BY id LIMIT 1").get(existing.id)
+      ?? { id: req.user.id, name: req.user.name, workspace_id: req.user.workspace_id };
+    notifyStaffWhatsappLinked({ user: owner, professional: { id: existing.id, name: m.name, phone: m.phone } });
+  }
 
   // Perfil público (linktree). Solo se toca si el body trae alguno de
   // estos campos, para que el PATCH de "Perfil profesional" (nombre,

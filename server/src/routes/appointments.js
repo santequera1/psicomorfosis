@@ -197,14 +197,38 @@ router.get("/:id", (req, res) => {
 
 router.post("/", (req, res) => {
   const a = req.body ?? {};
+  // Defensas que faltaban (el bot de WhatsApp creó una cita en 2025, sin
+  // profesional y sin nombre de paciente — y el auto-marcado la dejó
+  // "atendida" al instante):
+  //  - fecha en el pasado → 400 (una cita nueva nunca es para ayer);
+  //  - sin professional_id → el del usuario que la crea;
+  //  - sin patient_name → el nombre del paciente por su id.
+  const today = colombiaDateIso(new Date());
+  const date = a.date ?? today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < today) {
+    return res.status(400).json({ error: `La fecha ${date} ya pasó. Indica una fecha de hoy en adelante (formato YYYY-MM-DD).` });
+  }
+  if (!a.time || !/^\d{2}:\d{2}$/.test(String(a.time))) {
+    return res.status(400).json({ error: "Hora requerida (HH:mm)" });
+  }
+  const patientId = a.patient_id ?? a.patientId ?? null;
+  const patientRow = patientId
+    ? db.prepare("SELECT name FROM patients WHERE id = ? AND workspace_id = ?").get(patientId, req.user.workspace_id)
+    : null;
+  if (patientId && !patientRow) return res.status(404).json({ error: "Paciente no encontrado en este workspace" });
+  let professionalId = a.professional_id ?? a.professionalId ?? req.user.professional_id ?? null;
+  let professionalName = a.professional ?? "";
+  if (professionalId && !professionalName) {
+    professionalName = db.prepare("SELECT name FROM professionals WHERE id = ?").get(professionalId)?.name ?? "";
+  }
   const r = db.prepare(`
     INSERT INTO appointments (workspace_id, sede_id, professional_id, patient_id, date, time, duration_min, patient_name, professional, modality, room, status, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    req.user.workspace_id, a.sede_id ?? a.sedeId ?? null, a.professional_id ?? a.professionalId ?? null, a.patient_id ?? a.patientId ?? null,
-    a.date ?? colombiaDateIso(new Date()),
-    a.time, a.duration_min ?? 50, a.patient_name ?? a.patientName ?? "",
-    a.professional ?? "", a.modality ?? "individual", a.room ?? "",
+    req.user.workspace_id, a.sede_id ?? a.sedeId ?? null, professionalId, patientId,
+    date,
+    a.time, a.duration_min ?? 50, a.patient_name ?? a.patientName ?? patientRow?.name ?? "",
+    professionalName, a.modality ?? "individual", a.room ?? "",
     a.status ?? "pendiente", a.notes ?? ""
   );
   const row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));

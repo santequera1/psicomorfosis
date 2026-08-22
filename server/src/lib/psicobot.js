@@ -375,3 +375,42 @@ export const _internals = {
   buildRecipient,
   pushEventRaw,
 };
+
+/**
+ * Teléfono a E.164 colombiano: "300 123 4567" → "+573001234567". Si ya
+ * trae indicativo (+57 / 57…) lo respeta. Evolution rechaza números sin
+ * indicativo que no sean celulares colombianos.
+ */
+export function toE164Co(phone) {
+  const d = String(phone ?? "").replace(/\D/g, "");
+  if (!d) return null;
+  if (d.length === 10) return `+57${d}`;
+  if (d.length === 12 && d.startsWith("57")) return `+${d}`;
+  return `+${d}`;
+}
+
+/**
+ * El psicólogo acaba de poner (o cambiar) su WhatsApp. El bot arma la
+ * bienvenida y lo suscribe a los avisos proactivos (recordatorio 30 min
+ * antes de cada cita). Contrato: docs/bot-laura.md §3.2.
+ */
+export function notifyStaffWhatsappLinked({ user, professional }) {
+  if (!configured()) return;
+  const phone = toE164Co(professional?.phone);
+  if (!phone || phone.length < 12) return;
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const payload = {
+    event: "staff.whatsapp_linked",
+    idempotency_key: `staff-${user.id}-linked-${day}`,
+    recipient: {
+      phone,
+      name: user.name || professional.name,
+      role: "psicologo",
+      workspace_id: user.workspace_id ?? null,
+      user_id: user.id,
+    },
+    data: { professional_id: professional.id },
+    rendered_message: null,
+  };
+  setImmediate(() => pushAndLog(payload));
+}

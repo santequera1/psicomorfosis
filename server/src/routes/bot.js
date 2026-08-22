@@ -453,6 +453,49 @@ router.get("/bot/appointment-vocab", (_req, res) => {
  * Respuesta:
  *   { ok: true, request_id, appointment_id, patient_id, status: "pending" }
  */
+/**
+ * POST /api/bot/appointments/confirm
+ * body: { phone, appointment_id }
+ *
+ * El paciente respondió "sí" por WhatsApp. Clave por teléfono, SIN actor:
+ * quien reserva desde el perfil público no tiene cuenta del portal y
+ * antes el bot le pedía "activa tu cuenta" para poder confirmar — un
+ * callejón sin salida para alguien que solo dejó su número.
+ *
+ * Seguridad: el teléfono debe pertenecer al paciente de ESA cita. Solo
+ * pasa de pendiente/solicitada a confirmada; no toca citas atendidas ni
+ * canceladas. Idempotente: confirmar dos veces responde ok.
+ */
+router.post("/bot/appointments/confirm", (req, res) => {
+  const { phone, appointment_id } = req.body ?? {};
+  const apptId = Number(appointment_id);
+  if (!phone || !Number.isFinite(apptId)) {
+    return res.status(400).json({ error: "phone y appointment_id requeridos" });
+  }
+  const normalized = normalizePhone(phone);
+  const last10 = normalized.slice(-10);
+  const appt = db.prepare("SELECT * FROM appointments WHERE id = ?").get(apptId);
+  if (!appt) return res.status(404).json({ error: "Cita no encontrada" });
+  const patient = appt.patient_id
+    ? db.prepare("SELECT id, name, preferred_name, phone, workspace_id FROM patients WHERE id = ?").get(appt.patient_id)
+    : null;
+  const n = normalizePhone(patient?.phone ?? "");
+  const matches = patient && n && (n === normalized || n.endsWith(last10) || normalized.endsWith(n.slice(-10)));
+  if (!matches) return res.status(403).json({ error: "La cita no pertenece a este número" });
+
+  if (appt.status === "confirmada") {
+    return res.json({ ok: true, already: true, appointment_id: apptId, status: "confirmada" });
+  }
+  if (!["pendiente", "solicitada"].includes(String(appt.status))) {
+    return res.status(409).json({ error: `La cita está en estado "${appt.status}" y no se puede confirmar` });
+  }
+  db.prepare("UPDATE appointments SET status = 'confirmada' WHERE id = ?").run(apptId);
+  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(apptId);
+  req.app.get("io")?.to(`ws-${row.workspace_id}`).emit("appointment:updated", row);
+  console.log(`[bot] paciente ${patient.id} confirmó cita ${apptId} por WhatsApp`);
+  res.json({ ok: true, appointment_id: apptId, status: "confirmada", patient_id: patient.id });
+});
+
 router.post("/bot/reschedule-request", (req, res) => {
   const { phone, appointment_id, reason, preferred_slots } = req.body ?? {};
   const apptId = Number(appointment_id);

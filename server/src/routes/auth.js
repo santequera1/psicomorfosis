@@ -7,6 +7,7 @@ import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
 import { sendWelcomeEmail, sendPasswordResetEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
+import { notifyStaffWhatsappLinked } from "../lib/psicobot.js";
 
 const router = Router();
 
@@ -502,6 +503,13 @@ router.post("/register", registerLimiter, (req, res) => {
   // el usuario aceptaba en el registro y la app le abría acto seguido el
   // modal bloqueante pidiéndole exactamente lo mismo.
   const nAcc = recordSignupAcceptances(created.userId, req);
+  // Si dio su WhatsApp al registrarse, Laura lo saluda y lo suscribe.
+  if (phone) {
+    notifyStaffWhatsappLinked({
+      user: { id: created.userId, name, workspace_id: created.wsId },
+      professional: { id: created.profId, name, phone },
+    });
+  }
   if (nAcc) console.log("[register] " + nAcc + " documento(s) legal(es) aceptado(s) en el alta");
 
   // Bienvenida best-effort: si el correo falla, el registro NO se cae.
