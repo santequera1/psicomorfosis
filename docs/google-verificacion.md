@@ -1,6 +1,10 @@
 # Verificación de la app en Google (scope de Calendar)
 
-Estado: **pendiente de enviar** (lo envía Stiven desde Google Cloud Console).
+Estado: **ENVIADA el 24 de agosto de 2026** (Centro de verificación → "en proceso de revisión").
+Vídeo: https://youtu.be/9iKQRb7unfI · Cuenta de prueba para el revisor: `revisor.google@psicomorfosis.co`
+(workspace aislado "Consulta de prueba (Google review)", user id 45, paciente ficticio P-26000).
+Contacto del revisor: stivenantequera@gmail.com. Si piden algo, responder en <3 días o cierran la solicitud.
+Cuando aprueben: desactivar o conservar la cuenta de prueba (la vuelven a pedir si se añaden scopes).
 
 ## Por qué hace falta
 
