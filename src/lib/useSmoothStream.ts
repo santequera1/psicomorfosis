@@ -83,6 +83,10 @@ export function useSmoothStream(target: string, active: boolean): string {
       setDisplayed(displayedRef.current);
       rafRef.current = requestAnimationFrame(tick);
     };
+    // La ref puede haberse sincronizado de golpe durante el render (texto
+    // reiniciado o completo): reflejarlo en el estado, o el mensaje se
+    // quedaría sin pintar cuando no hay nada que animar.
+    setDisplayed((prev) => (prev === displayedRef.current ? prev : displayedRef.current));
     if (rafRef.current == null && displayedRef.current !== target) {
       lastRef.current = 0;
       rafRef.current = requestAnimationFrame(tick);
