@@ -216,7 +216,7 @@ function PatientsPage() {
     if (tagFilter !== "todos" && !(p.tags ?? []).includes(tagFilter)) return false;
     if (query.trim()) {
       const q = query.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.id.toLowerCase().includes(q) && !p.reason.toLowerCase().includes(q) && !p.doc.toLowerCase().includes(q)) return false;
+      if (!(p.name ?? "").toLowerCase().includes(q) && !p.id.toLowerCase().includes(q) && !(p.reason ?? "").toLowerCase().includes(q) && !(p.doc ?? "").toLowerCase().includes(q)) return false;
     }
     return true;
   }), [patients, query, status, modality, riskFilter, tagFilter]);

@@ -701,7 +701,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   const routeMatches: CmdItem[] = !q ? ROUTE_ITEMS : ROUTE_ITEMS.filter((r) => r.label.toLowerCase().includes(q));
 
   const patientMatches: CmdItem[] = patients
-    .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.preferredName ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || p.reason.toLowerCase().includes(q))
+    .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.preferredName ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.reason ?? "").toLowerCase().includes(q))
     .slice(0, 6)
     .map((p) => ({
       kind: "paciente" as const,

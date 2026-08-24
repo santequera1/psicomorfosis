@@ -231,7 +231,7 @@ function NoPatientSelected({ patients, onPick }: { patients: Patient[]; onPick: 
       ? patients.filter((p) =>
           p.name.toLowerCase().includes(q) ||
           (p.preferredName ?? "").toLowerCase().includes(q) ||
-          p.doc.toLowerCase().includes(q) ||
+          (p.doc ?? "").toLowerCase().includes(q) ||
           p.id.toLowerCase().includes(q)
         )
       : patients;

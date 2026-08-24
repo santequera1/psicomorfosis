@@ -28,19 +28,24 @@ function rowToPatient(r) {
   if (!r) return null;
   return {
     id: r.id,
-    name: r.name,
+    // Estos campos son TEXT nullable en BD, pero el front los tipa como
+    // string y les hace .toLowerCase() en los buscadores. Un paciente creado
+    // fuera del formulario (reserva pública, bot) los deja NULL y tumbaba
+    // /pacientes, /historia y el modal de nueva cita al teclear. Aquí se
+    // normalizan una sola vez para todos los lectores.
+    name: r.name ?? "",
     preferredName: r.preferred_name ?? undefined,
-    pronouns: r.pronouns,
-    doc: r.doc,
+    pronouns: r.pronouns ?? "",
+    doc: r.doc ?? "",
     age: r.age,
-    phone: r.phone,
-    email: r.email,
+    phone: r.phone ?? "",
+    email: r.email ?? "",
     professional: r.professional,
     professionalId: r.professional_id ?? undefined,
     sedeId: r.sede_id ?? undefined,
     modality: r.modality,
     status: r.status,
-    reason: r.reason,
+    reason: r.reason ?? "",
     // lastContact y nextSession se derivan de appointments — vienen del JOIN
     // (campos derived_*) si están disponibles, sino de la columna del paciente
     // como fallback (legacy seed strings).

@@ -140,7 +140,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
   const filtered = query.trim()
     ? patients.filter((p) => {
         const q = query.toLowerCase();
-        return p.name.toLowerCase().includes(q) || (p.preferredName ?? "").toLowerCase().includes(q) || p.doc.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+        return p.name.toLowerCase().includes(q) || (p.preferredName ?? "").toLowerCase().includes(q) || (p.doc ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
       }).slice(0, 6)
     : [];
 
