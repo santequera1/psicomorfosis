@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { api, type LauraStreamEvent } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useSmoothStream } from "@/lib/useSmoothStream";
 import { LauraProposalCard, type ProposedAction, type PatientPrefill } from "./LauraProposalCard";
 import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 import { toast } from "sonner";
@@ -367,12 +368,27 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Scroll auto al fondo cuando llegan mensajes nuevos o tokens
+  // Scroll auto al fondo cuando llega un mensaje nuevo.
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages.length]);
+
+  // Durante el streaming el texto crece frame a frame (useSmoothStream),
+  // no por cambios de `messages`: observamos el DOM y seguimos el fondo
+  // mientras el usuario esté cerca de él. Si subió a leer algo anterior,
+  // no se lo arrebatamos.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof MutationObserver === "undefined") return;
+    const obs = new MutationObserver(() => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (dist < 160) el.scrollTop = el.scrollHeight;
+    });
+    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => obs.disconnect();
+  }, [mounted]);
 
   // Focus al abrir
   useEffect(() => {
@@ -1440,19 +1456,43 @@ function TypingDots() {
  * sin cerrar para evitar que aparezca un asterisco suelto a media
  * generación.
  */
+/** Cuántos caracteres del final entran con fundido mientras se escribe. */
+const FADE_TAIL = 24;
+
 function MarkdownLite({ text, streaming }: { text: string; streaming?: boolean }) {
-  // Tokens reconocidos como pares delimitadores. Cada item: { open, close, render }.
-  // El parser hace múltiples pasadas reemplazando pares balanceados; lo
-  // que no calza queda como texto plano.
-  const safe = text;
+  // Streaming suave: el texto llega a trozos irregulares del servidor;
+  // useSmoothStream lo revela a ritmo continuo (ver src/lib/useSmoothStream).
+  const smooth = useSmoothStream(text, !!streaming);
+  const settling = !!streaming || smooth !== text;
   // Si streaming y hay un par abierto sin cerrar al final, lo cortamos
   // para no mostrar "**" colgando.
-  const display = streaming ? trimDanglingMarkers(safe) : safe;
-  const nodes = parseInline(display);
+  const display = settling ? trimDanglingMarkers(smooth) : text;
+
+  // Fundido por carácter SOLO en la cola: cada carácter nuevo aparece con
+  // una transición corta de opacidad, en vez de "saltar" a la vista. Las
+  // claves son el índice absoluto, así un carácter que ya se pintó no
+  // vuelve a animarse cuando la cola avanza. Si la cola contiene
+  // marcadores de formato, se pinta todo por el parser (sin fundido) para
+  // no partir un **negrita** por la mitad.
+  let nodes: React.ReactNode[];
+  if (settling && display.length > 0) {
+    const cut = Math.max(0, display.length - FADE_TAIL);
+    const tail = display.slice(cut);
+    if (/[*_`]/.test(tail)) {
+      nodes = parseInline(display);
+    } else {
+      nodes = parseInline(display.slice(0, cut));
+      for (let i = 0; i < tail.length; i++) {
+        nodes.push(<span key={`c${cut + i}`} className="laura-char">{tail[i]}</span>);
+      }
+    }
+  } else {
+    nodes = parseInline(display);
+  }
   return (
     <div className="whitespace-pre-wrap break-words">
       {nodes}
-      {streaming && <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-ink-400 align-text-bottom animate-pulse" />}
+      {settling && <span aria-hidden className="laura-caret" />}
     </div>
   );
 }

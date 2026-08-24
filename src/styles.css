@@ -1021,3 +1021,39 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 input[type="date"]::-webkit-inner-spin-button {
   display: none;
 }
+
+/* ─── Chat de Laura: streaming suave ─────────────────────────────────
+   .laura-char: cada carácter nuevo entra con un fundido breve (la cola
+   del mensaje mientras se escribe). .laura-caret: cursor fino que respira
+   en vez del bloque gris parpadeante. Con reduced-motion, sin animación. */
+/* Inspirado en el "pop-in" de transitions.dev, atenuado para prosa:
+   2 px de subida y 1.5 px de desenfoque en vez de 8 px con rebote —
+   los caracteres "cuajan" en su sitio en lugar de saltar. Sin
+   escalonado: la llegada del stream ya lo escalona sola. */
+@keyframes laura-char-in {
+  from { opacity: 0; transform: translateY(2px); filter: blur(1.5px); }
+  to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
+}
+.laura-char {
+  display: inline-block;
+  white-space: pre;
+  animation: laura-char-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes laura-caret-breathe {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.7; }
+}
+.laura-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: currentColor;
+  animation: laura-caret-breathe 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .laura-char { animation: none; }
+  .laura-caret { animation: none; opacity: 0.5; }
+}
