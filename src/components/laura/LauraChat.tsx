@@ -1459,6 +1459,27 @@ function TypingDots() {
 /** Cuántos caracteres del final entran con fundido mientras se escribe. */
 const FADE_TAIL = 24;
 
+// Segmentador de grafemas (emojis, tildes combinadas) — nativo en todos
+// los navegadores actuales; si faltara, caemos a puntos de código.
+const graphemeSegmenter: { segment: (s: string) => Iterable<{ segment: string }> } | null =
+  typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? new (Intl as unknown as { Segmenter: new (l: string, o: { granularity: string }) => { segment: (s: string) => Iterable<{ segment: string }> } }).Segmenter("es", { granularity: "grapheme" })
+    : null;
+function graphemes(s: string): string[] {
+  return graphemeSegmenter ? Array.from(graphemeSegmenter.segment(s), (x) => x.segment) : Array.from(s);
+}
+/** Índice de corte y los últimos `n` grafemas del texto (solo mira una
+ *  ventana del final: no hace falta segmentar todo el mensaje por frame). */
+function tailClusters(text: string, n: number): { cut: number; clusters: string[] } {
+  let start = Math.max(0, text.length - n * 4);
+  const code = text.charCodeAt(start);
+  if (code >= 0xdc00 && code <= 0xdfff) start += 1; // no arrancar en medio de un par
+  const gs = graphemes(text.slice(start));
+  const keep = gs.slice(-n);
+  const skipped = gs.slice(0, gs.length - keep.length).reduce((acc, g) => acc + g.length, 0);
+  return { cut: start + skipped, clusters: keep };
+}
+
 function MarkdownLite({ text, streaming }: { text: string; streaming?: boolean }) {
   // Streaming suave: el texto llega a trozos irregulares del servidor;
   // useSmoothStream lo revela a ritmo continuo (ver src/lib/useSmoothStream).
@@ -1476,14 +1497,19 @@ function MarkdownLite({ text, streaming }: { text: string; streaming?: boolean }
   // no partir un **negrita** por la mitad.
   let nodes: React.ReactNode[];
   if (settling && display.length > 0) {
-    const cut = Math.max(0, display.length - FADE_TAIL);
+    // La cola se parte por GRAFEMAS, no por unidades UTF-16: un emoji
+    // (👋, 📅) son dos unidades y partirlo pintaba dos símbolos rotos
+    // hasta que salía de la cola ("escribe raro y luego se arregla").
+    const { cut, clusters } = tailClusters(display, FADE_TAIL);
     const tail = display.slice(cut);
     if (/[*_`]/.test(tail)) {
       nodes = parseInline(display);
     } else {
       nodes = parseInline(display.slice(0, cut));
-      for (let i = 0; i < tail.length; i++) {
-        nodes.push(<span key={`c${cut + i}`} className="laura-char">{tail[i]}</span>);
+      let pos = cut;
+      for (const g of clusters) {
+        nodes.push(<span key={`c${pos}`} className="laura-char">{g}</span>);
+        pos += g.length;
       }
     }
   } else {

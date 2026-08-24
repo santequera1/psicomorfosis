@@ -708,7 +708,7 @@ export const LAURA_TOOLS = [
  */
 export function gatherBriefingContext({ workspaceId, patientId, appointment }) {
   const patient = db.prepare(`
-    SELECT id, name, preferred_name, age, modality, status, risk_level,
+    SELECT id, name, preferred_name, age, modality, status, risk AS risk_level,
            main_motive, tags, doc_number, contact_phone, contact_email
     FROM patients
     WHERE id = ? AND workspace_id = ?
