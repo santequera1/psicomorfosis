@@ -179,8 +179,8 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
     const pid = `P-${p.workspace_id}W${Date.now().toString(36).toUpperCase()}`;
     db.prepare(`
       INSERT INTO patients (id, workspace_id, professional_id, name, phone, email, age,
-                            professional, modality, status, reason, whatsapp_opt_in, whatsapp_opt_in_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo', ?, 1, datetime('now'))
+                            professional, modality, status, reason, risk, risk_type, whatsapp_opt_in, whatsapp_opt_in_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo', ?, 'none', '[]', 1, datetime('now'))
     `).run(pid, p.workspace_id, p.id, name, phone, email, age, p.name, modality,
            motivo ? `[reserva-web] ${motivo}` : "[reserva-web] Solicitud desde perfil público");
     patient = { id: pid, name };

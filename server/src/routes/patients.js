@@ -46,7 +46,8 @@ function rowToPatient(r) {
     // como fallback (legacy seed strings).
     lastContact: r.derived_last_contact ?? r.last_contact,
     nextSession: r.derived_next_session ?? r.next_session ?? undefined,
-    risk: r.risk,
+    // Nunca null hacia el cliente: los badges indexan mapas por este valor.
+    risk: r.risk || "none",
     riskTypes: r.risk_type ? safeParseArray(r.risk_type) : [],
     tags: r.tags ? r.tags.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     address: r.address ?? undefined,

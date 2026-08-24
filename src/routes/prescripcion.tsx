@@ -188,7 +188,7 @@ function PrescripcionPage() {
 
             <ul className="divide-y divide-line-100">
               {filtered.map((t) => {
-                const s = STATUS_STYLE[t.status];
+                const s = STATUS_STYLE[t.status] ?? STATUS_STYLE.pendiente ?? Object.values(STATUS_STYLE)[0];
                 const isSelected = selected?.id === t.id;
                 return (
                   <li key={t.id}>
@@ -243,8 +243,8 @@ function PrescripcionPage() {
                     <p className="text-[11px] uppercase tracking-[0.1em] text-brand-800 font-medium">{TYPE_LABEL[selected.type]}</p>
                     <h3 className="font-serif text-xl text-ink-900 mt-1">{selected.title}</h3>
                   </div>
-                  <span className={"text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full font-medium shrink-0 " + STATUS_STYLE[selected.status].bg + " " + STATUS_STYLE[selected.status].text}>
-                    {STATUS_STYLE[selected.status].label}
+                  <span className={"text-[10px] uppercase tracking-[0.08em] px-2 py-0.5 rounded-full font-medium shrink-0 " + (STATUS_STYLE[selected.status] ?? Object.values(STATUS_STYLE)[0]).bg + " " + (STATUS_STYLE[selected.status] ?? Object.values(STATUS_STYLE)[0]).text}>
+                    {(STATUS_STYLE[selected.status] ?? Object.values(STATUS_STYLE)[0]).label ?? selected.status}
                   </span>
                 </div>
                 <p className="text-sm text-ink-700">{selected.description}</p>

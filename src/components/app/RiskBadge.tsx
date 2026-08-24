@@ -19,11 +19,16 @@ export function RiskBadge({
   types?: RiskType[];
   compact?: boolean;
 }) {
-  const s = STYLES[risk];
+  // Fallback a "none": un paciente creado fuera del formulario (reserva
+  // pública, bot, importación) puede llegar con risk NULL/desconocido, y
+  // STYLES[undefined].bg tumbaba TODA la vista (agenda, pacientes…) con
+  // "Cannot read properties of undefined (reading 'bg')".
+  const level: Risk = risk && STYLES[risk] ? risk : "none";
+  const s = STYLES[level];
   const typeLabels = (types ?? []).map((t) => RISK_TYPE_LABEL[t]).filter(Boolean);
   const label = typeLabels.length > 0
-    ? `${typeLabels.join(" · ")} · ${RISK_LABEL_SHORT[risk]}`
-    : RISK_LABEL[risk];
+    ? `${typeLabels.join(" · ")} · ${RISK_LABEL_SHORT[level]}`
+    : RISK_LABEL[level];
   return (
     <span
       className={cn(
@@ -37,7 +42,7 @@ export function RiskBadge({
         className={cn(
           "rounded-full shrink-0",
           s.dot,
-          risk === "critical" && "ring-2 ring-risk-critical/40 animate-pulse",
+          level === "critical" && "ring-2 ring-risk-critical/40 animate-pulse",
           compact ? "h-2 w-2" : "h-2.5 w-2.5",
         )}
       />
