@@ -29,6 +29,7 @@ import { signToken, requireAuth } from "../auth.js";
 import { sendWelcomeEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
 import { publicSignupEnabled } from "./auth.js";
+import { notifyWhatsappSetup } from "../lib/psicobot.js";
 import { SCOPE_CALENDAR, getConnection, saveConnection, disconnect as gcalDisconnect } from "../lib/gcal.js";
 import rateLimit from "express-rate-limit";
 
@@ -503,6 +504,8 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
       // (clickwrap). Lo dejamos registrado con IP y user-agent, igual
       // que la casilla del formulario de registro.
       recordSignupAcceptances(created.userId, req);
+      // Google no da teléfono: queda el aviso en la campanita.
+      notifyWhatsappSetup(created.wsId, created.userId);
       try {
         sendWelcomeEmail({ to: email, name: fullName, username: created.username })
           .catch((e) => console.warn("[google] welcome mail:", e?.message));

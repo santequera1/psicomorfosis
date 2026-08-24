@@ -81,13 +81,20 @@ export function AdminDashboard() {
     return list.find((p) => p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()) ?? list[0];
   })();
   const WA_NUDGE_KEY = `psm.nudge.whatsapp.${user?.id ?? "x"}`;
+  // "Ahora no" lo esconde 7 días, no para siempre: mientras falte el
+  // número, vuelve a recordarlo (la campanita además guarda el aviso).
   const [waNudgeDismissed, setWaNudgeDismissed] = useState(() => {
-    try { return localStorage.getItem(WA_NUDGE_KEY) === "1"; } catch { return false; }
+    try {
+      const v = localStorage.getItem(WA_NUDGE_KEY);
+      if (!v) return false;
+      const until = Number(v);
+      return Number.isFinite(until) ? until > Date.now() : false;
+    } catch { return false; }
   });
   const showWaNudge = !!workspace && !!mine && !String(mine.phone ?? "").replace(/\D/g, "") && !waNudgeDismissed;
   function dismissWaNudge() {
     setWaNudgeDismissed(true);
-    try { localStorage.setItem(WA_NUDGE_KEY, "1"); } catch { /* noop */ }
+    try { localStorage.setItem(WA_NUDGE_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch { /* noop */ }
   }
   const firstName = user?.name.split(" ")[0] ?? "";
   // isOrg con fallback al user de localStorage (evita "salto" antes de que

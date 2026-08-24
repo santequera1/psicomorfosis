@@ -255,6 +255,8 @@ router.patch("/professionals/:id", (req, res) => {
     const owner = db.prepare("SELECT id, name, workspace_id FROM users WHERE professional_id = ? AND role <> 'paciente' ORDER BY id LIMIT 1").get(existing.id)
       ?? { id: req.user.id, name: req.user.name, workspace_id: req.user.workspace_id };
     notifyStaffWhatsappLinked({ user: owner, professional: { id: existing.id, name: m.name, phone: m.phone } });
+    // El aviso de la campanita ya cumplió su función.
+    db.prepare("UPDATE notifications SET read = 1 WHERE workspace_id = ? AND id = ?").run(req.user.workspace_id, `ajuste-whatsapp-${owner.id}`);
   }
 
   // Perfil público (linktree). Solo se toca si el body trae alguno de

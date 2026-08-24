@@ -427,6 +427,8 @@ function NotificationsPanel({ onClose, notifications }: { onClose: () => void; n
         if (n.id.startsWith("test-request-")) return { to: "/platform/test-requests" };
         return { to: "/platform/reportes" };
       case "mensaje":   return null;
+      // Ajustes de la cuenta (p. ej. "pon tu WhatsApp") → perfil profesional.
+      case "ajuste":    return { to: "/configuracion", search: { s: "perfil" } };
     }
   }
 

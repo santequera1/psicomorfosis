@@ -1,3 +1,4 @@
+import { db } from "../db.js";
 /**
  * Cliente para el bot de Laura en WhatsApp (psicobot.wailus.co).
  *
@@ -438,4 +439,19 @@ export async function notifyPatientMessage({ patient, text, professionalName }) 
   const r = await pushEventRaw(payload);
   console.log(`[psicobot] patient.message to=${patient.phone} → ${r.ok ? r.status : "FAIL " + r.status + " " + r.body}`);
   return r.ok ? { ok: true } : { ok: false, reason: "bot_error", detail: `${r.status} ${r.body}`.slice(0, 200) };
+}
+
+/**
+ * Notificación persistente "pon tu WhatsApp" para cuentas nuevas sin
+ * teléfono. Queda en la campanita hasta que la lea o ponga el número
+ * (el PATCH de profesional la marca leída). Complementa el banner del
+ * dashboard, que se puede cerrar.
+ */
+export function notifyWhatsappSetup(workspaceId, userId) {
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'ajuste', 'Activa los avisos de Laura por WhatsApp', 'Pon tu número en Perfil profesional: recibirás reservas desde tu perfil público, confirmaciones y recordatorios.', CURRENT_TIMESTAMP, 0, 0)
+    `).run(`ajuste-whatsapp-${userId}`, workspaceId);
+  } catch (e) { console.warn("[notif] whatsapp setup:", e?.message); }
 }

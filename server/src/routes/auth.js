@@ -7,7 +7,7 @@ import { signToken, requireAuth, invalidateUserTokens } from "../auth.js";
 import { validateUsername, validateEmail, looksLikeEmail } from "../lib/validators.js";
 import { sendWelcomeEmail, sendPasswordResetEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
-import { notifyStaffWhatsappLinked } from "../lib/psicobot.js";
+import { notifyStaffWhatsappLinked, notifyWhatsappSetup } from "../lib/psicobot.js";
 
 const router = Router();
 
@@ -509,6 +509,8 @@ router.post("/register", registerLimiter, (req, res) => {
       user: { id: created.userId, name, workspace_id: created.wsId },
       professional: { id: created.profId, name, phone },
     });
+  } else {
+    notifyWhatsappSetup(created.wsId, created.userId);
   }
   if (nAcc) console.log("[register] " + nAcc + " documento(s) legal(es) aceptado(s) en el alta");
 
