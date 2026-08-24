@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2, ChevronRight,
+  Send, X, Sparkles, Loader2, AlertTriangle, ShieldCheck, Trash2, ChevronRight, Brain, CheckCircle2,
   MessageSquarePlus, ChevronLeft, Plus, History,
   Paperclip, Image as ImageIcon, Mic, Square,
 } from "lucide-react";
@@ -48,7 +48,19 @@ type Message = {
   /** Solo para assistant: acciones propuestas (tool_use). Cada una
    *  se renderiza como una <LauraProposalCard> debajo del texto. */
   proposedActions?: ProposedAction[];
+  /** Consultas en vivo hechas durante la respuesta (agenda, ficha…). */
+  queries?: Array<{ name: string; status: "running" | "done" | "error"; label: string; summary?: string }>;
+  /** Solo user: nombres de archivos (PDF/Word) adjuntos. */
+  fileNames?: string[];
 };
+
+type AttachedDoc = { id: string; name: string; mediaType: string; base64: string; sizeBytes: number };
+const DOC_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const MAX_DOCS = 3;
+const MAX_DOC_BYTES = 8 * 1024 * 1024;
 
 type AttachedImage = {
   id: string;
@@ -93,6 +105,8 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
   const [sending, setSending] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
+  const [showMemory, setShowMemory] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,7 +166,11 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
       try { window.sessionStorage.setItem("laura.toolDecisions", JSON.stringify(next)); } catch {}
       return next;
     });
-  }, []);
+    // Persistida en el servidor: las acciones que ESCRIBEN (reprogramar,
+    // recibo, WhatsApp…) no pueden volver a quedar activas al recargar
+    // o desde otra pestaña.
+    if (conversationId) api.lauraDecide(conversationId, { tool_id: toolId, decision }).catch(() => {});
+  }, [conversationId]);
   // mounted controla la animación: cuando `open` pasa a false, no
   // desmontamos inmediatamente — mantenemos `mounted=true` mientras se
   // ejecuta la animación de salida, luego desmontamos al terminar.
@@ -192,7 +210,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, []);
-  const hasContent = input.trim().length > 0 || attachedImages.length > 0;
+  const hasContent = input.trim().length > 0 || attachedImages.length > 0 || attachedDocs.length > 0;
   const toolsCollapsed = isMobile && hasContent && !toolsExpanded;
 
   // Teclado en móvil: el drawer mide h-dvh, pero en iOS el teclado NO
@@ -343,8 +361,9 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const { messages: msgs } = await api.lauraGetConversation(conversationId);
+        const { messages: msgs, decisions } = await api.lauraGetConversation(conversationId);
         if (cancelled) return;
+        if (decisions) setToolDecisions((prev) => ({ ...prev, ...decisions }));
         setMessages(msgs.map((m) => ({
           id: m.id,
           role: m.role,
@@ -439,7 +458,23 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
       return prev; // se actualiza luego con append
     });
     const next: AttachedImage[] = [];
+    const docs: AttachedDoc[] = [];
     for (const file of arr) {
+      if (DOC_TYPES.has(file.type) || /\.(pdf|docx)$/i.test(file.name)) {
+        if (file.size > MAX_DOC_BYTES) { toast.error(`${file.name}: supera 8 MB`); continue; }
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result).split(",")[1] ?? "");
+          fr.onerror = () => reject(fr.error);
+          fr.readAsDataURL(file);
+        });
+        docs.push({
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name: file.name,
+          mediaType: file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+          base64: b64, sizeBytes: file.size,
+        });
+        continue;
+      }
       const r = await fileToAttachment(file);
       if (typeof r === "string") {
         // Error de validación: lo añadimos como toast simple via alert
@@ -449,6 +484,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
       }
       next.push(r);
     }
+    if (docs.length > 0) setAttachedDocs((prev) => [...prev, ...docs].slice(0, MAX_DOCS));
     if (next.length === 0) return;
     setAttachedImages((prev) => [...prev, ...next].slice(0, MAX_IMAGES));
   }, [fileToAttachment]);
@@ -490,7 +526,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     // setState + closure: setInput(text) + send() en el mismo handler
     // no ve el nuevo texto, porque la closure capturó el state viejo.
     const trimmed = (overrideText ?? input).trim();
-    const hasImages = attachedImages.length > 0;
+    const hasImages = attachedImages.length > 0 || attachedDocs.length > 0;
     // Permitimos enviar solo imágenes (sin texto) — Claude visión las
     // describe / interpreta. Requerimos al menos una de las dos cosas.
     if ((!trimmed && !hasImages) || sending) return;
@@ -503,10 +539,12 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     // Snapshot de las imágenes antes de limpiarlas (para mostrarlas
     // en la burbuja del user y para mandarlas al backend).
     const sendingImages = attachedImages;
+    const sendingDocs = attachedDocs;
 
     setSending(true);
     setInput("");
     setAttachedImages([]);
+    setAttachedDocs([]);
     markSpoken();
 
     // Append mensaje del user (con sus imágenes inline) y placeholder
@@ -516,6 +554,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
         role: "user",
         content: trimmed,
         imageDataUrls: sendingImages.map((i) => i.dataUrl),
+        fileNames: sendingDocs.map((d) => d.name),
       },
       { role: "assistant", content: "", status: "streaming" },
     ]);
@@ -533,6 +572,9 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
           images: sendingImages.length > 0
             ? sendingImages.map((i) => ({ data: i.base64, media_type: i.mediaType }))
             : undefined,
+          files: sendingDocs.length > 0
+            ? sendingDocs.map((d) => ({ name: d.name, data: d.base64, media_type: d.mediaType }))
+            : undefined,
         },
         (ev: LauraStreamEvent) => {
           if (ev.type === "conversation_id") {
@@ -543,6 +585,20 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               const last = next[next.length - 1];
               if (last?.role === "assistant") {
                 next[next.length - 1] = { ...last, content: last.content + ev.text };
+              }
+              return next;
+            });
+          } else if (ev.type === "query") {
+            // Estado de las consultas en vivo, bajo la burbuja.
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                const qs = [...(last.queries ?? [])];
+                const i = qs.findIndex((q) => q.name === ev.name && q.status === "running");
+                const entry = { name: ev.name, status: ev.status, label: ev.label, summary: ev.summary };
+                if (i >= 0 && ev.status !== "running") qs[i] = entry; else qs.push(entry);
+                next[next.length - 1] = { ...last, queries: qs };
               }
               return next;
             });
@@ -634,7 +690,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
       setSending(false);
       abortRef.current = null;
     }
-  }, [input, sending, isResting, conversationId, activePatientId, currentPath, markSpoken, refetchUsage]);
+  }, [input, sending, isResting, conversationId, activePatientId, currentPath, markSpoken, refetchUsage, attachedImages, attachedDocs]);
 
   const newConversation = useCallback(() => {
     if (sending) abortRef.current?.abort();
@@ -647,7 +703,8 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     setShowHistory(false);
     if (sending) abortRef.current?.abort();
     try {
-      const { messages: msgs } = await api.lauraGetConversation(id);
+      const { messages: msgs, decisions } = await api.lauraGetConversation(id);
+      if (decisions) setToolDecisions((prev) => ({ ...prev, ...decisions }));
       setConversationId(id);
       setMessages(msgs.map((m) => ({
         id: m.id,
@@ -730,6 +787,15 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               Nunca toca tus pacientes ni tu historia sin tu visto bueno
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowMemory(true)}
+            className="h-8 w-8 rounded-md text-ink-500 hover:bg-bg-50 inline-flex items-center justify-center shrink-0"
+            title="Lo que Laura recuerda de ti"
+            aria-label="Memoria de Laura"
+          >
+            <Brain className="h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
@@ -847,6 +913,17 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
           }}
           onDrop={onDrop}
         >
+          {attachedDocs.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {attachedDocs.map((d) => (
+                <span key={d.id} className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1.5 rounded-full border border-line-200 bg-bg-50 text-[11px] text-ink-700 max-w-[220px]">
+                  <span className="truncate">{d.name}</span>
+                  <span className="text-ink-400">{(d.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+                  <button type="button" onClick={() => setAttachedDocs((p) => p.filter((x) => x.id !== d.id))} className="h-5 w-5 rounded-full hover:bg-bg-100 inline-flex items-center justify-center" aria-label={`Quitar ${d.name}`}><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Previews de imágenes adjuntas */}
           {attachedImages.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
@@ -938,7 +1015,7 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
+                accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 multiple
                 hidden
                 onChange={(e) => {
@@ -1030,7 +1107,60 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
 
         </form>
       </aside>
+      {showMemory && <MemoryModal onClose={() => setShowMemory(false)} />}
     </>
+  );
+}
+
+/**
+ * "Lo que Laura recuerda de ti": texto libre por usuario que entra en
+ * cada conversación. Laura propone añadir cosas (tarjeta "Recordar");
+ * aquí se ve, se edita y se borra.
+ */
+function MemoryModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["laura-memory"], queryFn: () => api.lauraMemory() });
+  const [text, setText] = useState<string | null>(null);
+  const value = text ?? data?.notes ?? "";
+  const save = useMutation({
+    mutationFn: () => api.lauraMemorySave(value),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["laura-memory"] }); toast.success("Memoria guardada"); onClose(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink-900/40 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-modal overflow-hidden">
+        <header className="px-5 py-4 border-b border-line-100 flex items-start justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-brand-700 font-medium">Laura</p>
+            <h3 className="font-serif text-lg text-ink-900 mt-0.5">Lo que recuerda de ti</h3>
+          </div>
+          <button type="button" onClick={onClose} className="h-9 w-9 rounded-md border border-line-200 flex items-center justify-center text-ink-500 hover:border-brand-400"><X className="h-4 w-4" /></button>
+        </header>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-ink-500 leading-relaxed">
+            Preferencias y datos que Laura tiene en cuenta en todas tus conversaciones: cómo te gustan las notas, tu enfoque, abreviaturas… Ella propone añadir cosas cuando le dices «recuerda que…»; aquí puedes editarlo o borrarlo.
+          </p>
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-ink-400" /> : (
+            <textarea
+              value={value}
+              onChange={(e) => setText(e.target.value.slice(0, data?.max ?? 2000))}
+              rows={8}
+              placeholder="- Prefiero las notas en formato SOAP&#10;- Trabajo con enfoque cognitivo-conductual&#10;- Tuteo a los pacientes"
+              className="w-full px-3 py-2.5 rounded-lg border border-line-200 bg-bg text-sm text-ink-900 focus:outline-none focus:border-brand-400 resize-none leading-relaxed"
+            />
+          )}
+          <p className="text-[11px] text-ink-400 text-right">{value.length} / {data?.max ?? 2000}</p>
+        </div>
+        <footer className="px-5 py-4 border-t border-line-100 flex items-center justify-between gap-2">
+          <button type="button" onClick={() => setText("")} className="h-10 px-3 rounded-lg text-sm text-ink-500 hover:text-rose-700">Vaciar</button>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cancelar</button>
+            <button type="button" onClick={() => save.mutate()} disabled={save.isPending || text === null} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 disabled:opacity-50">Guardar</button>
+          </div>
+        </footer>
+      </div>
+    </div>
   );
 }
 
@@ -1377,6 +1507,13 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
               ))}
             </div>
           )}
+          {message.fileNames && message.fileNames.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 justify-end">
+              {message.fileNames.map((n, i) => (
+                <span key={i} className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-brand-700/80 text-white text-[10px] max-w-[220px]"><span className="truncate">{n}</span></span>
+              ))}
+            </div>
+          )}
           {message.content && (
             <div className="rounded-2xl rounded-tr-sm bg-brand-700 text-white px-3 py-2 text-sm whitespace-pre-wrap leading-relaxed">
               {message.content}
@@ -1411,9 +1548,21 @@ function MessageBubble({ message, avatarActive }: { message: Message; avatarActi
               {message.error ?? "Error"}
             </p>
           )}
-          {showTypingLoader ? (
+          {message.queries && message.queries.length > 0 && (
+            <ul className="mb-1.5 space-y-0.5">
+              {message.queries.map((q, i) => (
+                <li key={i} className={cn("text-[11px] inline-flex items-center gap-1.5", q.status === "error" ? "text-amber-700" : "text-ink-500")}>
+                  {q.status === "running"
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : q.status === "done" ? <CheckCircle2 className="h-3 w-3 text-brand-700" /> : <AlertTriangle className="h-3 w-3" />}
+                  <span>{q.status === "running" ? `${q.label}…` : (q.summary ?? q.label)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {showTypingLoader && !(message.queries?.some((q) => q.status === "running")) ? (
             <TypingDots />
-          ) : (
+          ) : showTypingLoader ? null : (
             <MarkdownLite text={message.content} streaming={isStreaming} />
           )}
         </div>
@@ -1609,12 +1758,39 @@ function EmptyState({
         </p>
       </div>
       <div className="w-full max-w-xs space-y-2 mt-1">
-        <SuggestionChip text="¿Cómo agendo una cita?" onPick={onPick} disabled={disabled} />
-        <SuggestionChip text="Dame ejercicios para ansiedad social" onPick={onPick} disabled={disabled} />
-        <SuggestionChip text="¿Cómo agrego un diagnóstico DSM-5?" onPick={onPick} disabled={disabled} />
+        <DynamicChips onPick={onPick} disabled={disabled} />
       </div>
     </div>
   );
+}
+
+/** Sugerencias según el día: si hay citas hoy, propone prepararlas. */
+function DynamicChips({ onPick, disabled }: { onPick: (t: string) => void; disabled: boolean }) {
+  // Fecha LOCAL del navegador (toISOString es UTC: desde las 19:00 en
+  // Colombia proponía "hoy" la sesión de mañana).
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const { data: todays = [] } = useQuery({
+    queryKey: ["appointments", today],
+    queryFn: () => api.listAppointments({ date: today }),
+    staleTime: 60_000,
+  });
+  const upcoming = (todays as Array<{ time: string; patient_name?: string; status?: string }>)
+    .filter((a) => a.status !== "cancelada" && a.status !== "atendida")
+    .sort((a, b) => String(a.time).localeCompare(String(b.time)));
+  const first = upcoming[0];
+  const chips = first
+    ? [
+        `¿Qué tengo hoy en la agenda?`,
+        `Prepárame la sesión de ${first.patient_name?.split(" ")[0] ?? "mi próximo paciente"} a las ${first.time}`,
+        `¿Qué cobros tengo pendientes?`,
+      ]
+    : [
+        `¿Qué tengo esta semana en la agenda?`,
+        `¿Qué tareas tengo pendientes?`,
+        `Dame ejercicios para ansiedad social`,
+      ];
+  return (<>{chips.map((t) => <SuggestionChip key={t} text={t} onPick={onPick} disabled={disabled} />)}</>);
 }
 
 function SuggestionChip({

@@ -2349,6 +2349,13 @@ export const api = {
     })}`),
 
   // ─── Laura (IA) ────────────────────────────────────────────────────
+  /** Memoria de Laura sobre el profesional (texto libre). */
+  lauraMemory: () => request<{ notes: string; updatedAt: string | null; max: number }>("/api/laura/memory"),
+  lauraMemorySave: (notes: string) => request<{ ok: true; notes: string }>("/api/laura/memory", { method: "PUT", body: JSON.stringify({ notes }) }),
+  lauraMemoryAppend: (note: string) => request<{ ok: true; notes: string; duplicate?: boolean }>("/api/laura/memory/append", { method: "POST", body: JSON.stringify({ note }) }),
+  /** WhatsApp al paciente redactado por Laura y aprobado por el profesional. */
+  lauraSendWhatsapp: (body: { patient_id: string; text: string }) =>
+    request<{ ok: true }>("/api/laura/whatsapp", { method: "POST", body: JSON.stringify(body) }),
   lauraHealth: () =>
     request<{
       ok: boolean;
@@ -2390,8 +2397,12 @@ export const api = {
         message_count: number;
       }>;
     }>(`/api/laura/conversations${qs({ limit: params?.limit ?? null })}`),
+  /** Decisión (aprobada/descartada) sobre una tarjeta, persistida. */
+  lauraDecide: (conversationId: number, body: { tool_id: string; decision: "approved" | "dismissed" }) =>
+    request<{ ok: true }>(`/api/laura/conversations/${conversationId}/decisions`, { method: "POST", body: JSON.stringify(body) }),
   lauraGetConversation: (id: number) =>
     request<{
+      decisions?: Record<string, "approved" | "dismissed">;
       conversation: {
         id: number;
         title: string | null;
@@ -2440,6 +2451,8 @@ export const api = {
        *  (solo los bytes). Tipos aceptados: image/jpeg | png | gif | webp.
        *  Máx 5 imágenes, 4MB cada una, 12MB total. */
       images?: Array<{ data: string; media_type: string }>;
+      /** PDF / Word: el servidor extrae el texto. Máx 3, 8MB c/u. */
+      files?: Array<{ name: string; data: string; media_type: string }>;
     },
     onEvent: (ev: LauraStreamEvent) => void,
     signal?: AbortSignal,
@@ -2621,5 +2634,7 @@ export type LauraStreamEvent =
   | { type: "conversation_id"; id: number }
   | { type: "delta"; text: string }
   | { type: "tool_call"; tool_id: string; name: string; input: Record<string, unknown> }
+  /** Consulta en vivo a la base de datos (agenda, paciente…) a mitad de respuesta. */
+  | { type: "query"; name: string; status: "running" | "done" | "error"; label: string; summary?: string }
   | { type: "error"; code?: string; message: string }
   | { type: "done"; usage?: { input_tokens: number; output_tokens: number; stop_reason: string | null }; conversation_id?: number };

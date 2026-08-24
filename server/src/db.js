@@ -1109,6 +1109,25 @@ function runMigrations() {
     // assistant. Permite renderizar la conversación al recargar sin
     // perder las tarjetas de propuesta.
     "ALTER TABLE laura_messages ADD COLUMN proposed_actions_json TEXT",
+    // Memoria de Laura por usuario: preferencias y datos que el
+    // profesional le pidió recordar (texto libre, tope 2000 chars).
+    // Decisión del profesional sobre cada tarjeta (aprobada/descartada).
+    // Persistida: las acciones que EJECUTAN escrituras no pueden volver
+    // a quedar activas al recargar o en otra pestaña.
+    `CREATE TABLE IF NOT EXISTS laura_action_decisions (
+      conversation_id INTEGER NOT NULL,
+      tool_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      decided_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (conversation_id, tool_id),
+      FOREIGN KEY (conversation_id) REFERENCES laura_conversations(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS laura_memory (
+      user_id INTEGER PRIMARY KEY,
+      notes TEXT NOT NULL DEFAULT '',
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`,
 
     // ═══════════════════════════════════════════════════════════════════════
     // BOT / WhatsApp — risk flags + reschedule requests

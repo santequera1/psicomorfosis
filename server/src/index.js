@@ -78,10 +78,20 @@ app.use(cors({
 // para verificar firmas HMAC (ej: /api/webhooks/messaging) donde el body
 // re-serializado por JSON.stringify puede diferir del enviado por el
 // cliente (whitespace, orden de keys). Patrón recomendado por Stripe.
+// El chat de Laura acepta PDF/Word en base64 (hasta 3 × 8 MB): parser
+// propio con límite mayor, montado ANTES del global (body-parser salta
+// si el body ya fue parseado). nginx sigue capando en 30M.
+app.use("/api/laura/chat", express.json({ limit: "36mb" }));
 app.use(express.json({
   limit: "4mb",
   verify: (req, _res, buf) => { req.rawBody = buf; },
 }));
+// Un rechazo de promesa no capturado en un handler async (Express 4 no
+// los atrapa) mataba el proceso entero y cortaba todos los streams. Se
+// registra y se sigue: PM2 ya no tiene que reiniciar.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason?.stack ?? reason);
+});
 // Confiar en X-Forwarded-* de nginx para que express-rate-limit cuente IPs
 // reales (no 127.0.0.1 de todos los requests proxied). nginx en VPS marca
 // el header con la IP del cliente final.

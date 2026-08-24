@@ -17,6 +17,9 @@
 
 import { Router } from "express";
 import { db } from "../db.js";
+import { isQuery, runQuery, summarizeQuery, labelOf } from "../lib/laura-tools.js";
+import { extractFilesText, FILE_TYPES, MAX_FILES, MAX_FILE_BYTES } from "../lib/laura-files.js";
+import { notifyPatientMessage } from "../lib/psicobot.js";
 import { requireAuth } from "../auth.js";
 import {
   buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage,
@@ -150,7 +153,10 @@ router.get("/laura/conversations/:id", requireAuth, (req, res) => {
     void proposed_actions_json;
     return { ...rest, proposed_actions };
   });
-  res.json({ conversation: c, messages });
+  const decisions = Object.fromEntries(
+    db.prepare("SELECT tool_id, decision FROM laura_action_decisions WHERE conversation_id = ?").all(id).map((r) => [r.tool_id, r.decision]),
+  );
+  res.json({ conversation: c, messages, decisions });
 });
 
 router.delete("/laura/conversations/:id", requireAuth, (req, res) => {
@@ -181,6 +187,14 @@ router.delete("/laura/conversations/:id", requireAuth, (req, res) => {
 //     message: string             // texto del usuario
 //   }
 
+/** Contenido multimodal (imágenes + texto) con el formato de la API. */
+function multimodal(text, images) {
+  return [
+    ...images.map((img) => ({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } })),
+    ...(text ? [{ type: "text", text }] : []),
+  ];
+}
+
 router.post("/laura/chat", requireAuth, async (req, res) => {
   const { conversation_id, patient_id, current_path, message, images } = req.body ?? {};
   const imgCount = Array.isArray(images) ? images.length : 0;
@@ -191,8 +205,24 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
   // Permitimos message vacío si vienen imágenes (caso "pegué una imagen
   // sin escribir nada"). Cuando no hay imágenes, el mensaje sí es
   // obligatorio.
-  if (message.trim().length === 0 && imgCount === 0) {
-    return res.status(400).json({ error: "Escribe un mensaje o adjunta una imagen" });
+  // Archivos (PDF/Word) — se validan AQUÍ, antes de abrir el stream SSE:
+  // un res.status().json() después de flushHeaders() tira
+  // ERR_HTTP_HEADERS_SENT y, en un handler async, tumbaba el proceso.
+  const files = Array.isArray(req.body?.files) ? req.body.files : [];
+  if (files.length > MAX_FILES) return res.status(400).json({ error: `Máximo ${MAX_FILES} archivos por mensaje` });
+  for (const f of files) {
+    const type = f?.media_type ?? "";
+    const ext = String(f?.name ?? "").toLowerCase().split(".").pop();
+    if (!f || (!FILE_TYPES.has(type) && !["pdf", "docx"].includes(ext))) {
+      return res.status(400).json({ error: "Solo se aceptan PDF y Word (.docx)" });
+    }
+    if (typeof f.data !== "string" || f.data.length === 0) return res.status(400).json({ error: "Archivo sin datos" });
+    if (Math.floor(f.data.length * 0.75) > MAX_FILE_BYTES) return res.status(400).json({ error: `${f.name ?? "El archivo"} supera 8 MB` });
+    // Tipo por extensión si el navegador no lo puso (pasa con .docx en Windows).
+    if (!FILE_TYPES.has(type)) f.media_type = ext === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (message.trim().length === 0 && imgCount === 0 && files.length === 0) {
+    return res.status(400).json({ error: "Escribe un mensaje o adjunta una imagen o un archivo" });
   }
   if (message.length > 8000) {
     return res.status(400).json({ error: "Mensaje demasiado largo (máx 8000 caracteres)" });
@@ -267,7 +297,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
       }
     }
     // Título inicial: primeras palabras del mensaje (recortado a 80 chars).
-    const title = message.trim().split(/\s+/).slice(0, 8).join(" ").slice(0, 80);
+    const title = (message.trim().split(/\s+/).slice(0, 8).join(" ").slice(0, 80)) || (files[0]?.name ? `Archivo: ${String(files[0].name).slice(0, 60)}` : "Conversación");
     const r = db.prepare(`
       INSERT INTO laura_conversations (workspace_id, user_id, patient_id, title)
       VALUES (?, ?, ?, ?)
@@ -299,9 +329,15 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
   // siguientes el contexto visual no se reenvía (decisión: costo
   // de tokens y privacidad — Laura "vio" la imagen pero no la
   // recuerda byte por byte en próximas vueltas).
+  // Archivos (PDF/Word): se convierten a texto y viajan dentro del
+  // mensaje del usuario. Solo el marcador queda persistido. (Ya están
+  // validados arriba, antes del SSE.)
+  const { text: filesText, notes: fileNotes } = await extractFilesText(files);
+  const messageForModel = filesText ? `${message}${message ? "\n\n" : ""}${filesText}` : message;
+  const fileMarker = files.length > 0 ? ` [${files.map((f) => `archivo: ${String(f.name ?? "adjunto").slice(0, 80)}`).join(", ")}]` : "";
   const persistedContent = imgCount > 0
-    ? `${message}${message ? "\n\n" : ""}[${imgCount} imagen${imgCount === 1 ? "" : "es"} adjunta${imgCount === 1 ? "" : "s"}]`
-    : message;
+    ? `${message}${message ? "\n\n" : ""}[${imgCount} imagen${imgCount === 1 ? "" : "es"} adjunta${imgCount === 1 ? "" : "s"}]${fileMarker}`
+    : message + fileMarker;
   db.prepare(`
     INSERT INTO laura_messages (conversation_id, role, content)
     VALUES (?, 'user', ?)
@@ -335,26 +371,79 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
 
   console.log(`[laura/chat] starting stream conv=${convId} systemPromptLen=${systemPrompt.length} historyLen=${history.length} images=${imgCount}`);
   const proposedActions = [];
+  for (const n of fileNotes) emit({ type: "query", name: "files", status: "error", label: "Archivo adjunto", summary: n });
   try {
+    // Bucle de consultas en vivo: el modelo emite [[LAURA_ACTION:query_x:{…}]]
+    // y se detiene; ejecutamos la consulta (solo lectura, acotada al
+    // workspace), se la devolvemos como un turno del usuario y sigue.
+    // Máximo 3 vueltas por respuesta.
+    const MAX_HOPS = 3;
+    let hops = 0;
+    let turnHistory = history;
+    let turnMessage = messageForModel;
+    let turnImages = Array.isArray(images) ? images : []; // sin imágenes llega undefined
+    const queryCtx = { workspaceId: req.user.workspace_id, userId: req.user.id, professionalId: req.user.professional_id ?? null };
     let deltaCount = 0;
-    for await (const ev of streamMessage({ systemPrompt, history, userMessage: message, userImages: images })) {
-      if (aborted) {
-        console.log(`[laura/chat] aborted mid-stream conv=${convId} deltas=${deltaCount}`);
-        break;
+    while (true) {
+      let pendingQuery = null;
+      let hopText = "";
+      // Tras la 3.ª consulta ya no se ejecutan más en esta respuesta: los
+      // markers que lleguen se ignoran SIN emitir "running" (antes quedaba
+      // un spinner eterno) y el modelo ya fue avisado en el último resultado.
+      const canQuery = hops < MAX_HOPS;
+      for await (const ev of streamMessage({ systemPrompt, history: turnHistory, userMessage: turnMessage, userImages: turnImages })) {
+        if (aborted) {
+          console.log(`[laura/chat] aborted mid-stream conv=${convId} deltas=${deltaCount}`);
+          break;
+        }
+        if (ev.type === "delta") {
+          deltaCount++;
+          hopText += ev.text;
+          accumulated += ev.text;
+          emit({ type: "delta", text: ev.text });
+        } else if (ev.type === "tool_call") {
+          if (isQuery(ev.name)) {
+            if (pendingQuery || !canQuery) continue; // una consulta por vuelta; ninguna tras el tope
+            pendingQuery = ev;
+            emit({ type: "query", name: ev.name, status: "running", label: labelOf(ev.name) });
+            console.log(`[laura/chat] query conv=${convId} ${ev.name} ${JSON.stringify(ev.input).slice(0, 120)}`);
+          } else {
+            console.log(`[laura/chat] tool_call conv=${convId} name=${ev.name}`);
+            proposedActions.push({ tool_id: ev.tool_id, name: ev.name, input: ev.input });
+            emit({ type: "tool_call", tool_id: ev.tool_id, name: ev.name, input: ev.input });
+          }
+        } else if (ev.type === "done") {
+          usage = usage
+            ? { ...usage, input_tokens: (usage.input_tokens ?? 0) + (ev.usage?.input_tokens ?? 0), output_tokens: (usage.output_tokens ?? 0) + (ev.usage?.output_tokens ?? 0), stop_reason: ev.usage?.stop_reason ?? usage.stop_reason }
+            : ev.usage;
+        }
       }
-      if (ev.type === "delta") {
-        deltaCount++;
-        accumulated += ev.text;
-        emit({ type: "delta", text: ev.text });
-      } else if (ev.type === "tool_call") {
-        console.log(`[laura/chat] tool_call conv=${convId} name=${ev.name}`);
-        proposedActions.push({ tool_id: ev.tool_id, name: ev.name, input: ev.input });
-        emit({ type: "tool_call", tool_id: ev.tool_id, name: ev.name, input: ev.input });
-      } else if (ev.type === "done") {
-        usage = ev.usage;
-        console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} tools=${proposedActions.length} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
-      }
+      if (aborted || !pendingQuery) break;
+      hops += 1;
+      const result = runQuery(pendingQuery.name, pendingQuery.input, queryCtx);
+      emit({ type: "query", name: pendingQuery.name, status: result.ok ? "done" : "error", label: labelOf(pendingQuery.name), summary: summarizeQuery(pendingQuery.name, pendingQuery.input, result) });
+      // El texto que Laura ya escribió en esta vuelta se conserva como su
+      // turno; el resultado entra como turno del usuario.
+      // El turno del assistant lleva su texto (si lo hubo) MÁS el marker,
+      // así el historial refleja qué consultó; un texto solo de espacios
+      // era un turno vacío que la API rechaza.
+      const marker = `[[LAURA_ACTION:${pendingQuery.name}:${JSON.stringify(pendingQuery.input ?? {})}]]`;
+      turnHistory = [
+        ...turnHistory,
+        // Las imágenes del mensaje original se conservan en su turno para
+        // que el modelo las siga "viendo" al continuar.
+        { role: "user", content: turnImages.length > 0 ? multimodal(turnMessage, turnImages) : turnMessage },
+        { role: "assistant", content: (hopText.trim() ? hopText.trimEnd() + "\n" : "") + marker },
+      ];
+      const lastAllowed = hops >= MAX_HOPS;
+      turnMessage = result.ok
+        ? `[RESULTADO de ${pendingQuery.name}]\n${result.json}${result.truncated ? "\n(resultado truncado)" : ""}\n\nContinúa tu respuesta con estos datos. No repitas la consulta ni pegues el JSON.${lastAllowed ? " Esta fue tu última consulta posible en esta respuesta: responde con lo que tienes y, si faltó algo, dilo." : ""}`
+        : `[RESULTADO de ${pendingQuery.name}: ERROR] ${result.error}\n\nExplícale al profesional qué pasó o prueba otra consulta.${lastAllowed ? " Ya no puedes consultar más en esta respuesta." : ""}`;
+      turnImages = [];
+      // Separador visual suave entre lo escrito antes y después de la consulta.
+      if (hopText && !/\s$/.test(hopText)) { accumulated += "\n"; emit({ type: "delta", text: "\n" }); }
     }
+    console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} hops=${hops} tools=${proposedActions.length} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
   } catch (err) {
     console.error(`[laura/chat] STREAM ERROR conv=${convId}:`, err);
     errorMsg = err?.message ?? String(err);
@@ -408,6 +497,73 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
 //
 // Body: { appointment_id: number }
 // Stream SSE: { type: "delta" | "done" | "error", ... }
+
+/** Decisión sobre una tarjeta (aprobada/descartada), persistida. */
+router.post("/laura/conversations/:id/decisions", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  const toolId = String(req.body?.tool_id ?? "").slice(0, 120);
+  const decision = req.body?.decision === "approved" ? "approved" : req.body?.decision === "dismissed" ? "dismissed" : null;
+  if (!Number.isFinite(id) || !toolId || !decision) return res.status(400).json({ error: "tool_id y decision requeridos" });
+  const own = db.prepare("SELECT 1 FROM laura_conversations WHERE id = ? AND user_id = ? AND workspace_id = ?").get(id, req.user.id, req.user.workspace_id);
+  if (!own) return res.status(404).json({ error: "Conversación no encontrada" });
+  db.prepare(`INSERT INTO laura_action_decisions (conversation_id, tool_id, decision) VALUES (?, ?, ?)
+              ON CONFLICT(conversation_id, tool_id) DO UPDATE SET decision = excluded.decision, decided_at = CURRENT_TIMESTAMP`).run(id, toolId, decision);
+  res.json({ ok: true });
+});
+
+// ─── Memoria de Laura ─────────────────────────────────────────────────
+const MEMORY_MAX = 2000;
+router.get("/laura/memory", requireAuth, (req, res) => {
+  const row = db.prepare("SELECT notes, updated_at FROM laura_memory WHERE user_id = ?").get(req.user.id);
+  res.json({ notes: row?.notes ?? "", updatedAt: row?.updated_at ?? null, max: MEMORY_MAX });
+});
+router.put("/laura/memory", requireAuth, (req, res) => {
+  const notes = String(req.body?.notes ?? "").slice(0, MEMORY_MAX);
+  db.prepare(`INSERT INTO laura_memory (user_id, notes, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(user_id) DO UPDATE SET notes = excluded.notes, updated_at = CURRENT_TIMESTAMP`).run(req.user.id, notes);
+  res.json({ ok: true, notes });
+});
+router.post("/laura/memory/append", requireAuth, (req, res) => {
+  const note = String(req.body?.note ?? "").trim().replace(/\s+/g, " ").slice(0, 300);
+  if (!note) return res.status(400).json({ error: "Nota vacía" });
+  const row = db.prepare("SELECT notes FROM laura_memory WHERE user_id = ?").get(req.user.id);
+  const current = (row?.notes ?? "").trim();
+  if (current.includes(note)) return res.json({ ok: true, notes: current, duplicate: true });
+  let notes = current ? `${current}\n- ${note}` : `- ${note}`;
+  if (notes.length > MEMORY_MAX) {
+    return res.status(409).json({ error: "La memoria está llena (2000 caracteres). Edítala desde el chat de Laura para hacer espacio." });
+  }
+  db.prepare(`INSERT INTO laura_memory (user_id, notes, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(user_id) DO UPDATE SET notes = excluded.notes, updated_at = CURRENT_TIMESTAMP`).run(req.user.id, notes);
+  res.json({ ok: true, notes });
+});
+
+// ─── WhatsApp al paciente (propuesto por Laura, aprobado por el profesional) ──
+router.post("/laura/whatsapp", requireAuth, async (req, res) => {
+  const patientId = String(req.body?.patient_id ?? "");
+  const text = String(req.body?.text ?? "").trim();
+  if (!patientId || !text) return res.status(400).json({ error: "patient_id y text requeridos" });
+  if (text.length > 1500) return res.status(400).json({ error: "Máximo 1500 caracteres" });
+  const patient = db.prepare("SELECT id, name, preferred_name, phone, whatsapp_opt_in, workspace_id FROM patients WHERE id = ? AND workspace_id = ?")
+    .get(patientId, req.user.workspace_id);
+  if (!patient) return res.status(404).json({ error: "Paciente no encontrado" });
+  const prof = req.user.professional_id
+    ? db.prepare("SELECT name FROM professionals WHERE id = ?").get(req.user.professional_id)
+    : null;
+  const sent = await notifyPatientMessage({ patient, text, professionalName: prof?.name ?? req.user.name });
+  if (!sent.ok) {
+    const msgs = {
+      sin_telefono: "El paciente no tiene teléfono.",
+      sin_opt_in: "El paciente no tiene WhatsApp activo (no dio su consentimiento).",
+      bot_no_configurado: "El bot de WhatsApp no está configurado.",
+      texto_vacio: "El mensaje está vacío.",
+      bot_error: "El bot de WhatsApp no aceptó el mensaje. Inténtalo de nuevo en un momento.",
+    };
+    return res.status(sent.reason === "bot_error" ? 502 : 409).json({ error: msgs[sent.reason] ?? "No se pudo enviar." });
+  }
+  console.log(`[laura/whatsapp] user=${req.user.id} → paciente ${patient.id} (${text.length} chars)`);
+  res.json({ ok: true });
+});
 
 router.post("/laura/briefing", requireAuth, async (req, res) => {
   const apptId = Number(req.body?.appointment_id);

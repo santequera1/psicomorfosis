@@ -1,7 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import {
   ArrowRight, MapPin, User as UserIcon, FileText, Check,
   X as XIcon, ShieldCheck, CalendarPlus, ListChecks, UserPlus,
+  CalendarClock, CalendarX, CheckCircle2, Brain, Receipt, MessageCircle, Sparkles, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +53,37 @@ type Props = {
 
 export function LauraProposalCard({ action, decision, onDecide, onProposePatient }: Props) {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
   const isMuted = decision != null;
+
+  /**
+   * Acciones que se EJECUTAN al aprobar (reprogramar, cancelar, atender,
+   * test, recibo, WhatsApp, memoria). La tarjeta es la confirmación
+   * explícita del profesional: muestra exactamente qué va a pasar y
+   * solo con su clic se llama a la API. Si falla, la tarjeta sigue
+   * activa para reintentar.
+   */
+  async function run(label: string, fn: () => Promise<unknown>, invalidate: string[] = []) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+      onDecide?.(action.tool_id, "approved");
+      for (const k of invalidate) qc.invalidateQueries({ queryKey: [k] });
+      toast.success(label);
+    } catch (e) {
+      toast.error((e as Error)?.message || "No se pudo completar");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const prettyDate = (d: string) => {
+    try { return new Date(d + "T00:00:00").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }); } catch { return d; }
+  };
+  const str = (k: string) => String(action.input[k] ?? "");
+  const num = (k: string) => Number(action.input[k]);
+  const Busy = () => (busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null);
 
   function approve(navigateFn?: () => void) {
     onDecide?.(action.tool_id, "approved");
@@ -435,6 +470,152 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
             </>
           }
         />
+      </Card>
+    );
+  }
+
+  // ── propose_reschedule ──────────────────────────────────────────────
+  if (action.name === "propose_reschedule") {
+    const id = num("appointment_id"); const date = str("date"); const time = str("time");
+    const valid = Number.isFinite(id) && /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time);
+    return (
+      <Card icon={<CalendarClock className="h-3.5 w-3.5" />} title="Reprogramar cita" muted={isMuted}>
+        <div className="space-y-1.5">
+          {str("patient_name") && <p className="text-xs font-medium text-ink-900">{str("patient_name")}</p>}
+          <div className="text-[11px] text-ink-700 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 space-y-0.5">
+            <p><span className="font-medium text-ink-900">Nueva fecha:</span> {valid ? prettyDate(date) : date || "—"} · {time || "—"}</p>
+            {str("reason") && <p><span className="font-medium text-ink-900">Motivo:</span> {str("reason")}</p>}
+            <p className="text-ink-500">Cita #{Number.isFinite(id) ? id : "?"}</p>
+          </div>
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Al aprobar se cambia la cita y se avisa al paciente por correo (con el nuevo enlace si es online).</p>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Reprogramando…" : "Reprogramar"} onClick={() => valid && run("Cita reprogramada", () => api.updateAppointment(id, { date, time }), ["appointments", "dashboard-stats"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_cancel ──────────────────────────────────────────────────
+  if (action.name === "propose_cancel") {
+    const id = num("appointment_id");
+    const notify = action.input.notify !== false;
+    return (
+      <Card icon={<CalendarX className="h-3.5 w-3.5" />} title="Cancelar cita" muted={isMuted}>
+        <div className="space-y-1.5">
+          {str("patient_name") && <p className="text-xs font-medium text-ink-900">{str("patient_name")}</p>}
+          <div className="text-[11px] text-ink-700 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 space-y-0.5">
+            {str("date") && <p><span className="font-medium text-ink-900">Cita:</span> {prettyDate(str("date"))} · {str("time")}</p>}
+            {str("reason") && <p><span className="font-medium text-ink-900">Motivo:</span> {str("reason")}</p>}
+            <p className="text-ink-500">{notify ? "Se avisa al paciente." : "Sin avisar al paciente."}</p>
+          </div>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Cancelando…" : "Cancelar cita"} onClick={() => Number.isFinite(id) && run("Cita cancelada", () => api.deleteAppointment(id, { notify }), ["appointments", "dashboard-stats"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_attended ────────────────────────────────────────────────
+  if (action.name === "propose_attended") {
+    const id = num("appointment_id");
+    return (
+      <Card icon={<CheckCircle2 className="h-3.5 w-3.5" />} title="Marcar cita como atendida" muted={isMuted}>
+        <div className="space-y-1.5">
+          {str("patient_name") && <p className="text-xs font-medium text-ink-900">{str("patient_name")}</p>}
+          {str("date") && <p className="text-[11px] text-ink-700">{prettyDate(str("date"))} · {str("time")}</p>}
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Guardando…" : "Marcar atendida"} onClick={() => Number.isFinite(id) && run("Cita marcada como atendida", () => api.updateAppointment(id, { status: "atendida", notify: false }), ["appointments", "dashboard-stats"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_test ────────────────────────────────────────────────────
+  if (action.name === "propose_test") {
+    const patientId = str("patient_id"); const testId = str("test_id");
+    return (
+      <Card icon={<Sparkles className="h-3.5 w-3.5" />} title="Asignar test" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-ink-900">{str("test_name") || testId}</p>
+          <p className="text-[11px] text-ink-700">Para {str("patient_name") || patientId}. El paciente lo recibe en su portal (y por WhatsApp si lo tiene activo).</p>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Asignando…" : "Asignar"} onClick={() => patientId && testId && run("Test asignado", () => api.assignTestToPatient({ test_id: testId, patient_id: patientId }), ["test-applications", "tests"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_receipt ─────────────────────────────────────────────────
+  if (action.name === "propose_receipt") {
+    const amount = num("amount");
+    const status = str("status") === "pagada" ? "pagada" : "pendiente";
+    // Vocabulario del módulo de facturación (Efectivo/Tarjeta/PSE/Transferencia/Convenio).
+    const methodRaw = str("method").toLowerCase();
+    const method = /nequi|daviplata|transfer/.test(methodRaw) ? "Transferencia"
+      : /tarjeta|card/.test(methodRaw) ? "Tarjeta"
+      : /pse/.test(methodRaw) ? "PSE"
+      : /convenio|eps/.test(methodRaw) ? "Convenio" : "Efectivo";
+    const patientId = str("patient_id");
+    const cop = Number.isFinite(amount) ? new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(amount) : "—";
+    return (
+      <Card icon={<Receipt className="h-3.5 w-3.5" />} title="Crear recibo" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-ink-900">{str("patient_name") || str("patient_id")}</p>
+          <div className="text-[11px] text-ink-700 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 space-y-0.5">
+            <p><span className="font-medium text-ink-900">Concepto:</span> {str("concept") || "Sesión"}</p>
+            <p><span className="font-medium text-ink-900">Valor:</span> {cop} · {method} · {status}</p>
+          </div>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Creando…" : "Crear recibo"} onClick={() => Number.isFinite(amount) && amount > 0 && patientId && run("Recibo creado", () => api.createInvoice({
+            patient_id: patientId, patient_name: str("patient_name"), concept: str("concept") || "Sesión",
+            amount, method, status, date: new Date().toISOString().slice(0, 10),
+          } as never), ["invoices", "invoices-summary"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_message ─────────────────────────────────────────────────
+  if (action.name === "propose_message") {
+    const patientId = str("patient_id"); const text = str("text");
+    return (
+      <Card icon={<MessageCircle className="h-3.5 w-3.5" />} title="Enviar WhatsApp al paciente" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-ink-900">Para {str("patient_name") || patientId}</p>
+          <div className="text-[11px] text-ink-900 leading-relaxed rounded-md border border-[#25D366]/40 bg-[#25D366]/5 p-2 whitespace-pre-wrap">{text}</div>
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Sale por el WhatsApp de Laura, firmado con tu nombre. Solo si el paciente tiene WhatsApp activo.</p>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Enviando…" : "Enviar"} onClick={() => patientId && text && run("WhatsApp enviado", () => api.lauraSendWhatsapp({ patient_id: patientId, text }))} />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
+  // ── propose_memory ──────────────────────────────────────────────────
+  if (action.name === "propose_memory") {
+    const note = str("note");
+    return (
+      <Card icon={<Brain className="h-3.5 w-3.5" />} title="Guardar en la memoria de Laura" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-ink-900 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2">{note}</p>
+          <p className="text-[10px] text-ink-500">Laura lo tendrá en cuenta en todas tus conversaciones. Puedes verlo y editarlo desde el icono de memoria del chat.</p>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton label={busy ? "Guardando…" : "Recordar"} onClick={() => note && run("Guardado en la memoria de Laura", () => api.lauraMemoryAppend(note), ["laura-memory"])} />
+          <DismissButton onClick={dismiss} />
+        </>} />
       </Card>
     );
   }

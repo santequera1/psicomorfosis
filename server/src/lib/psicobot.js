@@ -414,3 +414,28 @@ export function notifyStaffWhatsappLinked({ user, professional }) {
   };
   setImmediate(() => pushAndLog(payload));
 }
+
+/**
+ * Mensaje libre al paciente, redactado por Laura y APROBADO por el
+ * profesional en la tarjeta. Respeta opt-in y teléfono como cualquier
+ * otro aviso. Devuelve true si se encoló.
+ */
+export async function notifyPatientMessage({ patient, text, professionalName }) {
+  if (!configured()) return { ok: false, reason: "bot_no_configurado" };
+  if (!canPush(patient)) return { ok: false, reason: !patient?.phone ? "sin_telefono" : "sin_opt_in" };
+  const body = String(text ?? "").trim().slice(0, 1500);
+  if (!body) return { ok: false, reason: "texto_vacio" };
+  const firma = professionalName ? `\n\n— ${professionalName}, vía Laura (Psicomorfosis)` : "\n\n— Enviado desde Psicomorfosis";
+  const payload = {
+    event: "patient.message",
+    idempotency_key: `evt_patient_msg_${patient.id}_${Date.now()}`,
+    recipient: buildRecipient(patient),
+    data: { patient_id: patient.id, from: professionalName ?? null },
+    rendered_message: body + firma,
+  };
+  // Acción iniciada por el profesional con un clic: se espera la
+  // respuesta del bot para poder decirle "enviado" o "falló" de verdad.
+  const r = await pushEventRaw(payload);
+  console.log(`[psicobot] patient.message to=${patient.phone} → ${r.ok ? r.status : "FAIL " + r.status + " " + r.body}`);
+  return r.ok ? { ok: true } : { ok: false, reason: "bot_error", detail: `${r.status} ${r.body}`.slice(0, 200) };
+}

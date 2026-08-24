@@ -355,7 +355,7 @@ router.post("/applications", (req, res) => {
   const a = req.body ?? {};
   const testId = a.test_id ?? a.testId;
   if (!testId) return res.status(400).json({ error: "test_id requerido" });
-  const test = db.prepare("SELECT * FROM psych_tests WHERE id = ?").get(testId);
+  const test = db.prepare("SELECT * FROM psych_tests WHERE id = ? AND ((is_custom = 0 OR is_custom IS NULL) OR workspace_id = ?)").get(testId, req.user.workspace_id);
   if (!test) return res.status(404).json({ error: "Test no encontrado en el catálogo" });
 
   const id = a.id ?? `T-${req.user.workspace_id}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

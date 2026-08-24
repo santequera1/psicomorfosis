@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { db } from "../db.js";
+import { QUERY_DOCS } from "./laura-tools.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -171,7 +172,7 @@ function loadWorkspaceSummary(workspaceId) {
   };
 
   // Próximas 7 citas (no atendidas ni canceladas)
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10); // Bogotá (UTC-5)
   const upcomingAppts = db.prepare(`
     SELECT a.id, a.date, a.time, a.modality, a.status, a.room,
            p.name AS patient_name, p.preferred_name AS patient_preferred
@@ -271,10 +272,13 @@ export function buildSystemPrompt({ workspaceId, userId, patientId, currentPath 
   const profDisplay = profCtx.professional?.name ?? profCtx.user?.name ?? "Profesional";
   const profTitle = profCtx.professional?.title ?? "Psicólogo/a";
   const wsName = profCtx.workspace?.name ?? "su consulta";
+  // Fecha y hora de COLOMBIA (el servidor corre en UTC): sin timeZone,
+  // de 19:00 a 23:59 el modelo creía que ya era mañana y consultaba el
+  // día equivocado.
   const today = new Date().toLocaleDateString("es-CO", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota",
   });
-  const nowTime = new Date().toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true });
+  const nowTime = new Date().toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Bogota" });
 
   const sections = [];
 
@@ -331,13 +335,20 @@ Tienes lectura completa del workspace. Pero **toda acción** (notas, mensajes, a
 
 ## REGLA DE ORO sobre acciones (MUY IMPORTANTE)
 
-Tienes 6 acciones disponibles que se renderizan como **tarjetas accionables** en la UI:
+Tienes estas acciones, que se renderizan como **tarjetas accionables** en la UI (el psicólogo aprueba con un clic):
 - **navigate_to** — atajo de navegación
 - **open_patient** — abrir ficha de un paciente
 - **propose_clinical_note** — proponer nota clínica para que el psicólogo apruebe y firme
 - **propose_appointment** — proponer una cita nueva (abre el modal pre-llenado)
 - **propose_task** — proponer una tarea/ejercicio para un paciente
 - **propose_patient** — proponer un paciente nuevo (abre el formulario de alta pre-llenado)
+- **propose_reschedule** — reprogramar una cita existente (al aprobar se cambia y se avisa al paciente)
+- **propose_cancel** — cancelar una cita existente (al aprobar se cancela y se avisa)
+- **propose_attended** — marcar una cita como atendida
+- **propose_test** — asignar un test psicométrico a un paciente (usa query_catalogo_tests para el id)
+- **propose_receipt** — crear un recibo/cobro para un paciente
+- **propose_message** — enviar un WhatsApp al paciente (el psicólogo ve el texto y aprueba; sale por Laura)
+- **propose_memory** — guardar algo en tu memoria sobre este profesional (preferencias, forma de trabajar)
 
 Para emitir una acción, **incluye un marker en tu respuesta** con este formato EXACTO en una línea propia:
 
@@ -374,6 +385,24 @@ propose_task (los campos opcionales pueden omitirse):
 - \`priority\` ∈ ["LOW","MEDIUM","HIGH","URGENT"]
 - \`type\` libre (ej: "Ejercicios", "Tests", "Lectura", "Llamada", "Documento")
 
+propose_reschedule / propose_cancel / propose_attended (necesitan el appointment_id real: consíguelo con query_agenda o query_ficha):
+\`[[LAURA_ACTION:propose_reschedule:{"appointment_id":123,"patient_name":"Carlos Mendoza","date":"2026-09-02","time":"16:00","reason":"El paciente pidió cambiar"}]]\`
+\`[[LAURA_ACTION:propose_cancel:{"appointment_id":123,"patient_name":"Carlos Mendoza","date":"2026-09-02","time":"16:00","reason":"No podrá asistir","notify":true}]]\`
+\`[[LAURA_ACTION:propose_attended:{"appointment_id":123,"patient_name":"Carlos Mendoza","date":"2026-09-02","time":"16:00"}]]\`
+
+propose_test (test_id del catálogo — query_catalogo_tests):
+\`[[LAURA_ACTION:propose_test:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","test_id":"phq9","test_name":"PHQ-9"}]]\`
+
+propose_receipt (amount en pesos colombianos, entero):
+\`[[LAURA_ACTION:propose_receipt:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","concept":"Sesión individual","amount":120000,"method":"transferencia","status":"pendiente"}]]\`
+- \`method\` ∈ ["Efectivo","Tarjeta","PSE","Transferencia","Convenio"] (Nequi/Daviplata cuentan como "Transferencia"); \`status\` ∈ ["pendiente","pagada"]
+
+propose_message (WhatsApp al paciente — redacta tú el texto, cálido y breve). **PROHIBIDO incluir datos clínicos**: nada de diagnósticos, puntajes o resultados de tests, medicación, contenido de sesión, nivel de riesgo ni motivo de consulta — es un canal no seguro y lo exige la ley 1581. Solo logística (citas, recordatorios, enlaces, documentos por firmar). Si el profesional te pide mandar un resultado, propón un mensaje neutro ("tengo tus resultados, los vemos en la sesión del …") y explícale en una frase por qué:
+\`[[LAURA_ACTION:propose_message:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","text":"Hola Carlos, te recuerdo que mañana tenemos sesión a las 16:00. ¿Confirmas?"}]]\`
+
+propose_memory (cuando el profesional diga "recuerda que…" o exprese una preferencia estable sobre cómo trabaja):
+\`[[LAURA_ACTION:propose_memory:{"note":"Prefiere las notas en formato SOAP y tuteo con los pacientes"}]]\`
+
 propose_patient (solo \`name\` es obligatorio; el resto se omite si no lo sabes — NO inventes cédulas, teléfonos ni correos reales):
 \`[[LAURA_ACTION:propose_patient:{"name":"Mariana López","pronouns":"ella","age":29,"phone":"3001234567","email":"mariana@example.com","doc":"1020304050","modality":"individual","reason":"Ansiedad laboral y dificultad para dormir","tags":["ansiedad"]}]]\`
 - \`pronouns\` ∈ ["ella","él","elle"]
@@ -397,6 +426,13 @@ propose_patient (solo \`name\` es obligatorio; el resto se omite si no lo sabes 
 | "Pídele a [Paciente] que haga…", "ponle de tarea…", "mándale un ejercicio de…" | \`propose_task\` |
 | "Crea un paciente…", "agrega a [Nombre] como paciente", "regístrame un paciente de prueba" | \`propose_patient\` |
 | Te pega los datos de una persona nueva (nombre, teléfono, motivo) y quiere que quede en la plataforma | \`propose_patient\` |
+| "Cambia/mueve la cita de X al…" | \`propose_reschedule\` (busca la cita con query_agenda/query_ficha) |
+| "Cancela la cita de X" | \`propose_cancel\` |
+| "X ya vino / marca la cita como atendida" | \`propose_attended\` |
+| "Asígnale el PHQ-9 a X", "mándale un test de ansiedad" | \`propose_test\` (id de query_catalogo_tests) |
+| "Hazle un recibo a X de 120 mil", "registra el cobro" | \`propose_receipt\` |
+| "Escríbele a X que…", "mándale un WhatsApp recordándole…" | \`propose_message\` |
+| "Recuerda que…", "para la próxima ten en cuenta que…", "siempre prefiero…" | \`propose_memory\` |
 
 **NUNCA digas "no tengo el tool" o "no tengo el servidor MCP conectado"** — sí podés. El mecanismo es emitir el marker en texto.
 
@@ -449,6 +485,18 @@ Mira el resumen del workspace. Si el nombre coincide con uno listado allí, usa 
   const upcomingCompact = wsSummary.upcomingAppts.slice(0, 3)
     .map((a) => `${a.date} ${a.time} ${a.patient_preferred || a.patient_name || "—"}`)
     .join(" | ");
+
+  sections.push(QUERY_DOCS);
+
+  // Memoria del profesional (lo que pidió recordar). Va antes del estado
+  // del workspace para que condicione el tono desde el principio.
+  const memoryRow = db.prepare("SELECT notes FROM laura_memory WHERE user_id = ?").get(userId);
+  if (memoryRow?.notes?.trim()) {
+    sections.push(`# Memoria sobre este profesional (lo que te pidió recordar)
+${memoryRow.notes.trim()}
+
+Aplícalo sin mencionarlo explícitamente salvo que pregunte qué recuerdas.`);
+  }
 
   sections.push(`# Estado del workspace (resumen)
 
@@ -540,9 +588,9 @@ Antes del marker, acompañalo con UNA frase corta de contexto. Algo como: "Te de
 
   // 5b. Reglas de fecha/hora para propose_appointment
   const _now = new Date();
-  const todayIsoLocal = _now.toISOString().slice(0, 10);
+  const todayIsoLocal = new Date(_now.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10); // Bogotá (UTC-5)
   const todayLong = _now.toLocaleDateString("es-CO", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "America/Bogota",
   });
   sections.push(`# Cómo construir propose_appointment
 
@@ -1023,7 +1071,7 @@ Tu output será insertado DIRECTAMENTE en el editor de notas del psicólogo. Cui
 
 export async function* streamMessage({
   systemPrompt, history, userMessage, userImages = [],
-  model = LAURA_MODEL, maxTokens = 1500,
+  model = LAURA_MODEL, maxTokens = 3500,
 }) {
   // Si hay imágenes, el content del último mensaje es array con
   // image blocks + text block al final. Si no, el content es string
