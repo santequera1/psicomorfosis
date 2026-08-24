@@ -29,6 +29,7 @@ import { signToken, requireAuth } from "../auth.js";
 import { sendWelcomeEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
 import { publicSignupEnabled } from "./auth.js";
+import { SCOPE_CALENDAR, getConnection, saveConnection, disconnect as gcalDisconnect } from "../lib/gcal.js";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -93,10 +94,11 @@ const googleCallbackLimiter = rateLimit({
 });
 
 const states = new Map();
-/** `linkUserId` presente = flujo de VINCULAR (usuario ya autenticado). */
-function issueState(linkUserId = null) {
+/** `linkUserId` presente = flujo de VINCULAR (usuario ya autenticado).
+ *  `purpose` = "login" | "link" | "calendar". */
+function issueState(linkUserId = null, purpose = linkUserId ? "link" : "login", nonce = null) {
   const s = crypto.randomBytes(24).toString("hex");
-  states.set(s, { at: Date.now(), linkUserId });
+  states.set(s, { at: Date.now(), linkUserId, purpose, nonce });
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [k, v] of states) if (v.at < cutoff) states.delete(k);
   return s;
@@ -175,19 +177,92 @@ function fail(res, code) {
 }
 
 /** Arma la URL de autorización de Google con un state fresco. */
-function authorizeUrl(linkUserId = null) {
+/**
+ * Los flujos que ESCRIBEN sobre un usuario ya autenticado (vincular Google,
+ * conectar calendario) van atados al navegador que los inició: una cookie
+ * HttpOnly con un nonce que el callback compara con el state. Sin esto, un
+ * usuario podía generar una URL legítima de Google con SU state y hacer
+ * que otra persona la completara con SU cuenta ("consent phishing"): la
+ * cuenta de Google de la víctima quedaba conectada a la del atacante.
+ */
+const NONCE_COOKIE = "psm_oauth_nonce";
+function setNonceCookie(res) {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const secure = (cfg().appUrl || "").startsWith("https://") ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `${NONCE_COOKIE}=${nonce}; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=600${secure}`);
+  return nonce;
+}
+function readNonceCookie(req) {
+  const raw = String(req.headers.cookie ?? "");
+  const m = raw.match(new RegExp(`(?:^|;\\s*)${NONCE_COOKIE}=([a-f0-9]{32})`));
+  return m ? m[1] : null;
+}
+
+function authorizeUrl(linkUserId = null, opts = {}) {
   const params = new URLSearchParams({
     client_id: cfg().clientId,
     redirect_uri: cfg().redirectUri,
     response_type: "code",
-    scope: "openid email profile",
-    state: issueState(linkUserId),
+    scope: opts.scope ?? "openid email profile",
+    state: issueState(linkUserId, opts.purpose, opts.nonce ?? null),
     // Pide seleccionar cuenta siempre: evita entrar con la sesión de
     // Google equivocada sin darse cuenta (típico en equipos compartidos).
-    prompt: "select_account",
+    prompt: opts.prompt ?? "select_account",
   });
+  // Calendario: access_type=offline + prompt=consent garantizan que Google
+  // devuelva refresh_token (sin consent solo lo da la primera vez).
+  if (opts.offline) { params.set("access_type", "offline"); params.set("include_granted_scopes", "true"); }
   return `${GOOGLE_AUTH}?${params}`;
 }
+
+/**
+ * Paso 1 del flujo de CONECTAR GOOGLE CALENDAR (usuario autenticado).
+ * Devuelve la URL (el JWT viaja en la cabecera, no en la query).
+ */
+router.post("/google/calendar/start", linkStartLimiter, requireAuth, (req, res) => {
+  if (!configured()) return res.status(503).json({ error: "Google no está configurado" });
+  res.json({
+    url: authorizeUrl(req.user.id, {
+      purpose: "calendar",
+      scope: `openid email ${SCOPE_CALENDAR}`,
+      offline: true,
+      // consent → garantiza refresh_token; select_account → en un equipo
+      // compartido no conecta la cuenta de Google que estuviera abierta.
+      prompt: "consent select_account",
+      nonce: setNonceCookie(res),
+    }),
+  });
+});
+
+/** Estado de la conexión de calendario del usuario actual. */
+router.get("/google/calendar", requireAuth, (req, res) => {
+  const conn = getConnection(req.user.id);
+  const u = db.prepare("SELECT gcal_last_error FROM users WHERE id = ?").get(req.user.id);
+  res.json({
+    enabled: configured(),
+    connected: !!conn,
+    email: conn?.email ?? null,
+    connectedAt: conn?.connectedAt ?? null,
+    useMeet: conn?.useMeet ?? false,
+    lastError: u?.gcal_last_error ?? null,
+  });
+});
+
+/** Preferencias: usar Meet (en vez de Jitsi) en citas online. */
+router.patch("/google/calendar", requireAuth, (req, res) => {
+  if (!getConnection(req.user.id)) return res.status(409).json({ error: "Conecta Google Calendar primero" });
+  if (typeof req.body?.useMeet === "boolean") {
+    db.prepare("UPDATE users SET gcal_use_meet = ? WHERE id = ?").run(req.body.useMeet ? 1 : 0, req.user.id);
+  }
+  res.json({ ok: true, useMeet: !!getConnection(req.user.id)?.useMeet });
+});
+
+/** Desconectar: revoca en Google y borra el token. Las citas ya creadas
+ *  siguen en su calendario (son suyas); solo dejamos de sincronizar. */
+router.delete("/google/calendar", requireAuth, async (req, res) => {
+  await gcalDisconnect(req.user.id);
+  res.json({ ok: true });
+});
 
 // ─── Paso 1: mandar al usuario a Google ──────────────────────────────
 router.get("/google", googleStartLimiter, (_req, res) => {
@@ -202,20 +277,39 @@ router.get("/google", googleStartLimiter, (_req, res) => {
  */
 router.post("/google/link-start", linkStartLimiter, requireAuth, (req, res) => {
   if (!configured()) return res.status(503).json({ error: "Google no está configurado" });
-  res.json({ url: authorizeUrl(req.user.id) });
+  res.json({ url: authorizeUrl(req.user.id, { nonce: setNonceCookie(res) }) });
 });
 
 // ─── Paso 2: Google vuelve con el código ─────────────────────────────
 router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   if (!configured()) return fail(res, "no_configurado");
-  if (req.query.error) return fail(res, "cancelado");
+  // El state se resuelve primero: Google lo devuelve también en la
+  // respuesta de error, y sin él "cancelar" en el flujo de calendario
+  // mandaba al usuario logueado a /login (que lo rebotaba al dashboard
+  // sin ningún mensaje).
   const stateData = consumeState(req.query.state);
-  if (!stateData) return fail(res, "state_invalido");
+  const isCalendar = stateData?.purpose === "calendar";
+  const back = `${cfg().appUrl}/configuracion?s=integraciones&gcal_error=`;
+  const bail = (code) => isCalendar ? res.redirect(back + code) : fail(res, code);
+
+  if (req.query.error) return bail("cancelado");
+  if (!stateData) return bail("state_invalido");
+  // Flujos que escriben sobre un usuario ya autenticado: el navegador que
+  // completa debe ser el que inició (cookie de nonce).
+  if (stateData.linkUserId) {
+    const nonce = readNonceCookie(req);
+    if (!stateData.nonce || !nonce || nonce !== stateData.nonce) {
+      console.warn(`[google] nonce no coincide en flujo ${stateData.purpose} user=${stateData.linkUserId}`);
+      return isCalendar ? res.redirect(back + "sesion_invalida") : res.redirect(`${cfg().appUrl}/configuracion?google_error=sesion_invalida`);
+    }
+    res.setHeader("Set-Cookie", `${NONCE_COOKIE}=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0`);
+  }
 
   const code = String(req.query.code ?? "");
-  if (!code) return fail(res, "sin_codigo");
+  if (!code) return bail("sin_codigo");
 
   let profile;
+  let tokenJson = {};
   try {
     const r = await fetch(GOOGLE_TOKEN, {
       method: "POST",
@@ -230,12 +324,13 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
     });
     if (!r.ok) {
       console.warn("[google] token exchange:", r.status, (await r.text()).slice(0, 200));
-      return fail(res, "intercambio_fallido");
+      return bail("intercambio_fallido");
     }
-    profile = await verifyIdToken((await r.json()).id_token);
+    tokenJson = await r.json();
+    profile = await verifyIdToken(tokenJson.id_token);
   } catch (e) {
     console.warn("[google] verificación:", e?.message);
-    return fail(res, "verificacion_fallida");
+    return bail("verificacion_fallida");
   }
 
   const email = String(profile.email).toLowerCase();
@@ -267,6 +362,25 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   const countByEmail = (val) => db.prepare(
     "SELECT COUNT(*) AS n FROM users WHERE LOWER(email) = LOWER(?)",
   ).get(val).n;
+
+  // ─── Modo CONECTAR CALENDARIO ──────────────────────────────────────
+  // El usuario ya está dentro; Google devolvió refresh_token para el scope
+  // de calendario. Se guarda cifrado en SU usuario. No toca el login.
+  if (stateData.purpose === "calendar") {
+    const back = `${cfg().appUrl}/configuracion?s=integraciones`;
+    if (!stateData.linkUserId) return res.redirect(`${back}&gcal_error=sesion_invalida`);
+    const granted = String(tokenJson.scope ?? "");
+    if (!granted.includes("calendar")) return res.redirect(`${back}&gcal_error=sin_permiso`);
+    if (!tokenJson.refresh_token) return res.redirect(`${back}&gcal_error=sin_refresh_token`);
+    try {
+      saveConnection(stateData.linkUserId, { refreshToken: tokenJson.refresh_token, email });
+      console.log(`[gcal] conectado user=${stateData.linkUserId} cuenta=${email}`);
+      return res.redirect(`${back}&gcal=ok`);
+    } catch (e) {
+      console.error("[gcal] guardar conexión:", e?.message);
+      return res.redirect(`${back}&gcal_error=guardar_fallo`);
+    }
+  }
 
   // ─── Modo VINCULAR ─────────────────────────────────────────────────
   // El usuario ya está dentro y quiere poder entrar con Google. Aquí NO

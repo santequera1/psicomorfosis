@@ -2113,6 +2113,143 @@ function ProfessionalFormModal({ professional, sedes, isOrg, onClose, onSaved }:
   );
 }
 
+/**
+ * Google Calendar + Meet, por psicóloga (opt-in).
+ *
+ * Al conectar, cada cita (pendiente/confirmada) se crea, actualiza y
+ * borra en SU Google Calendar. Con "Usar Google Meet" activo, las citas
+ * online llevan enlace de Meet en vez de Jitsi — todos los avisos leen el
+ * mismo campo, así que el cambio es transparente para el paciente.
+ *
+ * Mientras Google no verifique la app, al conectar aparece la pantalla
+ * "Google no ha verificado esta aplicación": se avisa aquí para que no
+ * parezca un error.
+ */
+function GoogleCalendarCard() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["gcal"], queryFn: () => api.gcalStatus() });
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const ok = q.get("gcal"); const err = q.get("gcal_error");
+    if (!ok && !err) return;
+    if (ok) toast.success("Google Calendar conectado. Tus citas empezarán a aparecer en tu calendario.");
+    else {
+      const msgs: Record<string, string> = {
+        sin_permiso: "No diste permiso de calendario. Vuelve a intentarlo y marca la casilla de Google Calendar.",
+        sin_refresh_token: "Google no devolvió el permiso permanente. Quita el acceso en myaccount.google.com/permissions y vuelve a conectar.",
+        cancelado: "Cancelaste la conexión.",
+        sesion_invalida: "La conexión debe completarse en el mismo navegador donde la iniciaste. Inténtalo de nuevo.",
+        state_invalido: "El enlace expiró. Inténtalo de nuevo.",
+        intercambio_fallido: "Google no completó la conexión. Inténtalo de nuevo.",
+        verificacion_fallida: "No pudimos verificar la respuesta de Google. Inténtalo de nuevo.",
+        sin_codigo: "Google no devolvió la autorización. Inténtalo de nuevo.",
+        guardar_fallo: "No pudimos guardar la conexión. Inténtalo de nuevo.",
+      };
+      toast.error(msgs[err ?? ""] ?? "No se pudo conectar Google Calendar.", { duration: 9000 });
+    }
+    qc.invalidateQueries({ queryKey: ["gcal"] });
+    window.history.replaceState({}, "", `${window.location.pathname}?s=integraciones`);
+  }, [qc]);
+
+  const start = useMutation({
+    mutationFn: () => api.gcalStart(),
+    onSuccess: ({ url }) => { window.location.href = url; },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const settings = useMutation({
+    mutationFn: (useMeet: boolean) => api.gcalSettings({ useMeet }),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ["gcal"] }); toast.success(r.useMeet ? "Las citas online usarán Google Meet." : "Las citas online volverán a usar Jitsi."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const disconnect = useMutation({
+    mutationFn: () => api.gcalDisconnect(),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gcal"] }); toast.success("Google Calendar desconectado."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (isLoading || !data?.enabled) return null;
+
+  return (
+    <div className={cn("rounded-xl border p-5 mb-2", data.connected ? "border-brand-400/50 bg-brand-50/40" : "border-line-200 bg-surface")}>
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-lg bg-white border border-line-100 flex items-center justify-center shrink-0">
+          <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="" width={22} height={22} className="h-[22px] w-[22px]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-medium text-ink-900">Google Calendar y Meet</h4>
+            {data.connected
+              ? <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-brand-700 text-primary-foreground">Conectado</span>
+              : <span className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-medium bg-bg-100 text-ink-500">No conectado</span>}
+          </div>
+          {data.connected ? (
+            <p className="text-xs text-ink-600 mt-1 leading-relaxed">
+              Tus citas se crean, actualizan y cancelan en el calendario de <span className="font-medium text-ink-900">{data.email}</span>.
+            </p>
+          ) : (
+            <p className="text-xs text-ink-600 mt-1 leading-relaxed">
+              Cada cita aparecerá en tu Google Calendar automáticamente, y si quieres, las citas online tendrán enlace de Google Meet.
+            </p>
+          )}
+          {data.lastError && (
+            <p className="text-[11px] text-amber-700 mt-2">
+              Último problema al sincronizar: {data.lastError}. Si persiste, desconecta y vuelve a conectar.
+            </p>
+          )}
+
+          {data.connected && (
+            <label className="mt-4 flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={data.useMeet}
+                onChange={(e) => settings.mutate(e.target.checked)}
+                disabled={settings.isPending}
+                className="mt-0.5 h-4 w-4 accent-brand-700"
+              />
+              <span>
+                <span className="block text-sm text-ink-900">Usar Google Meet en las citas online</span>
+                <span className="block text-xs text-ink-500 mt-0.5">
+                  En vez de Jitsi. El enlace de Meet llega al paciente por correo y WhatsApp igual que ahora. Aplica a citas nuevas y a las que se confirmen o reprogramen desde ahora; las demás conservan su enlace.
+                </span>
+              </span>
+            </label>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {data.connected ? (
+              <button
+                type="button"
+                onClick={() => { if (confirm("¿Desconectar Google Calendar? Las citas ya creadas se quedan en tu calendario; solo dejamos de sincronizar.")) disconnect.mutate(); }}
+                disabled={disconnect.isPending}
+                className="h-9 px-3 rounded-lg border border-line-200 text-ink-700 text-xs hover:border-rose-400 hover:text-rose-700 disabled:opacity-50"
+              >
+                Desconectar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => start.mutate()}
+                disabled={start.isPending}
+                className="h-9 px-4 rounded-lg bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {start.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Conectar Google Calendar
+              </button>
+            )}
+          </div>
+          {!data.connected && (
+            <p className="text-[11px] text-ink-400 mt-3 leading-relaxed">
+              Google mostrará un aviso de «aplicación no verificada» mientras revisa Psicomorfosis.
+              Pulsa «Avanzado → Ir a psicomorfosis.co» para continuar. Solo pedimos permiso sobre eventos de tu calendario; puedes quitarlo cuando quieras.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IntegracionesPanel() {
   // Catálogo de integraciones futuras. Todas marcadas como "Próximamente"
   // hasta que cada una se implemente. Los logos vienen de Simple Icons
@@ -2137,9 +2274,11 @@ function IntegracionesPanel() {
 
   return (
     <>
-      <SectionHeader title="Integraciones" desc="Conecta Psicomorfosis con tus herramientas favoritas. Todas en desarrollo." />
+      <SectionHeader title="Integraciones" desc="Conecta Psicomorfosis con tus herramientas." />
+      <GoogleCalendarCard />
+      <h4 className="text-xs uppercase tracking-widest text-ink-500 font-medium mb-2 mt-8">Próximamente</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {integrations.map((it) => (
+        {integrations.filter((it) => it.id !== "gcal" && it.id !== "gmeet").map((it) => (
           <article key={it.id} className="rounded-xl border border-line-200 p-4 flex items-start gap-3 opacity-90">
             <div className="h-10 w-10 rounded-lg bg-white border border-line-100 flex items-center justify-center shrink-0 overflow-hidden">
               <img

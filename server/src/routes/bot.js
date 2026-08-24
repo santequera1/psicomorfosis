@@ -17,6 +17,8 @@
 
 import { Router } from "express";
 import { db } from "../db.js";
+import { syncBeforeNotify } from "../lib/gcal.js";
+import { notifyAsync as notifyAppointmentAsync } from "./appointments.js";
 
 const router = Router();
 
@@ -466,7 +468,7 @@ router.get("/bot/appointment-vocab", (_req, res) => {
  * pasa de pendiente/solicitada a confirmada; no toca citas atendidas ni
  * canceladas. Idempotente: confirmar dos veces responde ok.
  */
-router.post("/bot/appointments/confirm", (req, res) => {
+router.post("/bot/appointments/confirm", async (req, res) => {
   const { phone, appointment_id } = req.body ?? {};
   const apptId = Number(appointment_id);
   if (!phone || !Number.isFinite(apptId)) {
@@ -490,7 +492,13 @@ router.post("/bot/appointments/confirm", (req, res) => {
     return res.status(409).json({ error: `La cita está en estado "${appt.status}" y no se puede confirmar` });
   }
   db.prepare("UPDATE appointments SET status = 'confirmada' WHERE id = ?").run(apptId);
-  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(apptId);
+  let row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(apptId);
+  // Igual que al confirmar desde la agenda: calendario del profesional
+  // (esperando Meet si aplica) y aviso al paciente con .ics y enlace. Una
+  // solicitud web confirmada por WhatsApp no recibía nunca el enlace.
+  const wasRequest = appt.status === "solicitada";
+  row = await syncBeforeNotify(row);
+  if (wasRequest) notifyAppointmentAsync({ kind: "appointment_created", appointment: row });
   req.app.get("io")?.to(`ws-${row.workspace_id}`).emit("appointment:updated", row);
   console.log(`[bot] paciente ${patient.id} confirmó cita ${apptId} por WhatsApp`);
   res.json({ ok: true, appointment_id: apptId, status: "confirmada", patient_id: patient.id });

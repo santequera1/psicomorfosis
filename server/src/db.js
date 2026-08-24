@@ -1218,6 +1218,15 @@ function runMigrations() {
     "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)",
     // Videollamada de la cita (Jitsi). Se genera sola para modalidad tele.
     "ALTER TABLE appointments ADD COLUMN meeting_url TEXT",
+    // Google Calendar por psicólogo (lib/gcal.js). El refresh token va
+    // CIFRADO (AES-256-GCM); gcal_use_meet = usar Meet en vez de Jitsi.
+    "ALTER TABLE users ADD COLUMN gcal_refresh_token TEXT",
+    "ALTER TABLE users ADD COLUMN gcal_email TEXT",
+    "ALTER TABLE users ADD COLUMN gcal_connected_at TEXT",
+    "ALTER TABLE users ADD COLUMN gcal_use_meet INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN gcal_last_error TEXT",
+    "ALTER TABLE appointments ADD COLUMN google_event_id TEXT",
+    "ALTER TABLE appointments ADD COLUMN video_provider TEXT", // 'jitsi' | 'meet' | NULL
   ];
   for (const sql of migrations) {
     try {

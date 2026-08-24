@@ -33,12 +33,12 @@ export function ensureMeetingUrl(row) {
   if (isTele(row.modality)) {
     if (row.meeting_url) return row;
     const url = newMeetingUrl();
-    db.prepare("UPDATE appointments SET meeting_url = ? WHERE id = ?").run(url, row.id);
-    return { ...row, meeting_url: url };
+    db.prepare("UPDATE appointments SET meeting_url = ?, video_provider = 'jitsi' WHERE id = ?").run(url, row.id);
+    return { ...row, meeting_url: url, video_provider: "jitsi" };
   }
   if (row.meeting_url) {
-    db.prepare("UPDATE appointments SET meeting_url = NULL WHERE id = ?").run(row.id);
-    return { ...row, meeting_url: null };
+    db.prepare("UPDATE appointments SET meeting_url = NULL, video_provider = NULL WHERE id = ?").run(row.id);
+    return { ...row, meeting_url: null, video_provider: null };
   }
   return row;
 }

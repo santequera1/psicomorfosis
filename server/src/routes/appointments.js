@@ -4,6 +4,7 @@ import { requireAuth } from "../auth.js";
 import { sendAppointmentEmail } from "../mailer.js";
 import { notifyAppointmentCreated, notifyAppointmentCancelled } from "../lib/psicobot.js";
 import { ensureMeetingUrl } from "../lib/video.js";
+import { syncBeforeNotify, syncAppointmentAsync, removeEventAsync } from "../lib/gcal.js";
 
 /**
  * Dispara una notificación por email de manera asíncrona y NO bloqueante.
@@ -43,7 +44,7 @@ function buildAppointmentLocation({ appointment, sede, settings }) {
   return "";
 }
 
-function notifyAsync({ kind, appointment, previous }) {
+export function notifyAsync({ kind, appointment, previous }) {
   setImmediate(() => {
     try {
       // Traemos phone y whatsapp_opt_in además de email para poder
@@ -195,7 +196,7 @@ router.get("/:id", (req, res) => {
   res.json(row);
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const a = req.body ?? {};
   // Defensas que faltaban (el bot de WhatsApp creó una cita en 2025, sin
   // profesional y sin nombre de paciente — y el auto-marcado la dejó
@@ -231,7 +232,11 @@ router.post("/", (req, res) => {
     professionalName, a.modality ?? "individual", a.room ?? "",
     a.status ?? "pendiente", a.notes ?? ""
   );
-  const row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));
+  let row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));
+  // Google Calendar del profesional (si lo conectó). Si usa Meet y la cita
+  // es online, esperamos (máx. 4 s) para que el aviso lleve el enlace de
+  // Meet y no el de Jitsi; si no, se sincroniza en segundo plano.
+  row = await syncBeforeNotify(row);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:created", row);
   // Email best-effort al paciente — async, no bloquea la respuesta. El
   // caller puede saltarlo enviando notify=false en body (útil cuando
@@ -242,7 +247,7 @@ router.post("/", (req, res) => {
   res.status(201).json(row);
 });
 
-router.patch("/:id", (req, res) => {
+router.patch("/:id", async (req, res) => {
   const existing = db.prepare("SELECT * FROM appointments WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Cita no encontrada" });
   const a = { ...existing, ...req.body };
@@ -250,13 +255,37 @@ router.patch("/:id", (req, res) => {
     UPDATE appointments SET date=?, time=?, duration_min=?, patient_id=?, patient_name=?, professional=?, professional_id=?, sede_id=?, modality=?, room=?, status=?, notes=?
     WHERE id = ? AND workspace_id = ?
   `).run(a.date, a.time, a.duration_min, a.patient_id, a.patient_name, a.professional, a.professional_id, a.sede_id, a.modality, a.room, a.status, a.notes, req.params.id, req.user.workspace_id);
-  const row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id));
+  let row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(req.params.id));
+  // Calendario del profesional:
+  //  - cancelada → borrar el evento;
+  //  - solicitada → confirmada → crear (esperando Meet si aplica, porque
+  //    el aviso de confirmación lleva el enlace);
+  //  - cualquier otro cambio (fecha, hora, modalidad) → actualizar en 2º plano.
+  const rescheduled = existing.date !== row.date || existing.time !== row.time;
+  if (row.status === "cancelada") {
+    removeEventAsync(row);
+  } else if (existing.professional_id !== row.professional_id && existing.google_event_id) {
+    // Cambió de profesional: el evento vive en el calendario del anterior.
+    // Se borra allí y se vuelve a crear en el del nuevo (si lo conectó).
+    removeEventAsync(existing);
+    db.prepare("UPDATE appointments SET google_event_id = NULL WHERE id = ?").run(row.id);
+    row = { ...row, google_event_id: null };
+    syncAppointmentAsync(row);
+  } else if (existing.status === "solicitada" && row.status === "confirmada") {
+    row = await syncBeforeNotify(row);
+  } else if (rescheduled && req.body?.notify !== false) {
+    // El correo de reprogramación lleva el enlace: si aplica Meet y la cita
+    // aún no está en el calendario, se espera para que vaya el definitivo.
+    row = await syncBeforeNotify(row);
+  } else if (rescheduled || existing.modality !== row.modality || existing.duration_min !== row.duration_min
+             || existing.status !== row.status || existing.patient_id !== row.patient_id
+             || existing.patient_name !== row.patient_name || existing.room !== row.room || existing.sede_id !== row.sede_id) {
+    syncAppointmentAsync(row);
+  }
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:updated", row);
   // Email de reprogramación solo si cambió fecha u hora. Otros cambios
   // (notas internas, status, etc.) no ameritan notificación al paciente.
-  const dateChanged = existing.date !== row.date;
-  const timeChanged = existing.time !== row.time;
-  if ((dateChanged || timeChanged) && req.body?.notify !== false) {
+  if (rescheduled && req.body?.notify !== false) {
     notifyAsync({
       kind: "appointment_rescheduled",
       appointment: row,
@@ -282,6 +311,7 @@ router.delete("/:id", (req, res) => {
     .get(req.params.id, req.user.workspace_id);
   const r = db.prepare("DELETE FROM appointments WHERE id = ? AND workspace_id = ?").run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "No encontrada" });
+  if (existing) removeEventAsync(existing);
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:deleted", { id: Number(req.params.id) });
   // notify puede venir en body (DELETE permite body en HTTP 1.1) o en query
   // string como ?notify=false — ambos funcionan.

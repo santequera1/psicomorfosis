@@ -990,6 +990,15 @@ export const api = {
   /** Arranca el flujo de vinculación: devuelve la URL de Google a la que ir. */
   googleLinkStart: () =>
     request<{ url: string }>("/api/auth/google/link-start", { method: "POST" }),
+  /** Google Calendar del usuario actual (sincronización + Meet). */
+  gcalStatus: () =>
+    request<{ enabled: boolean; connected: boolean; email: string | null; connectedAt: string | null; useMeet: boolean; lastError: string | null }>(
+      "/api/auth/google/calendar",
+    ),
+  gcalStart: () => request<{ url: string }>("/api/auth/google/calendar/start", { method: "POST" }),
+  gcalSettings: (body: { useMeet: boolean }) =>
+    request<{ ok: true; useMeet: boolean }>("/api/auth/google/calendar", { method: "PATCH", body: JSON.stringify(body) }),
+  gcalDisconnect: () => request<{ ok: true }>("/api/auth/google/calendar", { method: "DELETE" }),
   /** Quita el vínculo. Falla si la cuenta no tiene contraseña propia. */
   googleUnlink: () => request<{ ok: true }>("/api/auth/google/link", { method: "DELETE" }),
   /** Logout server-side: invalida TODOS los tokens del usuario actual. */
