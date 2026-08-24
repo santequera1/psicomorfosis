@@ -7,7 +7,9 @@ Estado: **pendiente de enviar** (lo envía Stiven desde Google Cloud Console).
 `https://www.googleapis.com/auth/calendar.events` es un scope *sensible*. Sin
 verificación, al conectar aparece «Google no ha verificado esta aplicación» y
 hay un tope de 100 usuarios. Con verificación desaparece el aviso y el tope.
-No es un scope *restringido*, así que **no piden vídeo ni auditoría CASA**.
+No es un scope *restringido*, así que **no piden auditoría CASA** — pero el
+formulario actual del Centro de verificación **sí pide un vídeo de
+demostración** (corregido el 24/8: antes decía que no).
 
 ## Antes de enviar (checklist)
 
@@ -17,6 +19,29 @@ No es un scope *restringido*, así que **no piden vídeo ni auditoría CASA**.
 - [ ] Página principal: `https://psicomorfosis.co/inicio` · Privacidad: `https://psicomorfosis.co/privacidad` · Términos: `https://psicomorfosis.co/terminos`.
 - [ ] Que la política de privacidad **mencione Google Calendar**: qué datos se leen/escriben y que el usuario puede revocar el acceso. Texto sugerido abajo.
 - [ ] Logo de la app subido (aparece en el consentimiento; si se pone logo, Google exige verificación — ya la vamos a pedir).
+
+## Vídeo de demostración (lo pide el formulario)
+
+Grabación de pantalla, 2–3 minutos, sin editar, subida a YouTube como
+**"no listado"** (unlisted) y pegar el enlace. Google quiere ver, en este orden:
+
+1. **El consentimiento completo**: desde Configuración → Integraciones pulsas
+   "Conectar Google Calendar" → se ve la URL `accounts.google.com`, el nombre
+   de la app **Psicomorfosis**, la pantalla "app no verificada" (Google dice
+   expresamente que es normal y debe salir en el vídeo) → Avanzado → ir a
+   psicomorfosis.co → la casilla del permiso "Ver y editar eventos en tus
+   calendarios" → Permitir.
+2. **Para qué se usa el permiso**: creas una cita online en la agenda de
+   Psicomorfosis → abres Google Calendar en otra pestaña → se ve el evento
+   "Sesión · <paciente>" con el enlace de Meet. Reprogramas la cita → el
+   evento se mueve. La cancelas → desaparece.
+3. **Cómo se revoca**: Integraciones → Desconectar.
+
+Consejos: usa un paciente de prueba con nombre ficticio (el vídeo lo ve un
+revisor externo), idioma da igual, sin música. Si el proyecto está en
+producción y prefieres no exponer a usuarios reales al scope no verificado
+mientras revisan, la nota de Google sugiere grabar con un proyecto de prueba;
+a nuestra escala (beta, menos de 100 usuarios) no hace falta.
 
 ## Texto para "Justificación del scope" (copiar/pegar)
 
