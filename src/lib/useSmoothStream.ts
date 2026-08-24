@@ -57,12 +57,17 @@ export function useSmoothStream(target: string, active: boolean): string {
       const dt = lastRef.current ? Math.min(100, now - lastRef.current) : 16;
       lastRef.current = now;
       const backlog = t.length - d.length;
-      // Caracteres por segundo según atraso. Cuando el stream terminó,
-      // vaciamos deprisa: no tiene sentido seguir "escribiendo" lo que
-      // ya llegó completo.
-      const cps = !activeRef.current
-        ? 900
-        : Math.min(500, 45 + backlog * 6);
+      // Caracteres por segundo según atraso. Calibrado con el stream real:
+      // el proxy entrega trozos de ~120-150 caracteres (5-7 por respuesta),
+      // así que el techo debe ser bajo para que un trozo entero se lea
+      // ENTRANDO y no aparezca de golpe: 180 c/s mientras llega, 320 c/s
+      // al terminar (vaciado ágil pero visible). Salvaguarda: nunca más de
+      // ~5 s de atraso, por si llega un bloque enorme.
+      const floor = backlog / 5;
+      const cps = Math.max(
+        floor,
+        !activeRef.current ? 320 : Math.min(180, 40 + backlog * 1.2),
+      );
       carryRef.current += (cps * dt) / 1000;
       let n = Math.floor(carryRef.current);
       if (n < 1) {
