@@ -167,7 +167,7 @@ router.get("/", (req, res) => {
   // (cancelada, atendida, no_show), no se tocan.
   try { autoMarkPastAppointmentsAttended(req.user.workspace_id); } catch { /* no bloquear el GET */ }
 
-  const { date, from, to, professional_id, sede_id } = req.query;
+  const { date, from, to, professional_id, sede_id, patient_id, status } = req.query;
   let sql = "SELECT * FROM appointments WHERE workspace_id = ?";
   const args = [req.user.workspace_id];
   if (date) { sql += " AND date = ?"; args.push(date); }
@@ -175,6 +175,12 @@ router.get("/", (req, res) => {
   if (to)   { sql += " AND date <= ?"; args.push(to); }
   if (professional_id) { sql += " AND professional_id = ?"; args.push(professional_id); }
   if (sede_id) { sql += " AND sede_id = ?"; args.push(sede_id); }
+  // patient_id se aceptaba en la URL pero no filtraba: la ficha del
+  // paciente contaba TODAS las citas atendidas del workspace ("36
+  // sesiones" para cualquier paciente) y tomaba como "inicio" la cita
+  // más antigua del consultorio.
+  if (patient_id) { sql += " AND patient_id = ?"; args.push(String(patient_id)); }
+  if (status) { sql += " AND status = ?"; args.push(String(status)); }
   sql += " ORDER BY date, time";
   res.json(db.prepare(sql).all(...args));
 });
