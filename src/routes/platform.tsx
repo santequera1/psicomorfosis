@@ -7,12 +7,13 @@ import {
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
-  ArrowUpDown, Sparkles, Inbox, Mail,
+  ArrowUpDown, Sparkles, Inbox, Mail, Globe, MailCheck, CalendarDays, Clock,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { AppSelect } from "@/components/app/AppSelect";
+import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AppTooltip } from "@/components/app/AppTooltip";
@@ -100,32 +101,61 @@ function PendingRequestsButton() {
 // caen al final del orden (independiente de asc/desc).
 type SortKey =
   | "patients-desc" | "patients-asc"
-  | "recent" | "lastlogin"
+  | "recent" | "oldest" | "lastlogin" | "lastlogin-asc"
   | "sessions-desc" | "revenue-desc"
   | "name-asc";
 
 const SORT_OPTIONS: { v: SortKey; label: string }[] = [
+  { v: "recent",        label: "Alta más reciente" },
+  { v: "oldest",        label: "Alta más antigua" },
+  { v: "lastlogin",     label: "Último acceso (reciente)" },
+  { v: "lastlogin-asc", label: "Más tiempo sin entrar" },
   { v: "patients-desc", label: "Más pacientes" },
   { v: "patients-asc",  label: "Menos pacientes" },
   { v: "sessions-desc", label: "Más sesiones (30d)" },
   { v: "revenue-desc",  label: "Mayor ingreso (30d)" },
-  { v: "recent",        label: "Más recientes" },
-  { v: "lastlogin",     label: "Último login" },
   { v: "name-asc",      label: "Nombre (A→Z)" },
 ];
 
 type ModeFilter = "todos" | "individual" | "organization";
-type SubFilter = "todos" | "invitado";
+// Acceso: con qué entra el dueño de la cuenta. "ambos" = cuenta de
+// contraseña que además vinculó Google (auth_provider "password+google").
+type AuthFilter = "todos" | "google" | "password" | "ambos";
+// Origen: por dónde llegó la cuenta (formulario web, botón de Google o
+// creada a mano desde este panel — signup_source NULL).
+type OriginFilter = "todos" | "web" | "google" | "manual";
+type VerifiedFilter = "todos" | "si" | "no";
+// Último acceso: ventanas relativas a hoy.
+type LoginFilter = "todos" | "hoy" | "7d" | "30d" | "inactivo" | "nunca";
+
+const DAY_MS = 86_400_000;
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Día local (del navegador) de un timestamp que SQLite guardó en UTC sin zona ("2026-08-24 19:30:44"). */
+function localDay(ts: string | null | undefined): string {
+  if (!ts) return "";
+  const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(ts);
+  const d = new Date(hasZone ? ts : ts.replace(" ", "T") + "Z");
+  return Number.isNaN(d.getTime()) ? ts.slice(0, 10) : isoDay(d);
+}
+const authKind = (p: string | null | undefined): AuthFilter =>
+  p?.includes("+") ? "ambos" : p === "google" ? "google" : "password";
+const PLAN_LABELS: Record<string, string> = { free: "Gratis", invitado: "Invitado", pro: "Pro", clinica: "Clínica" };
 
 function PlatformDashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | "activo" | "deshabilitado">("todos");
-  // Filtros adicionales (modo + suscripción) y orden. Suscripción por ahora
-  // solo tiene "invitado" porque la app no cobra todavía — cuando exista el
-  // campo plan/tier en la API el filtro ya está cableado para crecer.
+  // Facetas: modo, plan (valores reales de la API), acceso, origen,
+  // verificación de correo, último acceso y rango de fecha de alta.
   const [modeFilter, setModeFilter] = useState<ModeFilter>("todos");
-  const [subFilter, setSubFilter] = useState<SubFilter>("todos");
-  const [sortBy, setSortBy] = useState<SortKey>("patients-desc");
+  const [planFilter, setPlanFilter] = useState<string>("todos");
+  const [authFilter, setAuthFilter] = useState<AuthFilter>("todos");
+  const [originFilter, setOriginFilter] = useState<OriginFilter>("todos");
+  const [verifiedFilter, setVerifiedFilter] = useState<VerifiedFilter>("todos");
+  const [loginFilter, setLoginFilter] = useState<LoginFilter>("todos");
+  // Rango de alta en ISO YYYY-MM-DD, inclusive por ambos lados; "" = sin tope.
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("recent");
   const [createOpen, setCreateOpen] = useState(false);
   // Vista persistida del listado: 'list' (filas detalladas con botones)
   // o 'cards' (tarjetas compactas, mejor en mobile y para escanear muchas
@@ -145,14 +175,30 @@ function PlatformDashboard() {
   });
 
   const filtered = useMemo(() => {
+    const now = Date.now();
     const base = workspaces.filter((w) => {
       if (statusFilter === "activo" && w.disabledAt) return false;
       if (statusFilter === "deshabilitado" && !w.disabledAt) return false;
       if (modeFilter !== "todos" && w.mode !== modeFilter) return false;
-      // Suscripción: hoy solo "invitado". El filtro queda preparado para
-      // cuando exista un campo plan/tier en PlatformWorkspace.
-      // Por ahora todos son "invitado" así que el filtro no descarta nada.
-      if (subFilter === "invitado") { /* todos pasan */ }
+      if (planFilter !== "todos" && (w.plan || "free") !== planFilter) return false;
+      if (authFilter !== "todos" && authKind(w.ownerAuthProvider) !== authFilter) return false;
+      if (originFilter !== "todos" && (w.signupSource ?? "manual") !== originFilter) return false;
+      if (verifiedFilter === "si" && !w.ownerEmailVerified) return false;
+      if (verifiedFilter === "no" && w.ownerEmailVerified) return false;
+      if (loginFilter !== "todos") {
+        const last = w.lastLoginAt ? new Date(w.lastLoginAt).getTime() : null;
+        const ageDays = last == null ? Infinity : (now - last) / DAY_MS;
+        if (loginFilter === "nunca" && last != null) return false;
+        if (loginFilter === "hoy" && !(last != null && localDay(w.lastLoginAt) === isoDay(new Date(now)))) return false;
+        if (loginFilter === "7d" && !(ageDays <= 7)) return false;
+        if (loginFilter === "30d" && !(ageDays <= 30)) return false;
+        if (loginFilter === "inactivo" && !(ageDays > 30)) return false;
+      }
+      if (createdFrom || createdTo) {
+        const day = localDay(w.createdAt);
+        if (createdFrom && day < createdFrom) return false;
+        if (createdTo && day > createdTo) return false;
+      }
       if (query.trim()) {
         const q = query.toLowerCase();
         const hay = (s: string | null) => (s ?? "").toLowerCase().includes(q);
@@ -179,17 +225,45 @@ function PlatformDashboard() {
       case "sessions-desc": sorted.sort((a, b) => num(b.sessions30d) - num(a.sessions30d)); break;
       case "revenue-desc":  sorted.sort((a, b) => num(b.revenue30d) - num(a.revenue30d)); break;
       case "recent":        sorted.sort((a, b) => date(b.createdAt) - date(a.createdAt)); break;
+      case "oldest":        sorted.sort((a, b) => date(a.createdAt) - date(b.createdAt)); break;
       case "lastlogin":     sorted.sort((a, b) => date(b.lastLoginAt) - date(a.lastLoginAt)); break;
+      // Sin login (0) queda primero: son las que más tiempo llevan sin entrar.
+      case "lastlogin-asc": sorted.sort((a, b) => date(a.lastLoginAt) - date(b.lastLoginAt)); break;
       case "name-asc":      sorted.sort((a, b) => a.name.localeCompare(b.name, "es")); break;
     }
     return sorted;
-  }, [workspaces, query, statusFilter, modeFilter, subFilter, sortBy]);
+  }, [workspaces, query, statusFilter, modeFilter, planFilter, authFilter, originFilter, verifiedFilter, loginFilter, createdFrom, createdTo, sortBy]);
 
   const counts = useMemo(() => ({
     todos: workspaces.length,
     activo: workspaces.filter((w) => !w.disabledAt).length,
     deshabilitado: workspaces.filter((w) => !!w.disabledAt).length,
+    google: workspaces.filter((w) => authKind(w.ownerAuthProvider) === "google").length,
+    password: workspaces.filter((w) => authKind(w.ownerAuthProvider) === "password").length,
+    ambos: workspaces.filter((w) => authKind(w.ownerAuthProvider) === "ambos").length,
+    web: workspaces.filter((w) => w.signupSource === "web").length,
+    originGoogle: workspaces.filter((w) => w.signupSource === "google").length,
+    manual: workspaces.filter((w) => !w.signupSource).length,
+    verified: workspaces.filter((w) => w.ownerEmailVerified).length,
+    unverified: workspaces.filter((w) => !w.ownerEmailVerified).length,
   }), [workspaces]);
+  const plans = useMemo(
+    () => Array.from(new Set(workspaces.map((w) => w.plan || "free"))).sort(),
+    [workspaces],
+  );
+  const activeFilters =
+    [statusFilter, modeFilter, planFilter, authFilter, originFilter, verifiedFilter, loginFilter].filter((v) => v !== "todos").length
+    + (createdFrom || createdTo ? 1 : 0);
+  const clearFilters = () => {
+    setStatusFilter("todos"); setModeFilter("todos"); setPlanFilter("todos");
+    setAuthFilter("todos"); setOriginFilter("todos"); setVerifiedFilter("todos"); setLoginFilter("todos");
+    setCreatedFrom(""); setCreatedTo("");
+  };
+  const setCreatedPreset = (days: number | null) => {
+    const t = new Date();
+    setCreatedFrom(isoDay(days == null ? new Date(t.getFullYear(), t.getMonth(), 1) : new Date(t.getTime() - days * DAY_MS)));
+    setCreatedTo(isoDay(t));
+  };
 
   /**
    * Exporta la lista de cuentas (filtrada por los filtros aplicados)
@@ -208,6 +282,7 @@ function PlatformDashboard() {
     const headers = [
       "ID", "Nombre", "Modo", "Estado", "Razón deshabilitada",
       "Creada", "Último login",
+      "Acceso", "Origen", "Correo verificado", "Plan",
       "Usuarios staff", "Pacientes activos", "Capacidad máx.", "% Ocupación",
       "Documentos totales",
       "Docs últimos 7 días", "Citas últimos 30 días",
@@ -229,6 +304,10 @@ function PlatformDashboard() {
       w.disabledReason ?? "",
       w.createdAt?.slice(0, 10) ?? "",
       w.lastLoginAt?.slice(0, 19).replace("T", " ") ?? "",
+      ({ google: "Google", password: "Correo y contraseña", ambos: "Correo + Google", todos: "" } as Record<AuthFilter, string>)[authKind(w.ownerAuthProvider)],
+      ({ web: "Registro web", google: "Botón Google" } as Record<string, string>)[w.signupSource ?? ""] ?? "Creada por admin",
+      w.ownerEmailVerified ? "sí" : "no",
+      w.plan || "free",
       w.usersCount, w.patientsCount,
       w.maxPatients ?? "",
       w.occupancyPct != null ? `${w.occupancyPct}%` : "",
@@ -391,14 +470,15 @@ function PlatformDashboard() {
                   { v: "organization", label: "Clínica", icon: <Building2 className="h-3 w-3" /> },
                 ]}
               />
-              {/* Suscripción — hoy todas son "invitado". */}
+              {/* Plan: los valores que realmente existen en las cuentas
+                  (hoy solo "free"); crece solo cuando aparezcan planes de pago. */}
               <FilterPills
                 label="Plan"
-                value={subFilter}
-                onChange={(v) => setSubFilter(v as SubFilter)}
+                value={planFilter}
+                onChange={setPlanFilter}
                 options={[
                   { v: "todos", label: "Todos" },
-                  { v: "invitado", label: "Invitado", icon: <Tag className="h-3 w-3" /> },
+                  ...plans.map((p) => ({ v: p, label: PLAN_LABELS[p] ?? p, icon: <Tag className="h-3 w-3" /> })),
                 ]}
               />
               {/* Contador de resultados visibles vs total. Se muestra a la
@@ -406,6 +486,88 @@ function PlatformDashboard() {
               <span className="ml-auto text-[11px] text-ink-500 tabular">
                 {filtered.length} de {workspaces.length}
               </span>
+            </div>
+
+            {/* Fila 3: cómo entran y por dónde llegaron. */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs">
+              <FilterPills
+                label="Acceso"
+                value={authFilter}
+                onChange={(v) => setAuthFilter(v as AuthFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "google", label: "Google", count: counts.google, icon: <Globe className="h-3 w-3" /> },
+                  { v: "password", label: "Correo y contraseña", count: counts.password, icon: <KeyRound className="h-3 w-3" /> },
+                  { v: "ambos", label: "Ambos", count: counts.ambos },
+                ]}
+              />
+              <FilterPills
+                label="Origen"
+                value={originFilter}
+                onChange={(v) => setOriginFilter(v as OriginFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "web", label: "Registro web", count: counts.web },
+                  { v: "google", label: "Botón Google", count: counts.originGoogle },
+                  { v: "manual", label: "Creada aquí", count: counts.manual },
+                ]}
+              />
+              <FilterPills
+                label="Correo"
+                value={verifiedFilter}
+                onChange={(v) => setVerifiedFilter(v as VerifiedFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "si", label: "Verificado", count: counts.verified, icon: <MailCheck className="h-3 w-3" /> },
+                  { v: "no", label: "Sin verificar", count: counts.unverified },
+                ]}
+              />
+            </div>
+
+            {/* Fila 4: actividad reciente y rango de fecha de alta. */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs">
+              <FilterPills
+                label="Último acceso"
+                value={loginFilter}
+                onChange={(v) => setLoginFilter(v as LoginFilter)}
+                options={[
+                  { v: "todos", label: "Todos" },
+                  { v: "hoy", label: "Hoy" },
+                  { v: "7d", label: "7 días" },
+                  { v: "30d", label: "30 días" },
+                  { v: "inactivo", label: "+30 días sin entrar", icon: <Clock className="h-3 w-3" /> },
+                  { v: "nunca", label: "Nunca entró" },
+                ]}
+              />
+              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium shrink-0 inline-flex items-center gap-1">
+                  <CalendarDays className="h-3 w-3" /> Alta
+                </span>
+                <AppDatePicker value={createdFrom} onChange={setCreatedFrom} placeholder="Desde" size="sm" clearable className="w-32" aria-label="Alta desde" />
+                <span className="text-ink-400">–</span>
+                <AppDatePicker value={createdTo} onChange={setCreatedTo} placeholder="Hasta" size="sm" clearable className="w-32" aria-label="Alta hasta" />
+                <div className="flex gap-1 p-1 rounded-md bg-bg-100">
+                  {([["7d", "7 días", 7], ["30d", "30 días", 30], ["mes", "Este mes", null]] as const).map(([k, label, days]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setCreatedPreset(days)}
+                      className="px-2.5 py-1 rounded text-xs text-ink-500 hover:text-ink-900 transition-colors"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeFilters > 0 && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="sm:ml-auto inline-flex items-center gap-1 h-7 px-2 rounded-md border border-line-200 text-[11px] text-ink-600 hover:bg-bg-100 transition-colors"
+                >
+                  <X className="h-3 w-3" /> Limpiar filtros ({activeFilters})
+                </button>
+              )}
             </div>
           </div>
 

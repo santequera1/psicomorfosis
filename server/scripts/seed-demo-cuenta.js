@@ -18,6 +18,7 @@
  *   node server/scripts/seed-demo-cuenta.js --email=... --db=/tmp/copia.db   (ensayo)
  *   node server/scripts/seed-demo-cuenta.js --email=... --wipe               (limpia y resiembra)
  *   node server/scripts/seed-demo-cuenta.js --email=... --wipe --only-wipe   (solo limpia)
+ *   node server/scripts/seed-demo-cuenta.js --email=... --pool=A            (elige el juego de pacientes A o B)
  */
 
 import path from "node:path";
@@ -161,7 +162,8 @@ const POOL_B = [
     plan: "Acompañamiento en duelo, reconstrucción de rutinas significativas y activación social. PHQ-9 mensual.",
     dx: { code: "Z63.4", system: "DSM-5-TR", name: "Reacción de duelo (no patológica)" } },
 ];
-const PATIENTS = ws % 2 === 0 ? POOL_B : POOL_A;
+// --pool=A|B fuerza un juego; por defecto alterna por paridad del workspace.
+const PATIENTS = args.pool ? (String(args.pool).toUpperCase() === "B" ? POOL_B : POOL_A) : (ws % 2 === 0 ? POOL_B : POOL_A);
 
 function nextPatientId() {
   const wsMax = db.prepare("SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS m FROM patients WHERE workspace_id = ? AND id GLOB 'P-[0-9]*'").get(ws);
