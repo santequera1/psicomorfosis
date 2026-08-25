@@ -1,6 +1,8 @@
 # Verificación de la app en Google (scope de Calendar)
 
-Estado: **ENVIADA el 24 de agosto de 2026** (Centro de verificación → "en proceso de revisión").
+Estado: **APROBADA el 25 de agosto de 2026** (correo "[Action Needed] OAuth Verification Request Acknowledgement", The Third Party Data Safety Team) para el scope `…/auth/calendar.events`, proyecto 1096205886952 / `psicomorfosis`. Enviada el 24 de agosto; respuesta en menos de 24 h.
+
+Recordatorios de Google tras la aprobación: mantener actualizados Owner/Editor del proyecto en Cloud Console; cualquier scope nuevo o cambio en la pantalla de consentimiento exige **nueva** verificación; la verificación no se hereda a otros scopes sensibles/restringidos.
 Vídeo: https://youtu.be/9iKQRb7unfI · Cuenta de prueba para el revisor: `revisor.google@psicomorfosis.co`
 (workspace aislado "Consulta de prueba (Google review)", user id 45, paciente ficticio P-26000).
 Contacto del revisor: stivenantequera@gmail.com. Si piden algo, responder en <3 días o cierran la solicitud.

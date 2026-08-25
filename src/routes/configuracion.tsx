@@ -2240,8 +2240,8 @@ function GoogleCalendarCard() {
           </div>
           {!data.connected && (
             <p className="text-[11px] text-ink-400 mt-3 leading-relaxed">
-              Google mostrará un aviso de «aplicación no verificada» mientras revisa Psicomorfosis.
-              Pulsa «Avanzado → Ir a psicomorfosis.co» para continuar. Solo pedimos permiso sobre eventos de tu calendario; puedes quitarlo cuando quieras.
+              Psicomorfosis está verificada por Google. Solo pedimos permiso sobre los eventos de tu calendario
+              (crear y actualizar tus citas); no leemos tu correo ni tus contactos, y puedes desconectarlo cuando quieras.
             </p>
           )}
         </div>
