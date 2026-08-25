@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, normalizeTareaType } from "@/lib/api";
 import {
   ArrowRight, MapPin, User as UserIcon, FileText, Check,
   X as XIcon, ShieldCheck, CalendarPlus, ListChecks, UserPlus,
@@ -323,7 +323,7 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
     const patientName = String(action.input.patient_name ?? "");
     const dueDate = String(action.input.due_date ?? ""); // yyyy-mm-dd
     const priority = String(action.input.priority ?? "MEDIUM").toUpperCase();
-    const type = String(action.input.type ?? "");
+    const type = normalizeTareaType(action.input.type);
 
     const priorityLabel: Record<string, string> = {
       LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", URGENT: "Urgente",

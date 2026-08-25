@@ -394,6 +394,23 @@ export function LauraChat({ open, onClose, onProposePatient }: Props) {
     }
   }, [messages.length]);
 
+  // Al reabrir el panel (p. ej. tras aprobar una propuesta que abre un
+  // formulario y lo cierra) la lista se vuelve a montar con scrollTop 0
+  // aunque la conversación siga cargada — messages.length no cambia y el
+  // efecto de arriba no dispara —, así que el usuario caía al primer
+  // mensaje. Llevamos la vista al último: en el primer frame y otra vez
+  // al terminar la animación de entrada (el alto definitivo llega ahí).
+  useEffect(() => {
+    if (!mounted) return;
+    const toBottom = () => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    };
+    const raf = requestAnimationFrame(toBottom);
+    const t = setTimeout(toBottom, 280);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [mounted]);
+
   // Durante el streaming el texto crece frame a frame (useSmoothStream),
   // no por cambios de `messages`: observamos el DOM y seguimos el fondo
   // mientras el usuario esté cerca de él. Si subió a leer algo anterior,

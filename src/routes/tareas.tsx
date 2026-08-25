@@ -14,7 +14,7 @@ import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
 import {
   api, type Tarea, type TareaStatus, type TareaPriority,
   type TareaProject, type TareaColumn, type Professional, type ApiPatient,
-  TAREA_TYPES, type TareaType, type TareaVisibility,
+  TAREA_TYPES, normalizeTareaType, type TareaType, type TareaVisibility,
 } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace";
 import { cn, displayPatientName } from "@/lib/utils";
@@ -1158,7 +1158,10 @@ function TareaDialog({
 
   const [title, setTitle] = useState(init.title ?? "");
   const [description, setDescription] = useState(init.description ?? "");
-  const [type, setType] = useState<TareaType | "">(init.type ?? "");
+  // Normalizado: un tipo que no esté en el select (p. ej. "Ejercicios" de
+  // una propuesta vieja de Laura) dejaba el campo en blanco y el servidor
+  // respondía "type inválido" al guardar.
+  const [type, setType] = useState<TareaType | "">(normalizeTareaType(init.type));
   const [status, setStatus] = useState<TareaStatus>(init.status ?? "TODO");
   const [priority, setPriority] = useState<TareaPriority>(init.priority ?? "MEDIUM");
   const [assigneeId, setAssigneeId] = useState<number | "">(init.assignee_id ?? "");

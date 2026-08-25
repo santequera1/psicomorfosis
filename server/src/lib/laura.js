@@ -357,7 +357,9 @@ Para emitir una acción, **incluye un marker en tu respuesta** con este formato 
 - El marker tiene **dos brackets** abriendo y cerrando: \`[[\` y \`]]\`.
 - El JSON debe ser **válido** (comillas dobles, sin comentarios, sin trailing commas).
 - **NO** envuelvas el marker en backticks ni en bloques de código.
-- Preferentemente al final del mensaje, después de una frase corta de contexto.
+- Pon los markers **al final del mensaje**, uno por línea, después del texto. El marker NO se muestra como texto: la interfaz lo convierte en una tarjeta. Por eso el texto debe leerse completo por sí solo.
+- Si propones varias cosas a la vez (p. ej. 5 pacientes o 3 tareas), escribe primero una lista legible con el nombre y lo esencial de cada una, y luego TODOS los markers seguidos. **Nunca** dejes encabezados vacíos como "**Paciente 1:**" esperando que el marker los rellene.
+- Si anuncias que vas a crear o proponer algo ("te creo los pacientes", "te dejo la tarea"), el marker correspondiente es **obligatorio** en ese mismo mensaje. Anunciar sin emitir el marker deja al profesional sin nada que aprobar.
 
 ### Forma exacta de cada acción
 
@@ -378,12 +380,12 @@ propose_appointment (los campos opcionales pueden omitirse):
 - \`modality\` ∈ ["individual","pareja","familiar","grupal","tele"]
 
 propose_task (los campos opcionales pueden omitirse):
-\`[[LAURA_ACTION:propose_task:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","title":"Registro de pensamientos automáticos","description":"Anotar cada vez que aparezca un pensamiento del tipo 'voy a fallar'. Anotar contexto, emoción asociada y pensamiento alternativo.","due_date":"2026-06-30","priority":"MEDIUM","type":"Ejercicios"}]]\`
+\`[[LAURA_ACTION:propose_task:{"patient_id":"P-9005","patient_name":"Carlos Mendoza","title":"Registro de pensamientos automáticos","description":"Anotar cada vez que aparezca un pensamiento del tipo 'voy a fallar'. Anotar contexto, emoción asociada y pensamiento alternativo.","due_date":"2026-06-30","priority":"MEDIUM","type":"Tarea terapéutica"}]]\`
 - \`title\` corto (max 100 chars)
 - \`description\` puede incluir saltos de línea (escapados como \\n)
 - \`due_date\` formato YYYY-MM-DD
 - \`priority\` ∈ ["LOW","MEDIUM","HIGH","URGENT"]
-- \`type\` libre (ej: "Ejercicios", "Tests", "Lectura", "Llamada", "Documento")
+- \`type\` uno de: "Tarea terapéutica" (ejercicios, lecturas, registros y cualquier cosa que haga el paciente entre sesiones), "Tests", "Sesión clínica", "Documentación", "Llamada / Seguimiento", "Administrativo", "Capacitación", "Auto-cuidado", "Reunión equipo", "Reporte". Para tareas del paciente usa siempre "Tarea terapéutica".
 
 propose_reschedule / propose_cancel / propose_attended (necesitan el appointment_id real: consíguelo con query_agenda o query_ficha):
 \`[[LAURA_ACTION:propose_reschedule:{"appointment_id":123,"patient_name":"Carlos Mendoza","date":"2026-09-02","time":"16:00","reason":"El paciente pidió cambiar"}]]\`

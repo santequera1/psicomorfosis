@@ -12,10 +12,36 @@ const VALID_VISIBILITY = new Set(["private", "team", "workspace"]);
 // Cuando se omite alguno, las plantillas que usen ese tipo (p. ej.
 // "Tests" para el MCMI-II) fallan con 400 al crear la tarea.
 const VALID_TASK_TYPES = new Set([
-  "Sesión clínica", "Tests", "Documentación", "Llamada / Seguimiento",
+  "Sesión clínica", "Tarea terapéutica", "Tests", "Documentación", "Llamada / Seguimiento",
   "Administrativo", "Capacitación", "Auto-cuidado",
   "Reunión equipo", "Reporte",
 ]);
+
+// Sinónimos → tipo canónico. Laura (y seeds viejos) mandaban "Ejercicios",
+// "Clínica", "Administrativa"…; antes eso era un 400 "type inválido" que
+// dejaba al psicólogo sin poder crear la tarea desde la propuesta. Se
+// compara sin tildes ni mayúsculas; lo que no se reconoce se guarda sin tipo.
+const TYPE_ALIASES = {
+  "tarea terapeutica": "Tarea terapéutica", "ejercicio": "Tarea terapéutica", "ejercicios": "Tarea terapéutica",
+  "tarea paciente": "Tarea terapéutica", "tarea para el paciente": "Tarea terapéutica", "lectura": "Tarea terapéutica",
+  "registro": "Tarea terapéutica", "homework": "Tarea terapéutica",
+  "sesion clinica": "Sesión clínica", "clinica": "Sesión clínica", "sesion": "Sesión clínica",
+  "test": "Tests", "tests": "Tests", "evaluacion": "Tests",
+  "documentacion": "Documentación", "documento": "Documentación", "documentos": "Documentación",
+  "llamada / seguimiento": "Llamada / Seguimiento", "llamada": "Llamada / Seguimiento", "seguimiento": "Llamada / Seguimiento",
+  "administrativo": "Administrativo", "administrativa": "Administrativo", "admin": "Administrativo",
+  "capacitacion": "Capacitación", "formacion": "Capacitación",
+  "auto-cuidado": "Auto-cuidado", "autocuidado": "Auto-cuidado",
+  "reunion equipo": "Reunión equipo", "reunion": "Reunión equipo",
+  "reporte": "Reporte", "informe": "Reporte",
+};
+export function normalizeTaskType(v) {
+  if (v == null || v === "") return null;
+  const raw = String(v).trim();
+  if (VALID_TASK_TYPES.has(raw)) return raw;
+  const key = raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  return TYPE_ALIASES[key] ?? null;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const now = () => new Date().toISOString();
@@ -195,7 +221,7 @@ router.post("/", (req, res) => {
   if (b.status && !VALID_STATUS.has(b.status)) return res.status(400).json({ error: "status inválido" });
   if (b.priority && !VALID_PRIORITY.has(b.priority)) return res.status(400).json({ error: "priority inválida" });
   if (b.visibility && !VALID_VISIBILITY.has(b.visibility)) return res.status(400).json({ error: "visibility inválida" });
-  if (b.type && !VALID_TASK_TYPES.has(b.type)) return res.status(400).json({ error: "type inválido" });
+  if (b.type != null) b.type = normalizeTaskType(b.type);
 
   const status = b.status ?? "TODO";
   const maxPos = db.prepare("SELECT COALESCE(MAX(position), -1) AS m FROM tareas WHERE workspace_id = ? AND status = ?")
@@ -248,7 +274,7 @@ router.patch("/:id", (req, res) => {
   if (b.status && !VALID_STATUS.has(b.status)) return res.status(400).json({ error: "status inválido" });
   if (b.priority && !VALID_PRIORITY.has(b.priority)) return res.status(400).json({ error: "priority inválida" });
   if (b.visibility && !VALID_VISIBILITY.has(b.visibility)) return res.status(400).json({ error: "visibility inválida" });
-  if (b.type && !VALID_TASK_TYPES.has(b.type)) return res.status(400).json({ error: "type inválido" });
+  if (b.type != null) b.type = normalizeTaskType(b.type);
 
   const fields = [
     "title", "description", "type", "status", "priority",

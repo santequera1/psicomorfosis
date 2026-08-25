@@ -381,6 +381,7 @@ export type TareaPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 export type TareaVisibility = "private" | "team" | "workspace";
 export type TareaType =
   | "Sesión clínica"
+  | "Tarea terapéutica"
   | "Tests"
   | "Documentación"
   | "Llamada / Seguimiento"
@@ -403,6 +404,7 @@ export const TRACKING_PRESETS: { id: TrackingPreset; label: string; minutes: num
 
 export const TAREA_TYPES: TareaType[] = [
   "Sesión clínica",
+  "Tarea terapéutica",
   "Tests",
   "Documentación",
   "Llamada / Seguimiento",
@@ -412,6 +414,33 @@ export const TAREA_TYPES: TareaType[] = [
   "Reunión equipo",
   "Reporte",
 ];
+
+/**
+ * Lleva un tipo "libre" (propuesta de Laura, import, dato viejo) al valor
+ * canónico del select; "" si no se reconoce. Espejo de normalizeTaskType
+ * en server/routes/tareas.js — mantener ambos si se agrega un tipo.
+ */
+export function normalizeTareaType(v: unknown): TareaType | "" {
+  if (v == null || v === "") return "";
+  const raw = String(v).trim();
+  if ((TAREA_TYPES as string[]).includes(raw)) return raw as TareaType;
+  const key = raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  const aliases: Record<string, TareaType> = {
+    "tarea terapeutica": "Tarea terapéutica", "ejercicio": "Tarea terapéutica", "ejercicios": "Tarea terapéutica",
+    "tarea paciente": "Tarea terapéutica", "tarea para el paciente": "Tarea terapéutica", "lectura": "Tarea terapéutica",
+    "registro": "Tarea terapéutica", "homework": "Tarea terapéutica",
+    "sesion clinica": "Sesión clínica", "clinica": "Sesión clínica", "sesion": "Sesión clínica",
+    "test": "Tests", "tests": "Tests", "evaluacion": "Tests",
+    "documentacion": "Documentación", "documento": "Documentación", "documentos": "Documentación",
+    "llamada / seguimiento": "Llamada / Seguimiento", "llamada": "Llamada / Seguimiento", "seguimiento": "Llamada / Seguimiento",
+    "administrativo": "Administrativo", "administrativa": "Administrativo", "admin": "Administrativo",
+    "capacitacion": "Capacitación", "formacion": "Capacitación",
+    "auto-cuidado": "Auto-cuidado", "autocuidado": "Auto-cuidado",
+    "reunion equipo": "Reunión equipo", "reunion": "Reunión equipo",
+    "reporte": "Reporte", "informe": "Reporte",
+  };
+  return aliases[key] ?? "";
+}
 
 export interface RecurrenceConfig {
   enabled: boolean;

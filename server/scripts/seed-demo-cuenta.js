@@ -350,16 +350,16 @@ const seeded = db.transaction(() => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'team', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `);
   const TASKS = [
-    { t: `Informe de remisión a psiquiatría — ${PATIENTS[2].name}`, st: "TODO", pr: "URGENT", due: 2, pid: ids[2], type: "Clínica" },
-    { t: "Confirmar citas de la próxima semana", st: "TODO", pr: "HIGH", due: 1, type: "Administrativa" },
+    { t: `Informe de remisión a psiquiatría — ${PATIENTS[2].name}`, st: "TODO", pr: "URGENT", due: 2, pid: ids[2], type: "Sesión clínica" },
+    { t: "Confirmar citas de la próxima semana", st: "TODO", pr: "HIGH", due: 1, type: "Administrativo" },
     { t: `Revisar tamizaje pendiente — ${PATIENTS[0].name}`, st: "TODO", pr: "MEDIUM", due: 3, pid: ids[0], type: "Tests" },
-    { t: `Plan de exposición gradual — ${PATIENTS[0].name}`, st: "IN_PROGRESS", pr: "HIGH", due: 4, pid: ids[0], type: "Clínica" },
-    { t: "Actualizar consentimientos informados 2026", st: "IN_PROGRESS", pr: "MEDIUM", due: 7, type: "Administrativa" },
-    { t: `Preparar sesión familiar — ${PATIENTS[5].name}`, st: "TODO", pr: "MEDIUM", due: 6, pid: ids[5], type: "Clínica" },
-    { t: "Cierre de facturación del mes anterior", st: "DONE", pr: "MEDIUM", due: -3, type: "Administrativa" },
-    { t: `Resumen de evolución para EPS — ${PATIENTS[4].name}`, st: "IN_REVIEW", pr: "LOW", due: 10, pid: ids[4], type: "Clínica" },
-    { t: "Renovar póliza de responsabilidad civil", st: "TODO", pr: "LOW", due: 21, type: "Administrativa" },
-    { t: "Leer guía NICE de ansiedad generalizada (actualización)", st: "TODO", pr: "LOW", due: 14, type: "Formación" },
+    { t: `Plan de exposición gradual — ${PATIENTS[0].name}`, st: "IN_PROGRESS", pr: "HIGH", due: 4, pid: ids[0], type: "Sesión clínica" },
+    { t: "Actualizar consentimientos informados 2026", st: "IN_PROGRESS", pr: "MEDIUM", due: 7, type: "Administrativo" },
+    { t: `Preparar sesión familiar — ${PATIENTS[5].name}`, st: "TODO", pr: "MEDIUM", due: 6, pid: ids[5], type: "Sesión clínica" },
+    { t: "Cierre de facturación del mes anterior", st: "DONE", pr: "MEDIUM", due: -3, type: "Administrativo" },
+    { t: `Resumen de evolución para EPS — ${PATIENTS[4].name}`, st: "IN_REVIEW", pr: "LOW", due: 10, pid: ids[4], type: "Sesión clínica" },
+    { t: "Renovar póliza de responsabilidad civil", st: "TODO", pr: "LOW", due: 21, type: "Administrativo" },
+    { t: "Leer guía NICE de ansiedad generalizada (actualización)", st: "TODO", pr: "LOW", due: 14, type: "Capacitación" },
   ];
   TASKS.forEach((t, i) => {
     tareaIns.run(ws, t.t, `${TAG} Tarea de demostración.`, t.type, t.st, t.pr, profId, user.id, t.pid ?? null,
