@@ -288,6 +288,10 @@ router.post("/auth/patient/login", loginLimiter, (req, res) => {
   if (!email || !password) return res.status(400).json({ error: "Email y contraseña requeridos" });
   const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'paciente'").get(email);
   if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+  // Cuenta creada con Google: no tiene contraseña (bcrypt con null revienta).
+  if (!user.password_hash) {
+    return res.status(401).json({ error: "Esta cuenta entra con Google. Pulsa «Continuar con Google»." });
+  }
   if (!bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: "Credenciales inválidas" });
   }
@@ -430,6 +434,9 @@ router.post("/portal/me/delete", requirePatient, (req, res) => {
   const user = db.prepare("SELECT id, name, password_hash, patient_id, workspace_id FROM users WHERE id = ?")
     .get(req.user.id);
   if (!user) return res.status(404).json({ error: "Cuenta no encontrada" });
+  if (!user.password_hash) {
+    return res.status(400).json({ error: "Tu cuenta entra con Google y no tiene contraseña. Usa «Olvidé mi contraseña» si quieres definir una." });
+  }
   if (!bcrypt.compareSync(current_password, user.password_hash)) {
     return res.status(401).json({ error: "Contraseña incorrecta" });
   }

@@ -39,8 +39,8 @@ function GoogleLanding() {
       if (!token || !user) throw new Error("payload incompleto");
       setSession(token, user);
       // Limpiamos el fragmento antes de navegar para que el token no
-      // quede en el historial del navegador.
-      window.location.replace("/");
+      // quede en el historial del navegador. Los pacientes van al portal.
+      window.location.replace(user.role === "paciente" ? "/p/inicio" : "/");
     } catch {
       setError("No pudimos completar el ingreso con Google.");
     }

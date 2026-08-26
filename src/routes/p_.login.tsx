@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2, Heart } from "lucide-react";
 import { api, setSession } from "@/lib/api";
 import { PortalCanvas } from "./p_.activar.$token";
+import { GoogleButton, AuthDivider } from "@/components/auth/GoogleButton";
 
 export const Route = createFileRoute("/p_/login")({
   head: () => ({ meta: [{ title: "Mi portal — Psicomorfosis" }] }),
@@ -24,12 +25,14 @@ function PortalLoginPage() {
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("google_error");
     if (!code) return;
-    toast.info(
-      code === "usa_portal_paciente"
-        ? "Tu cuenta es de paciente: entra aquí con tu correo y contraseña."
-        : "No pudimos completar el ingreso con Google. Entra con tu correo y contraseña.",
-      { duration: 8000 },
-    );
+    const MESSAGES: Record<string, string> = {
+      usa_portal_paciente: "Tu cuenta es de paciente: entra aquí con Google o con tu correo y contraseña.",
+      sin_ficha: "No encontramos una ficha de paciente con ese correo de Google. Pide a tu psicólogo/a que te registre con ese correo, o entra con tu correo y contraseña.",
+      varias_fichas: "Ese correo aparece en más de una consulta. Usa el enlace de invitación que te llegó por correo, o entra con tu correo y contraseña.",
+      cuenta_deshabilitada: "Esta cuenta está deshabilitada. Habla con tu psicólogo/a.",
+      cancelado: "Cancelaste el ingreso con Google.",
+    };
+    toast.info(MESSAGES[code] ?? "No pudimos completar el ingreso con Google. Entra con tu correo y contraseña.", { duration: 9000 });
     window.history.replaceState({}, "", "/p/login");
   }, []);
 
@@ -59,6 +62,10 @@ function PortalLoginPage() {
         </div>
 
         <form onSubmit={submit} className="space-y-4 bg-surface rounded-2xl border border-line-200 shadow-soft p-6">
+          {/* Google primero: si el correo de la ficha es un Gmail, es un
+              clic (y sirve también para activar la cuenta por primera vez). */}
+          <GoogleButton href="/api/auth/google/portal" label="Continuar con Google" />
+          <AuthDivider text="o con tu correo" />
           <div>
             <label className="block text-xs font-medium text-ink-700 mb-1.5">Correo electrónico</label>
             <input

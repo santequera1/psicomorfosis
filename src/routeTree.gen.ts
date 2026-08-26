@@ -43,6 +43,7 @@ import { Route as PLoginRouteImport } from './routes/p_.login'
 import { Route as PInicioRouteImport } from './routes/p_.inicio'
 import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
 import { Route as PCitasRouteImport } from './routes/p_.citas'
+import { Route as PActivarGoogleRouteImport } from './routes/p_.activar-google'
 import { Route as LegalSlugRouteImport } from './routes/legal.$slug'
 import { Route as LegalAdminAceptacionesRouteImport } from './routes/legal-admin_.aceptaciones'
 import { Route as LegalAdminSlugRouteImport } from './routes/legal-admin_.$slug'
@@ -225,6 +226,11 @@ const PCitasRoute = PCitasRouteImport.update({
   path: '/p/citas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PActivarGoogleRoute = PActivarGoogleRouteImport.update({
+  id: '/p_/activar-google',
+  path: '/p/activar-google',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LegalSlugRoute = LegalSlugRouteImport.update({
   id: '/legal/$slug',
   path: '/legal/$slug',
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/p/activar-google': typeof PActivarGoogleRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -355,6 +362,7 @@ export interface FileRoutesByTo {
   '/legal-admin/$slug': typeof LegalAdminSlugRoute
   '/legal-admin/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/p/activar-google': typeof PActivarGoogleRoute
   '/p/citas': typeof PCitasRoute
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
@@ -403,6 +411,7 @@ export interface FileRoutesById {
   '/legal-admin_/$slug': typeof LegalAdminSlugRoute
   '/legal-admin_/aceptaciones': typeof LegalAdminAceptacionesRoute
   '/legal/$slug': typeof LegalSlugRoute
+  '/p_/activar-google': typeof PActivarGoogleRoute
   '/p_/citas': typeof PCitasRoute
   '/p_/documentos': typeof PDocumentosRoute
   '/p_/inicio': typeof PInicioRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/legal-admin/$slug'
     | '/legal-admin/aceptaciones'
     | '/legal/$slug'
+    | '/p/activar-google'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -499,6 +509,7 @@ export interface FileRouteTypes {
     | '/legal-admin/$slug'
     | '/legal-admin/aceptaciones'
     | '/legal/$slug'
+    | '/p/activar-google'
     | '/p/citas'
     | '/p/documentos'
     | '/p/inicio'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/legal-admin_/$slug'
     | '/legal-admin_/aceptaciones'
     | '/legal/$slug'
+    | '/p_/activar-google'
     | '/p_/citas'
     | '/p_/documentos'
     | '/p_/inicio'
@@ -594,6 +606,7 @@ export interface RootRouteChildren {
   LegalAdminSlugRoute: typeof LegalAdminSlugRoute
   LegalAdminAceptacionesRoute: typeof LegalAdminAceptacionesRoute
   LegalSlugRoute: typeof LegalSlugRoute
+  PActivarGoogleRoute: typeof PActivarGoogleRoute
   PCitasRoute: typeof PCitasRoute
   PDocumentosRoute: typeof PDocumentosRoute
   PInicioRoute: typeof PInicioRoute
@@ -855,6 +868,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PCitasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p_/activar-google': {
+      id: '/p_/activar-google'
+      path: '/p/activar-google'
+      fullPath: '/p/activar-google'
+      preLoaderRoute: typeof PActivarGoogleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/legal/$slug': {
       id: '/legal/$slug'
       path: '/legal/$slug'
@@ -962,6 +982,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalAdminSlugRoute: LegalAdminSlugRoute,
   LegalAdminAceptacionesRoute: LegalAdminAceptacionesRoute,
   LegalSlugRoute: LegalSlugRoute,
+  PActivarGoogleRoute: PActivarGoogleRoute,
   PCitasRoute: PCitasRoute,
   PDocumentosRoute: PDocumentosRoute,
   PInicioRoute: PInicioRoute,

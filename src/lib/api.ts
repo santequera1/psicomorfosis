@@ -1122,6 +1122,20 @@ export const api = {
       { method: "POST", body: JSON.stringify({ email, password }) }
     ),
 
+  // Portal con Google: datos para el consentimiento y activación.
+  portalGooglePending: (proof: string) =>
+    request<{
+      email: string;
+      patient: { name: string; preferred_name: string | null } | null;
+      professional: { name: string; title: string | null } | null;
+      clinic: { name: string | null };
+    }>(`/api/auth/google/portal/pending?p=${encodeURIComponent(proof)}`),
+  portalGoogleActivate: (proof: string, opts: { acceptedLegal: boolean; legalVersion: string }) =>
+    request<{ token: string; user: { id: number; name: string; email: string; role: "paciente"; patient_id: string; workspace_id: number } }>(
+      "/api/auth/google/portal/activate",
+      { method: "POST", body: JSON.stringify({ proof, accepted_legal: opts.acceptedLegal, legal_version: opts.legalVersion }) },
+    ),
+
   // Portal del paciente — endpoints autenticados
   portalMe: () =>
     request<{

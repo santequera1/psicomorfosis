@@ -71,7 +71,7 @@ if (home) {
 }
 await expectPage("/inicio", ["og:image"], "/inicio (og:image)");
 await expectPage("/login", "<div", "/login");
-await expectPage("/p/login", "<div", "/p/login (portal paciente)");
+await expectPage("/p/login", ["<div"], "/p/login (portal paciente)");
 await expectPage("/privacidad", "<div", "/privacidad");
 await expectPage("/terminos", "<div", "/terminos");
 await expectPage(`/perfil/${SLUG}`, "<div", `/perfil/${SLUG} (perfil público)`);
@@ -109,6 +109,15 @@ await expectPage(`/perfil/${SLUG}`, "<div", `/perfil/${SLUG} (perfil público)`)
   if (p && !(p.name || p.professional?.name)) warn("perfil público: payload sin name", r.text.slice(0, 80));
 }
 await expectStatus(`/api/public/professionals/${SLUG}/availability`, 200, "GET …/availability");
+{
+  // Portal del paciente con Google: arranque → Google; activación sin prueba → 410.
+  const r = await expectStatus("/api/auth/google/portal", [302, 303], "GET /api/auth/google/portal → redirect a Google");
+  if (r && !/accounts\.google\.com/.test(r.headers.get("location") || "")) bad("portal OAuth: destino", (r.headers.get("location") || "").slice(0, 100));
+  await expectStatus("/api/auth/google/portal/pending?p=nope", 410, "GET /api/auth/google/portal/pending (prueba inválida) → 410");
+  await expectStatus("/api/auth/google/portal/activate", 410, "POST /api/auth/google/portal/activate (prueba inválida) → 410",
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ proof: "nope", accepted_legal: true }) });
+  await expectPage("/p/activar-google", "<div", "/p/activar-google");
+}
 await expectStatus("/api/public/professionals/no-existe-xyz", 404, "perfil inexistente → 404");
 
 // Privadas sin sesión: 401, nunca 200 ni 500.

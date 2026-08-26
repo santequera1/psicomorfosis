@@ -11,11 +11,13 @@ export function GoogleButton({
    *  cuenta: pulsar el botón es el acto de aceptación (clickwrap), y el
    *  backend lo registra con IP y user-agent al dar de alta. */
   showTerms = false,
-}: { label?: string; showTerms?: boolean }) {
+  /** Ruta de arranque del OAuth. El portal del paciente usa la suya. */
+  href = "/api/auth/google",
+}: { label?: string; showTerms?: boolean; href?: string }) {
   return (
     <>
     <a
-      href="/api/auth/google"
+      href={href}
       className="w-full h-12 rounded-full border border-line-200 bg-surface text-ink-900 text-sm font-medium hover:border-brand-400 hover:bg-bg-50 inline-flex items-center justify-center gap-3 transition-colors"
     >
       <svg viewBox="0 0 48 48" className="h-[18px] w-[18px]" aria-hidden>

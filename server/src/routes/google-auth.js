@@ -97,6 +97,20 @@ const googleCallbackLimiter = rateLimit({
 const states = new Map();
 /** `linkUserId` presente = flujo de VINCULAR (usuario ya autenticado).
  *  `purpose` = "login" | "link" | "calendar". */
+/**
+ * Pacientes que entraron con Google pero aún no tienen cuenta de portal:
+ * Google ya confirmó su correo, falta el consentimiento informado. La
+ * "prueba" vive 15 min y se consume al activar. En memoria, como `states`.
+ */
+const portalPending = new Map();
+const PENDING_TTL_MS = 15 * 60 * 1000;
+function takePending(proof) {
+  const v = portalPending.get(String(proof ?? ""));
+  if (!v) return null;
+  if (Date.now() - v.at > PENDING_TTL_MS) { portalPending.delete(String(proof)); return null; }
+  return v;
+}
+
 function issueState(linkUserId = null, purpose = linkUserId ? "link" : "login", nonce = null) {
   const s = crypto.randomBytes(24).toString("hex");
   states.set(s, { at: Date.now(), linkUserId, purpose, nonce });
@@ -271,6 +285,12 @@ router.get("/google", googleStartLimiter, (_req, res) => {
   res.redirect(authorizeUrl());
 });
 
+/** Paso 1 del PORTAL DEL PACIENTE ("Continuar con Google" en /p/login). */
+router.get("/google/portal", googleStartLimiter, (_req, res) => {
+  if (!configured()) return res.redirect(`${cfg().appUrl}/p/login?google_error=no_configurado`);
+  res.redirect(authorizeUrl(null, { purpose: "portal" }));
+});
+
 /**
  * Paso 1 del flujo de VINCULAR. Devuelve la URL en vez de redirigir para
  * que el JWT viaje en la cabecera Authorization y no en la query — un
@@ -290,8 +310,10 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   // sin ningún mensaje).
   const stateData = consumeState(req.query.state);
   const isCalendar = stateData?.purpose === "calendar";
+  const isPortal = stateData?.purpose === "portal";
   const back = `${cfg().appUrl}/configuracion?s=integraciones&gcal_error=`;
-  const bail = (code) => isCalendar ? res.redirect(back + code) : fail(res, code);
+  const pfail = (code) => res.redirect(`${cfg().appUrl}/p/login?google_error=${encodeURIComponent(code)}`);
+  const bail = (code) => isCalendar ? res.redirect(back + code) : isPortal ? pfail(code) : fail(res, code);
 
   if (req.query.error) return bail("cancelado");
   if (!stateData) return bail("state_invalido");
@@ -363,6 +385,75 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
   const countByEmail = (val) => db.prepare(
     "SELECT COUNT(*) AS n FROM users WHERE LOWER(email) = LOWER(?)",
   ).get(val).n;
+
+  /**
+   * Entrar al portal del paciente con una cuenta de portal existente.
+   * Misma entrega que el staff (sesión en el fragmento de /auth/google);
+   * el front ve role=paciente y aterriza en /p/inicio.
+   */
+  const enterPortal = (u) => {
+    if (u.disabled_at) return pfail("cuenta_deshabilitada");
+    const nowIso = new Date().toISOString();
+    try {
+      db.prepare("UPDATE users SET last_login_at = ?, email_verified_at = COALESCE(email_verified_at, ?) WHERE id = ?")
+        .run(nowIso, nowIso, u.id);
+      // Vínculo fuerte por `sub` si ese sub no pertenece ya a otra cuenta
+      // (la misma persona puede ser staff en un consultorio y paciente en otro).
+      if (!u.google_sub && !findBySub(sub)) {
+        db.prepare(`
+          UPDATE users SET google_sub = ?, google_email = ?, google_linked_at = ?,
+            auth_provider = CASE WHEN password_hash IS NULL THEN 'google' ELSE 'password+google' END
+          WHERE id = ?
+        `).run(sub, email, nowIso, u.id);
+      }
+    } catch { /* tracking/vínculo no bloquean el ingreso */ }
+    const token = signToken({
+      id: u.id, workspace_id: u.workspace_id, username: u.username,
+      role: "paciente", name: u.name, patient_id: u.patient_id,
+    });
+    const payload = Buffer.from(JSON.stringify({
+      token,
+      user: { id: u.id, name: u.name, email: u.email, role: "paciente", patient_id: u.patient_id, workspace_id: u.workspace_id },
+    })).toString("base64url");
+    return res.redirect(`${cfg().appUrl}/auth/google#s=${payload}`);
+  };
+
+  // ─── Modo PORTAL (paciente entra con Google) ───────────────────────
+  if (isPortal) {
+    const pu = db.prepare(`
+      SELECT u.*, w.disabled_at
+      FROM users u JOIN workspaces w ON w.id = u.workspace_id
+      WHERE u.role = 'paciente'
+        AND (u.google_sub = ? OR LOWER(u.email) = LOWER(?) OR LOWER(u.username) = LOWER(?))
+      ORDER BY (u.google_sub = ?) DESC, u.last_login_at DESC, u.id DESC
+    `).get(sub, email, email, sub);
+    if (pu) return enterPortal(pu);
+
+    // Sin cuenta de portal todavía: ¿hay ficha de paciente con ese correo?
+    // Se prefiere la que tenga invitación abierta; si sigue habiendo
+    // varias (misma persona en dos consultorios), que use la invitación.
+    const fichas = db.prepare(`
+      SELECT p.id, p.workspace_id, w.disabled_at,
+             EXISTS(SELECT 1 FROM patient_invites i WHERE i.patient_id = p.id AND i.used_at IS NULL AND i.expires_at > ?) AS invited
+      FROM patients p JOIN workspaces w ON w.id = p.workspace_id
+      WHERE LOWER(p.email) = LOWER(?) AND p.archived_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.patient_id = p.id)
+      ORDER BY invited DESC, p.created_at DESC
+    `).all(new Date().toISOString(), email);
+    const candidates = fichas.filter((f) => !f.disabled_at);
+    if (candidates.length === 0) return pfail(fichas.length ? "cuenta_deshabilitada" : "sin_ficha");
+    const invited = candidates.filter((f) => f.invited);
+    if (candidates.length > 1 && invited.length !== 1) return pfail("varias_fichas");
+    const ficha = invited[0] ?? candidates[0];
+
+    // Falta el consentimiento informado (Ley 1581/2012): se pide en
+    // /p/activar-google y solo entonces se crea la cuenta.
+    const proof = crypto.randomBytes(24).toString("hex");
+    portalPending.set(proof, { at: Date.now(), sub, email, name: fullName, patientId: ficha.id, workspaceId: ficha.workspace_id });
+    for (const [k, v] of portalPending) if (Date.now() - v.at > PENDING_TTL_MS) portalPending.delete(k);
+    console.log(`[google] portal: ficha ${ficha.id} sin cuenta, pidiendo consentimiento (${email})`);
+    return res.redirect(`${cfg().appUrl}/p/activar-google#p=${proof}`);
+  }
 
   // ─── Modo CONECTAR CALENDARIO ──────────────────────────────────────
   // El usuario ya está dentro; Google devolvió refresh_token para el scope
@@ -443,8 +534,9 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
 
   if (user) {
     if (user.role === "paciente") {
-      // Los pacientes tienen su propio portal; no entran por acá.
-      return res.redirect(`${cfg().appUrl}/p/login?google_error=usa_portal_paciente`);
+      // Los pacientes tienen su propio portal: se les abre directo en
+      // vez de rebotarlos a /p/login a repetir el clic.
+      return enterPortal(user);
     }
     if (user.disabled_at && !user.is_platform_admin && !user.is_legal_admin) {
       return fail(res, "cuenta_deshabilitada");
@@ -558,6 +650,76 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
 
   // En el FRAGMENTO (#): no llega al servidor, no queda en logs ni Referer.
   res.redirect(`${cfg().appUrl}/auth/google?s=${payload}`.replace("?s=", "#s="));
+});
+
+/** Datos para la pantalla de consentimiento (paciente nuevo con Google). */
+router.get("/google/portal/pending", googleCallbackLimiter, (req, res) => {
+  const pend = takePending(req.query.p);
+  if (!pend) return res.status(410).json({ error: "El ingreso con Google expiró. Vuelve a intentarlo desde el portal." });
+  const patient = db.prepare("SELECT name, preferred_name FROM patients WHERE id = ?").get(pend.patientId);
+  const prof = db.prepare(`
+    SELECT p.name, p.title FROM professionals p JOIN patients pt ON pt.professional_id = p.id WHERE pt.id = ? LIMIT 1
+  `).get(pend.patientId);
+  const ws = db.prepare("SELECT name FROM workspaces WHERE id = ?").get(pend.workspaceId);
+  res.json({
+    email: pend.email,
+    patient: patient ? { name: patient.name, preferred_name: patient.preferred_name } : null,
+    professional: prof ?? null,
+    clinic: { name: ws?.name ?? null },
+  });
+});
+
+/**
+ * Crea la cuenta de portal del paciente que entró con Google, una vez
+ * aceptó el aviso de privacidad y los términos. Sin contraseña: entra
+ * siempre con Google (puede definir una después con "olvidé mi clave").
+ */
+router.post("/google/portal/activate", googleCallbackLimiter, (req, res) => {
+  const { proof, accepted_legal, legal_version } = req.body ?? {};
+  const pend = takePending(proof);
+  if (!pend) return res.status(410).json({ error: "El ingreso con Google expiró. Vuelve a intentarlo desde el portal." });
+  if (accepted_legal !== true) {
+    return res.status(400).json({ error: "Debes aceptar el aviso de privacidad y los términos para activar tu cuenta." });
+  }
+  const patient = db.prepare("SELECT * FROM patients WHERE id = ? AND archived_at IS NULL").get(pend.patientId);
+  if (!patient) return res.status(404).json({ error: "La ficha de paciente ya no existe." });
+  if (db.prepare("SELECT 1 FROM users WHERE patient_id = ?").get(patient.id)
+      || db.prepare("SELECT 1 FROM users WHERE LOWER(username) = LOWER(?)").get(pend.email)) {
+    portalPending.delete(String(proof));
+    return res.status(409).json({ error: "Ya existe una cuenta con este correo. Vuelve a pulsar «Continuar con Google»." });
+  }
+  const now = new Date().toISOString();
+  const acceptedVersion = (typeof legal_version === "string" && legal_version.trim()) || now.slice(0, 10);
+  // El mismo Google puede ser staff en otro consultorio: el `sub` es único
+  // en users, así que en ese caso se entra por correo y no se guarda el sub.
+  const subTaken = db.prepare("SELECT 1 FROM users WHERE google_sub = ?").get(pend.sub);
+  let userId;
+  try {
+    userId = db.transaction(() => {
+      const ins = db.prepare(`
+        INSERT INTO users (workspace_id, username, password_hash, name, email, role, patient_id,
+                           google_sub, google_email, google_linked_at, auth_provider, email_verified_at, last_login_at)
+        VALUES (?, ?, NULL, ?, ?, 'paciente', ?, ?, ?, ?, 'google', ?, ?)
+      `).run(pend.workspaceId, pend.email, patient.name, pend.email, patient.id,
+             subTaken ? null : pend.sub, pend.email, now, now, now);
+      db.prepare("UPDATE patient_invites SET used_at = ? WHERE patient_id = ? AND used_at IS NULL").run(now, patient.id);
+      db.prepare("UPDATE patients SET legal_accepted_at = ?, legal_accepted_version = ? WHERE id = ?").run(now, acceptedVersion, patient.id);
+      return ins.lastInsertRowid;
+    })();
+  } catch (e) {
+    console.error("[google] portal: activación falló:", e?.message);
+    return res.status(500).json({ error: "No pudimos crear tu cuenta. Intenta de nuevo o usa la invitación de tu correo." });
+  }
+  portalPending.delete(String(proof));
+  console.log(`[google] portal: paciente ${patient.id} activado con Google (user=${userId})`);
+  const token = signToken({
+    id: userId, workspace_id: pend.workspaceId, username: pend.email,
+    role: "paciente", name: patient.name, patient_id: patient.id,
+  });
+  res.status(201).json({
+    token,
+    user: { id: userId, name: patient.name, email: pend.email, role: "paciente", patient_id: patient.id, workspace_id: pend.workspaceId },
+  });
 });
 
 /** El front pregunta si mostrar el botón. */
