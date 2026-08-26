@@ -550,6 +550,21 @@ html[data-theme="aurora"] .bg-card {
     scrollbar-gutter: stable;
     overflow-y: scroll;
   }
+
+/* Radix (Select, Dialog, Popover modal…) bloquea el scroll con
+   react-remove-scroll: pone `overflow: hidden` en <body>. Eso convierte al
+   body en contenedor de scroll y el sidebar `sticky` deja de pegarse al
+   viewport: con la página desplazada se pintaba cortado (el "manchón" de
+   la izquierda, el mismo síntoma que tuvo Laura). No necesitamos ese
+   bloqueo: el gutter estable ya evita el salto de layout y Radix sigue
+   frenando la rueda/touch por JS mientras el menú está abierto. */
+html body[data-scroll-locked][data-scroll-locked][data-scroll-locked] {
+  overflow: visible !important;
+  position: static !important;
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+}
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
