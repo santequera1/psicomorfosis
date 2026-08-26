@@ -19,7 +19,7 @@
 import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "../db.js";
-import { notifyBookingRequested } from "../lib/psicobot.js";
+import { notifyBookingRequested, toE164Co } from "../lib/psicobot.js";
 import { sendBookingRequestEmails } from "../mailer.js";
 import { ensureMeetingUrl } from "../lib/video.js";
 
@@ -179,9 +179,9 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
     const pid = `P-${p.workspace_id}W${Date.now().toString(36).toUpperCase()}`;
     db.prepare(`
       INSERT INTO patients (id, workspace_id, professional_id, name, phone, email, age, doc, pronouns,
-                            professional, modality, status, reason, risk, risk_type, whatsapp_opt_in, whatsapp_opt_in_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, 'activo', ?, 'none', '[]', 1, datetime('now'))
-    `).run(pid, p.workspace_id, p.id, name, phone, email, age, p.name, modality,
+                            professional, modality, status, reason, risk, risk_type, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, 'activo', ?, 'none', '[]', 1, datetime('now'), 'paciente')
+    `).run(pid, p.workspace_id, p.id, name, (digits.length === 10 && digits.startsWith("3")) ? `+57${digits}` : (toE164Co(digits) ?? phone), email, age, p.name, modality,
            motivo ? `[reserva-web] ${motivo}` : "[reserva-web] Solicitud desde perfil público");
     patient = { id: pid, name };
   } else {
