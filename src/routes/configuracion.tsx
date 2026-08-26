@@ -2189,7 +2189,7 @@ function GoogleCalendarCard() {
             </p>
           ) : (
             <p className="text-xs text-ink-600 mt-1 leading-relaxed">
-              Cada cita aparecerá en tu Google Calendar automáticamente, y si quieres, las citas online tendrán enlace de Google Meet.
+              Cada cita aparecerá en tu Google Calendar automáticamente (al conectar copiamos también las que ya tienes programadas) y las citas online nuevas llevarán enlace de Google Meet.
             </p>
           )}
           {data.lastError && (

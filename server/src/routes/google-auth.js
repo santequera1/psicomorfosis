@@ -30,7 +30,7 @@ import { sendWelcomeEmail } from "../mailer.js";
 import { recordSignupAcceptances } from "./legal.js";
 import { publicSignupEnabled } from "./auth.js";
 import { notifyWhatsappSetup } from "../lib/psicobot.js";
-import { SCOPE_CALENDAR, getConnection, saveConnection, disconnect as gcalDisconnect } from "../lib/gcal.js";
+import { SCOPE_CALENDAR, getConnection, saveConnection, backfillUpcoming, disconnect as gcalDisconnect } from "../lib/gcal.js";
 import rateLimit from "express-rate-limit";
 
 const router = Router();
@@ -376,6 +376,7 @@ router.get("/google/callback", googleCallbackLimiter, async (req, res) => {
     try {
       saveConnection(stateData.linkUserId, { refreshToken: tokenJson.refresh_token, email });
       console.log(`[gcal] conectado user=${stateData.linkUserId} cuenta=${email}`);
+      backfillUpcoming(stateData.linkUserId);
       return res.redirect(`${back}&gcal=ok`);
     } catch (e) {
       console.error("[gcal] guardar conexión:", e?.message);

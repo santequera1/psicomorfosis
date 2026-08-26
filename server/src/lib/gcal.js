@@ -72,11 +72,51 @@ export function getConnection(userId) {
 }
 
 export function saveConnection(userId, { refreshToken, email }) {
+  // Primera conexión: Meet activo por defecto (es lo que la gente espera
+  // al conectar Google; Jitsi queda como respaldo). Si ya había conexión
+  // se respeta lo que la persona eligió en el interruptor.
   db.prepare(`
-    UPDATE users SET gcal_refresh_token = ?, gcal_email = ?, gcal_connected_at = ?, gcal_last_error = NULL
+    UPDATE users SET gcal_refresh_token = ?, gcal_email = ?, gcal_last_error = NULL,
+      gcal_use_meet = CASE WHEN gcal_connected_at IS NULL THEN 1 ELSE gcal_use_meet END,
+      gcal_connected_at = ?
     WHERE id = ?
   `).run(encryptToken(refreshToken), email ?? null, new Date().toISOString(), userId);
   accessCache.delete(userId);
+}
+
+/**
+ * Al conectar el calendario, copia las citas futuras que ya existían para
+ * que el calendario no aparezca vacío. No toca enlaces (una cita con Jitsi
+ * se queda con Jitsi; Meet es solo para citas nuevas o recién confirmadas).
+ * Secuencial, en segundo plano y con pausa entre llamadas; una cita que
+ * falle no frena a las demás. Se detiene si la persona desconecta a mitad.
+ */
+export function backfillUpcoming(userId) {
+  setImmediate(async () => {
+    try {
+      const u = db.prepare("SELECT professional_id FROM users WHERE id = ?").get(userId);
+      if (!u?.professional_id || !getConnection(userId)) return;
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const rows = db.prepare(`
+        SELECT * FROM appointments
+        WHERE professional_id = ? AND google_event_id IS NULL AND date >= ?
+          AND status IN ('pendiente', 'confirmada', 'en_curso')
+        ORDER BY date, time
+        LIMIT 200
+      `).all(u.professional_id, today);
+      if (rows.length === 0) { console.log(`[gcal] backfill user=${userId}: sin citas futuras que copiar`); return; }
+      let ok = 0;
+      for (const appt of rows) {
+        if (!getConnection(userId)) break;
+        const r = await syncAppointment(appt, { allowMeet: false });
+        if (r?.google_event_id) ok++;
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+      console.log(`[gcal] backfill user=${userId}: ${ok}/${rows.length} citas futuras copiadas al calendario`);
+    } catch (e) {
+      console.warn(`[gcal] backfill user=${userId} falló:`, e?.message);
+    }
+  });
 }
 
 export async function disconnect(userId) {

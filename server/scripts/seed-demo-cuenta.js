@@ -226,7 +226,7 @@ const seeded = db.transaction(() => {
       } else {
         const daysAhead = Math.round((d - TODAY) / 86400000);
         if (!solicitadaDone && i === 6 && daysAhead > 2) { status = "solicitada"; solicitadaDone = true; notes = "Solicitud desde el enlace público — pendiente de confirmar."; }
-        else status = daysAhead <= 7 ? "confirmada" : "agendada";
+        else status = daysAhead <= 7 ? "confirmada" : "pendiente";
         nFuture++;
       }
       const meeting = isTele && !past && status !== "solicitada"
