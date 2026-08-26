@@ -7,13 +7,15 @@ import {
   Search, Loader2, X, AlertCircle, Copy, ChevronRight, ArrowLeft,
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
-  ArrowUpDown, Sparkles, Inbox, Mail, Globe, MailCheck, CalendarDays, Clock,
+  ArrowUpDown, Sparkles, Inbox, Mail, Globe, MailCheck, CalendarDays, Clock, SlidersHorizontal,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Drawer, DrawerContent, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { api, getStoredUser, type PlatformWorkspace, type PlatformWorkspaceDetail } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { AppTooltip } from "@/components/app/AppTooltip";
@@ -156,11 +158,25 @@ function PlatformDashboard() {
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("recent");
+  // Panel de facetas: popover en escritorio, hoja inferior en móvil.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   // Vista persistida del listado: 'list' (filas detalladas con botones)
   // o 'cards' (tarjetas compactas, mejor en mobile y para escanear muchas
   // cuentas de un vistazo).
   const [viewMode, setViewMode] = usePersistedViewMode("psm.platform.view", "list");
+  // En pantallas < sm la fila densa no cabe: se fuerzan tarjetas y se
+  // oculta el toggle. La preferencia guardada sigue mandando en escritorio.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  const effectiveView = isMobile ? "cards" : viewMode;
   const [disabling, setDisabling] = useState<PlatformWorkspace | null>(null);
   const [deleting, setDeleting] = useState<PlatformWorkspace | null>(null);
   const [editing, setEditing] = useState<PlatformWorkspace | null>(null);
@@ -251,9 +267,28 @@ function PlatformDashboard() {
     () => Array.from(new Set(workspaces.map((w) => w.plan || "free"))).sort(),
     [workspaces],
   );
-  const activeFilters =
-    [statusFilter, modeFilter, planFilter, authFilter, originFilter, verifiedFilter, loginFilter].filter((v) => v !== "todos").length
+  // Facetas del panel activas (sin contar Estado, que vive en la barra).
+  const panelCount =
+    [modeFilter, planFilter, authFilter, originFilter, verifiedFilter, loginFilter].filter((v) => v !== "todos").length
     + (createdFrom || createdTo ? 1 : 0);
+  const fmtShort = (isoDate: string) => {
+    const d = new Date(isoDate + "T00:00:00");
+    return Number.isNaN(d.getTime()) ? isoDate : d.toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+  };
+  // Chips quitables bajo la barra: uno por faceta activa.
+  const chips: { key: string; label: string; remove: () => void }[] = [];
+  if (statusFilter !== "todos") chips.push({ key: "status", label: statusFilter === "activo" ? "Activas" : "Deshabilitadas", remove: () => setStatusFilter("todos") });
+  if (modeFilter !== "todos") chips.push({ key: "mode", label: modeFilter === "individual" ? "Individual" : "Clínica", remove: () => setModeFilter("todos") });
+  if (planFilter !== "todos") chips.push({ key: "plan", label: `Plan ${PLAN_LABELS[planFilter] ?? planFilter}`, remove: () => setPlanFilter("todos") });
+  if (authFilter !== "todos") chips.push({ key: "auth", label: { google: "Entra con Google", password: "Correo y contraseña", ambos: "Google + contraseña", todos: "" }[authFilter], remove: () => setAuthFilter("todos") });
+  if (originFilter !== "todos") chips.push({ key: "origin", label: { web: "Registro web", google: "Botón Google", manual: "Creada aquí", todos: "" }[originFilter], remove: () => setOriginFilter("todos") });
+  if (verifiedFilter !== "todos") chips.push({ key: "verified", label: verifiedFilter === "si" ? "Correo verificado" : "Correo sin verificar", remove: () => setVerifiedFilter("todos") });
+  if (loginFilter !== "todos") chips.push({ key: "login", label: { hoy: "Entró hoy", "7d": "Entró en 7 días", "30d": "Entró en 30 días", inactivo: "+30 días sin entrar", nunca: "Nunca entró", todos: "" }[loginFilter], remove: () => setLoginFilter("todos") });
+  if (createdFrom || createdTo) chips.push({
+    key: "created",
+    label: createdFrom && createdTo ? `Alta ${fmtShort(createdFrom)} – ${fmtShort(createdTo)}` : createdFrom ? `Alta desde ${fmtShort(createdFrom)}` : `Alta hasta ${fmtShort(createdTo)}`,
+    remove: () => { setCreatedFrom(""); setCreatedTo(""); },
+  });
   const clearFilters = () => {
     setStatusFilter("todos"); setModeFilter("todos"); setPlanFilter("todos");
     setAuthFilter("todos"); setOriginFilter("todos"); setVerifiedFilter("todos"); setLoginFilter("todos");
@@ -264,6 +299,92 @@ function PlatformDashboard() {
     setCreatedFrom(isoDay(days == null ? new Date(t.getFullYear(), t.getMonth(), 1) : new Date(t.getTime() - days * DAY_MS)));
     setCreatedTo(isoDay(t));
   };
+
+  // Contenido del panel de facetas. Es una función (no un componente
+  // anidado) para que popover y hoja compartan el mismo árbol sin
+  // remontar los controles en cada render.
+  const filtersPanel = (onDone: () => void) => (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-[11px] uppercase tracking-widest text-brand-800 font-medium">Filtrar cuentas</p>
+          <p className="text-xs text-ink-500 mt-0.5">
+            {filtered.length === workspaces.length ? `Todas las ${workspaces.length} cuentas` : `${filtered.length} de ${workspaces.length} coinciden`}
+          </p>
+        </div>
+        {panelCount > 0 && (
+          <button type="button" onClick={clearFilters} className="text-xs text-ink-500 hover:text-ink-900 underline-offset-2 hover:underline">
+            Limpiar
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        <FilterSection label="Modo">
+          <Segmented value={modeFilter} onChange={(v) => setModeFilter(v as ModeFilter)} options={[
+            { v: "todos", label: "Todos" },
+            { v: "individual", label: "Individual", icon: <UserIcon className="h-3 w-3" /> },
+            { v: "organization", label: "Clínica", icon: <Building2 className="h-3 w-3" /> },
+          ]} />
+        </FilterSection>
+        <FilterSection label="Plan">
+          <Segmented value={planFilter} onChange={setPlanFilter} options={[
+            { v: "todos", label: "Todos" },
+            ...plans.map((p) => ({ v: p, label: PLAN_LABELS[p] ?? p, icon: <Tag className="h-3 w-3" /> })),
+          ]} />
+        </FilterSection>
+        <FilterSection label="Acceso" hint="Con qué entra la persona dueña de la cuenta">
+          <Segmented value={authFilter} onChange={(v) => setAuthFilter(v as AuthFilter)} options={[
+            { v: "todos", label: "Todos" },
+            { v: "google", label: "Google", count: counts.google, icon: <Globe className="h-3 w-3" /> },
+            { v: "password", label: "Correo y contraseña", count: counts.password, icon: <KeyRound className="h-3 w-3" /> },
+            { v: "ambos", label: "Ambos", count: counts.ambos },
+          ]} />
+        </FilterSection>
+        <FilterSection label="Origen" hint="Por dónde llegó la cuenta">
+          <Segmented value={originFilter} onChange={(v) => setOriginFilter(v as OriginFilter)} options={[
+            { v: "todos", label: "Todos" },
+            { v: "web", label: "Registro web", count: counts.web },
+            { v: "google", label: "Botón Google", count: counts.originGoogle },
+            { v: "manual", label: "Creada aquí", count: counts.manual },
+          ]} />
+        </FilterSection>
+        <FilterSection label="Correo">
+          <Segmented value={verifiedFilter} onChange={(v) => setVerifiedFilter(v as VerifiedFilter)} options={[
+            { v: "todos", label: "Todos" },
+            { v: "si", label: "Verificado", count: counts.verified, icon: <MailCheck className="h-3 w-3" /> },
+            { v: "no", label: "Sin verificar", count: counts.unverified },
+          ]} />
+        </FilterSection>
+        <FilterSection label="Último acceso">
+          <Segmented value={loginFilter} onChange={(v) => setLoginFilter(v as LoginFilter)} options={[
+            { v: "todos", label: "Todos" },
+            { v: "hoy", label: "Hoy" },
+            { v: "7d", label: "7 días" },
+            { v: "30d", label: "30 días" },
+            { v: "inactivo", label: "+30 días sin entrar", icon: <Clock className="h-3 w-3" /> },
+            { v: "nunca", label: "Nunca entró" },
+          ]} />
+        </FilterSection>
+        <FilterSection label="Fecha de alta" className="sm:col-span-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <AppDatePicker value={createdFrom} onChange={setCreatedFrom} placeholder="Desde" size="sm" clearable className="w-36" aria-label="Alta desde" />
+            <span className="text-ink-400 text-xs">hasta</span>
+            <AppDatePicker value={createdTo} onChange={setCreatedTo} placeholder="Hasta" size="sm" clearable className="w-36" aria-label="Alta hasta" />
+            <Segmented
+              value={""}
+              onChange={(v) => setCreatedPreset(v === "mes" ? null : Number(v))}
+              options={[{ v: "7", label: "Últimos 7 días" }, { v: "30", label: "Últimos 30 días" }, { v: "mes", label: "Este mes" }]}
+            />
+          </div>
+        </FilterSection>
+      </div>
+      <div className="mt-5 pt-4 border-t border-line-100 flex justify-end">
+        <button type="button" onClick={onDone} className="h-9 px-4 rounded-lg bg-brand-700 text-white text-xs font-medium hover:bg-brand-800 transition-colors">
+          Listo
+        </button>
+      </div>
+    </div>
+  );
 
   /**
    * Exporta la lista de cuentas (filtrada por los filtros aplicados)
@@ -401,14 +522,14 @@ function PlatformDashboard() {
           className="rounded-xl border border-line-200 bg-surface animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
           style={{ animationDelay: "420ms" }}
         >
-          {/* Toolbar de filtros — dos filas:
-              Fila 1: search (flex-1) + sort dropdown + view toggle.
-              Fila 2: pills de estado + modo + suscripción + contador "N de M".
-              Mantenemos visualmente que la fila 1 es "input/output" (qué
-              buscar y cómo ordenar) y la fila 2 es "facets" (filtrar). */}
-          <div className="p-3 sm:p-4 border-b border-line-100 space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-line-200 bg-bg-100/40 flex-1 min-w-60">
+          {/* Toolbar: una sola fila limpia (buscar · estado · filtros · orden ·
+              vista) y debajo los filtros activos como chips quitables. El
+              resto de facetas vive en un panel — popover en escritorio,
+              hoja inferior en móvil — para no convertir la cabecera en un
+              muro de pastillas. */}
+          <div className="p-3 sm:p-4 border-b border-line-100 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 h-10 px-3 rounded-lg border border-line-200 bg-bg-100/40 w-full sm:w-auto sm:flex-1 min-w-0 focus-within:border-brand-400 focus-within:bg-surface transition-colors">
                 <Search className="h-4 w-4 text-ink-400 shrink-0" />
                 <input
                   value={query}
@@ -417,157 +538,87 @@ function PlatformDashboard() {
                   className="flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 outline-none min-w-0"
                 />
                 {query && (
-                  <button
-                    onClick={() => setQuery("")}
-                    className="text-ink-400 hover:text-ink-700"
-                    title="Limpiar búsqueda"
-                  >
+                  <button onClick={() => setQuery("")} className="text-ink-400 hover:text-ink-700" title="Limpiar búsqueda">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
-              {/* Sort: antes era <select> nativo (se veía diferente al
-                  resto de la app — bordes del SO, fondo blanco crudo,
-                  no respetaba tokens del tema). Pasamos a AppSelect
-                  (Radix con estilos del DS) para coherencia visual.
-                  Icono ArrowUpDown delante via wrapper relative. */}
-              <div className="relative inline-flex items-center">
-                <ArrowUpDown className="absolute left-3 z-10 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
-                <AppSelect
-                  value={sortBy}
-                  onChange={(v) => setSortBy(v as SortKey)}
-                  options={SORT_OPTIONS.map((o) => ({ value: o.v, label: o.label }))}
-                  className="pl-7 min-w-44"
-                  aria-label="Ordenar listado de cuentas"
-                />
-              </div>
-              <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
-            </div>
 
-            {/* Mobile: vertical stack para que cada filtro tome su
-                línea (antes se desbordaba en pantallas chicas). En sm+
-                vuelve a horizontal con wrap. */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs overflow-x-auto sm:overflow-visible">
-              {/* Estado */}
-              <FilterPills
-                label="Estado"
+              <Segmented
                 value={statusFilter}
                 onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+                className="flex-1 sm:flex-initial"
                 options={[
                   { v: "todos", label: "Todas", count: counts.todos },
                   { v: "activo", label: "Activas", count: counts.activo },
                   { v: "deshabilitado", label: "Deshabilitadas", count: counts.deshabilitado },
                 ]}
               />
-              {/* Modo */}
-              <FilterPills
-                label="Modo"
-                value={modeFilter}
-                onChange={(v) => setModeFilter(v as ModeFilter)}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  { v: "individual", label: "Individual", icon: <UserIcon className="h-3 w-3" /> },
-                  { v: "organization", label: "Clínica", icon: <Building2 className="h-3 w-3" /> },
-                ]}
-              />
-              {/* Plan: los valores que realmente existen en las cuentas
-                  (hoy solo "free"); crece solo cuando aparezcan planes de pago. */}
-              <FilterPills
-                label="Plan"
-                value={planFilter}
-                onChange={setPlanFilter}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  ...plans.map((p) => ({ v: p, label: PLAN_LABELS[p] ?? p, icon: <Tag className="h-3 w-3" /> })),
-                ]}
-              />
-              {/* Contador de resultados visibles vs total. Se muestra a la
-                  derecha como hint persistente. */}
-              <span className="ml-auto text-[11px] text-ink-500 tabular">
-                {filtered.length} de {workspaces.length}
-              </span>
-            </div>
 
-            {/* Fila 3: cómo entran y por dónde llegaron. */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs">
-              <FilterPills
-                label="Acceso"
-                value={authFilter}
-                onChange={(v) => setAuthFilter(v as AuthFilter)}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  { v: "google", label: "Google", count: counts.google, icon: <Globe className="h-3 w-3" /> },
-                  { v: "password", label: "Correo y contraseña", count: counts.password, icon: <KeyRound className="h-3 w-3" /> },
-                  { v: "ambos", label: "Ambos", count: counts.ambos },
-                ]}
-              />
-              <FilterPills
-                label="Origen"
-                value={originFilter}
-                onChange={(v) => setOriginFilter(v as OriginFilter)}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  { v: "web", label: "Registro web", count: counts.web },
-                  { v: "google", label: "Botón Google", count: counts.originGoogle },
-                  { v: "manual", label: "Creada aquí", count: counts.manual },
-                ]}
-              />
-              <FilterPills
-                label="Correo"
-                value={verifiedFilter}
-                onChange={(v) => setVerifiedFilter(v as VerifiedFilter)}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  { v: "si", label: "Verificado", count: counts.verified, icon: <MailCheck className="h-3 w-3" /> },
-                  { v: "no", label: "Sin verificar", count: counts.unverified },
-                ]}
-              />
-            </div>
+              {/* Escritorio: popover anclado al botón. */}
+              <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <PopoverTrigger asChild>
+                  <button type="button" className={filterButtonClass(panelCount > 0, "hidden sm:inline-flex")}>
+                    <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+                    {panelCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-brand-700 text-white text-[10px] font-semibold tabular">{panelCount}</span>}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" sideOffset={8} className="w-[min(92vw,44rem)] p-0 rounded-xl border-line-200 bg-surface shadow-lg">
+                  {filtersPanel(() => setFiltersOpen(false))}
+                </PopoverContent>
+              </Popover>
+              {/* Móvil: hoja inferior con el mismo contenido. */}
+              <Drawer open={sheetOpen} onOpenChange={setSheetOpen}>
+                <DrawerTrigger asChild>
+                  <button type="button" className={filterButtonClass(panelCount > 0, "inline-flex sm:hidden")}>
+                    <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+                    {panelCount > 0 && <span className="ml-0.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-brand-700 text-white text-[10px] font-semibold tabular">{panelCount}</span>}
+                  </button>
+                </DrawerTrigger>
+                <DrawerContent className="bg-surface border-line-200 max-h-[88vh]">
+                  <DrawerTitle className="sr-only">Filtrar cuentas</DrawerTitle>
+                  <div className="overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+                    {filtersPanel(() => setSheetOpen(false))}
+                  </div>
+                </DrawerContent>
+              </Drawer>
 
-            {/* Fila 4: actividad reciente y rango de fecha de alta. */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 text-xs">
-              <FilterPills
-                label="Último acceso"
-                value={loginFilter}
-                onChange={(v) => setLoginFilter(v as LoginFilter)}
-                options={[
-                  { v: "todos", label: "Todos" },
-                  { v: "hoy", label: "Hoy" },
-                  { v: "7d", label: "7 días" },
-                  { v: "30d", label: "30 días" },
-                  { v: "inactivo", label: "+30 días sin entrar", icon: <Clock className="h-3 w-3" /> },
-                  { v: "nunca", label: "Nunca entró" },
-                ]}
-              />
-              <div className="inline-flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium shrink-0 inline-flex items-center gap-1">
-                  <CalendarDays className="h-3 w-3" /> Alta
-                </span>
-                <AppDatePicker value={createdFrom} onChange={setCreatedFrom} placeholder="Desde" size="sm" clearable className="w-32" aria-label="Alta desde" />
-                <span className="text-ink-400">–</span>
-                <AppDatePicker value={createdTo} onChange={setCreatedTo} placeholder="Hasta" size="sm" clearable className="w-32" aria-label="Alta hasta" />
-                <div className="flex gap-1 p-1 rounded-md bg-bg-100">
-                  {([["7d", "7 días", 7], ["30d", "30 días", 30], ["mes", "Este mes", null]] as const).map(([k, label, days]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setCreatedPreset(days)}
-                      className="px-2.5 py-1 rounded text-xs text-ink-500 hover:text-ink-900 transition-colors"
-                    >
-                      {label}
-                    </button>
-                  ))}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative inline-flex items-center flex-1 sm:flex-initial">
+                  <ArrowUpDown className="absolute left-3 z-10 h-3.5 w-3.5 text-ink-400 pointer-events-none" />
+                  <AppSelect
+                    value={sortBy}
+                    onChange={(v) => setSortBy(v as SortKey)}
+                    options={SORT_OPTIONS.map((o) => ({ value: o.v, label: o.label }))}
+                    className="pl-7 w-full sm:min-w-48"
+                    aria-label="Ordenar listado de cuentas"
+                  />
+                </div>
+                <div className="hidden sm:block">
+                  <ViewToggle value={viewMode} onChange={setViewMode} modes={["list", "cards"]} />
                 </div>
               </div>
-              {activeFilters > 0 && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="sm:ml-auto inline-flex items-center gap-1 h-7 px-2 rounded-md border border-line-200 text-[11px] text-ink-600 hover:bg-bg-100 transition-colors"
-                >
-                  <X className="h-3 w-3" /> Limpiar filtros ({activeFilters})
+            </div>
+
+            {/* Filtros activos + contador. La fila existe siempre (evita que
+                la lista salte al aparecer el primer chip). */}
+            <div className="flex items-center gap-1.5 flex-wrap min-h-7">
+              {chips.map((c) => (
+                <span key={c.key} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-brand-50 text-brand-800 text-xs font-medium">
+                  {c.label}
+                  <button type="button" onClick={c.remove} className="h-5 w-5 rounded-full inline-flex items-center justify-center hover:bg-brand-100 text-brand-700" aria-label={`Quitar filtro ${c.label}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {chips.length > 0 && (
+                <button type="button" onClick={clearFilters} className="h-7 px-2 text-[11px] text-ink-500 hover:text-ink-900 rounded-md hover:bg-bg-100 transition-colors">
+                  Limpiar todo
                 </button>
               )}
+              <span className="ml-auto text-[11px] text-ink-400 tabular">
+                {filtered.length === workspaces.length ? `${workspaces.length} cuentas` : `${filtered.length} de ${workspaces.length} cuentas`}
+              </span>
             </div>
           </div>
 
@@ -579,7 +630,7 @@ function PlatformDashboard() {
                 ? "Aún no hay cuentas. Click en \"Crear cuenta\" para invitar al primer psicólogo."
                 : "Sin coincidencias con los filtros."}
             </div>
-          ) : viewMode === "cards" ? (
+          ) : effectiveView === "cards" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
               {filtered.map((w, i) => (
                 <WorkspaceCard
@@ -616,53 +667,65 @@ function PlatformDashboard() {
   );
 }
 
-// ─── Grupo de pills para filtros (estado, modo, plan) ──────────────────────
-// Recibe `label` (texto pequeño a la izquierda), `options` (con opcional
-// count e icon), y dispara `onChange` con el value seleccionado. Lo
-// abstraemos porque la toolbar tiene 3 grupos visualmente idénticos.
-function FilterPills<T extends string>({
-  label,
+// ─── Controles de la toolbar ────────────────────────────────────────────────
+// Segmented: grupo de opciones excluyentes con contador opcional. Una sola
+// pieza visual (fondo hundido + opción activa "elevada") para que la barra y
+// el panel de filtros se lean como el mismo sistema.
+function Segmented<T extends string>({
   value,
   onChange,
   options,
+  className,
 }: {
-  label: string;
   value: T;
   onChange: (v: T) => void;
   options: { v: T; label: string; count?: number; icon?: React.ReactNode }[];
+  className?: string;
 }) {
   return (
-    <div className="inline-flex items-center gap-1.5 w-full sm:w-auto">
-      <span className="text-[10px] uppercase tracking-wider text-ink-400 font-medium shrink-0">
-        {label}
-      </span>
-      <div className="flex gap-1 p-1 rounded-md bg-bg-100 flex-1 sm:flex-initial overflow-x-auto">
-        {options.map((it) => {
-          const active = value === it.v;
-          return (
-            <button
-              key={it.v}
-              onClick={() => onChange(it.v)}
-              className={cn(
-                "px-2.5 py-1 rounded transition-colors inline-flex items-center gap-1.5 text-xs",
-                active
-                  ? "bg-surface text-ink-900 font-medium shadow-xs"
-                  : "text-ink-500 hover:text-ink-900",
-              )}
-            >
-              {it.icon}
-              {it.label}
-              {typeof it.count === "number" && (
-                <span className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular",
-                  active ? "bg-brand-50 text-brand-800" : "bg-line-100 text-ink-500",
-                )}>{it.count}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+    <div role="group" className={cn("inline-flex flex-wrap gap-0.5 p-0.5 rounded-lg bg-bg-100 border border-line-200/70", className)}>
+      {options.map((it) => {
+        const active = value === it.v;
+        return (
+          <button
+            key={it.v}
+            type="button"
+            onClick={() => onChange(it.v)}
+            aria-pressed={active}
+            className={cn(
+              "h-7 px-2.5 rounded-md inline-flex items-center gap-1.5 text-xs whitespace-nowrap transition-colors flex-1 sm:flex-initial justify-center",
+              active ? "bg-surface text-ink-900 font-medium shadow-xs ring-1 ring-line-200" : "text-ink-500 hover:text-ink-900",
+            )}
+          >
+            {it.icon}
+            {it.label}
+            {typeof it.count === "number" && (
+              <span className={cn("text-[10px] tabular", active ? "text-brand-700 font-semibold" : "text-ink-400")}>{it.count}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function FilterSection({ label, hint, className, children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <span className="text-[10px] uppercase tracking-wider text-ink-500 font-medium">{label}</span>
+        {hint && <span className="text-[10px] text-ink-400">{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function filterButtonClass(active: boolean, extra = "") {
+  return cn(
+    "items-center gap-1.5 h-10 px-3 rounded-lg border text-xs font-medium transition-colors",
+    active ? "border-brand-300 bg-brand-50 text-brand-800 hover:bg-brand-100" : "border-line-200 bg-surface text-ink-700 hover:border-brand-400 hover:text-ink-900",
+    extra,
   );
 }
 
@@ -867,7 +930,7 @@ function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
             className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500"
             title="Plan actual. La app no cobra todavía — todas las cuentas son Invitado."
           >
-            <Tag className="h-3 w-3" /> Invitado
+            <Tag className="h-3 w-3" /> {PLAN_LABELS[ws.plan || "free"] ?? ws.plan}
           </span>
           {/* Cómo llegó la cuenta: registro público (correo/Google) o
               creada a mano desde este panel. Solo lo mostramos para las
@@ -927,7 +990,7 @@ function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
           {ws.mode === "organization" ? "Clínica" : "Individual"}
         </span>
         <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500">
-          <Tag className="h-3 w-3" /> Invitado
+          <Tag className="h-3 w-3" /> {PLAN_LABELS[ws.plan || "free"] ?? ws.plan}
         </span>
         <span className="text-[11px] text-ink-500 ml-auto tabular">
           {ws.patientsCount} pac. · {ws.sessions30d ?? 0} ses. 30d
@@ -1023,7 +1086,7 @@ function WorkspaceCard({ ws, index, onDisable, onDelete }: { ws: PlatformWorkspa
             {ws.mode === "organization" ? "Clínica" : "Individual"}
           </span>
           <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-lavender-100 text-lavender-500">
-            <Tag className="h-3 w-3" /> Invitado
+            <Tag className="h-3 w-3" /> {PLAN_LABELS[ws.plan || "free"] ?? ws.plan}
           </span>
         </div>
 
