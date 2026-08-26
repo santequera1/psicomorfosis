@@ -310,6 +310,7 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
     preferredName: patient.preferredName ?? "",
     pronouns: patient.pronouns,
     phone: patient.phone,
+    whatsappOptIn: patient.whatsappOptIn ?? false,
     email: patient.email,
     address: patient.address ?? "",
     sex: (patient.sex ?? "") as "" | "M" | "F",
@@ -369,10 +370,25 @@ function EditPatientInlineModal({ patient, onClose }: { patient: import("@/lib/a
               <input value={form.preferredName} onChange={(e) => setForm((p) => ({ ...p, preferredName: e.target.value }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </label>
             <label className="block">
-              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Teléfono</span>
-              <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
+              <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">WhatsApp / Teléfono</span>
+              <input type="tel" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />
             </label>
           </div>
+          <label className="flex items-start gap-2.5 text-xs text-ink-700 leading-relaxed cursor-pointer rounded-lg border border-line-200 bg-bg-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={form.whatsappOptIn}
+              onChange={(e) => setForm((p) => ({ ...p, whatsappOptIn: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-line-300 text-brand-700 focus:ring-brand-400 shrink-0"
+            />
+            <span>
+              <span className="font-medium text-ink-900">Autoriza mensajes por WhatsApp</span> — confirmaciones, recordatorios y avisos.
+              Al activarlo, Laura se presenta al paciente y le explica cómo responder NO.
+              {patient.whatsappOptOutAt && !form.whatsappOptIn && (
+                <span className="block mt-1 text-risk-high">El paciente pidió no recibir mensajes ({new Date(patient.whatsappOptOutAt).toLocaleDateString("es-CO")}). Reactívalo solo si te lo autorizó de nuevo.</span>
+              )}
+            </span>
+          </label>
           <label className="block">
             <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Correo</span>
             <input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" />

@@ -326,6 +326,26 @@ export function notifyPortalInvite({ patient, url, professionalName, daysValid }
 }
 
 /**
+ * El psicólogo (o el paciente desde su portal) activó "Autoriza mensajes
+ * por WhatsApp". El bot arma la bienvenida —se presenta, dice para qué
+ * escribe y cómo responder NO— y registra el opt-in de su lado. Contrato:
+ * psicomorfosis_bot/docs/GUIA_BOT_DESDE_PLATAFORMA.md §3.2.
+ */
+export function notifyPatientOptIn({ patient, professionalName }) {
+  if (!configured()) return;
+  const phone = toE164Co(patient?.phone);
+  if (!phone || phone.length < 12) return;
+  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const payload = {
+    event: "patient.whatsapp_optin",
+    idempotency_key: `optin-${patient.id}-${day}`,
+    recipient: { ...buildRecipient(patient), phone },
+    data: { professional: { name: professionalName || null } },
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
+/**
  * Solicitud de cita desde el perfil público (linktree). El destinatario
  * es el PROFESIONAL — el staff no requiere opt-in (es su herramienta de
  * trabajo). Le avisa al instante para que acepte/rechace desde su agenda.

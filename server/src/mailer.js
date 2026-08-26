@@ -56,6 +56,10 @@ function getTransport() {
     port: c.port,
     secure: c.secure,       // true para puerto 465 (SSL), false para 587 (STARTTLS)
     auth: { user: c.user, pass: c.pass },
+    // quoted-printable en vez de base64 para el texto: algunos filtros
+    // (incluido el propio rspamd) puntúan el texto en base64 como señal
+    // de spam y en Gmail no aporta nada.
+    textEncoding: "quoted-printable",
     // Timeouts conservadores: si SMTP cae, no queremos bloquear 30s la
     // creación de citas. 10s para handshake, 15s para envío grande.
     connectionTimeout: 10_000,
@@ -78,7 +82,29 @@ function getTransport() {
  * Solo reintenta errores transitorios (ECONNRESET, ETIMEDOUT, ESOCKET).
  * Errores de auth o de dirección inválida se propagan sin retry.
  */
+/**
+ * Parte text/plain a partir del HTML. Un correo solo-HTML puntúa como spam
+ * (MIME_HTML_ONLY en rspamd y señal equivalente en Gmail); con la
+ * alternativa en texto se ve igual en el cliente y entra mejor.
+ */
+function htmlToText(html) {
+  return String(html ?? "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6]|table)>/gi, "\n")
+    .replace(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, txt) => {
+      const t = txt.replace(/<[^>]+>/g, "").trim();
+      return t && t !== href ? `${t} (${href})` : href;
+    })
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 async function sendMailWithRetry(mail, attempts = 3) {
+  if (mail && mail.html && !mail.text) mail.text = htmlToText(mail.html);
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -438,20 +464,44 @@ export async function sendAppointmentEmail(opts) {
       status: kind === "appointment_cancelled" ? "CANCELLED" : "CONFIRMED",
     });
 
+    const attachments = [{
+      filename: "cita.ics",
+      content: ics,
+      contentType: "text/calendar; charset=utf-8; method=" + (kind === "appointment_cancelled" ? "CANCEL" : "REQUEST"),
+    }];
     await sendMailWithRetry({
       from: fromAddress,
       to: patient.email,
       replyTo: replyTo || undefined,
       subject,
       html,
-      attachments: [{
-        filename: "cita.ics",
-        content: ics,
-        contentType: "text/calendar; charset=utf-8; method=" + (kind === "appointment_cancelled" ? "CANCEL" : "REQUEST"),
-      }],
+      attachments,
     });
 
     result.status = "sent";
+
+    // Copia al profesional: registro en su correo y el enlace de la
+    // videollamada a mano para unirse desde ahí. Best-effort: no afecta
+    // al envío del paciente. Se omite si no hay correo o es el mismo del
+    // paciente (pruebas).
+    const profEmail = String(professional?.email ?? "").trim();
+    if (profEmail.includes("@") && profEmail.toLowerCase() !== String(patient.email).toLowerCase()) {
+      const intro = `<p style="margin:0 0 16px;padding:10px 14px;border-radius:8px;background:#f3f6f4;color:#3a4a44;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif">`
+        + `Copia para ti: esta es la notificación que recibió <strong>${patient.name ?? "el paciente"}</strong>`
+        + (patient.email ? ` (${patient.email})` : "") + `.</p>`;
+      sendMailWithRetry({
+        from: fromAddress,
+        to: profEmail,
+        subject: `${subject} · ${patient.name ?? ""}`.trim(),
+        html: intro + html,
+        attachments,
+      }).then(() => {
+        logEmail({ ...result, to_email: profEmail, kind: `${kind}_copia`, status: "sent", error: null, ms: Date.now() - start });
+      }).catch((err) => {
+        console.warn(`[mailer] copia al profesional falló (${profEmail}): ${err?.message}`);
+        logEmail({ ...result, to_email: profEmail, kind: `${kind}_copia`, status: "failed", error: String(err?.message ?? err).slice(0, 500), ms: Date.now() - start });
+      });
+    }
   } catch (err) {
     result.status = "failed";
     result.error = String(err?.message ?? err).slice(0, 500);

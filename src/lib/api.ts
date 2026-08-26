@@ -203,6 +203,11 @@ export interface ApiPatient {
   doc: string;
   age: number;
   phone: string;
+  /** Consentimiento para confirmaciones/recordatorios por WhatsApp (Laura). */
+  whatsappOptIn?: boolean;
+  whatsappOptInAt?: string;
+  whatsappOptOutAt?: string;
+  whatsappOptInBy?: string;
   email: string;
   professional: string;
   professionalId?: number;

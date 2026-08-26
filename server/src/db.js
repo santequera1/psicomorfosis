@@ -1246,6 +1246,8 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN gcal_last_error TEXT",
     "ALTER TABLE appointments ADD COLUMN google_event_id TEXT",
     "ALTER TABLE appointments ADD COLUMN video_provider TEXT", // 'jitsi' | 'meet' | NULL
+    // Consentimiento de WhatsApp: quién lo activó ('profesional' | 'paciente' | 'bot' | 'registro').
+    "ALTER TABLE patients ADD COLUMN whatsapp_opt_in_by TEXT",
   ];
   for (const sql of migrations) {
     try {

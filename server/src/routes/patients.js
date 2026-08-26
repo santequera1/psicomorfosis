@@ -3,6 +3,29 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth } from "../auth.js";
+import { toE164Co, notifyPatientOptIn } from "../lib/psicobot.js";
+
+/**
+ * Teléfono del paciente en E.164. Móvil colombiano de 10 dígitos (3xx…)
+ * → +57…; lo demás se deja con su indicativo. Así el bot de WhatsApp y
+ * los avisos no dependen de cómo lo escribió cada quien (espacios,
+ * guiones, marcas invisibles que mete iOS al pegar).
+ */
+function normalizePatientPhone(v) {
+  const raw = String(v ?? "").trim();
+  if (!raw) return "";
+  const d = raw.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length === 10 && d.startsWith("3")) return `+57${d}`;
+  return toE164Co(d) ?? raw;
+}
+
+/** Nombre del profesional para la bienvenida de Laura. */
+function professionalNameFor(row, req) {
+  if (row?.professional) return row.professional;
+  const pr = row?.professional_id ? db.prepare("SELECT name FROM professionals WHERE id = ?").get(row.professional_id) : null;
+  return pr?.name || req.user?.name || null;
+}
 
 const router = Router();
 router.use(requireAuth);
@@ -39,6 +62,11 @@ function rowToPatient(r) {
     doc: r.doc ?? "",
     age: r.age,
     phone: r.phone ?? "",
+    // Consentimiento de WhatsApp (avisos y recordatorios por Laura).
+    whatsappOptIn: r.whatsapp_opt_in === 1,
+    whatsappOptInAt: r.whatsapp_opt_in_at ?? undefined,
+    whatsappOptOutAt: r.whatsapp_opt_out_at ?? undefined,
+    whatsappOptInBy: r.whatsapp_opt_in_by ?? undefined,
     email: r.email ?? "",
     professional: r.professional,
     professionalId: r.professional_id ?? undefined,
@@ -298,9 +326,19 @@ function nextPatientId(wsId) {
 router.post("/", (req, res) => {
   const p = req.body ?? {};
   const id = p.id ?? nextPatientId(req.user.workspace_id);
+  const phone = normalizePatientPhone(p.phone);
+  // Consentimiento de WhatsApp: registrar al paciente con su número implica
+  // que el profesional tiene su autorización para confirmaciones y
+  // recordatorios (decisión de producto, 26 ago 2026). El formulario lo
+  // muestra como interruptor encendido y queda auditado (quién/cuándo);
+  // el paciente siempre puede responder NO al bot (opt-out).
+  const optIn = Boolean(phone) && (p.whatsappOptIn === undefined ? true : Boolean(p.whatsappOptIn));
+  const nowIso = new Date().toISOString();
   db.prepare(`
-    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags, address, sex, insurance_provider, insurance_plan, insurance_policy, insurance_valid_until)
-    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags, @address, @sex, @insurance_provider, @insurance_plan, @insurance_policy, @insurance_valid_until)
+    INSERT INTO patients (id, workspace_id, sede_id, professional_id, name, preferred_name, pronouns, doc, age, phone, email, professional, modality, status, reason, last_contact, next_session, risk, risk_type, tags, address, sex, insurance_provider, insurance_plan, insurance_policy, insurance_valid_until,
+                          whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_by)
+    VALUES (@id, @workspace_id, @sede_id, @professional_id, @name, @preferred_name, @pronouns, @doc, @age, @phone, @email, @professional, @modality, @status, @reason, @last_contact, @next_session, @risk, @risk_type, @tags, @address, @sex, @insurance_provider, @insurance_plan, @insurance_policy, @insurance_valid_until,
+            @whatsapp_opt_in, @whatsapp_opt_in_at, @whatsapp_opt_in_by)
   `).run({
     id,
     workspace_id: req.user.workspace_id,
@@ -311,7 +349,10 @@ router.post("/", (req, res) => {
     pronouns: p.pronouns ?? "",
     doc: p.doc ?? "",
     age: p.age ?? 0,
-    phone: p.phone ?? "",
+    phone,
+    whatsapp_opt_in: optIn ? 1 : 0,
+    whatsapp_opt_in_at: optIn ? nowIso : null,
+    whatsapp_opt_in_by: optIn ? "profesional" : null,
     email: p.email ?? "",
     professional: p.professional ?? "",
     modality: p.modality ?? "individual",
@@ -330,6 +371,7 @@ router.post("/", (req, res) => {
     insurance_valid_until: p.insuranceValidUntil ?? null,
   });
   const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(id);
+  if (optIn) notifyPatientOptIn({ patient: row, professionalName: professionalNameFor(row, req) });
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("patient:created", rowToPatient(row));
   res.status(201).json(rowToPatient(row));
 });
@@ -341,13 +383,35 @@ router.patch("/:id", (req, res) => {
   // Para los campos de seguro usamos `?? existing.x` solo cuando el campo NO
   // viene en el body. Si viene como null o "", se respeta (permite limpiar).
   const pickInsurance = (key, col) => Object.prototype.hasOwnProperty.call(p, key) ? (p[key] || null) : existing[col];
+  const phone = Object.prototype.hasOwnProperty.call(p, "phone") ? normalizePatientPhone(p.phone) : (existing.phone ?? "");
+  // Consentimiento de WhatsApp (ver POST): explícito si viene
+  // `whatsappOptIn`; si solo le ponen número por primera vez, misma
+  // regla que al registrar. Sin número no hay canal.
+  const nowIso = new Date().toISOString();
+  let optIn = existing.whatsapp_opt_in === 1;
+  let optInAt = existing.whatsapp_opt_in_at ?? null;
+  let optOutAt = existing.whatsapp_opt_out_at ?? null;
+  let optInBy = existing.whatsapp_opt_in_by ?? null;
+  let welcome = false;
+  if (Object.prototype.hasOwnProperty.call(p, "whatsappOptIn")) {
+    const want = Boolean(p.whatsappOptIn) && Boolean(phone);
+    if (want && !optIn) { optIn = true; optInAt = nowIso; optOutAt = null; optInBy = "profesional"; welcome = true; }
+    else if (!want && optIn) { optIn = false; optOutAt = nowIso; optInBy = "profesional"; }
+  } else if (phone && !existing.phone && !optIn && !existing.whatsapp_opt_out_at) {
+    optIn = true; optInAt = nowIso; optInBy = "profesional"; welcome = true;
+  }
+  if (!phone && optIn) optIn = false;
   const mapped = {
     name: p.name ?? existing.name,
     preferred_name: p.preferredName ?? existing.preferred_name,
     pronouns: p.pronouns ?? existing.pronouns,
     doc: p.doc ?? existing.doc,
     age: p.age ?? existing.age,
-    phone: p.phone ?? existing.phone,
+    phone,
+    whatsapp_opt_in: optIn ? 1 : 0,
+    whatsapp_opt_in_at: optInAt,
+    whatsapp_opt_out_at: optOutAt,
+    whatsapp_opt_in_by: optInBy,
     email: p.email ?? existing.email,
     professional: p.professional ?? existing.professional,
     professional_id: p.professionalId ?? existing.professional_id,
@@ -380,10 +444,13 @@ router.patch("/:id", (req, res) => {
       address=@address, sex=@sex,
       insurance_provider=@insurance_provider, insurance_plan=@insurance_plan,
       insurance_policy=@insurance_policy, insurance_valid_until=@insurance_valid_until,
+      whatsapp_opt_in=@whatsapp_opt_in, whatsapp_opt_in_at=@whatsapp_opt_in_at,
+      whatsapp_opt_out_at=@whatsapp_opt_out_at, whatsapp_opt_in_by=@whatsapp_opt_in_by,
       updated_at=CURRENT_TIMESTAMP
     WHERE id=@id
   `).run({ ...mapped, id: req.params.id });
   const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id);
+  if (welcome) notifyPatientOptIn({ patient: row, professionalName: professionalNameFor(row, req) });
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("patient:updated", rowToPatient(row));
   res.json(rowToPatient(row));
 });

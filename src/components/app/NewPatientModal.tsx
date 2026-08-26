@@ -46,6 +46,9 @@ export function NewPatientModal({
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Consentimiento de WhatsApp: encendido por defecto (registrar con número
+  // = autorización); el paciente puede responder NO al bot.
+  const [whatsappOptIn, setWhatsappOptIn] = useState(true);
 
   // Checkboxes del paso 3. Antes eran puramente decorativos (defaultChecked
   // sin onChange y sin lectura en submit) → la psicóloga marcaba "agendar
@@ -131,6 +134,7 @@ export function NewPatientModal({
       doc: form.doc ?? "",
       age: form.age ?? 0,
       phone: form.phone ?? "",
+      whatsappOptIn,
       email: form.email ?? "",
       professional: professionalName,
       professionalId,
@@ -202,8 +206,20 @@ export function NewPatientModal({
                     ]}
                   />
                 </Labeled>
-                <Labeled label="Teléfono"><input defaultValue={form.phone ?? ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
+                <Labeled label="WhatsApp / Teléfono"><input type="tel" defaultValue={form.phone ?? ""} onChange={(e) => updateField("phone", e.target.value)} placeholder="+57 310 000 0000" className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm outline-none focus:border-brand-700" /></Labeled>
               </div>
+              <label className="flex items-start gap-2.5 text-xs text-ink-700 leading-relaxed cursor-pointer rounded-lg border border-line-200 bg-bg-50 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={whatsappOptIn}
+                  onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-line-300 text-brand-700 focus:ring-brand-400 shrink-0"
+                />
+                <span>
+                  <span className="font-medium text-ink-900">Autoriza mensajes por WhatsApp</span> — confirmaciones, recordatorios y avisos de citas desde el número de Laura.
+                  Al guardar, Laura se presenta y le explica cómo responder NO si no los quiere. Escribe el número con indicativo (+57).
+                </span>
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 <Labeled label="Sexo asignado al nacer">
                   <AppSelect
