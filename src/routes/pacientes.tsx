@@ -43,7 +43,7 @@ const MODALITY_LABEL: Record<string, string> = {
   pareja: "Pareja",
   familiar: "Familiar",
   grupal: "Grupal",
-  tele: "Telepsicología",
+  tele: "Videollamada",
 };
 
 function initials(name: string) {
@@ -939,7 +939,7 @@ function EditPatientModal({ patient, onClose }: { patient: Patient; onClose: () 
                   { value: "pareja", label: "Pareja" },
                   { value: "familiar", label: "Familiar" },
                   { value: "grupal", label: "Grupal" },
-                  { value: "tele", label: "Telepsicología" },
+                  { value: "tele", label: "Videollamada" },
                 ]}
               />
             </Labeled>

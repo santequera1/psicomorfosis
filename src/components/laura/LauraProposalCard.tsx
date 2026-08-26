@@ -249,7 +249,7 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
 
     const modalityLabel: Record<string, string> = {
       individual: "Individual", pareja: "Pareja", familiar: "Familiar",
-      grupal: "Grupal", tele: "Telepsicología",
+      grupal: "Grupal", tele: "Videollamada",
     };
 
     const handleApprove = () => {

@@ -310,11 +310,11 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
                 onChange={(v) => setModality(v as Modality)}
                 className="mt-1"
                 options={[
-                  { value: "individual", label: "Individual" },
+                  { value: "individual", label: "Individual (presencial)" },
+                  { value: "tele", label: "Videollamada" },
                   { value: "pareja", label: "Pareja" },
                   { value: "familiar", label: "Familiar" },
                   { value: "grupal", label: "Grupal" },
-                  { value: "tele", label: "Telepsicología" },
                 ]}
               />
             </label>
@@ -345,8 +345,8 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
               "Telepsicología" para no confundir a la psicóloga. */}
           {modality === "tele" ? (
             <div className="rounded-md border border-line-200 bg-bg-50 px-3 py-2 text-xs text-ink-600">
-              Como la modalidad es <strong>telepsicología</strong>, la cita queda como videollamada.
-              No necesitas elegir un consultorio.
+              La cita queda como <strong>videollamada</strong>: el enlace se genera solo (Google Meet si tienes
+              Google Calendar conectado; si no, Jitsi) y le llega al paciente por correo y WhatsApp. No hace falta elegir lugar.
             </div>
           ) : (
             <>
@@ -355,6 +355,9 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
                 <AppSelect
                   value={lugar.kind === "sede" ? `sede:${lugar.sedeId}` : lugar.kind}
                   onChange={(v) => {
+                    // "Videollamada" desde Lugar: es la modalidad la que decide
+                    // el enlace (isTele en el servidor), así que se cambia ahí.
+                    if (v === "tele") { setModality("tele"); return; }
                     if (v === "principal") setLugar({ kind: "principal" });
                     else if (v === "custom") setLugar({ kind: "custom" });
                     else if (v === "none") setLugar({ kind: "none" });
@@ -365,6 +368,7 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
                     ...(hasPrincipal
                       ? [{ value: "principal", label: settings?.consultorio_name ?? "Mi consultorio" }]
                       : []),
+                    { value: "tele", label: "Videollamada (Meet / Jitsi)" },
                     ...sedes.map((s) => ({ value: `sede:${s.id}`, label: s.name })),
                     { value: "custom", label: "Otro lugar (escribir)…" },
                     { value: "none", label: "(Sin lugar especificado)" },

@@ -116,7 +116,7 @@ function AppointmentRow({ appt, past }: { appt: any; past?: boolean }) {
                   <Video className="h-3 w-3" /> Unirme a la videollamada
                 </a>
               ) : (
-                <span className="inline-flex items-center gap-1.5"><Video className="h-3 w-3" /> Telepsicología</span>
+                <span className="inline-flex items-center gap-1.5"><Video className="h-3 w-3" /> Videollamada</span>
               )
             ) : appt.sede_name ? (
               <span className="inline-flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {appt.sede_name}</span>

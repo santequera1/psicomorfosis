@@ -64,7 +64,7 @@ const MODALITY_ICON: Record<Modality, React.ComponentType<{ className?: string }
 };
 
 const MODALITY_LABEL: Record<Modality, string> = {
-  individual: "Individual", pareja: "Pareja", familiar: "Familiar", grupal: "Grupal", tele: "Telepsicología",
+  individual: "Individual", pareja: "Pareja", familiar: "Familiar", grupal: "Grupal", tele: "Videollamada",
 };
 
 

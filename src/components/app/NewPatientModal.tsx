@@ -279,7 +279,7 @@ export function NewPatientModal({
                       { value: "pareja", label: "Pareja" },
                       { value: "familiar", label: "Familiar" },
                       { value: "grupal", label: "Grupal" },
-                      { value: "tele", label: "Telepsicología" },
+                      { value: "tele", label: "Videollamada" },
                     ]}
                   />
                 </Labeled>
