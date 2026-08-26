@@ -12,13 +12,11 @@ import { toast } from "sonner";
 import { NewAppointmentModal } from "@/components/app/NewAppointmentModal";
 import { LauraBriefingModal } from "@/components/laura/LauraBriefingModal";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
+import { AppDialog } from "@/components/app/AppDialog";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
 import { AppTimePicker } from "@/components/app/AppTimePicker";
 import { ReceiptFormModal } from "./facturacion";
-import {
-  Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X,
-  ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2, Receipt,
-} from "lucide-react";
+import { Calendar, ClipboardList, FileSignature, Brain, ChevronRight, Plus, X, ChevronLeft, MapPin, Users, Video, CalendarDays, Loader2, Receipt, Inbox } from "lucide-react";
 
 type AgendaSearch = { appt?: number; laura_appt?: string };
 
@@ -99,6 +97,7 @@ function formatMonthLong(d: Date) {
 
 function AgendaPage() {
   const navigate = useNavigate();
+  const [solicitudesOpen, setSolicitudesOpen] = useState(false);
   const [view, setView] = useState<View>("dia");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [createOpen, setCreateOpen] = useState(false);
@@ -224,6 +223,7 @@ function AgendaPage() {
             </h1>
           </div>
           <div className="flex gap-2">
+            <SolicitudesButton onOpen={() => setSolicitudesOpen(true)} />
             <button
               onClick={() => setCreateOpen(true)}
               className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2"
@@ -232,6 +232,12 @@ function AgendaPage() {
             </button>
           </div>
         </header>
+        {solicitudesOpen && (
+          <SolicitudesModal
+            onClose={() => setSolicitudesOpen(false)}
+            onOpenAppt={(id) => { setSolicitudesOpen(false); navigate({ to: "/agenda", search: { appt: id } as never }); }}
+          />
+        )}
 
         {/* KPIs — stagger left-to-right. Pacientes y Tareas son
             clickables (links a sus módulos respectivos). Sesiones y
@@ -1151,5 +1157,129 @@ function AppointmentDetailModal({ slot, onClose }: { slot: any; onClose: () => v
       />
     )}
     </>
+  );
+}
+
+// ─── Solicitudes de cita (reservas desde el perfil público) ────────────────
+// Botón con contador en la cabecera + panel para confirmar / rechazar /
+// abrir en la agenda. Usa el mismo PATCH/DELETE que el modal de detalle,
+// así los avisos al paciente (correo + WhatsApp) salen igual.
+function useSolicitudes() {
+  return useQuery({
+    queryKey: ["appointments", "solicitadas"],
+    queryFn: () => api.listAppointments({ status: "solicitada" }),
+    refetchInterval: 60_000,
+  });
+}
+
+function SolicitudesButton({ onOpen }: { onOpen: () => void }) {
+  const { data = [] } = useSolicitudes();
+  const n = data.length;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "h-10 px-3.5 rounded-lg border text-sm font-medium inline-flex items-center gap-2 transition-colors",
+        n > 0
+          ? "border-warning/40 bg-warning-soft text-warning hover:border-warning"
+          : "border-line-200 bg-surface text-ink-600 hover:border-brand-400 hover:text-ink-900",
+      )}
+      title="Reservas hechas desde tu perfil público que esperan confirmación"
+    >
+      <Inbox className="h-4 w-4" />
+      <span className="hidden sm:inline">Solicitudes</span>
+      {n > 0 && (
+        <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-warning text-white text-[11px] font-semibold tabular">{n}</span>
+      )}
+    </button>
+  );
+}
+
+function SolicitudesModal({ onClose, onOpenAppt }: { onClose: () => void; onOpenAppt: (id: number) => void }) {
+  const qc = useQueryClient();
+  const { data = [], isLoading } = useSolicitudes();
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<any | null>(null);
+  const sorted = [...data].sort((a: any, b: any) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const fmt = (d: string, t: string) => {
+    const dt = new Date(`${d}T${t || "00:00"}:00`);
+    return Number.isNaN(dt.getTime()) ? `${d} ${t}` : dt.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" }) + ` · ${t}`;
+  };
+  const motivo = (notes?: string) => (notes ?? "").replace(/^\[reserva-web\]\s*/, "").trim();
+  const done = () => { qc.invalidateQueries({ queryKey: ["appointments"] }); qc.invalidateQueries({ queryKey: ["notifications"] }); };
+
+  async function confirmar(a: any) {
+    setBusyId(a.id);
+    try {
+      await api.updateAppointment(a.id, { status: "confirmada" });
+      toast.success(`Cita de ${a.patient_name ?? "paciente"} confirmada — Laura le avisa por WhatsApp y correo`);
+      done();
+    } catch (e: any) { toast.error("No se pudo confirmar: " + (e?.message ?? e)); }
+    finally { setBusyId(null); }
+  }
+  async function rechazar(a: any) {
+    setBusyId(a.id);
+    try {
+      await api.deleteAppointment(a.id, { notify: true });
+      toast.success("Solicitud rechazada — se le avisó al paciente");
+      done();
+    } catch (e: any) { toast.error("No se pudo rechazar: " + (e?.message ?? e)); }
+    finally { setBusyId(null); setRejecting(null); }
+  }
+
+  return (
+    <AppDialog open onClose={onClose} title="Solicitudes de cita" eyebrow="Perfil público" size="lg">
+      <div className="p-5">
+        {isLoading ? (
+          <p className="text-sm text-ink-500 py-8 text-center">Cargando…</p>
+        ) : sorted.length === 0 ? (
+          <div className="py-10 text-center">
+            <Inbox className="h-8 w-8 mx-auto text-ink-300 mb-2" />
+            <p className="text-sm text-ink-700">No tienes solicitudes pendientes.</p>
+            <p className="text-xs text-ink-500 mt-1">Las reservas que hagan tus pacientes desde tu enlace público aparecen aquí hasta que las confirmes.</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-line-100 -mx-5">
+            {sorted.map((a: any) => (
+              <li key={a.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink-900 truncate">{a.patient_name || "Paciente"}</p>
+                  <p className="text-xs text-ink-600 mt-0.5 capitalize">{fmt(a.date, a.time)}</p>
+                  <p className="text-xs text-ink-500 mt-0.5 inline-flex items-center gap-1.5">
+                    {a.modality === "tele" || a.modality === "virtual" ? <><Video className="h-3 w-3" /> Videollamada</> : <><MapPin className="h-3 w-3" /> Presencial</>}
+                    {motivo(a.notes) && <span className="text-ink-400">· "{motivo(a.notes)}"</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button type="button" onClick={() => confirmar(a)} disabled={busyId === a.id}
+                    className="h-9 px-3 rounded-md bg-brand-700 text-primary-foreground text-xs font-medium hover:bg-brand-800 disabled:opacity-60">
+                    Confirmar
+                  </button>
+                  <button type="button" onClick={() => onOpenAppt(a.id)}
+                    className="h-9 px-3 rounded-md border border-line-200 text-xs text-ink-700 hover:border-brand-400">
+                    Otro horario
+                  </button>
+                  <button type="button" onClick={() => setRejecting(a)} disabled={busyId === a.id}
+                    className="h-9 px-3 rounded-md border border-line-200 text-xs text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 disabled:opacity-60">
+                    Rechazar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {rejecting && (
+        <ConfirmDialog
+          title="Rechazar solicitud"
+          message={`Se elimina la solicitud de ${rejecting.patient_name ?? "el paciente"} y se le avisa por correo y WhatsApp que no fue posible. ¿Continuar?`}
+          confirmLabel="Rechazar"
+          danger
+          onConfirm={() => rechazar(rejecting)}
+          onCancel={() => setRejecting(null)}
+        />
+      )}
+    </AppDialog>
   );
 }

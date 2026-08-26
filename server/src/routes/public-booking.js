@@ -201,6 +201,23 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(info.lastInsertRowid));
   console.log(`[public-booking] solicitud appt=${info.lastInsertRowid} prof=${p.slug} patient=${patient.id} ${date} ${time}`);
 
+  // Notificación en la app (campana): id "appt-<id>-solicitud" → el Topbar
+  // extrae el número y abre /agenda?appt=<id> con el botón "Confirmar cita".
+  // Se marca leída cuando la cita deja de estar solicitada (PATCH/DELETE).
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'cita', ?, ?, CURRENT_TIMESTAMP, 0, 1)
+    `).run(
+      `appt-${info.lastInsertRowid}-solicitud`,
+      p.workspace_id,
+      `Solicitud de cita: ${patient.name} · ${date} ${time}`,
+      `Desde tu perfil público (${modality === "tele" ? "videollamada" : "presencial"})${motivo ? ` · "${String(motivo).slice(0, 80)}"` : ""}. Confírmala o propón otro horario.`,
+    );
+  } catch (e) {
+    console.warn(`[public-booking] notif fail: ${e?.message}`);
+  }
+
   // Aviso al PROFESIONAL por WhatsApp via Laura (best-effort, async).
   try {
     notifyBookingRequested({

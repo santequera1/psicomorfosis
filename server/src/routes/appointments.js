@@ -288,6 +288,11 @@ router.patch("/:id", async (req, res) => {
              || existing.patient_name !== row.patient_name || existing.room !== row.room || existing.sede_id !== row.sede_id) {
     syncAppointmentAsync(row);
   }
+  // La solicitud se resolvió (confirmada, cancelada, reprogramada…): la
+  // notificación de la campana deja de estar pendiente.
+  if (existing.status === "solicitada" && row.status !== "solicitada") {
+    try { db.prepare("UPDATE notifications SET read = 1 WHERE id = ? AND workspace_id = ?").run(`appt-${row.id}-solicitud`, req.user.workspace_id); } catch { /* noop */ }
+  }
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:updated", row);
   // Email de reprogramación solo si cambió fecha u hora. Otros cambios
   // (notas internas, status, etc.) no ameritan notificación al paciente.
@@ -318,6 +323,9 @@ router.delete("/:id", (req, res) => {
   const r = db.prepare("DELETE FROM appointments WHERE id = ? AND workspace_id = ?").run(req.params.id, req.user.workspace_id);
   if (r.changes === 0) return res.status(404).json({ error: "No encontrada" });
   if (existing) removeEventAsync(existing);
+  if (existing?.status === "solicitada") {
+    try { db.prepare("UPDATE notifications SET read = 1 WHERE id = ? AND workspace_id = ?").run(`appt-${existing.id}-solicitud`, req.user.workspace_id); } catch { /* noop */ }
+  }
   req.app.get("io")?.to(`ws-${req.user.workspace_id}`).emit("appointment:deleted", { id: Number(req.params.id) });
   // notify puede venir en body (DELETE permite body en HTTP 1.1) o en query
   // string como ?notify=false — ambos funcionan.
