@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { notifyStaffWhatsappLinked } from "../lib/psicobot.js";
+import { notifyStaffWhatsappLinked, toE164Co } from "../lib/psicobot.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import { db } from "../db.js";
@@ -245,6 +245,9 @@ router.patch("/professionals/:id", (req, res) => {
   const existing = db.prepare("SELECT * FROM professionals WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Profesional no encontrado" });
   const m = { ...existing, ...req.body };
+  // Teléfono en E.164 colombiano (+57…): así el bot y los avisos no
+  // dependen de cómo lo escribió cada quien (con/sin 57, espacios, guiones).
+  if (typeof m.phone === "string" && m.phone.trim()) m.phone = toE164Co(m.phone) ?? m.phone.trim();
   db.prepare("UPDATE professionals SET name = ?, title = ?, email = ?, phone = ?, approach = ?, active = ? WHERE id = ?")
     .run(m.name, m.title, m.email, m.phone, m.approach, m.active ? 1 : 0, req.params.id);
 

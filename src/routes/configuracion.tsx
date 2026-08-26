@@ -328,7 +328,14 @@ function PerfilPanel() {
           <LabeledInput label="Título profesional" value={profForm.title} onChange={(v) => setProfForm((p) => ({ ...p, title: v }))} />
           <LabeledInput label="Enfoque terapéutico" value={profForm.approach} onChange={(v) => setProfForm((p) => ({ ...p, approach: v }))} />
           <LabeledInput label="Correo profesional" type="email" value={profForm.email} onChange={(v) => setProfForm((p) => ({ ...p, email: v }))} />
-          <LabeledInput label="Teléfono" value={profForm.phone} onChange={(v) => setProfForm((p) => ({ ...p, phone: v }))} />
+          <LabeledInput
+            label="WhatsApp / Teléfono"
+            type="tel"
+            placeholder="+57 302 644 4564"
+            hint="Con indicativo de país (57). Laura te reconoce por este número y te manda aquí los avisos de tu agenda."
+            value={profForm.phone}
+            onChange={(v) => setProfForm((p) => ({ ...p, phone: v }))}
+          />
         </div>
         <div className="flex justify-end gap-3">
           <button type="submit" disabled={profMu.isPending} className="h-10 px-5 rounded-lg bg-brand-700 text-primary-foreground text-sm hover:bg-brand-800 disabled:opacity-60 inline-flex items-center gap-2">
@@ -485,7 +492,7 @@ function ProfilePhotoSection({ name, initials }: { name: string; initials: strin
   );
 }
 
-function LabeledInput({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
+function LabeledInput({ label, value, onChange, type = "text", placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; hint?: string }) {
   return (
     <label className="block">
       <div className="text-xs font-medium text-ink-700 mb-1.5">{label}</div>
@@ -496,6 +503,7 @@ function LabeledInput({ label, value, onChange, type = "text", placeholder }: { 
         placeholder={placeholder}
         className="w-full h-10 px-3.5 rounded-lg border border-line-200 bg-bg-50 text-sm text-ink-900 focus:outline-none focus:border-brand-400 focus:bg-surface"
       />
+      {hint && <p className="text-[11px] text-ink-500 mt-1.5 leading-relaxed">{hint}</p>}
     </label>
   );
 }
