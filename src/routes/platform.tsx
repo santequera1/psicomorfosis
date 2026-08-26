@@ -1389,7 +1389,7 @@ function DisableWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose
 }
 
 // ─── Modal: eliminar workspace permanentemente ─────────────────────────────
-function DeleteWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose: () => void }) {
+function DeleteWorkspaceModal({ ws, onClose, onDeleted }: { ws: PlatformWorkspace; onClose: () => void; onDeleted?: () => void }) {
   useEscToClose(onClose);
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState("");
@@ -1401,6 +1401,7 @@ function DeleteWorkspaceModal({ ws, onClose }: { ws: PlatformWorkspace; onClose:
       qc.invalidateQueries({ queryKey: ["platform-usage"] });
       toast.success(`Cuenta "${ws.name}" eliminada`);
       onClose();
+      onDeleted?.();
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1469,6 +1470,27 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
   const [resetting, setResetting] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
   const [editing, setEditing] = useState<PlatformWorkspaceDetail["users"][number] | null>(null);
   const [adding, setAdding] = useState(false);
+  // Acciones sobre la cuenta desde su propio detalle (antes solo desde el
+  // listado): deshabilitar/habilitar y eliminar. Los modales del listado
+  // reciben un PlatformWorkspace; aquí armamos uno con lo que el detalle
+  // ya trae (solo usan id, nombre y conteos).
+  const [disabling, setDisabling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const qc = useQueryClient();
+  const enableMu = useMutation({
+    mutationFn: () => api.platformEnableWorkspace(wsId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["platform-workspace", wsId] });
+      qc.invalidateQueries({ queryKey: ["platform-workspaces"] });
+      toast.success("Cuenta habilitada");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "No se pudo habilitar"),
+  });
+  const wsForModal = data ? ({
+    ...data.workspace,
+    patientsCount: data.stats.patients_count,
+    documentsCount: data.stats.documents_count,
+  } as unknown as PlatformWorkspace) : null;
 
   return (
     <AppShell>
@@ -1483,7 +1505,8 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
           <div className="text-center py-20"><AlertCircle className="h-8 w-8 mx-auto text-ink-400 mb-2" /><p className="text-ink-500">Workspace no encontrado.</p></div>
         ) : (
           <>
-            <header>
+            <header className="flex flex-wrap items-start justify-between gap-3">
+              <div>
               <p className="text-sm text-ink-500 inline-flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5" /> Plataforma
               </p>
@@ -1499,6 +1522,35 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
                 {data.workspace.mode === "organization" ? "Clínica con varios profesionales" : "Consulta individual"}
                 {" · creada el "}{new Date(data.workspace.createdAt).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
               </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {data.workspace.disabledAt ? (
+                  <button
+                    type="button"
+                    onClick={() => enableMu.mutate()}
+                    disabled={enableMu.isPending}
+                    className="h-9 px-3 rounded-lg border border-line-200 text-xs text-success hover:border-success/50 inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {enableMu.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />} Habilitar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDisabling(true)}
+                    className="h-9 px-3 rounded-lg border border-line-200 text-xs text-risk-high hover:border-risk-high/50 inline-flex items-center gap-1.5"
+                  >
+                    <PowerOff className="h-3.5 w-3.5" /> Deshabilitar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDeleting(true)}
+                  className="h-9 px-3 rounded-lg border border-line-200 text-xs text-rose-700 hover:border-rose-400 hover:bg-rose-500/10 inline-flex items-center gap-1.5"
+                  title="Eliminar esta cuenta y todos sus datos"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                </button>
+              </div>
             </header>
 
             <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1569,6 +1621,15 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
           </>
         )}
       </div>
+      {disabling && wsForModal && (
+        <DisableWorkspaceModal
+          ws={wsForModal}
+          onClose={() => { setDisabling(false); qc.invalidateQueries({ queryKey: ["platform-workspace", wsId] }); }}
+        />
+      )}
+      {deleting && wsForModal && (
+        <DeleteWorkspaceModal ws={wsForModal} onClose={() => setDeleting(false)} onDeleted={onBack} />
+      )}
       {resetting && (
         <ResetPasswordModal
           user={resetting}
