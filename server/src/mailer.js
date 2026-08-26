@@ -103,8 +103,37 @@ function htmlToText(html) {
     .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+const FREEMAIL_RE = /@(gmail|googlemail|hotmail|outlook|live|yahoo|icloud|me|aol|proton|protonmail)\.[a-z.]+$/i;
+
+/**
+ * Ajustes de entregabilidad comunes a todo envío:
+ *  - Reply-To hacia un correo gratuito (Gmail, Hotmail…) distinto del
+ *    remitente puntúa como spam (FREEMAIL_REPLYTO_NEQ_FROM). En ese caso
+ *    se quita la cabecera y el contacto va escrito al pie del correo.
+ *  - List-Unsubscribe: no somos remitente masivo, pero Gmail lo valora y
+ *    da al paciente una salida clara.
+ *  - Parte text/plain a partir del HTML (ver htmlToText).
+ */
+function prepareMail(mail) {
+  if (!mail) return mail;
+  const rt = typeof mail.replyTo === "string" ? mail.replyTo.trim() : "";
+  if (rt && FREEMAIL_RE.test(rt)) {
+    delete mail.replyTo;
+    const line = `Para responder, escribe a ${rt}.`;
+    if (mail.html) mail.html += `<p style="margin:18px 0 0;color:#6b7a74;font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif">${line}</p>`;
+    if (mail.text) mail.text += `\n\n${line}`;
+  }
+  const c = getSmtpConfig();
+  mail.headers = {
+    "List-Unsubscribe": `<mailto:${c.user}?subject=${encodeURIComponent("No quiero recibir correos")}>`,
+    ...(mail.headers ?? {}),
+  };
+  if (mail.html && !mail.text) mail.text = htmlToText(mail.html);
+  return mail;
+}
+
 async function sendMailWithRetry(mail, attempts = 3) {
-  if (mail && mail.html && !mail.text) mail.text = htmlToText(mail.html);
+  prepareMail(mail);
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
