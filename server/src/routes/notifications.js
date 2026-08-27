@@ -64,8 +64,9 @@ function relativeTime(iso) {
  */
 function apptInstantISO(date, time) {
   if (!date || !time) return null;
-  // SQLite guarda strings, no Date. Construimos un ISO manualmente.
-  return `${date}T${time}:00`;
+  // SQLite guarda strings, no Date. ISO con la zona de Colombia (-05:00):
+  // el servidor corre en UTC y sin zona las citas "de hoy" se desplazaban 5 h.
+  return `${date}T${time}:00-05:00`;
 }
 
 /**

@@ -151,7 +151,11 @@ function autoMarkPastAppointmentsAttended(workspaceId) {
   const upd = db.prepare("UPDATE appointments SET status = 'atendida' WHERE id = ? AND workspace_id = ?");
   for (const c of candidates) {
     if (!c.date || !c.time) continue;
-    const startMs = Date.parse(`${c.date}T${c.time}:00`);
+    // Hora de Colombia explícita (-05:00, sin horario de verano). Sin la
+    // zona, Node la leía como UTC en el servidor y marcaba "atendidas" citas
+    // que aún faltaban hasta 5 horas (bug visto el 27 ago 2026: 11:30 y
+    // 14:30 cerradas a las 11:11; el bot dejaba de recordarlas).
+    const startMs = Date.parse(`${c.date}T${c.time}:00-05:00`);
     if (Number.isNaN(startMs)) continue;
     const endMs = startMs + (c.duration_min ?? 50) * 60 * 1000;
     const graceMs = endMs + ATTEND_GRACE_MIN * 60 * 1000;

@@ -155,7 +155,9 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !GRID.includes(time)) {
     return res.status(400).json({ error: "Fecha u hora inválida" });
   }
-  const when = new Date(`${date}T${time}:00`);
+  // Hora de Colombia explícita: sin zona el servidor (UTC) rechazaba como
+  // "ya pasó" cualquier reserva de las próximas 5 horas.
+  const when = new Date(`${date}T${time}:00-05:00`);
   if (!(when > new Date())) return res.status(400).json({ error: "El horario ya pasó" });
 
   // ¿Slot aún libre? (carrera entre dos visitantes)
