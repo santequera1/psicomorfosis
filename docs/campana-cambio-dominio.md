@@ -86,3 +86,11 @@ El bloque de puerto 80 ya redirige a `https://$host…`, que a su vez caerá en 
 
 1. **Día y hora** del envío (= día de la redirección).
 2. Desde qué buzón responder: pon `CAMPAIGN_REPLY_TO=tu@correo` en el `.env` del VPS, o se usa `notificaciones@`.
+
+## Ejecutado — 27 de agosto de 2026
+- 11:08 · Campaña enviada a 19 cuentas (más la prueba a Stiven del 26): 14 entregadas por Mailcow; 5 rebotadas
+  (Hotmail/Outlook: Microsoft bloquea la red de OVH, `550 5.7.1 S3140`).
+- 11:42 · `scripts/dominio-301.sh apply`: `psico.wailus.co` → `psicomorfosis.co` (backup en `/etc/nginx/backups/`).
+- 12:xx · Correo saliente conmutado a **Brevo** (dominio autenticado, IP del VPS autorizada); los 5 rebotados reenviados y aceptados.
+- Antes, el mismo día: la app pasó a `bot.psicomorfosis.co` (`PSICOBOT_URL`); el bot ya apuntaba a `psicomorfosis.co`.
+
