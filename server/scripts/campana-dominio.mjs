@@ -35,6 +35,9 @@ const EXCLUDE = new Set([
   "stivenantequera@gmail.com",
   "stivenatequera@gmail.com",
   "legal@psicomorfosis.co",
+  // Cuentas de prueba (revisor de Google, pruebas de OAuth).
+  "revisor.google@psicomorfosis.co",
+  "oauthtestks@gmail.com",
 ]);
 
 db.exec(`CREATE TABLE IF NOT EXISTS campaign_log (
@@ -55,7 +58,7 @@ const rows = db.prepare(`
   WHERE u.role <> 'paciente' AND u.is_legal_admin = 0
     AND u.email IS NOT NULL AND u.email LIKE '%@%'
   ORDER BY u.last_login_at DESC NULLS LAST
-`).all().filter((r) => !EXCLUDE.has(r.email.toLowerCase()));
+`).all().filter((r) => ONLY ? true : !EXCLUDE.has(r.email.toLowerCase())); // con --only se permite probar con una excluida (la de Stiven)
 
 const already = new Set(db.prepare("SELECT user_id FROM campaign_log WHERE campaign = ? AND status = 'sent'").all(CAMPAIGN).map((r) => r.user_id));
 const targets = rows.filter((r) => !already.has(r.id)).filter((r) => !ONLY || r.email.toLowerCase() === ONLY);
@@ -102,11 +105,12 @@ function html({ name, neverLoggedIn, username }) {
         dirección te pedirá iniciar sesión de nuevo — es normal, la sesión va atada al dominio.
       </p>
       ${reinvite}
-      <p style="font-size:15px;line-height:1.6;margin:0 0 8px">Y tres novedades que llegan con el cambio:</p>
+      <p style="font-size:15px;line-height:1.6;margin:0 0 8px">Y las novedades que llegan con el cambio:</p>
       <ul style="font-size:15px;line-height:1.7;margin:0 0 18px;padding-left:20px">
-        <li><strong>Entrar con Google</strong>, con un clic, si lo prefieres.</li>
-        <li><strong>Recuperar la contraseña</strong> tú mismo desde el login.</li>
-        <li><strong>Videollamada automática</strong> en las citas online: cada cita trae su enlace y le llega al paciente por correo y WhatsApp.</li>
+        <li><strong>Entrar con Google</strong>, con un clic, si lo prefieres (y recuperar la contraseña tú mismo desde el login).</li>
+        <li><strong>Google Calendar y Meet</strong>: conecta tu calendario en Configuración y cada cita aparece allí; las citas online traen su enlace de Meet, que le llega al paciente por correo y WhatsApp.</li>
+        <li><strong>Tu enlace público de reservas</strong> (psicomorfosis.co/perfil/tu-nombre): tus pacientes piden cita y tú la confirmas desde la agenda con un clic.</li>
+        <li><strong>Laura por WhatsApp</strong>: pon tu número en tu perfil y te avisa de reservas, confirmaciones y recordatorios; tus pacientes reciben los suyos.</li>
       </ul>
       <a href="${APP}/login" style="display:inline-block;background:#2E5F66;color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:600;font-size:14px">Entrar a psicomorfosis.co</a>
       <p style="font-size:13px;line-height:1.6;color:#6b7280;margin:24px 0 0">Si algo no te funciona, responde a este correo y lo miro yo.<br>Stiven</p>
