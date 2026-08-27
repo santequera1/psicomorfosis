@@ -33,6 +33,9 @@ function getSmtpConfig() {
     secure: String(process.env.SMTP_SECURE ?? "true") === "true",
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
+    // Remitente visible. Con un relay (Brevo) el login no es el buzón
+    // desde el que queremos escribir: SMTP_FROM lo fija; si falta, el login.
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
     fromName: process.env.SMTP_FROM_NAME ?? "Psicomorfosis",
   };
 }
@@ -125,7 +128,7 @@ function prepareMail(mail) {
   }
   const c = getSmtpConfig();
   mail.headers = {
-    "List-Unsubscribe": `<mailto:${c.user}?subject=${encodeURIComponent("No quiero recibir correos")}>`,
+    "List-Unsubscribe": `<mailto:${c.from}?subject=${encodeURIComponent("No quiero recibir correos")}>`,
     ...(mail.headers ?? {}),
   };
   if (mail.html && !mail.text) mail.text = htmlToText(mail.html);
@@ -476,7 +479,7 @@ export async function sendAppointmentEmail(opts) {
   try {
     const c = getSmtpConfig();
     const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
-    const fromAddress = `${profDisplay} <${c.user}>`;
+    const fromAddress = `${profDisplay} <${c.from}>`;
     const html =
       kind === "appointment_rescheduled" ? templateRescheduled({ appointment, patient, professional, workspaceName, location, previous }) :
       kind === "appointment_cancelled" ? templateCancelled({ appointment, patient, professional, workspaceName }) :
@@ -561,7 +564,7 @@ function logEmail(r) {
 export function logSmtpStatus() {
   const c = getSmtpConfig();
   if (smtpConfigured()) {
-    console.log(`[mailer] SMTP listo: ${c.user} @ ${c.host}:${c.port} (secure=${c.secure})`);
+    console.log(`[mailer] SMTP listo: remitente ${c.from} · login ${c.user} @ ${c.host}:${c.port} (secure=${c.secure})`);
   } else {
     console.warn("[mailer] SMTP NO configurado — emails de citas no se enviarán. Setea SMTP_HOST/USER/PASS en .env.");
   }
@@ -658,7 +661,7 @@ export async function sendPatientInviteEmail(opts) {
   try {
     const c = getSmtpConfig();
     const profDisplay = professional?.name ? `${professional.name} · ${c.fromName}` : c.fromName;
-    const fromAddress = `${profDisplay} <${c.user}>`;
+    const fromAddress = `${profDisplay} <${c.from}>`;
     const html = templatePatientInvite({ patient, professional, workspaceName, url, daysValid });
 
     await sendMailWithRetry({
@@ -712,7 +715,7 @@ export async function sendDemoRequestEmail(opts) {
 
   try {
     const c = getSmtpConfig();
-    const fromAddress = `${c.fromName} <${c.user}>`;
+    const fromAddress = `${c.fromName} <${c.from}>`;
     const safeName = String(name).slice(0, 100);
     const safeEmail = String(email).slice(0, 200);
     const safePhone = phone ? String(phone).slice(0, 50) : "";
@@ -876,7 +879,7 @@ Si esto fue un error o tienes dudas, responde a este correo y te ayudamos.
 async function sendAccountRequestNotificationEmail({ request, toEmail }) {
   if (!smtpConfigured()) return { status: "skipped_no_smtp" };
   const c = getSmtpConfig();
-  const fromAddress = `${c.fromName} <${c.user}>`;
+  const fromAddress = `${c.fromName} <${c.from}>`;
   const safeName = escapeHtmlMail(String(request.full_name).slice(0, 100));
   const safeEmail = escapeHtmlMail(String(request.email).slice(0, 200));
   const safeUsername = escapeHtmlMail(String(request.username).slice(0, 100));
@@ -962,7 +965,7 @@ export async function sendWelcomeEmail({ to, name, username }) {
   </div>`;
   try {
     await sendMailWithRetry({
-      from: `${c.fromName} <${c.user}>`,
+      from: `${c.fromName} <${c.from}>`,
       to,
       subject: "Bienvenido/a a Psicomorfosis — tu cuenta está lista",
       html,
@@ -979,7 +982,7 @@ export async function sendAccountRequestReceivedEmail({ fullName, email, usernam
   const c = getSmtpConfig();
   try {
     await sendMailWithRetry({
-      from: `${c.fromName} <${c.user}>`,
+      from: `${c.fromName} <${c.from}>`,
       to: email,
       replyTo: replyTo || undefined,
       subject: "Recibimos tu solicitud · Psicomorfosis",
@@ -1000,7 +1003,7 @@ export async function sendAccountApprovedEmail({ fullName, email, username, logi
   const c = getSmtpConfig();
   try {
     await sendMailWithRetry({
-      from: `${c.fromName} <${c.user}>`,
+      from: `${c.fromName} <${c.from}>`,
       to: email,
       replyTo: replyTo || undefined,
       subject: "Tu cuenta de Psicomorfosis ya está lista",
@@ -1021,7 +1024,7 @@ export async function sendAccountRejectedEmail({ fullName, email, reason, replyT
   const c = getSmtpConfig();
   try {
     await sendMailWithRetry({
-      from: `${c.fromName} <${c.user}>`,
+      from: `${c.fromName} <${c.from}>`,
       to: email,
       replyTo: replyTo || undefined,
       subject: "Sobre tu solicitud de acceso · Psicomorfosis",
@@ -1081,7 +1084,7 @@ async function sendPatientNotificationInternal({ patient, kind, subject, html, r
 
   try {
     const c = getSmtpConfig();
-    const fromAddress = `${c.fromName} <${c.user}>`;
+    const fromAddress = `${c.fromName} <${c.from}>`;
     await sendMailWithRetry({
       from: fromAddress,
       to: patient.email,
@@ -1305,7 +1308,7 @@ export async function sendRiskFlagEmail({ to, professionalName, patient, severit
 
   try {
     const c = getSmtpConfig();
-    const fromAddress = `${c.fromName} <${c.user}>`;
+    const fromAddress = `${c.fromName} <${c.from}>`;
     const displayName = patient?.preferred_name || patient?.name || "el paciente";
     const isCritical = severity === "critical";
     const severityLabel = { low: "Baja", medium: "Media", high: "Alta", critical: "CRÍTICA" }[severity] ?? severity;
@@ -1411,7 +1414,7 @@ export async function sendBookingRequestEmails({ professional, patient, appointm
   if (professional.email && professional.email.includes("@")) {
     try {
       await sendMailWithRetry({
-        from: `${c.fromName} <${c.user}>`,
+        from: `${c.fromName} <${c.from}>`,
         to: professional.email,
         subject: `Nueva solicitud de cita: ${patient.name} · ${appointment.date} ${appointment.time}`,
         html: shell("Tienes una solicitud de cita 📥", `
@@ -1437,7 +1440,7 @@ export async function sendBookingRequestEmails({ professional, patient, appointm
   if (patient.email && patient.email.includes("@")) {
     try {
       await sendMailWithRetry({
-        from: `${c.fromName} <${c.user}>`,
+        from: `${c.fromName} <${c.from}>`,
         to: patient.email,
         replyTo: professional.email || undefined,
         subject: `Recibimos tu solicitud de cita con ${professional.name}`,
@@ -1494,7 +1497,7 @@ export async function sendPasswordResetEmail({ to, name, username, url }) {
   </div>`;
   try {
     await sendMailWithRetry({
-      from: `${c.fromName} <${c.user}>`,
+      from: `${c.fromName} <${c.from}>`,
       to,
       subject: "Restablecer tu contraseña de Psicomorfosis",
       html,

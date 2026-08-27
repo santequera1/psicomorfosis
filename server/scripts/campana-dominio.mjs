@@ -78,8 +78,8 @@ const c = {
 };
 if (!c.host || !c.user || !c.pass) { console.error("SMTP no configurado en .env"); process.exit(1); }
 const transport = nodemailer.createTransport({ host: c.host, port: c.port, secure: c.secure, auth: { user: c.user, pass: c.pass } });
-const FROM = process.env.CAMPAIGN_FROM || `Stiven de Psicomorfosis <${c.user}>`;
-const REPLY_TO = process.env.CAMPAIGN_REPLY_TO || c.user;
+const FROM = process.env.CAMPAIGN_FROM || `Stiven de Psicomorfosis <${process.env.SMTP_FROM || c.user}>`;
+const REPLY_TO = process.env.CAMPAIGN_REPLY_TO || "hola@psicomorfosis.co";
 
 function html({ name, neverLoggedIn, username }) {
   const first = String(name || "").split(" ")[0];
