@@ -10,7 +10,10 @@ import { signToken, requireAuth, requirePatient, verifyToken, invalidateUserToke
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
 import { sendPatientInviteEmail } from "../mailer.js";
-import { notifyPortalInvite } from "../lib/psicobot.js";
+import { notifyPortalInvite, notifyRescheduleRequested, notifyCancelledByPatient } from "../lib/psicobot.js";
+import { computeAvailability, SLOT_GRID } from "./public-booking.js";
+import { notifyAsync } from "./appointments.js";
+import { removeEventAsync } from "../lib/gcal.js";
 // Reutilizamos el mismo limiter que el login del staff — misma política
 // (10 intentos/15min por IP) es apropiada para ambos.
 import { loginLimiter } from "./auth.js";
@@ -591,6 +594,105 @@ router.get("/portal/appointments", requirePatient, (req, res) => {
     ORDER BY a.date DESC, a.time DESC
   `).all(req.user.patient_id, req.user.workspace_id);
   res.json(rows);
+});
+
+// ─── Cambiar hora / cancelar desde el portal ─────────────────────────
+// Reglas: solo citas propias, futuras y en estado pendiente/confirmada/
+// solicitada. El cambio de hora NO se aplica solo: la cita pasa a
+// "solicitada" con la nueva hora y el profesional la confirma desde
+// Solicitudes (mismo circuito que la reserva pública).
+const PORTAL_EDITABLE = new Set(["pendiente", "confirmada", "solicitada"]);
+function portalAppointment(req) {
+  const a = db.prepare("SELECT * FROM appointments WHERE id = ? AND patient_id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  return a ?? null;
+}
+function isFutureBogota(date, time) {
+  const t = Date.parse(`${date}T${time || "00:00"}:00-05:00`);
+  return Number.isFinite(t) && t > Date.now();
+}
+function professionalOf(appt) {
+  return appt.professional_id
+    ? db.prepare("SELECT id, name, phone, email FROM professionals WHERE id = ?").get(appt.professional_id)
+    : null;
+}
+
+router.get("/portal/appointments/:id/availability", requirePatient, (req, res) => {
+  const a = portalAppointment(req);
+  if (!a) return res.status(404).json({ error: "Cita no encontrada" });
+  if (!a.professional_id) return res.json({ days: [], duration_min: 50 });
+  res.json(computeAvailability(a.professional_id, { days: 21, excludeAppointmentId: a.id }));
+});
+
+router.post("/portal/appointments/:id/reschedule", requirePatient, (req, res) => {
+  const a = portalAppointment(req);
+  if (!a) return res.status(404).json({ error: "Cita no encontrada" });
+  if (!PORTAL_EDITABLE.has(a.status)) return res.status(409).json({ error: "Esta cita ya no se puede cambiar." });
+  if (!isFutureBogota(a.date, a.time)) return res.status(409).json({ error: "La cita ya pasó." });
+  const { date, time } = req.body ?? {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !SLOT_GRID.includes(String(time))) {
+    return res.status(400).json({ error: "Fecha u hora inválida" });
+  }
+  if (!isFutureBogota(date, time)) return res.status(400).json({ error: "Ese horario ya pasó" });
+  if (date === a.date && time === a.time) return res.status(400).json({ error: "Es la misma hora que ya tienes" });
+  const clash = db.prepare(`
+    SELECT id FROM appointments WHERE professional_id = ? AND date = ? AND time = ? AND status != 'cancelada' AND id != ?
+  `).get(a.professional_id, date, time, a.id);
+  if (clash) return res.status(409).json({ error: "Ese horario acaba de ocuparse. Elige otro." });
+
+  const previous = { date: a.date, time: a.time };
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE appointments SET date = ?, time = ?, status = 'solicitada',
+      notes = COALESCE(notes, '') || ?
+    WHERE id = ?
+  `).run(date, time, `\n[portal] Cambio de hora pedido por el paciente el ${now.slice(0, 16).replace("T", " ")}: antes ${previous.date} ${previous.time}`, a.id);
+  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(a.id);
+  // El evento de Google de la hora vieja sobra; se vuelve a crear al confirmar.
+  if (a.google_event_id) removeEventAsync(a);
+  const patient = db.prepare("SELECT id, name, preferred_name, phone FROM patients WHERE id = ?").get(a.patient_id);
+  const prof = professionalOf(a);
+  try {
+    db.prepare(`
+      INSERT OR REPLACE INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'cita', ?, ?, CURRENT_TIMESTAMP, 0, 1)
+    `).run(`appt-${a.id}-solicitud`, a.workspace_id,
+      `${patient?.name ?? "Paciente"} pide cambiar su cita a ${date} ${time}`,
+      `Antes era el ${previous.date} a las ${previous.time}. Confírmala o propón otro horario desde Solicitudes.`);
+  } catch (e) { console.warn("[portal] notif reschedule:", e?.message); }
+  if (prof) notifyRescheduleRequested({ professional: prof, patient, appointment: row, previous });
+  req.app.get("io")?.to(`ws-${a.workspace_id}`).emit("appointment:updated", row);
+  console.log(`[portal] cita ${a.id}: paciente ${a.patient_id} pide ${date} ${time} (antes ${previous.date} ${previous.time})`);
+  res.json({ ok: true, status: "solicitada", date, time });
+});
+
+router.post("/portal/appointments/:id/cancel", requirePatient, (req, res) => {
+  const a = portalAppointment(req);
+  if (!a) return res.status(404).json({ error: "Cita no encontrada" });
+  if (!PORTAL_EDITABLE.has(a.status)) return res.status(409).json({ error: "Esta cita ya no se puede cancelar." });
+  if (!isFutureBogota(a.date, a.time)) return res.status(409).json({ error: "La cita ya pasó." });
+  const now = new Date().toISOString();
+  db.prepare("UPDATE appointments SET status = 'cancelada', notes = COALESCE(notes, '') || ? WHERE id = ?")
+    .run(`\n[portal] Cancelada por el paciente el ${now.slice(0, 16).replace("T", " ")}`, a.id);
+  const row = db.prepare("SELECT * FROM appointments WHERE id = ?").get(a.id);
+  removeEventAsync(row);
+  const patient = db.prepare("SELECT id, name, preferred_name, phone FROM patients WHERE id = ?").get(a.patient_id);
+  const prof = professionalOf(a);
+  try {
+    db.prepare("UPDATE notifications SET read = 1 WHERE id = ? AND workspace_id = ?").run(`appt-${a.id}-solicitud`, a.workspace_id);
+    db.prepare(`
+      INSERT OR REPLACE INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'cita', ?, ?, CURRENT_TIMESTAMP, 0, 0)
+    `).run(`appt-${a.id}-cancelada`, a.workspace_id,
+      `${patient?.name ?? "Paciente"} canceló su cita del ${a.date} ${a.time}`,
+      "Cancelada desde el portal del paciente. El hueco queda libre.");
+  } catch (e) { console.warn("[portal] notif cancel:", e?.message); }
+  // Correo + WhatsApp de cancelación al paciente (y copia al profesional).
+  notifyAsync({ kind: "appointment_cancelled", appointment: row });
+  if (prof) notifyCancelledByPatient({ professional: prof, patient, appointment: row });
+  req.app.get("io")?.to(`ws-${a.workspace_id}`).emit("appointment:updated", row);
+  console.log(`[portal] cita ${a.id}: cancelada por el paciente ${a.patient_id}`);
+  res.json({ ok: true, status: "cancelada" });
 });
 
 /**

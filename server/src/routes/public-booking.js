@@ -103,14 +103,15 @@ router.get("/professionals/:slug", readLimiter, (req, res) => {
 // de la app); cuando haga falta, esto lee de una tabla de horarios.
 const GRID = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
 
-router.get("/professionals/:slug/availability", readLimiter, (req, res) => {
-  const p = publicProfessional(req.params.slug);
-  if (!p) return res.status(404).json({ error: "Perfil no encontrado" });
-
-  const days = Math.min(Number(req.query.days) || 14, 30);
+/**
+ * Huecos libres de un profesional (misma grilla que el perfil público).
+ * También la usa el portal del paciente para pedir cambio de hora.
+ * `excludeAppointmentId`: la cita que se está moviendo no se cuenta como
+ * ocupada (si no, su propio horario nunca aparecería).
+ */
+export function computeAvailability(professionalId, { days = 14, excludeAppointmentId = null } = {}) {
   const now = new Date();
   const out = [];
-
   for (let i = 0; i < days + 7 && out.length < days; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() + 1 + i); // desde mañana
@@ -120,13 +121,21 @@ router.get("/professionals/:slug/availability", readLimiter, (req, res) => {
     const taken = new Set(
       db.prepare(`
         SELECT time FROM appointments
-        WHERE professional_id = ? AND date = ? AND status != 'cancelada'
-      `).all(p.id, date).map((r) => String(r.time).slice(0, 5)),
+        WHERE professional_id = ? AND date = ? AND status != 'cancelada' AND id != ?
+      `).all(professionalId, date, excludeAppointmentId ?? -1).map((r) => String(r.time).slice(0, 5)),
     );
     const slots = GRID.filter((t) => !taken.has(t));
     if (slots.length) out.push({ date, slots });
   }
-  res.json({ days: out, duration_min: 50 });
+  return { days: out, duration_min: 50 };
+}
+export const SLOT_GRID = GRID;
+
+router.get("/professionals/:slug/availability", readLimiter, (req, res) => {
+  const p = publicProfessional(req.params.slug);
+  if (!p) return res.status(404).json({ error: "Perfil no encontrado" });
+  const days = Math.min(Number(req.query.days) || 14, 30);
+  res.json(computeAvailability(p.id, { days }));
 });
 
 // ─── POST reserva ────────────────────────────────────────────────────

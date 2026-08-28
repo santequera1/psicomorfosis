@@ -10,6 +10,7 @@ import { AlertTriangle, Search, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppSelect } from "@/components/app/AppSelect";
 import { AppDatePicker } from "@/components/app/AppDatePicker";
+import { AppTimePicker } from "@/components/app/AppTimePicker";
 
 /**
  * Datos opcionales para pre-llenar el modal. Lo usa Laura cuando
@@ -272,22 +273,14 @@ export function NewAppointmentModal({ patients, prefilledPatient = null, prefill
             </label>
             <label className="block">
               <span className="text-[11px] uppercase tracking-wider text-ink-500 font-medium">Hora</span>
-              {/* Input nativo type=time para que la psicóloga escriba
-                  cualquier hora (no solo múltiplos de 15min). step=60
-                  permite minutos individuales. showPicker() en click
-                  abre el picker nativo aunque haya hecho click fuera
-                  del icono pequeño del browser. */}
-              <input
-                type="time"
+              {/* Mismo selector que la fecha (AppTimePicker): se ve igual en
+                  todos los sistemas y respeta el tema, a diferencia del
+                  <input type="time"> nativo (popup oscuro del navegador). */}
+              <AppTimePicker
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
-                step={60}
+                onChange={setTime}
+                className="mt-1"
                 aria-label="Hora de la cita"
-                onClick={(e) => {
-                  const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
-                  try { el.showPicker?.(); } catch { /* no-op si el browser no soporta */ }
-                }}
-                className="mt-1 w-full h-10 px-3 rounded-md border border-line-200 bg-surface text-sm text-ink-900 outline-none focus:border-brand-700"
               />
             </label>
           </div>

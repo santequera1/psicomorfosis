@@ -1184,6 +1184,12 @@ export const api = {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
   portalAppointments: () => request<Array<Record<string, any>>>("/api/portal/appointments"),
+  portalAppointmentAvailability: (id: number | string) =>
+    request<{ days: Array<{ date: string; slots: string[] }>; duration_min: number }>(`/api/portal/appointments/${id}/availability`),
+  portalRescheduleAppointment: (id: number | string, body: { date: string; time: string }) =>
+    request<{ ok: boolean; status: string; date: string; time: string }>(`/api/portal/appointments/${id}/reschedule`, { method: "POST", body: JSON.stringify(body) }),
+  portalCancelAppointment: (id: number | string) =>
+    request<{ ok: boolean; status: string }>(`/api/portal/appointments/${id}/cancel`, { method: "POST" }),
   portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
   portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),
   /**

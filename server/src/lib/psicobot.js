@@ -346,6 +346,47 @@ export function notifyPatientOptIn({ patient, professionalName }) {
 }
 
 /**
+ * El paciente pidió cambiar la hora desde su portal. Aviso al PROFESIONAL
+ * (sin opt-in: es su herramienta). La cita queda "solicitada" hasta que
+ * confirme desde Solicitudes.
+ */
+export function notifyRescheduleRequested({ professional, patient, appointment, previous }) {
+  if (!configured()) return;
+  if (!professional?.phone || String(professional.phone).replace(/\D/g, "").length < 6) return;
+  const rendered =
+    `🔁 *${patient?.name ?? "Un paciente"} pidió cambiar su cita* desde el portal\n\n` +
+    `Antes: ${fmtDate(previous.date)} · ${previous.time}\n` +
+    `Ahora pide: ${fmtDate(appointment.date)} · ${appointment.time}` +
+    `\n\nEntra a tu agenda (botón *Solicitudes*) para confirmarla o proponer otra hora.`;
+  const payload = {
+    event: "appointment.reschedule_requested",
+    idempotency_key: `evt_resched_req_${appointment.id}_${Date.now()}`,
+    recipient: { phone: toE164Co(professional.phone), name: professional.name, role: "psicologo", workspace_id: appointment.workspace_id ?? null },
+    data: { appointment_id: appointment.id, patient_id: patient?.id ?? null, previous, date: appointment.date, time: appointment.time },
+    rendered_message: rendered,
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
+/** El paciente canceló desde su portal: aviso al PROFESIONAL. */
+export function notifyCancelledByPatient({ professional, patient, appointment }) {
+  if (!configured()) return;
+  if (!professional?.phone || String(professional.phone).replace(/\D/g, "").length < 6) return;
+  const rendered =
+    `❌ *${patient?.name ?? "Un paciente"} canceló su cita* desde el portal\n\n` +
+    `📅 ${fmtDate(appointment.date)} · ${appointment.time}` +
+    `\n\nEl hueco queda libre en tu agenda.`;
+  const payload = {
+    event: "appointment.cancelled",
+    idempotency_key: `evt_cancel_by_patient_${appointment.id}`,
+    recipient: { phone: toE164Co(professional.phone), name: professional.name, role: "psicologo", workspace_id: appointment.workspace_id ?? null },
+    data: { appointment_id: appointment.id, patient_id: patient?.id ?? null, by: "paciente" },
+    rendered_message: rendered,
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
+/**
  * Solicitud de cita desde el perfil público (linktree). El destinatario
  * es el PROFESIONAL — el staff no requiere opt-in (es su herramienta de
  * trabajo). Le avisa al instante para que acepte/rechace desde su agenda.
