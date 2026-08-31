@@ -120,6 +120,8 @@ app.use("/api/debug", (await import("./routes/debug-session.js")).default);
 // Perfil público + reserva de citas (linktree por profesional) — sin auth,
 // rate-limited por endpoint. Prefijo propio: nada de routers pelados en /api.
 app.use("/api/public", (await import("./routes/public-booking.js")).default);
+// Dictado por voz del formulario público de reserva — sin auth, límite por IP.
+app.use("/api/public/voice", (await import("./routes/voice.js")).publicVoiceRouter);
 // Landing pública (/api/landing/demo-request) — sin auth, con rate limit.
 app.use("/api", landingRoutes);
 // Documentos legales: rutas públicas (/public/*), del usuario (/me/*) y

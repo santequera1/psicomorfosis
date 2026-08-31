@@ -54,7 +54,7 @@ function getOpenAIKey() {
   return process.env.OPENAI_API_KEY?.trim() || null;
 }
 
-router.post("/transcribe", transcribeLimiter, upload.single("audio"), async (req, res) => {
+async function transcribeHandler(req, res) {
   const key = getOpenAIKey();
   if (!key) {
     return res.status(503).json({
@@ -109,7 +109,7 @@ router.post("/transcribe", transcribeLimiter, upload.single("audio"), async (req
       return res.json({ success: true, text: "" });
     }
 
-    console.log(`[voice] OK ws=${req.user.workspace_id} user=${req.user.id} bytes=${req.file.size} ms=${elapsed} chars=${text.length}`);
+    console.log(`[voice] OK ws=${req.user?.workspace_id ?? "público"} user=${req.user?.id ?? "-"} bytes=${req.file.size} ms=${elapsed} chars=${text.length}`);
     return res.json({ success: true, text });
   } catch (err) {
     console.error(`[voice] error: ${err?.message ?? err}`);
@@ -118,7 +118,26 @@ router.post("/transcribe", transcribeLimiter, upload.single("audio"), async (req
       error: "Error procesando el audio. Intenta de nuevo.",
     });
   }
+}
+router.post("/transcribe", transcribeLimiter, upload.single("audio"), transcribeHandler);
+
+/**
+ * Transcripción PÚBLICA — dictado del "¿Qué te trae a consulta?" en el
+ * formulario de reserva del perfil (hay gente a la que escribir le
+ * cuesta; pedido de las testers). Sin sesión: límite estricto por IP y
+ * mismo tope de tamaño; el costo por audio es de centavos, el límite
+ * evita que alguien lo use como transcriptor gratis.
+ */
+export const publicVoiceRouter = Router();
+const publicVoiceLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pvoice:${ipKeyGenerator(req)}`,
+  message: { success: false, error: "Demasiados audios desde esta conexión. Escribe el texto o intenta más tarde." },
 });
+publicVoiceRouter.post("/transcribe", publicVoiceLimiter, upload.single("audio"), transcribeHandler);
 
 function guessFilename(mime) {
   if (!mime) return "audio.webm";

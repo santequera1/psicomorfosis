@@ -8,6 +8,25 @@ import {
 } from "lucide-react";
 import { easeOutExpo } from "@/components/landing/motion";
 import { bgByKey } from "@/lib/public-profile";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
+import { es } from "date-fns/locale";
+import { VoiceRecorderButton } from "@/components/app/VoiceRecorderButton";
+
+const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Transcripción para visitantes (sin sesión): endpoint público con límite por conexión. */
+async function publicTranscribe(audio: Blob): Promise<{ success: true; text: string } | { success: false; error: string }> {
+  try {
+    const fd = new FormData();
+    fd.append("audio", audio, "audio.webm");
+    const r = await fetch("/api/public/voice/transcribe", { method: "POST", body: fd });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j?.success) return { success: true, text: String(j.text ?? "") };
+    return { success: false, error: j?.error ?? "No pudimos transcribir el audio. Escríbelo, sin afán." };
+  } catch {
+    return { success: false, error: "Sin conexión para transcribir. Escríbelo, sin afán." };
+  }
+}
 
 /** lucide no trae logos de TikTok; SVG oficial simplificado. */
 function TikTokIcon({ className }: { className?: string }) {
@@ -262,12 +281,21 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
   const [date, setDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", age: "", phone: "", email: "", motivo: "", website: "" });
+  // Cierre protegido: el clic fuera ya no cierra (se perdía todo el
+  // proceso); la X pregunta si hay algo diligenciado.
+  const [confirmClose, setConfirmClose] = useState(false);
+  function requestClose() {
+    const hasProgress = !!modality || !!date || !!time
+      || [form.name, form.age, form.phone, form.email, form.motivo].some((v) => v.trim() !== "");
+    if (done || !hasProgress) return onClose();
+    setConfirmClose(true);
+  }
   const ageNum = Number.parseInt(form.age, 10);
   const ageOk = Number.isInteger(ageNum) && ageNum >= 1 && ageNum <= 120;
 
   const { data: avail, isLoading: loadingAvail } = useQuery({
     queryKey: ["public-availability", profile.slug],
-    queryFn: () => fetchJson<Availability>(`/api/public/professionals/${profile.slug}/availability?days=14`),
+    queryFn: () => fetchJson<Availability>(`/api/public/professionals/${profile.slug}/availability?days=30`),
     enabled: step === 2,
     staleTime: 60_000,
   });
@@ -281,6 +309,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
       }),
   });
 
+  const availDates = useMemo(() => new Set((avail?.days ?? []).map((d) => d.date)), [avail]);
   const daySlots = useMemo(
     () => avail?.days.find((d) => d.date === date)?.slots ?? [],
     [avail, date],
@@ -315,7 +344,6 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
-      onClick={onClose}
     >
       <motion.div
         initial={{ y: "100%", opacity: 0.6 }}
@@ -323,7 +351,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
         exit={{ y: "100%", opacity: 0 }}
         transition={{ duration: 0.45, ease: easeOutExpo }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-lg bg-surface rounded-t-3xl sm:rounded-3xl shadow-modal max-h-[92svh] overflow-y-auto"
+        className="relative w-full sm:max-w-lg bg-surface rounded-t-3xl sm:rounded-3xl shadow-modal max-h-[92svh] overflow-y-auto"
       >
         {/* Header con progreso */}
         <div className="sticky top-0 bg-surface/95 backdrop-blur px-5 pt-4 pb-3 border-b border-line-100 z-10">
@@ -336,7 +364,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
               )}
               {!done && <span className="font-medium">Paso {step} de 4</span>}
             </div>
-            <button onClick={onClose} className="h-9 w-9 rounded-full bg-bg-100 hover:bg-bg-200 text-ink-500 flex items-center justify-center" aria-label="Cerrar">
+            <button onClick={requestClose} className="h-9 w-9 rounded-full bg-bg-100 hover:bg-bg-200 text-ink-500 flex items-center justify-center" aria-label="Cerrar">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -408,24 +436,26 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
               {loadingAvail ? (
                 <div className="py-12 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-brand-700" /></div>
               ) : !avail?.days.length ? (
-                <p className="py-10 text-center text-sm text-ink-500">No hay horarios disponibles en las próximas dos semanas.</p>
+                <p className="py-10 text-center text-sm text-ink-500">No hay horarios disponibles en las próximas semanas.</p>
               ) : (
                 <>
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    {avail.days.slice(0, 8).map((d) => {
-                      const f = fmtDia(d.date);
-                      const sel = date === d.date;
-                      return (
-                        <button
-                          key={d.date}
-                          onClick={() => { setDate(d.date); setTime(null); }}
-                          className={`rounded-xl border-2 py-2.5 text-center transition-colors ${sel ? "border-brand-700 bg-brand-700 text-white" : "border-line-200 hover:border-brand-400"}`}
-                        >
-                          <span className={`block text-[10px] font-semibold ${sel ? "text-white/80" : "text-ink-400"}`}>{f.dow}</span>
-                          <span className="block text-lg font-semibold leading-tight">{f.num}</span>
-                        </button>
-                      );
-                    })}
+                  {/* Calendario de mes (pedido de las testers: los chips
+                      sueltos no dejaban saber en qué mes o día estabas).
+                      Solo se pueden tocar los días con huecos libres. */}
+                  <div className="mt-4 rounded-2xl border border-line-200 flex justify-center py-2">
+                    <CalendarPicker
+                      mode="single"
+                      locale={es}
+                      selected={date ? new Date(`${date}T12:00:00`) : undefined}
+                      onSelect={(d) => {
+                        if (!d) return;
+                        const iso = isoOf(d);
+                        if (!availDates.has(iso)) return;
+                        setDate(iso);
+                        setTime(null);
+                      }}
+                      disabled={(d) => !availDates.has(isoOf(d))}
+                    />
                   </div>
                   {date && (
                     <>
@@ -499,7 +529,15 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium text-ink-500">¿Qué te trae a consulta? (opcional)</span>
+                  <span className="text-xs font-medium text-ink-500 flex items-center justify-between gap-2">
+                    <span>¿Qué te trae a consulta? (opcional)</span>
+                    <VoiceRecorderButton
+                      variant="compact"
+                      label="Dictar"
+                      transcribe={publicTranscribe}
+                      onTranscript={(t) => setForm((f) => ({ ...f, motivo: (f.motivo ? f.motivo.trimEnd() + " " : "") + t }))}
+                    />
+                  </span>
                   <textarea
                     value={form.motivo}
                     onChange={(e) => setForm({ ...form, motivo: e.target.value })}
@@ -566,6 +604,19 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                   ? <>Continuar <ChevronRight className="h-4 w-4" /></>
                   : <>Enviar solicitud <ArrowRight className="h-4 w-4" /></>}
             </button>
+          </div>
+        )}
+
+        {confirmClose && (
+          <div className="absolute inset-0 z-20 bg-surface/95 backdrop-blur-sm flex items-center justify-center p-6">
+            <div className="text-center max-w-xs">
+              <p className="text-base font-semibold text-ink-900">¿Cerrar sin terminar?</p>
+              <p className="text-sm text-ink-500 mt-1">Se perderá lo que llevas diligenciado.</p>
+              <div className="mt-5 grid gap-2">
+                <button onClick={() => setConfirmClose(false)} className="h-11 rounded-xl bg-brand-700 text-white text-sm font-semibold hover:bg-brand-800">Seguir con mi solicitud</button>
+                <button onClick={onClose} className="h-11 rounded-xl border border-line-200 text-sm text-ink-700 hover:border-brand-400">Cerrar de todos modos</button>
+              </div>
+            </div>
           </div>
         )}
       </motion.div>

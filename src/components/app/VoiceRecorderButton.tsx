@@ -35,6 +35,9 @@ interface Props {
   disabled?: boolean;
   className?: string;
   maxDurationMs?: number;
+  /** Transcriptor alternativo (p. ej. el endpoint público del perfil de
+   *  reservas, que no exige sesión). Por defecto, el de la app. */
+  transcribe?: (audio: Blob) => Promise<{ success: true; text: string } | { success: false; error: string }>;
 }
 
 function fmtSec(ms: number): string {
@@ -54,6 +57,7 @@ export function VoiceRecorderButton({
   disabled,
   className,
   maxDurationMs,
+  transcribe,
 }: Props) {
   const rec = useVoiceRecorder({ maxDurationMs });
   const [transcribing, setTranscribing] = useState(false);
@@ -72,7 +76,7 @@ export function VoiceRecorderButton({
       }
       setTranscribing(true);
       try {
-        const result = await api.transcribeVoice(blob);
+        const result = await (transcribe ?? api.transcribeVoice)(blob);
         if (result.success) {
           const text = result.text.trim();
           if (text) {
