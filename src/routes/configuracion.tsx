@@ -1490,8 +1490,8 @@ function HorarioPanel() {
           </p>
         )}
         <p className="text-[11px] text-ink-500 mt-2">
-          Vista previa: {DAY_KEYS. La hora de fin es la última hora en que puede empezar una cita.filter((d) => days.has(d)).map((d) => DAY_SHORT[d]).join(" · ") || "—"}{" "}
-          de {startHour}:00 a {endHour}:00.
+          Vista previa: {DAY_KEYS.filter((d) => days.has(d)).map((d) => DAY_SHORT[d]).join(" · ") || "—"}{" "}
+          de {startHour}:00 a {endHour}:00. La hora de fin es la última hora en que puede empezar una cita.
         </p>
       </div>
 
