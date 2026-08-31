@@ -729,6 +729,160 @@ function filterButtonClass(active: boolean, extra = "") {
   );
 }
 
+// ─── Ficha 360° del detalle: perfil, servicios, Laura, adopción ─────────────
+// Todo sale de datos que ya existen (professionals, users, laura_*,
+// conteos por módulo). Sin contenido de conversaciones ni datos clínicos.
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2).replace(".", ",") + " M";
+  if (n >= 1_000) return Math.round(n / 1_000) + " k";
+  return String(n);
+}
+
+function ServiceDot({ on, label, hint }: { on: boolean; label: string; hint?: string }) {
+  return (
+    <li className="flex items-center gap-2.5 text-sm">
+      <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", on ? "bg-success" : "bg-line-200")} aria-hidden />
+      <span className={on ? "text-ink-900" : "text-ink-500"}>{label}</span>
+      {hint && <span className="text-xs text-ink-400 truncate">{hint}</span>}
+      {!on && <span className="ml-auto text-[10px] uppercase tracking-wider text-ink-400">sin configurar</span>}
+    </li>
+  );
+}
+
+function WorkspaceFicha360({ data }: { data: PlatformWorkspaceDetail }) {
+  const { integrations: integ, laura, stats } = data;
+  const adopcion: Array<{ label: string; done: boolean }> = [
+    { label: "Pacientes creados", done: stats.patients_count > 0 },
+    { label: "Citas agendadas", done: stats.appointments_total > 0 },
+    { label: "Notas clínicas", done: stats.notes_count > 0 },
+    { label: "Tests aplicados", done: stats.tests_count > 0 },
+    { label: "Documentos", done: stats.documents_count > 0 },
+    { label: "Tareas", done: stats.tareas_count > 0 },
+    { label: "Recibos", done: stats.invoices_count > 0 },
+    { label: "Usa a Laura", done: laura.conversations > 0 },
+    { label: "WhatsApp configurado", done: integ.whatsapp },
+    { label: "Google Calendar", done: integ.gcal },
+    { label: "Perfil público activo", done: integ.publicProfile },
+  ];
+  const done = adopcion.filter((a) => a.done).length;
+  const pct = Math.round((done / adopcion.length) * 100);
+  const faltan = adopcion.filter((a) => !a.done).map((a) => a.label);
+  const publicUrl = integ.publicSlug ? `https://psicomorfosis.co/perfil/${integ.publicSlug}` : null;
+
+  return (
+    <>
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Perfil profesional + enlace público */}
+        <div className="rounded-xl border border-line-200 bg-surface p-5">
+          <h3 className="font-serif text-lg text-ink-900 mb-3">Perfil profesional</h3>
+          {data.professionals.length === 0 ? (
+            <p className="text-xs text-ink-500">Sin profesional configurado.</p>
+          ) : data.professionals.map((pr) => (
+            <div key={pr.id} className="not-first:mt-4 not-first:pt-4 not-first:border-t not-first:border-line-100">
+              <p className="text-sm font-semibold text-ink-900">
+                {pr.name}
+                {pr.title && <span className="text-ink-500 font-normal"> · {pr.title}</span>}
+              </p>
+              <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-xs">
+                <dt className="text-[10px] uppercase tracking-wider text-ink-500 font-medium pt-0.5">WhatsApp</dt>
+                <dd className="m-0 text-ink-800 tabular">{pr.phone || <span className="text-ink-400">sin configurar</span>}</dd>
+                <dt className="text-[10px] uppercase tracking-wider text-ink-500 font-medium pt-0.5">Correo</dt>
+                <dd className="m-0 text-ink-800 truncate">{pr.email || "—"}</dd>
+                <dt className="text-[10px] uppercase tracking-wider text-ink-500 font-medium pt-0.5">Enfoque</dt>
+                <dd className="m-0 text-ink-800">{pr.approach || "—"}</dd>
+                <dt className="text-[10px] uppercase tracking-wider text-ink-500 font-medium pt-0.5">Ubicación</dt>
+                <dd className="m-0 text-ink-800">{pr.publicLocation || "—"}</dd>
+              </dl>
+            </div>
+          ))}
+          <div className="mt-4 pt-4 border-t border-line-100">
+            <p className="text-[10px] uppercase tracking-wider text-ink-500 font-medium mb-2">Perfil público (enlace de reservas)</p>
+            {publicUrl ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-success-soft text-success">
+                  <Power className="h-3 w-3" /> Activo
+                </span>
+                <a href={publicUrl} target="_blank" rel="noreferrer" className="text-xs text-brand-700 underline underline-offset-2 truncate max-w-[18rem]">
+                  {publicUrl.replace("https://", "")}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard?.writeText(publicUrl).then(() => toast.success("Enlace copiado")); }}
+                  className="inline-flex items-center gap-1 h-7 px-2 rounded-md border border-line-200 text-[11px] text-ink-600 hover:border-brand-400"
+                >
+                  <Copy className="h-3 w-3" /> Copiar
+                </button>
+              </div>
+            ) : (
+              <span className="inline-flex items-center text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-bg-100 text-ink-500">Sin activar</span>
+            )}
+          </div>
+        </div>
+
+        {/* Servicios conectados */}
+        <div className="rounded-xl border border-line-200 bg-surface p-5">
+          <h3 className="font-serif text-lg text-ink-900 mb-3">Servicios conectados</h3>
+          <ul className="space-y-2.5">
+            <ServiceDot on={integ.whatsapp} label="WhatsApp de Laura" hint={integ.whatsapp ? "recibe avisos y puede escribirle" : undefined} />
+            <ServiceDot on={integ.gcal} label="Google Calendar" hint={integ.gcalEmail ?? undefined} />
+            <ServiceDot on={integ.meet} label="Google Meet en citas online" />
+            <ServiceDot on={integ.publicProfile} label="Perfil público de reservas" />
+            <ServiceDot on={integ.googleLogin} label="Entra con Google" />
+            <ServiceDot on={integ.emailVerified} label="Correo verificado" />
+          </ul>
+          <p className="mt-4 pt-3 border-t border-line-100 text-[11px] text-ink-500">
+            Plan <span className="font-semibold text-ink-800">{PLAN_LABELS[data.workspace.plan ?? "free"] ?? data.workspace.plan}</span>
+            {" · "}creada el {new Date(data.workspace.createdAt).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+          </p>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Uso de Laura — solo métricas, nunca contenido */}
+        <div className="rounded-xl border border-line-200 bg-surface p-5">
+          <h3 className="font-serif text-lg text-ink-900 mb-1 flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand-700" /> Uso de Laura</h3>
+          <p className="text-[11px] text-ink-500 mb-4">Consumo de IA de la cuenta. El contenido de las conversaciones no es visible desde aquí.</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-bg-50 border border-line-100 px-2 py-2.5">
+              <div className="text-lg font-semibold text-ink-900 tabular">{laura.conversations}</div>
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">Conversaciones</div>
+            </div>
+            <div className="rounded-lg bg-bg-50 border border-line-100 px-2 py-2.5">
+              <div className="text-lg font-semibold text-ink-900 tabular">{laura.replies}</div>
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">Respuestas</div>
+            </div>
+            <div className="rounded-lg bg-bg-50 border border-line-100 px-2 py-2.5">
+              <div className="text-lg font-semibold text-ink-900 tabular">{fmtTokens(laura.tokens)}</div>
+              <div className="text-[10px] uppercase tracking-wider text-ink-500">Tokens</div>
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] text-ink-500">
+            Último uso: <span className="text-ink-800">{laura.lastUsedAt ? formatRelative(laura.lastUsedAt) : "nunca"}</span>
+          </p>
+        </div>
+
+        {/* Adopción */}
+        <div className="rounded-xl border border-line-200 bg-surface p-5">
+          <h3 className="font-serif text-lg text-ink-900 mb-1 flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-brand-700" /> Adopción</h3>
+          <p className="text-[11px] text-ink-500 mb-3">{done} de {adopcion.length} funciones en uso</p>
+          <div className="h-2 rounded-full bg-bg-100 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+            <div className={cn("h-full rounded-full", pct >= 70 ? "bg-success" : pct >= 40 ? "bg-warning" : "bg-risk-high")} style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-1.5 text-xs font-semibold tabular text-ink-800">{pct}%</p>
+          {faltan.length > 0 && (
+            <p className="mt-3 text-[11px] text-ink-500 leading-relaxed">
+              <span className="font-medium text-ink-700">Sin usar todavía:</span> {faltan.join(" · ")}
+            </p>
+          )}
+          <p className="mt-3 pt-3 border-t border-line-100 text-[11px] text-ink-500">
+            Uso por módulo: {stats.patients_count} pacientes · {stats.appointments_total} citas ({stats.sessions_done} atendidas) · {stats.notes_count} notas · {stats.tests_count} tests · {stats.documents_count} docs · {stats.tareas_count} tareas · {stats.invoices_count} recibos ({formatCurrencyCOP(stats.invoices_paid_sum)} cobrados)
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
 // ─── Fila por workspace ─────────────────────────────────────────────────────
 function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
   ws: PlatformWorkspace;
@@ -1559,6 +1713,8 @@ function WorkspaceDetailView({ wsId, onBack }: { wsId: number; onBack: () => voi
               <KpiCard label="Citas totales" value={String(data.stats.appointments_total)} icon={<CalendarCheck2 className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
               <KpiCard label="Notas + tests" value={String(data.stats.notes_count + data.stats.tests_count)} hint={`${data.stats.tests_count} tests aplicados`} icon={<Activity className="h-4 w-4" />} delta={{ neutral: true, value: "" }} />
             </section>
+
+            <WorkspaceFicha360 data={data} />
 
             <section className="rounded-xl border border-line-200 bg-surface">
               <div className="px-5 py-3 border-b border-line-100 flex items-center justify-between gap-3">

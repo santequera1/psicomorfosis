@@ -91,6 +91,7 @@ export interface PlatformWorkspaceDetail {
     disabledAt: string | null;
     disabledReason: string | null;
     createdAt: string;
+    plan?: string;
   };
   users: Array<{
     id: number;
@@ -102,6 +103,16 @@ export interface PlatformWorkspaceDetail {
     lastLoginAt: string | null;
     createdAt: string;
   }>;
+  professionals: Array<{
+    id: number; name: string; title: string | null; email: string | null; phone: string | null;
+    approach: string | null; active: boolean; slug: string | null;
+    publicEnabled: boolean; publicLocation: string | null;
+  }>;
+  integrations: {
+    whatsapp: boolean; gcal: boolean; gcalEmail: string | null; meet: boolean;
+    googleLogin: boolean; emailVerified: boolean; publicProfile: boolean; publicSlug: string | null;
+  };
+  laura: { conversations: number; replies: number; tokens: number; lastUsedAt: string | null };
   stats: {
     patients_count: number;
     patients_archived: number;
@@ -110,6 +121,10 @@ export interface PlatformWorkspaceDetail {
     appointments_total: number;
     tests_count: number;
     notes_count: number;
+    tareas_count: number;
+    invoices_count: number;
+    invoices_paid_sum: number;
+    sessions_done: number;
   };
 }
 

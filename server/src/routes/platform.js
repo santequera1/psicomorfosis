@@ -201,8 +201,33 @@ router.get("/workspaces/:id", (req, res) => {
       (SELECT COUNT(*) FROM documents WHERE workspace_id = ? AND status = 'firmado') AS documents_signed,
       (SELECT COUNT(*) FROM appointments WHERE workspace_id = ?) AS appointments_total,
       (SELECT COUNT(*) FROM test_applications ta JOIN patients p ON ta.patient_id = p.id WHERE p.workspace_id = ?) AS tests_count,
-      (SELECT COUNT(*) FROM clinical_notes WHERE workspace_id = ?) AS notes_count
-  `).get(id, id, id, id, id, id, id);
+      (SELECT COUNT(*) FROM clinical_notes WHERE workspace_id = ?) AS notes_count,
+      (SELECT COUNT(*) FROM tareas WHERE workspace_id = ? AND deleted_at IS NULL) AS tareas_count,
+      (SELECT COUNT(*) FROM invoices WHERE workspace_id = ?) AS invoices_count,
+      (SELECT COALESCE(SUM(amount), 0) FROM invoices WHERE workspace_id = ? AND status = 'pagada') AS invoices_paid_sum,
+      (SELECT COUNT(*) FROM appointments WHERE workspace_id = ? AND status = 'atendida') AS sessions_done
+  `).get(id, id, id, id, id, id, id, id, id, id, id);
+
+  // Ficha 360° (pedido 31 ago 2026): perfil del profesional con su enlace
+  // público, estado de los servicios conectados y uso de Laura — SIN el
+  // contenido de las conversaciones (son créditos que paga la plataforma,
+  // pero el texto es material clínico del consultorio).
+  const professionals = db.prepare(`
+    SELECT id, name, title, email, phone, approach, active, slug, public_enabled, public_location
+    FROM professionals WHERE workspace_id = ? ORDER BY id ASC
+  `).all(id);
+  const staffInteg = db.prepare(`
+    SELECT (gcal_refresh_token IS NOT NULL) AS gcal, gcal_use_meet, gcal_email,
+           (google_sub IS NOT NULL) AS google_login, (email_verified_at IS NOT NULL) AS email_verified
+    FROM users WHERE workspace_id = ? AND role <> 'paciente'
+  `).all(id);
+  const laura = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM laura_conversations WHERE workspace_id = ?) AS conversations,
+      (SELECT COUNT(*) FROM laura_messages m JOIN laura_conversations c ON c.id = m.conversation_id WHERE c.workspace_id = ? AND m.role = 'assistant') AS replies,
+      (SELECT COALESCE(SUM(COALESCE(m.tokens_in, 0) + COALESCE(m.tokens_out, 0)), 0) FROM laura_messages m JOIN laura_conversations c ON c.id = m.conversation_id WHERE c.workspace_id = ?) AS tokens,
+      (SELECT MAX(m.created_at) FROM laura_messages m JOIN laura_conversations c ON c.id = m.conversation_id WHERE c.workspace_id = ?) AS last_used_at
+  `).get(id, id, id, id);
 
   res.json({
     workspace: {
@@ -212,6 +237,28 @@ router.get("/workspaces/:id", (req, res) => {
       disabledAt: ws.disabled_at,
       disabledReason: ws.disabled_reason,
       createdAt: ws.created_at,
+      plan: ws.plan ?? "free",
+    },
+    professionals: professionals.map((pr) => ({
+      id: pr.id, name: pr.name, title: pr.title, email: pr.email, phone: pr.phone,
+      approach: pr.approach, active: !!pr.active, slug: pr.slug,
+      publicEnabled: !!pr.public_enabled, publicLocation: pr.public_location,
+    })),
+    integrations: {
+      whatsapp: professionals.some((pr) => pr.phone && String(pr.phone).trim() !== ""),
+      gcal: staffInteg.some((u) => u.gcal),
+      gcalEmail: staffInteg.find((u) => u.gcal)?.gcal_email ?? null,
+      meet: staffInteg.some((u) => u.gcal && u.gcal_use_meet),
+      googleLogin: staffInteg.some((u) => u.google_login),
+      emailVerified: staffInteg.some((u) => u.email_verified),
+      publicProfile: professionals.some((pr) => pr.public_enabled && pr.slug),
+      publicSlug: professionals.find((pr) => pr.public_enabled && pr.slug)?.slug ?? null,
+    },
+    laura: {
+      conversations: laura?.conversations ?? 0,
+      replies: laura?.replies ?? 0,
+      tokens: laura?.tokens ?? 0,
+      lastUsedAt: laura?.last_used_at ?? null,
     },
     users: users.map((u) => ({
       id: u.id,
