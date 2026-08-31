@@ -119,9 +119,14 @@ function scheduleFor(professionalId) {
   let start = parseInt(String(setts.work_start_hour ?? "8"), 10);
   let end = parseInt(String(setts.work_end_hour ?? "18"), 10);
   if (!Number.isFinite(start) || start < 0 || start > 23) start = 8;
-  if (!Number.isFinite(end) || end <= start || end > 24) end = Math.min(start + 10, 24);
+  if (!Number.isFinite(end) || end < start || end > 24) end = Math.min(start + 9, 23);
+  // "Hora de fin" = ÚLTIMA hora agendable, INCLUSIVE. Nathaly (31 ago)
+  // puso fin 19:00 esperando recibir pacientes a las 7 pm y el enlace
+  // solo ofrecía hasta las 6 — así lo lee quien configura, y así lo
+  // dice ahora la vista previa de Configuración.
   const slots = [];
-  for (let h = start; h < end; h++) slots.push(String(h).padStart(2, "0") + ":00");
+  const lastStart = Math.min(end, 23);
+  for (let h = start; h <= lastStart; h++) slots.push(String(h).padStart(2, "0") + ":00");
   return { days, slots };
 }
 

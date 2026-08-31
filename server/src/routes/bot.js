@@ -18,6 +18,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { syncBeforeNotify } from "../lib/gcal.js";
+import { notifyPatientDeclined } from "../lib/psicobot.js";
 import { notifyAsync as notifyAppointmentAsync } from "./appointments.js";
 
 const router = Router();
@@ -554,6 +555,18 @@ router.post("/bot/reschedule-request", (req, res) => {
     INSERT INTO notifications (id, workspace_id, type, title, description, at, urgent)
     VALUES (?, ?, 'reschedule_request', ?, ?, CURRENT_TIMESTAMP, 0)
   `).run(notifId, patient.workspace_id, `📅 ${displayName} pide reagendar`, description);
+
+  // WhatsApp al profesional además de la campana: "X avisó que no podrá
+  // asistir". El bot despacha el rendered_message tal cual (a3c6773).
+  const prof = appt.professional_id
+    ? db.prepare(`
+        SELECT p.id, p.name, p.phone, u.id AS user_id
+        FROM professionals p
+        LEFT JOIN users u ON u.professional_id = p.id AND u.role <> 'paciente'
+        WHERE p.id = ?
+      `).get(appt.professional_id)
+    : null;
+  if (prof) notifyPatientDeclined({ professional: prof, patient, appointment: appt, reason: cleanReason });
 
   console.log(`[bot/reschedule-request] patient=${patient.id} appt=${apptId} slots=${slotsJson ? "yes" : "no"}`);
 

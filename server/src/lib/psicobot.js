@@ -368,6 +368,36 @@ export function notifyRescheduleRequested({ professional, patient, appointment, 
   setImmediate(() => pushAndLog(payload));
 }
 
+/**
+ * El paciente respondió por WhatsApp que NO podrá asistir (o pidió
+ * reagendar). Aviso al PROFESIONAL por WhatsApp — el bot ya tiene el
+ * evento appointment.reschedule_requested en su catálogo (a3c6773).
+ * Solo al psicólogo: el paciente ya recibió su respuesta de Laura.
+ */
+export function notifyPatientDeclined({ professional, patient, appointment, reason }) {
+  if (!configured()) return;
+  if (!professional?.phone || String(professional.phone).replace(/\D/g, "").length < 6) return;
+  const rendered =
+    `⚠️ *${patient?.name ?? "Un paciente"}* avisó que no podrá asistir a la cita del *${fmtDate(appointment.date)} · ${appointment.time}*.` +
+    (reason ? `\n\n📝 ${String(reason).slice(0, 300)}` : "") +
+    `\n\nEntra a tu agenda para reagendarla o proponerle otro horario.`;
+  const payload = {
+    event: "appointment.reschedule_requested",
+    idempotency_key: `evt_resched_${appointment.id}_${Date.now()}`,
+    recipient: {
+      phone: toE164Co(professional.phone), name: professional.name, role: "psicologo",
+      workspace_id: appointment.workspace_id ?? null, user_id: professional.user_id ?? null,
+    },
+    data: {
+      appointment: { id: appointment.id, date: appointment.date, time: appointment.time, modality: appointment.modality ?? null },
+      patient: { name: patient?.name ?? null, phone: patient?.phone ?? null },
+      reason: reason ? String(reason).slice(0, 300) : null,
+    },
+    rendered_message: rendered,
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
 /** El paciente canceló desde su portal: aviso al PROFESIONAL. */
 export function notifyCancelledByPatient({ professional, patient, appointment }) {
   if (!configured()) return;
