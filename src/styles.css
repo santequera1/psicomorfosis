@@ -1072,3 +1072,20 @@ input[type="date"]::-webkit-inner-spin-button {
   .laura-char { animation: none; }
   .laura-caret { animation: none; opacity: 0.5; }
 }
+
+/* ─── Móvil: sin auto-zoom al enfocar campos ─────────────────────────
+   iOS y Chrome Android hacen zoom a toda la página cuando el campo
+   enfocado tiene fuente menor de 16px, y la dejan descuadrada (reporte
+   27 ago 2026: buscador de paciente en "Agendar cita"; pasaba en casi
+   todos los modales). Regla global: en pantallas pequeñas todo campo de
+   texto se pinta a 16px, que es el umbral que desactiva ese zoom.
+   !important porque las utilidades de Tailwind (text-sm = 14px) tienen
+   prioridad de capa sobre una regla base normal. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
