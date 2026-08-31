@@ -1,13 +1,13 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain, Bug } from "lucide-react";
+import { Home, Calendar, ListChecks, FileText, User, LogOut, Heart, Brain, Bug, Receipt } from "lucide-react";
 import { ReportProblemModal } from "@/components/app/ReportProblemModal";
 import { Logo } from "@/components/app/Logo";
 import { api, clearSession, getStoredUser, getToken, logoutEverywhere, type ApiUser } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type TabKey = "inicio" | "citas" | "tareas" | "tests" | "documentos" | "perfil";
+type TabKey = "inicio" | "citas" | "tareas" | "tests" | "documentos" | "pagos" | "perfil";
 
 const TABS: { key: TabKey; to: string; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "inicio",     to: "/p/inicio",     label: "Inicio",     icon: Home },
@@ -15,6 +15,7 @@ const TABS: { key: TabKey; to: string; label: string; icon: React.ComponentType<
   { key: "tareas",     to: "/p/tareas",     label: "Tareas",     icon: ListChecks },
   { key: "tests",      to: "/p/tests",      label: "Tests",      icon: Brain },
   { key: "documentos", to: "/p/documentos", label: "Documentos", icon: FileText },
+  { key: "pagos",      to: "/p/pagos",      label: "Pagos",      icon: Receipt },
   { key: "perfil",     to: "/p/perfil",     label: "Perfil",     icon: User },
 ];
 

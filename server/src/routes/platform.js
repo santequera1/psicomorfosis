@@ -229,6 +229,25 @@ router.get("/workspaces/:id", (req, res) => {
       (SELECT MAX(m.created_at) FROM laura_messages m JOIN laura_conversations c ON c.id = m.conversation_id WHERE c.workspace_id = ?) AS last_used_at
   `).get(id, id, id, id);
 
+  // Métricas del perfil público del mes en curso (mismas queries que la
+  // tarjeta "Tu perfil público este mes" del psicólogo, agregadas por
+  // workspace) — el admin ve cómo les está yendo a los enlaces de reserva.
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit" }).format(new Date());
+  const profIds = professionals.map((pr) => pr.id);
+  const inClause = profIds.map(() => "?").join(",");
+  const pev = (type) => profIds.length
+    ? db.prepare(`SELECT COUNT(*) AS n FROM profile_events WHERE professional_id IN (${inClause}) AND type = ? AND day LIKE ?`).get(...profIds, type, month + "%").n
+    : 0;
+  const papt = (extra) => db.prepare(
+    `SELECT COUNT(*) AS n FROM appointments WHERE workspace_id = ? AND notes LIKE '[reserva-web]%' AND substr(COALESCE(created_at, date), 1, 7) = ? ${extra}`,
+  ).get(id, month).n;
+  const pcobrado = db.prepare(`
+    SELECT COALESCE(SUM(i.amount), 0) AS s
+    FROM invoices i JOIN patients p ON p.id = i.patient_id
+    WHERE i.workspace_id = ? AND i.status = 'pagada' AND p.reason LIKE '[reserva-web]%'
+      AND substr(COALESCE(i.paid_at, i.date), 1, 7) = ?
+  `).get(id, month).s;
+
   res.json({
     workspace: {
       id: ws.id,
@@ -259,6 +278,15 @@ router.get("/workspaces/:id", (req, res) => {
       replies: laura?.replies ?? 0,
       tokens: laura?.tokens ?? 0,
       lastUsedAt: laura?.last_used_at ?? null,
+    },
+    profileStats: {
+      month,
+      visits: pev("visit"),
+      clicksAgendar: pev("click_agendar"),
+      solicitudes: papt(""),
+      confirmadas: papt("AND status IN ('confirmada', 'atendida', 'en_curso')"),
+      atendidas: papt("AND status = 'atendida'"),
+      cobrado: pcobrado,
     },
     users: users.map((u) => ({
       id: u.id,

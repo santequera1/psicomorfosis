@@ -9,6 +9,7 @@ import { db } from "../db.js";
 import { signToken, requireAuth, requirePatient, verifyToken, invalidateUserTokens } from "../auth.js";
 import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
+import { sendReceiptPdf } from "./invoices.js";
 import { sendPatientInviteEmail } from "../mailer.js";
 import { notifyPortalInvite, notifyRescheduleRequested, notifyCancelledByPatient } from "../lib/psicobot.js";
 import { computeAvailability, isBookableSlot } from "./public-booking.js";
@@ -494,6 +495,35 @@ router.post("/portal/me/delete", requirePatient, (req, res) => {
  * no datos suministrados POR el paciente — pertenecen al expediente
  * clínico que requiere consentimiento de la psicóloga para entregar).
  */
+/**
+ * GET /api/portal/invoices — recibos del paciente (pedido de Nathaly,
+ * 31 ago 2026): que el paciente pueda ver sus recibos de pago en el
+ * portal. Solo campos que le conciernen — nada de notas internas ni
+ * referencias bancarias del consultorio — y sin borradores.
+ */
+router.get("/portal/invoices", requirePatient, (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, concept, amount, method, status, date, paid_at, professional, modality, eps, created_at
+    FROM invoices
+    WHERE patient_id = ? AND workspace_id = ? AND status != 'borrador'
+    ORDER BY date DESC, created_at DESC
+  `).all(req.user.patient_id, req.user.workspace_id);
+  res.json(rows);
+});
+
+/** Descarga del PDF del recibo — el mismo comprobante que emite el consultorio. */
+router.get("/portal/invoices/:id/pdf", requirePatient, (req, res) => {
+  const inv = db.prepare("SELECT * FROM invoices WHERE id = ? AND patient_id = ? AND workspace_id = ?")
+    .get(req.params.id, req.user.patient_id, req.user.workspace_id);
+  if (!inv || inv.status === "borrador") return res.status(404).json({ error: "Recibo no encontrado" });
+  try {
+    sendReceiptPdf(res, inv, req.user.workspace_id);
+  } catch (e) {
+    console.error("[portal/invoices/pdf]", e);
+    if (!res.headersSent) res.status(500).json({ error: "No se pudo generar el PDF" });
+  }
+});
+
 router.get("/portal/me/export", requirePatient, (req, res) => {
   const pid = req.user.patient_id;
   const wsid = req.user.workspace_id;
@@ -730,6 +760,11 @@ router.get("/portal/tasks", requirePatient, (req, res) => {
     FROM documents WHERE id = ?
   `);
   const docDesc = (docId) => (docId ? docStmt.get(docId) ?? null : null);
+  const extraDocsStmt = db.prepare(`
+    SELECT d.id, d.name, d.original_name, d.filename, d.mime, d.size_bytes, d.kind
+    FROM tarea_documents td JOIN documents d ON d.id = td.document_id
+    WHERE td.tarea_id = ? ORDER BY td.created_at ASC
+  `);
 
   // Mapear las kanban al shape que espera el portal.
   const kanbanMapped = kanban.map((t) => ({
@@ -746,6 +781,8 @@ router.get("/portal/tasks", requirePatient, (req, res) => {
     // Adjuntos del flujo Moodle (null si la tarea no usa archivos).
     template_document: docDesc(t.template_document_id),
     submission_document: docDesc(t.submission_document_id),
+    // Documentos adicionales (una tarea puede llevar varios archivos).
+    documents: extraDocsStmt.all(t.id),
     submitted_at: t.submitted_at ?? null,
   }));
 

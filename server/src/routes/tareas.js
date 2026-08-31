@@ -67,6 +67,15 @@ function getDocDescriptor(docId) {
   return d ?? null;
 }
 
+/** Documentos adicionales de una tarea (además de la plantilla). */
+function listTaskDocs(taskId) {
+  return db.prepare(`
+    SELECT d.id, d.name, d.original_name, d.filename, d.mime, d.size_bytes, d.kind, d.created_at
+    FROM tarea_documents td JOIN documents d ON d.id = td.document_id
+    WHERE td.tarea_id = ? ORDER BY td.created_at ASC
+  `).all(taskId);
+}
+
 function toTask(row) {
   if (!row) return null;
   return {
@@ -75,6 +84,7 @@ function toTask(row) {
     is_recurring_instance: !!row.is_recurring_instance,
     template_document: getDocDescriptor(row.template_document_id),
     submission_document: getDocDescriptor(row.submission_document_id),
+    documents: listTaskDocs(row.id),
   };
 }
 
@@ -322,6 +332,38 @@ router.patch("/:id", (req, res) => {
   db.prepare(`UPDATE tareas SET ${sets.join(", ")} WHERE id = ?`).run(...params);
   const row = getTask(req.params.id, wsId(req));
   const task = attachSubresources(toTask(row));
+  emit(req, "task:updated", task);
+  res.json(task);
+});
+
+// ─── Documentos adicionales ─────────────────────────────────────────────────
+// Una tarea puede llevar varios archivos además de la plantilla. El doc ya
+// existe (subido via /api/documents/upload); aquí solo se enlaza — y si la
+// tarea es visible para un paciente, el doc se comparte para que el portal
+// pueda descargarlo (mismo auto-marcado que el template).
+router.post("/:id/documents", (req, res) => {
+  const t = getTask(req.params.id, wsId(req));
+  if (!t) return res.status(404).json({ error: "Tarea no encontrada" });
+  const docId = String(req.body?.document_id ?? "");
+  const doc = db.prepare("SELECT id FROM documents WHERE id = ? AND workspace_id = ?").get(docId, wsId(req));
+  if (!doc) return res.status(404).json({ error: "Documento no encontrado" });
+  db.prepare("INSERT OR IGNORE INTO tarea_documents (tarea_id, document_id) VALUES (?, ?)").run(t.id, docId);
+  if (t.patient_id && t.visibility !== "private") {
+    db.prepare(`
+      UPDATE documents SET shared_with_patient = 1, updated_at = ?
+      WHERE id = ? AND workspace_id = ? AND shared_with_patient = 0
+    `).run(now(), docId, wsId(req));
+  }
+  const task = attachSubresources(toTask(getTask(t.id, wsId(req))));
+  emit(req, "task:updated", task);
+  res.json(task);
+});
+
+router.delete("/:id/documents/:docId", (req, res) => {
+  const t = getTask(req.params.id, wsId(req));
+  if (!t) return res.status(404).json({ error: "Tarea no encontrada" });
+  db.prepare("DELETE FROM tarea_documents WHERE tarea_id = ? AND document_id = ?").run(t.id, req.params.docId);
+  const task = attachSubresources(toTask(getTask(t.id, wsId(req))));
   emit(req, "task:updated", task);
   res.json(task);
 });

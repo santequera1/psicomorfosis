@@ -114,6 +114,7 @@ function TaskCard({ task, onComplete, completing, onSubmitFile, submitting }: {
   //   - !hasTemplate: tarea sin adjuntos (texto puro) → flujo original "marcar hecha".
   const hasTemplate = !!task.template_document;
   const hasSubmission = !!task.submission_document;
+  const extraDocs: any[] = task.documents ?? [];
 
   function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -163,21 +164,34 @@ function TaskCard({ task, onComplete, completing, onSubmitFile, submitting }: {
             </div>
           )}
 
-          {/* Bloque del flujo Moodle: solo cuando hay plantilla adjunta. */}
-          {hasTemplate && (
+          {/* Bloque del flujo Moodle: cuando hay plantilla o más adjuntos. */}
+          {(hasTemplate || extraDocs.length > 0) && (
             <div className="mt-4 rounded-lg border border-brand-200/60 bg-brand-50/40 p-3 space-y-2">
               <div className="flex items-center gap-2 text-xs text-brand-800 font-medium">
                 <FileText className="h-3.5 w-3.5" />
                 Tarea con archivo adjunto
               </div>
-              <a
-                href={api.portalDocumentFileUrl(task.template_document.id)}
-                download={task.template_document.original_name ?? task.template_document.name ?? "consigna"}
-                className="inline-flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Descargar consigna ({task.template_document.original_name ?? task.template_document.name})
-              </a>
+              {hasTemplate && (
+                <a
+                  href={api.portalDocumentFileUrl(task.template_document.id)}
+                  download={task.template_document.original_name ?? task.template_document.name ?? "consigna"}
+                  className="flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Descargar consigna ({task.template_document.original_name ?? task.template_document.name})
+                </a>
+              )}
+              {extraDocs.map((d) => (
+                <a
+                  key={d.id}
+                  href={api.portalDocumentFileUrl(d.id)}
+                  download={d.original_name ?? d.name ?? "archivo"}
+                  className="flex items-center gap-1.5 text-sm text-brand-700 hover:text-brand-800 hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {d.original_name ?? d.name}
+                </a>
+              ))}
               {hasSubmission && task.submitted_at && (
                 <p className="text-xs text-success">
                   ✓ Entregaste el {new Date(task.submitted_at).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}

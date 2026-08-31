@@ -1256,6 +1256,10 @@ function runMigrations() {
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_events_visit_dedupe ON profile_events (professional_id, day, type, visitor) WHERE type = 'visit'",
     // Cuándo se creó cada cita (para métricas del mes; NULL en las viejas).
     "ALTER TABLE appointments ADD COLUMN created_at TEXT",
+    // Varios documentos por tarea (pedido 31 ago 2026): además de la
+    // plantilla principal (template_document_id), el psicólogo puede
+    // adjuntar más archivos — se enlazan aquí, el binario vive en documents.
+    "CREATE TABLE IF NOT EXISTS tarea_documents (tarea_id INTEGER NOT NULL, document_id TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (tarea_id, document_id))",
   ];
   for (const sql of migrations) {
     try {

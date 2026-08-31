@@ -113,6 +113,10 @@ export interface PlatformWorkspaceDetail {
     googleLogin: boolean; emailVerified: boolean; publicProfile: boolean; publicSlug: string | null;
   };
   laura: { conversations: number; replies: number; tokens: number; lastUsedAt: string | null };
+  profileStats?: {
+    month: string; visits: number; clicksAgendar: number;
+    solicitudes: number; confirmadas: number; atendidas: number; cobrado: number;
+  };
   stats: {
     patients_count: number;
     patients_archived: number;
@@ -553,6 +557,8 @@ export interface Tarea {
   submitted_at?: string | null;
   template_document?: TareaDocumentDescriptor | null;
   submission_document?: TareaDocumentDescriptor | null;
+  /** Documentos adicionales de la tarea (además de la plantilla). */
+  documents?: TareaDocumentDescriptor[];
 }
 
 /** Descriptor mínimo de un archivo adjunto a una tarea (template o entrega). */
@@ -1213,6 +1219,20 @@ export const api = {
     request<{ ok: boolean; status: string; date: string; time: string }>(`/api/portal/appointments/${id}/reschedule`, { method: "POST", body: JSON.stringify(body) }),
   portalCancelAppointment: (id: number | string) =>
     request<{ ok: boolean; status: string }>(`/api/portal/appointments/${id}/cancel`, { method: "POST" }),
+  /** Recibos del paciente en su portal (solo los suyos, sin borradores). */
+  portalInvoices: () => request<Array<Record<string, any>>>("/api/portal/invoices"),
+  /** PDF del recibo desde el portal — mismo comprobante que emite el consultorio. */
+  portalInvoicePdf: async (id: string): Promise<Blob> => {
+    const token = getToken();
+    const r = await fetch(`${API_BASE}/api/portal/invoices/${id}/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (body as any).error ?? "No se pudo generar el PDF");
+    }
+    return r.blob();
+  },
   portalTasks: () => request<Array<Record<string, any>>>("/api/portal/tasks"),
   portalCompleteTask: (id: string) => request<{ ok: true }>(`/api/portal/tasks/${id}/complete`, { method: "POST" }),
   /**
@@ -1946,6 +1966,11 @@ export const api = {
   updateTarea: (id: number, body: Partial<Tarea>) =>
     request<Tarea>(`/api/tareas/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteTarea: (id: number) => request<void>(`/api/tareas/${id}`, { method: "DELETE" }),
+  /** Adjunta un documento adicional a una tarea (además de la plantilla). */
+  attachTareaDocument: (taskId: number, document_id: string) =>
+    request<Tarea>(`/api/tareas/${taskId}/documents`, { method: "POST", body: JSON.stringify({ document_id }) }),
+  detachTareaDocument: (taskId: number, docId: string) =>
+    request<Tarea>(`/api/tareas/${taskId}/documents/${docId}`, { method: "DELETE" }),
   restoreTarea: (id: number) => request<Tarea>(`/api/tareas/${id}/restore`, { method: "POST" }),
   archiveTarea: (id: number) => request<void>(`/api/tareas/${id}/archive`, { method: "POST" }),
   moveTarea: (id: number, status: TareaStatus, position: number) =>

@@ -479,4 +479,43 @@ router.get("/:id/pdf", (req, res) => {
   }
 });
 
+/**
+ * Render + stream del PDF de un recibo, reutilizable desde el portal del
+ * paciente (portal.js valida allá que el recibo pertenezca al paciente
+ * logueado). Mismo comprobante que descarga el consultorio.
+ */
+export function sendReceiptPdf(res, inv, workspaceId) {
+  const ws = db.prepare("SELECT id, name, mode FROM workspaces WHERE id = ?").get(workspaceId);
+  const settings = Object.fromEntries(
+    db.prepare("SELECT key, value FROM settings WHERE workspace_id = ?").all(workspaceId)
+      .map((sr) => [sr.key, sr.value]),
+  );
+  const prof = inv.professional
+    ? db.prepare("SELECT name, title, email, phone FROM professionals WHERE workspace_id = ? AND name = ?")
+        .get(workspaceId, inv.professional)
+    : null;
+  const showLogo = settings.receipt_show_logo !== "0";
+  const showName = settings.receipt_show_name !== "0";
+  const orientation = settings.receipt_logo_orientation ?? "horizontal";
+  const logoPath = showLogo ? findLogoPath(workspaceId) : null;
+  const LOGO_SIZES = {
+    horizontal: { width: 117, height: 36 },
+    vertical:   { width: 49,  height: 73 },
+    square:     { width: 57,  height: 57 },
+  };
+  const logoSize = LOGO_SIZES[orientation] ?? LOGO_SIZES.horizontal;
+  const docDef = buildReceiptDoc({ inv, ws, prof, settings, showLogo, showName, logoPath, logoSize });
+  const stream = printer.createPdfKitDocument(docDef);
+  const safe = (inv.patient_name || "recibo").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_").slice(0, 60);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${inv.id}_${safe}.pdf"`);
+  stream.on("error", (err) => {
+    console.error("[portal recibo pdf stream]", err);
+    if (!res.headersSent) res.status(500).json({ error: "Error generando PDF" });
+    else res.destroy(err);
+  });
+  stream.pipe(res);
+  stream.end();
+}
+
 export default router;

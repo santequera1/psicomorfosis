@@ -748,7 +748,7 @@ function PerfilPublicoStatsCard() {
   });
   if (!data || !data.enabled) return null;
   const cop = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
-  const conv = data.visits > 0 ? Math.round((data.solicitudes / data.visits) * 100) : null;
+  const conv = data.visits > 0 ? Math.min(100, Math.round((data.solicitudes / data.visits) * 100)) : null;
   const tiles: Array<{ label: string; value: string; hint?: string }> = [
     { label: "Visitas", value: String(data.visits), hint: data.sources[0] ? `top: ${data.sources[0].source}` : undefined },
     { label: "Clics en Reservar", value: String(data.clicksAgendar) },

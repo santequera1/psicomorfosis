@@ -39,6 +39,7 @@ import { Route as PacientesIdRouteImport } from './routes/pacientes_.$id'
 import { Route as PTestsRouteImport } from './routes/p_.tests'
 import { Route as PTareasRouteImport } from './routes/p_.tareas'
 import { Route as PPerfilRouteImport } from './routes/p_.perfil'
+import { Route as PPagosRouteImport } from './routes/p_.pagos'
 import { Route as PLoginRouteImport } from './routes/p_.login'
 import { Route as PInicioRouteImport } from './routes/p_.inicio'
 import { Route as PDocumentosRouteImport } from './routes/p_.documentos'
@@ -206,6 +207,11 @@ const PPerfilRoute = PPerfilRouteImport.update({
   path: '/p/perfil',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PPagosRoute = PPagosRouteImport.update({
+  id: '/p_/pagos',
+  path: '/p/pagos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PLoginRoute = PLoginRouteImport.update({
   id: '/p_/login',
   path: '/p/login',
@@ -319,6 +325,7 @@ export interface FileRoutesByFullPath {
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
   '/p/login': typeof PLoginRoute
+  '/p/pagos': typeof PPagosRoute
   '/p/perfil': typeof PPerfilRoute
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
@@ -367,6 +374,7 @@ export interface FileRoutesByTo {
   '/p/documentos': typeof PDocumentosRoute
   '/p/inicio': typeof PInicioRoute
   '/p/login': typeof PLoginRoute
+  '/p/pagos': typeof PPagosRoute
   '/p/perfil': typeof PPerfilRoute
   '/p/tareas': typeof PTareasRoute
   '/p/tests': typeof PTestsRoute
@@ -416,6 +424,7 @@ export interface FileRoutesById {
   '/p_/documentos': typeof PDocumentosRoute
   '/p_/inicio': typeof PInicioRoute
   '/p_/login': typeof PLoginRoute
+  '/p_/pagos': typeof PPagosRoute
   '/p_/perfil': typeof PPerfilRoute
   '/p_/tareas': typeof PTareasRoute
   '/p_/tests': typeof PTestsRoute
@@ -466,6 +475,7 @@ export interface FileRouteTypes {
     | '/p/documentos'
     | '/p/inicio'
     | '/p/login'
+    | '/p/pagos'
     | '/p/perfil'
     | '/p/tareas'
     | '/p/tests'
@@ -514,6 +524,7 @@ export interface FileRouteTypes {
     | '/p/documentos'
     | '/p/inicio'
     | '/p/login'
+    | '/p/pagos'
     | '/p/perfil'
     | '/p/tareas'
     | '/p/tests'
@@ -562,6 +573,7 @@ export interface FileRouteTypes {
     | '/p_/documentos'
     | '/p_/inicio'
     | '/p_/login'
+    | '/p_/pagos'
     | '/p_/perfil'
     | '/p_/tareas'
     | '/p_/tests'
@@ -611,6 +623,7 @@ export interface RootRouteChildren {
   PDocumentosRoute: typeof PDocumentosRoute
   PInicioRoute: typeof PInicioRoute
   PLoginRoute: typeof PLoginRoute
+  PPagosRoute: typeof PPagosRoute
   PPerfilRoute: typeof PPerfilRoute
   PTareasRoute: typeof PTareasRoute
   PTestsRoute: typeof PTestsRoute
@@ -840,6 +853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PPerfilRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/p_/pagos': {
+      id: '/p_/pagos'
+      path: '/p/pagos'
+      fullPath: '/p/pagos'
+      preLoaderRoute: typeof PPagosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/p_/login': {
       id: '/p_/login'
       path: '/p/login'
@@ -987,6 +1007,7 @@ const rootRouteChildren: RootRouteChildren = {
   PDocumentosRoute: PDocumentosRoute,
   PInicioRoute: PInicioRoute,
   PLoginRoute: PLoginRoute,
+  PPagosRoute: PPagosRoute,
   PPerfilRoute: PPerfilRoute,
   PTareasRoute: PTareasRoute,
   PTestsRoute: PTestsRoute,

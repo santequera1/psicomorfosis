@@ -1177,6 +1177,13 @@ function TareaDialog({
   const [templateDoc, setTemplateDoc] = useState(task?.template_document ?? null);
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const templateInputRef = useRef<HTMLInputElement>(null);
+  // Varios archivos por tarea (31 ago 2026): además de la plantilla se
+  // pueden adjuntar más documentos. Los staged esperan al Guardar.
+  const [extraStaged, setExtraStaged] = useState<File[]>([]);
+  const [extraDocs, setExtraDocs] = useState(task?.documents ?? []);
+  // "Cambiar" reutiliza el mismo input pero debe REEMPLAZAR la plantilla,
+  // no ir a la lista de adicionales.
+  const replacingTemplate = useRef(false);
 
   /**
    * Sube el archivo staged y enlaza el doc creado a la tarea. Llamado AFTER
@@ -1212,6 +1219,41 @@ function TareaDialog({
     }
   }
 
+  /** Sube y enlaza los archivos adicionales. Se pasa la lista explícita
+   *  (no el estado) porque setState es async y al guardar el estado aún
+   *  puede no reflejar el último pick. */
+  async function uploadExtraFiles(taskId: number, files: File[]) {
+    const patient = patients.find((p) => p.id === patientId) ?? null;
+    for (const file of files) {
+      try {
+        const doc = await api.uploadDocument(file, {
+          name: file.name,
+          type: "otro",
+          patient_id: patient?.id ?? null,
+          patient_name: patient?.name ?? null,
+        });
+        const updated = await api.attachTareaDocument(taskId, doc.id);
+        setExtraDocs(updated.documents ?? []);
+        setExtraStaged((prev) => prev.filter((f) => f !== file));
+      } catch (e: any) {
+        toast.error(e?.message ?? `No se pudo adjuntar ${file.name}`);
+      }
+    }
+  }
+
+  async function detachExtra(docId: string) {
+    if (!isEdit || !task) {
+      setExtraDocs((prev: any[]) => prev.filter((d) => d.id !== docId));
+      return;
+    }
+    try {
+      const updated = await api.detachTareaDocument(task.id, docId);
+      setExtraDocs(updated.documents ?? []);
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo quitar el archivo");
+    }
+  }
+
   async function detachTemplate() {
     if (!isEdit || !task) {
       // Si aún no se ha guardado, solo limpiamos el staging.
@@ -1242,6 +1284,9 @@ function TareaDialog({
       if (templateStaged && savedTask?.id) {
         await uploadAndAttachTemplate(savedTask.id);
       }
+      if (extraStaged.length > 0 && savedTask?.id) {
+        await uploadExtraFiles(savedTask.id, extraStaged);
+      }
       toast.success(isEdit ? "Tarea actualizada" : "Tarea creada");
       onClose();
     },
@@ -1269,14 +1314,18 @@ function TareaDialog({
   };
 
   function handlePickTemplate(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setTemplateStaged(file);
-    // Si estamos editando, subimos al instante (ya tenemos taskId).
-    // Si estamos creando, esperamos al save.
-    if (isEdit && task) {
-      uploadAndAttachTemplate(task.id);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    // El primer archivo ocupa el lugar de la plantilla si está libre (o si
+    // se pulsó "Cambiar"); el resto van como documentos adicionales. Todo
+    // se sube al pulsar Guardar — un solo momento de espera.
+    let rest = files;
+    if (replacingTemplate.current || (!templateStaged && !templateDoc)) {
+      setTemplateStaged(files[0]);
+      replacingTemplate.current = false;
+      rest = files.slice(1);
     }
+    if (rest.length > 0) setExtraStaged((prev) => [...prev, ...rest]);
     e.target.value = "";
   }
 
@@ -1452,8 +1501,8 @@ function TareaDialog({
                 Archivo de la tarea (opcional)
               </div>
               <p className="text-xs text-ink-500 -mt-1">
-                Adjunta un Word/PDF para que el paciente lo descargue, llene y vuelva a subir desde su portal.
-                Útil para autorregistros, escalas, registros de pensamientos, etc.
+                Adjunta uno o varios archivos (Word/PDF/imágenes) para que el paciente los descargue desde su portal.
+                Útil para autorregistros, escalas, registros de pensamientos, etc. Puedes seleccionar varios a la vez.
               </p>
 
               {/* Plantilla: o staged (preview), o ya subida (descarga), o sin nada (botón pick). */}
@@ -1487,7 +1536,7 @@ function TareaDialog({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
-                      onClick={() => templateInputRef.current?.click()}
+                      onClick={() => { replacingTemplate.current = true; templateInputRef.current?.click(); }}
                       className="text-xs text-ink-500 hover:text-ink-700"
                       title="Reemplazar archivo"
                     >
@@ -1511,12 +1560,60 @@ function TareaDialog({
                 >
                   {uploadingTemplate
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Subiendo…</>
-                    : <><Upload className="h-4 w-4" /> Adjuntar plantilla</>}
+                    : <><Upload className="h-4 w-4" /> Adjuntar archivos</>}
+                </button>
+              )}
+
+              {/* Documentos adicionales: ya enlazados + pendientes de subir. */}
+              {(extraDocs.length > 0 || extraStaged.length > 0) && (
+                <div className="space-y-2">
+                  {extraDocs.map((d: any) => (
+                    <div key={d.id} className="flex items-center justify-between gap-2 p-3 rounded-md border border-line-200 bg-surface">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-brand-700 shrink-0" />
+                        <a
+                          href={api.documentFileUrl(d.id)}
+                          download={d.original_name ?? d.name ?? "archivo"}
+                          className="text-sm text-brand-700 hover:underline truncate"
+                        >
+                          {d.original_name ?? d.name}
+                        </a>
+                      </div>
+                      <button type="button" onClick={() => detachExtra(d.id)} className="text-xs text-ink-500 hover:text-rose-700 shrink-0">
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                  {extraStaged.map((f, i) => (
+                    <div key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 p-3 rounded-md border border-dashed border-line-200 bg-surface">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 text-ink-400 shrink-0" />
+                        <span className="text-sm text-ink-900 truncate">{f.name}</span>
+                        <span className="text-xs text-ink-500 shrink-0">({Math.round(f.size / 1024)} KB)</span>
+                      </div>
+                      <button type="button" onClick={() => setExtraStaged((prev) => prev.filter((x) => x !== f))} className="text-xs text-ink-500 hover:text-rose-700 shrink-0">
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Con plantilla ya puesta, el botón grande desaparece — este
+                  atajo permite seguir añadiendo documentos. */}
+              {(templateStaged || templateDoc) && (
+                <button
+                  type="button"
+                  onClick={() => templateInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-dashed border-line-200 bg-surface text-xs text-ink-600 hover:border-brand-400"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Añadir más archivos
                 </button>
               )}
               <input
                 ref={templateInputRef}
                 type="file"
+                multiple
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.gif,.txt"
                 className="sr-only"
                 onChange={handlePickTemplate}

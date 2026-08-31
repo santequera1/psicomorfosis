@@ -78,3 +78,10 @@ smoke/smoke.env
 # Credenciales OAuth de Google — NUNCA al repo
 g/
 client_secret_*.json
+
+# Material de trabajo local que no debe versionarse
+tsconfig.tsbuildinfo
+.agents/
+skills-lock.json
+landing-nathaly/
+public/landing/mis-datos-*.json

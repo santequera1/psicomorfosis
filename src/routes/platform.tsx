@@ -816,6 +816,15 @@ function WorkspaceFicha360({ data }: { data: PlatformWorkspaceDetail }) {
             ) : (
               <span className="inline-flex items-center text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-bg-100 text-ink-500">Sin activar</span>
             )}
+            {publicUrl && data.profileStats && (
+              <p className="mt-3 text-[11px] text-ink-600 leading-relaxed">
+                Este mes: <span className="font-semibold tabular">{data.profileStats.visits}</span> visitas
+                {" · "}<span className="font-semibold tabular">{data.profileStats.clicksAgendar}</span> clics en reservar
+                {" · "}<span className="font-semibold tabular">{data.profileStats.solicitudes}</span> solicitudes
+                {" · "}<span className="font-semibold tabular">{data.profileStats.confirmadas}</span> confirmadas
+                {" · "}<span className="font-semibold tabular">${(data.profileStats.cobrado ?? 0).toLocaleString("es-CO")}</span> cobrado
+              </p>
+            )}
           </div>
         </div>
 
