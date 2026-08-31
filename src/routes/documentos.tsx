@@ -83,12 +83,12 @@ function PdfGlyph({ className }: { className?: string }) {
  * nativos y editables; los `kind=file` son subidos y solo se ven/descargan.
  */
 function formatBadge(doc: PsmDocument): {
-  label: string; bg: string; text: string;
+  label: string; bg: string; text: string; solid: string;
   Icon: React.ComponentType<{ className?: string }>;
   editable: boolean; title: string;
 } {
   if (doc.kind !== "file") {
-    return { label: "Editable", bg: "bg-brand-50", text: "text-brand-800", Icon: Pencil, editable: true, title: "Documento nativo — editable en la plataforma" };
+    return { label: "Editable", bg: "bg-brand-50", text: "text-brand-800", solid: "bg-brand-700 text-white", Icon: Pencil, editable: true, title: "Documento nativo — editable en la plataforma" };
   }
   const name = (doc.original_name ?? doc.filename ?? doc.name ?? "").toLowerCase();
   const mime = doc.mime ?? "";
@@ -96,21 +96,21 @@ function formatBadge(doc: PsmDocument): {
   const viewTitle = (fmt: string) => `Archivo ${fmt} subido — solo visualización y descarga`;
 
   if (mime === "application/pdf" || ext === "pdf") {
-    return { label: "PDF", bg: "bg-rose-500/10", text: "text-rose-700 dark:text-rose-400", Icon: PdfGlyph, editable: false, title: viewTitle("PDF") };
+    return { label: "PDF", bg: "bg-rose-500/10", text: "text-rose-700 dark:text-rose-400", solid: "bg-rose-600 text-white", Icon: PdfGlyph, editable: false, title: viewTitle("PDF") };
   }
   if (mime.includes("wordprocessingml") || mime === "application/msword" || ext === "docx" || ext === "doc") {
-    return { label: ext === "doc" ? "DOC" : "DOCX", bg: "bg-blue-500/10", text: "text-blue-700 dark:text-blue-400", Icon: FileText, editable: false, title: viewTitle("Word") };
+    return { label: ext === "doc" ? "DOC" : "DOCX", bg: "bg-blue-500/10", text: "text-blue-700 dark:text-blue-400", solid: "bg-blue-600 text-white", Icon: FileText, editable: false, title: viewTitle("Word") };
   }
   if (mime.includes("spreadsheetml") || mime === "application/vnd.ms-excel" || ext === "xlsx" || ext === "xls" || ext === "csv") {
-    return { label: ext ? ext.toUpperCase() : "EXCEL", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", Icon: FileSpreadsheet, editable: false, title: viewTitle("Excel") };
+    return { label: ext ? ext.toUpperCase() : "EXCEL", bg: "bg-emerald-500/10", text: "text-emerald-700 dark:text-emerald-400", solid: "bg-emerald-600 text-white", Icon: FileSpreadsheet, editable: false, title: viewTitle("Excel") };
   }
   if (mime.startsWith("image/")) {
-    return { label: ext ? ext.toUpperCase() : "IMAGEN", bg: "bg-violet-500/10", text: "text-violet-700 dark:text-violet-400", Icon: ImageIcon, editable: false, title: viewTitle("de imagen") };
+    return { label: ext ? ext.toUpperCase() : "IMAGEN", bg: "bg-violet-500/10", text: "text-violet-700 dark:text-violet-400", solid: "bg-violet-600 text-white", Icon: ImageIcon, editable: false, title: viewTitle("de imagen") };
   }
   if (mime === "text/plain" || ext === "txt") {
-    return { label: "TXT", bg: "bg-bg-100", text: "text-ink-500", Icon: FileText, editable: false, title: viewTitle("de texto") };
+    return { label: "TXT", bg: "bg-bg-100", text: "text-ink-500", solid: "bg-ink-700 text-white", Icon: FileText, editable: false, title: viewTitle("de texto") };
   }
-  return { label: ext ? ext.toUpperCase() : "Archivo", bg: "bg-bg-100", text: "text-ink-500", Icon: FileArchive, editable: false, title: viewTitle("") };
+  return { label: ext ? ext.toUpperCase() : "Archivo", bg: "bg-bg-100", text: "text-ink-500", solid: "bg-ink-500 text-white", Icon: FileArchive, editable: false, title: viewTitle("") };
 }
 
 function DocumentosPage() {
@@ -790,11 +790,11 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
           </span>
           {/* Formato real (PDF/DOCX/XLSX/…) + si es editable o solo lectura */}
           <span
-            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium", fmt.bg, fmt.text)}
+            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md font-semibold shadow-xs", fmt.solid)}
             title={fmt.title}
           >
             <fmt.Icon className="h-3 w-3" /> {fmt.label}
-            {!fmt.editable && <Eye className="h-3 w-3 opacity-60" />}
+            {!fmt.editable && <Eye className="h-3 w-3 opacity-70" />}
           </span>
           {doc.shared_with_patient && doc.patient_id && (
             <span
@@ -823,11 +823,11 @@ function DocRow({ doc, menuOpen, onMenuToggle, onCloseMenu, onArchive, onDelete,
             <s.Icon className="h-3 w-3" /> {s.label}
           </span>
           <span
-            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium", fmt.bg, fmt.text)}
+            className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md font-semibold shadow-xs", fmt.solid)}
             title={fmt.title}
           >
             <fmt.Icon className="h-3 w-3" /> {fmt.label}
-            {!fmt.editable && <Eye className="h-3 w-3 opacity-60" />}
+            {!fmt.editable && <Eye className="h-3 w-3 opacity-70" />}
           </span>
           {doc.shared_with_patient && doc.patient_id && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em] px-2 py-0.5 rounded-full font-medium bg-brand-50 text-brand-800">
@@ -987,12 +987,14 @@ function DocCard({ doc, onArchive, onDelete, onDuplicate, onPreviewImage, onShar
               )}>
                 {s.label}
               </span>
+              {/* Insignia de formato sólida (pedida por los testers: que el
+                  tipo de archivo se vea de un vistazo, estilo "tag" de
+                  gestor de archivos, con nuestros colores). */}
               <span
-                className={cn("inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full font-medium", fmt.bg, fmt.text)}
+                className={cn("inline-flex items-center gap-1 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-md font-semibold shadow-xs", fmt.solid)}
                 title={fmt.title}
               >
-                <fmt.Icon className="h-2.5 w-2.5" /> {fmt.label}
-                {!fmt.editable && <Eye className="h-2.5 w-2.5 opacity-60" />}
+                <fmt.Icon className="h-3 w-3" /> {fmt.label}
               </span>
               {doc.shared_with_patient && doc.patient_id && (
                 <span
