@@ -97,11 +97,40 @@ router.get("/professionals/:slug", readLimiter, (req, res) => {
 });
 
 // ─── GET disponibilidad ──────────────────────────────────────────────
-// Slots de 50 min en grilla horaria Lu-Vi 08:00-17:00, excluyendo las
-// horas ya ocupadas en la agenda real del profesional. v1 sin horarios
-// configurables por profesional (la grilla coincide con el uso actual
-// de la app); cuando haga falta, esto lee de una tabla de horarios.
-const GRID = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
+// Slots horarios según el "Horario de atención" que el profesional
+// configura en Configuración (settings: work_days CSV en inglés,
+// work_start_hour, work_end_hour). Si no lo ha configurado, L-V de 8 a
+// 18 — el comportamiento de siempre. Reporte de Nathaly (31 ago 2026):
+// habilitó el sábado y el enlace público seguía sin ofrecerlo, porque
+// esto era una grilla fija.
+const DAY_INDEX = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+function scheduleFor(professionalId) {
+  const prof = db.prepare("SELECT workspace_id FROM professionals WHERE id = ?").get(professionalId);
+  const setts = prof
+    ? Object.fromEntries(db.prepare(
+        "SELECT key, value FROM settings WHERE workspace_id = ? AND key IN ('work_days', 'work_start_hour', 'work_end_hour')",
+      ).all(prof.workspace_id).map((r) => [r.key, r.value]))
+    : {};
+  const days = new Set(
+    String(setts.work_days ?? "monday,tuesday,wednesday,thursday,friday")
+      .split(",").map((d) => DAY_INDEX[d.trim().toLowerCase()]).filter((n) => n !== undefined),
+  );
+  if (days.size === 0) [1, 2, 3, 4, 5].forEach((n) => days.add(n));
+  let start = parseInt(String(setts.work_start_hour ?? "8"), 10);
+  let end = parseInt(String(setts.work_end_hour ?? "18"), 10);
+  if (!Number.isFinite(start) || start < 0 || start > 23) start = 8;
+  if (!Number.isFinite(end) || end <= start || end > 24) end = Math.min(start + 10, 24);
+  const slots = [];
+  for (let h = start; h < end; h++) slots.push(String(h).padStart(2, "0") + ":00");
+  return { days, slots };
+}
+
+/** ¿Ese día/hora cae dentro del horario de atención del profesional? */
+export function isBookableSlot(professionalId, date, time) {
+  const sched = scheduleFor(professionalId);
+  const d = new Date(`${date}T12:00:00`);
+  return sched.slots.includes(String(time)) && sched.days.has(d.getDay());
+}
 
 /**
  * Huecos libres de un profesional (misma grilla que el perfil público).
@@ -110,26 +139,29 @@ const GRID = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17
  * ocupada (si no, su propio horario nunca aparecería).
  */
 export function computeAvailability(professionalId, { days = 14, excludeAppointmentId = null } = {}) {
-  const now = new Date();
+  const sched = scheduleFor(professionalId);
+  // "Hoy" en Bogotá: con toISOString (UTC) el "desde mañana" se corría un
+  // día a partir de las 7 pm hora Colombia.
+  const hoyBogota = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const base = new Date(`${hoyBogota}T12:00:00`);
   const out = [];
-  for (let i = 0; i < days + 7 && out.length < days; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 1 + i); // desde mañana
-    const dow = d.getDay();
-    if (dow === 0 || dow === 6) continue; // Lu-Vi
-    const date = d.toISOString().slice(0, 10);
+  // Margen amplio: un profesional que solo atiende 1-2 días por semana
+  // necesita mirar más lejos para juntar `days` días con huecos.
+  for (let i = 1; i <= days * 7 && out.length < days; i++) {
+    const d = new Date(base.getTime() + i * 86_400_000); // desde mañana
+    if (!sched.days.has(d.getDay())) continue;
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const taken = new Set(
       db.prepare(`
         SELECT time FROM appointments
         WHERE professional_id = ? AND date = ? AND status != 'cancelada' AND id != ?
       `).all(professionalId, date, excludeAppointmentId ?? -1).map((r) => String(r.time).slice(0, 5)),
     );
-    const slots = GRID.filter((t) => !taken.has(t));
+    const slots = sched.slots.filter((t) => !taken.has(t));
     if (slots.length) out.push({ date, slots });
   }
   return { days: out, duration_min: 50 };
 }
-export const SLOT_GRID = GRID;
 
 router.get("/professionals/:slug/availability", readLimiter, (req, res) => {
   const p = publicProfessional(req.params.slug);
@@ -161,8 +193,8 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
   if (name.length < 3) return res.status(400).json({ error: "Nombre requerido" });
   if (phone.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Teléfono válido requerido" });
   if (!Number.isInteger(age) || age < 1 || age > 120) return res.status(400).json({ error: "Indica tu edad" });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !GRID.includes(time)) {
-    return res.status(400).json({ error: "Fecha u hora inválida" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(String(time)) || !isBookableSlot(p.id, date, time)) {
+    return res.status(400).json({ error: "Ese horario no está disponible. Elige uno del calendario." });
   }
   // Hora de Colombia explícita: sin zona el servidor (UTC) rechazaba como
   // "ya pasó" cualquier reserva de las próximas 5 horas.

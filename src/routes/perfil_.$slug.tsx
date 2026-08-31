@@ -439,10 +439,11 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                 <p className="py-10 text-center text-sm text-ink-500">No hay horarios disponibles en las próximas semanas.</p>
               ) : (
                 <>
-                  {/* Calendario de mes (pedido de las testers: los chips
-                      sueltos no dejaban saber en qué mes o día estabas).
-                      Solo se pueden tocar los días con huecos libres. */}
-                  <div className="mt-4 rounded-2xl border border-line-200 flex justify-center py-2">
+                  {/* Calendario a ancho completo con celdas grandes: la
+                      versión anterior quedaba flotando pequeña dentro de una
+                      caja y se veía fuera de lugar (feedback 31 ago). Solo
+                      se pueden tocar los días con huecos libres. */}
+                  <div className="mt-4">
                     <CalendarPicker
                       mode="single"
                       locale={es}
@@ -455,7 +456,15 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                         setTime(null);
                       }}
                       disabled={(d) => !availDates.has(isoOf(d))}
+                      className="w-full bg-transparent p-0 [--cell-size:2.65rem] sm:[--cell-size:3rem]"
+                      classNames={{
+                        root: "rdp-root w-full",
+                        month: "rdp-month flex w-full flex-col gap-3",
+                        month_caption: "rdp-month_caption flex h-(--cell-size) w-full items-center justify-center px-(--cell-size) font-serif text-lg text-ink-900 capitalize",
+                        weekday: "rdp-weekday text-ink-400 flex-1 select-none text-[11px] font-medium uppercase tracking-wide",
+                      }}
                     />
+                    <p className="mt-2 text-[11px] text-ink-400 text-center">Los días apagados no tienen horarios libres.</p>
                   </div>
                   {date && (
                     <>

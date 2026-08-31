@@ -11,7 +11,7 @@ import { calculateScore } from "../psych_test_definitions.js";
 import { applyPatientSignature, buildInterpolationContext } from "./documents.js";
 import { sendPatientInviteEmail } from "../mailer.js";
 import { notifyPortalInvite, notifyRescheduleRequested, notifyCancelledByPatient } from "../lib/psicobot.js";
-import { computeAvailability, SLOT_GRID } from "./public-booking.js";
+import { computeAvailability, isBookableSlot } from "./public-booking.js";
 import { notifyAsync } from "./appointments.js";
 import { removeEventAsync } from "../lib/gcal.js";
 // Reutilizamos el mismo limiter que el login del staff — misma política
@@ -630,8 +630,9 @@ router.post("/portal/appointments/:id/reschedule", requirePatient, (req, res) =>
   if (!PORTAL_EDITABLE.has(a.status)) return res.status(409).json({ error: "Esta cita ya no se puede cambiar." });
   if (!isFutureBogota(a.date, a.time)) return res.status(409).json({ error: "La cita ya pasó." });
   const { date, time } = req.body ?? {};
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !SLOT_GRID.includes(String(time))) {
-    return res.status(400).json({ error: "Fecha u hora inválida" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !/^\d{2}:\d{2}$/.test(String(time))
+      || !isBookableSlot(a.professional_id, String(date), String(time))) {
+    return res.status(400).json({ error: "Ese horario no está en la agenda de tu psicólogo/a. Elige uno de la lista." });
   }
   if (!isFutureBogota(date, time)) return res.status(400).json({ error: "Ese horario ya pasó" });
   if (date === a.date && time === a.time) return res.status(400).json({ error: "Es la misma hora que ya tienes" });
