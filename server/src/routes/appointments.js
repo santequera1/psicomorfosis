@@ -242,6 +242,7 @@ router.post("/", async (req, res) => {
     professionalName, a.modality ?? "individual", a.room ?? "",
     a.status ?? "pendiente", a.notes ?? ""
   );
+  db.prepare("UPDATE appointments SET created_at = datetime('now') WHERE id = ?").run(r.lastInsertRowid);
   let row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));
   // Google Calendar del profesional (si lo conectó). Si usa Meet y la cita
   // es online, esperamos (máx. 4 s) para que el aviso lleve el enlace de

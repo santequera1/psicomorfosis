@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /p/
+Disallow: /auth/
+Disallow: /login
+Disallow: /platform
+
+Sitemap: https://psicomorfosis.co/sitemap.xml

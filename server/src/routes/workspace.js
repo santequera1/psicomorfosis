@@ -1106,4 +1106,44 @@ function statsOperationalKpis(ws) {
   };
 }
 
+/**
+ * GET /api/workspace/perfil-publico/stats — "Tu perfil este mes" para el
+ * profesional del usuario: visitas y clics (profile_events) + embudo de
+ * citas llegadas por el enlace (marcadas [reserva-web]) + $ cobrado a
+ * esos pacientes. Atribución honesta: solo lo que entró por el enlace.
+ */
+router.get("/perfil-publico/stats", (req, res) => {
+  const pros = db.prepare("SELECT id, email, slug, public_enabled FROM professionals WHERE workspace_id = ? AND active = 1 ORDER BY id").all(req.user.workspace_id);
+  const mine = pros.find((pr) => pr.email && req.user.email && pr.email.toLowerCase() === String(req.user.email).toLowerCase()) ?? pros[0];
+  if (!mine) return res.json(null);
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit" }).format(new Date());
+  const ev = (type) => db.prepare("SELECT COUNT(*) AS n FROM profile_events WHERE professional_id = ? AND type = ? AND day LIKE ?").get(mine.id, type, month + "%").n;
+  // Citas del enlace, del mes (por fecha de creación; las anteriores a la
+  // columna created_at cuentan por la fecha de la cita).
+  const apptCount = (extra) => db.prepare(
+    `SELECT COUNT(*) AS n FROM appointments WHERE professional_id = ? AND notes LIKE '[reserva-web]%' AND substr(COALESCE(created_at, date), 1, 7) = ? ${extra}`,
+  ).get(mine.id, month).n;
+  const cobrado = db.prepare(`
+    SELECT COALESCE(SUM(i.amount), 0) AS s
+    FROM invoices i JOIN patients p ON p.id = i.patient_id
+    WHERE i.workspace_id = ? AND i.status = 'pagada' AND p.reason LIKE '[reserva-web]%'
+      AND substr(COALESCE(i.paid_at, i.date), 1, 7) = ?
+  `).get(req.user.workspace_id, month).s;
+  res.json({
+    month,
+    enabled: !!(mine.public_enabled && mine.slug),
+    slug: mine.slug ?? null,
+    visits: ev("visit"),
+    clicksAgendar: ev("click_agendar"),
+    clicksWhatsapp: ev("click_whatsapp"),
+    clicksSocial: ev("click_social") + ev("click_link"),
+    solicitudes: apptCount(""),
+    confirmadas: apptCount("AND status IN ('confirmada', 'atendida', 'en_curso')"),
+    atendidas: apptCount("AND status = 'atendida'"),
+    canceladas: apptCount("AND status IN ('cancelada', 'no_show')"),
+    cobrado,
+    sources: db.prepare("SELECT COALESCE(source, 'directo') AS source, COUNT(*) AS n FROM profile_events WHERE professional_id = ? AND type = 'visit' AND day LIKE ? GROUP BY 1 ORDER BY 2 DESC LIMIT 5").all(mine.id, month + "%"),
+  });
+});
+
 export default router;

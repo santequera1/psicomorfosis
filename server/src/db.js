@@ -1248,6 +1248,14 @@ function runMigrations() {
     "ALTER TABLE appointments ADD COLUMN video_provider TEXT", // 'jitsi' | 'meet' | NULL
     // Consentimiento de WhatsApp: quién lo activó ('profesional' | 'paciente' | 'bot' | 'registro').
     "ALTER TABLE patients ADD COLUMN whatsapp_opt_in_by TEXT",
+    // Métricas anónimas del perfil público (visitas/clics; sin cookies ni
+    // datos personales — `visitor` es un hash de conexión+día solo para
+    // no contar la misma visita varias veces).
+    "CREATE TABLE IF NOT EXISTS profile_events (id INTEGER PRIMARY KEY AUTOINCREMENT, professional_id INTEGER NOT NULL, workspace_id INTEGER NOT NULL, type TEXT NOT NULL, source TEXT, network TEXT, day TEXT NOT NULL, visitor TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE INDEX IF NOT EXISTS idx_profile_events_prof_day ON profile_events (professional_id, day, type)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_events_visit_dedupe ON profile_events (professional_id, day, type, visitor) WHERE type = 'visit'",
+    // Cuándo se creó cada cita (para métricas del mes; NULL en las viejas).
+    "ALTER TABLE appointments ADD COLUMN created_at TEXT",
   ];
   for (const sql of migrations) {
     try {

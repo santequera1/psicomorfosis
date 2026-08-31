@@ -1142,6 +1142,14 @@ export const api = {
       { method: "POST", body: JSON.stringify({ email, password }) }
     ),
 
+  perfilPublicoStats: () =>
+    request<{
+      month: string; enabled: boolean; slug: string | null;
+      visits: number; clicksAgendar: number; clicksWhatsapp: number; clicksSocial: number;
+      solicitudes: number; confirmadas: number; atendidas: number; canceladas: number; cobrado: number;
+      sources: Array<{ source: string; n: number }>;
+    } | null>("/api/workspace/perfil-publico/stats"),
+
   // Portal con Google: datos para el consentimiento y activación.
   portalGooglePending: (proof: string) =>
     request<{

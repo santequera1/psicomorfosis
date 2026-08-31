@@ -17,6 +17,7 @@
  */
 
 import { Router } from "express";
+import crypto from "node:crypto";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "../db.js";
 import { notifyBookingRequested, toE164Co } from "../lib/psicobot.js";
@@ -245,6 +246,7 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
          modality, modality === "tele" ? null : "Por confirmar",
          `[reserva-web]${motivo ? ` ${motivo}` : ""}`);
 
+  db.prepare("UPDATE appointments SET created_at = datetime('now') WHERE id = ?").run(info.lastInsertRowid);
   // Si es online, el enlace se crea ya; viajará en la confirmación.
   ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(info.lastInsertRowid));
   console.log(`[public-booking] solicitud appt=${info.lastInsertRowid} prof=${p.slug} patient=${patient.id} ${date} ${time}`);
@@ -291,6 +293,66 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
     status: "solicitada",
     message: `${p.name.split(" ")[0]} confirmará tu cita por WhatsApp.`,
   });
+});
+
+/**
+ * Métrica anónima del perfil público (visitas y clics). Sin cookies ni
+ * datos personales: para deduplicar visitas se guarda un hash de
+ * conexión+día que no permite identificar a nadie. Nunca falla hacia el
+ * visitante: cualquier problema responde ok y se descarta.
+ */
+const metricLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `pmetric:${ipKeyGenerator(req)}`,
+  message: { ok: false },
+});
+const METRIC_TYPES = new Set(["visit", "click_agendar", "click_whatsapp", "click_social", "click_link"]);
+router.post("/profile-metric", metricLimiter, (req, res) => {
+  try {
+    const { slug, type, source, network } = req.body ?? {};
+    if (!METRIC_TYPES.has(String(type))) return res.json({ ok: true });
+    const p = publicProfessional(String(slug ?? ""));
+    if (!p) return res.json({ ok: true });
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const src = source ? String(source).slice(0, 80) : null;
+    const net = network ? String(network).slice(0, 30) : null;
+    if (type === "visit") {
+      const ua = String(req.headers["user-agent"] ?? "");
+      if (/bot|crawler|spider|preview|facebookexternalhit|slurp|whatsapp\//i.test(ua)) return res.json({ ok: true });
+      const ip = String(req.headers["x-real-ip"] ?? req.ip ?? "");
+      const visitor = crypto.createHash("sha256").update(`${ip}|${ua}|${day}|psm-metric`).digest("hex").slice(0, 24);
+      db.prepare("INSERT OR IGNORE INTO profile_events (professional_id, workspace_id, type, source, day, visitor) VALUES (?, ?, 'visit', ?, ?, ?)")
+        .run(p.id, p.workspace_id, src, day, visitor);
+    } else {
+      db.prepare("INSERT INTO profile_events (professional_id, workspace_id, type, source, network, day) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(p.id, p.workspace_id, String(type), src, net, day);
+    }
+  } catch (e) {
+    console.warn(`[profile-metric] ${e?.message}`);
+  }
+  res.json({ ok: true });
+});
+
+/**
+ * Sitemap para buscadores: páginas públicas + perfiles activos. nginx lo
+ * expone como https://psicomorfosis.co/sitemap.xml.
+ */
+router.get("/sitemap.xml", (req, res) => {
+  const base = "https://psicomorfosis.co";
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = ["/", "/inicio", "/privacidad", "/terminos"].map((u) => ({ loc: base + u, priority: u === "/" ? "1.0" : "0.7" }));
+  for (const pr of db.prepare("SELECT slug FROM professionals WHERE public_enabled = 1 AND slug IS NOT NULL AND slug != ''").all()) {
+    urls.push({ loc: `${base}/perfil/${pr.slug}`, priority: "0.8" });
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    urls.map((u) => `  <url><loc>${u.loc}</loc><lastmod>${today}</lastmod><priority>${u.priority}</priority></url>`).join("\n") +
+    `\n</urlset>\n`;
+  res.set("Content-Type", "application/xml; charset=utf-8");
+  res.set("Cache-Control", "public, max-age=3600");
+  res.send(xml);
 });
 
 export default router;

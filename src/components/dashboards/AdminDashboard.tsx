@@ -316,6 +316,8 @@ export function AdminDashboard() {
           dashStats resuelve), así que mountaba tarde y empujaba todo
           abajo. Ahora va al final, donde su aparición tardía no afecta
           a estas dos cards. */}
+      <PerfilPublicoStatsCard />
+
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div
           className="lg-surface xl:col-span-2 rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards"
@@ -732,5 +734,50 @@ function UpcomingSessionRow({ session: s }: { session: any }) {
         </div>
       </div>
     </li>
+  );
+}
+
+// ─── "Tu perfil público este mes" ───────────────────────────────────────────
+// Embudo del enlace público con atribución honesta: solo visitas/clics del
+// perfil y citas/cobros de pacientes que llegaron por él ([reserva-web]).
+function PerfilPublicoStatsCard() {
+  const { data } = useQuery({
+    queryKey: ["perfil-publico-stats"],
+    queryFn: () => api.perfilPublicoStats(),
+    staleTime: 5 * 60_000,
+  });
+  if (!data || !data.enabled) return null;
+  const cop = (n: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+  const conv = data.visits > 0 ? Math.round((data.solicitudes / data.visits) * 100) : null;
+  const tiles: Array<{ label: string; value: string; hint?: string }> = [
+    { label: "Visitas", value: String(data.visits), hint: data.sources[0] ? `top: ${data.sources[0].source}` : undefined },
+    { label: "Clics en Reservar", value: String(data.clicksAgendar) },
+    { label: "Solicitudes", value: String(data.solicitudes), hint: conv != null ? `${conv}% de las visitas` : undefined },
+    { label: "Confirmadas", value: String(data.confirmadas), hint: data.atendidas > 0 ? `${data.atendidas} atendidas` : undefined },
+    { label: "Cobrado", value: cop(data.cobrado), hint: "pacientes del enlace" },
+  ];
+  return (
+    <section className="rounded-xl border border-line-200 bg-surface p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-backwards">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div>
+          <h3 className="font-serif text-lg text-ink-900">Tu perfil público este mes</h3>
+          <p className="text-xs text-ink-500">Lo que tu enlace de reservas está generando.</p>
+        </div>
+        {data.slug && (
+          <a href={`/perfil/${data.slug}`} target="_blank" rel="noreferrer" className="text-xs text-brand-700 font-medium hover:underline">
+            Ver mi perfil →
+          </a>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-lg bg-bg-50 border border-line-100 px-3 py-2.5">
+            <div className="text-lg font-semibold text-ink-900 tabular truncate">{t.value}</div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-500">{t.label}</div>
+            {t.hint && <div className="text-[10px] text-ink-400 mt-0.5 truncate">{t.hint}</div>}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
