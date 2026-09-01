@@ -376,6 +376,102 @@ router.post("/", (req, res) => {
   res.status(201).json(rowToPatient(row));
 });
 
+/**
+ * POST /api/patients/import — importación masiva desde Excel/CSV
+ * (pedido 1 sep 2026: "cada psicólogo nuevo llega con su Excel"). El
+ * front parsea el archivo y manda filas ya mapeadas; aquí se valida,
+ * se deduplica y se inserta en una transacción.
+ *
+ * Dedupe dentro del workspace: correo o teléfono ya registrados; si la
+ * fila no trae ninguno de los dos, nombre exacto. whatsapp_opt_in sigue
+ * la regla de consentimiento (tener número = autorización) PERO sin
+ * disparar la bienvenida de Laura salvo sendWelcome=true — importar el
+ * histórico no debe mandar cientos de WhatsApps de una.
+ */
+router.post("/import", (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  const sendWelcome = Boolean(req.body?.sendWelcome);
+  if (rows.length === 0) return res.status(400).json({ error: "Sin filas para importar" });
+  if (rows.length > 500) return res.status(400).json({ error: "Máximo 500 pacientes por importación" });
+  const ws = req.user.workspace_id;
+  const nowIso = new Date().toISOString();
+
+  const prof = req.user.professional_id
+    ? db.prepare("SELECT id, name FROM professionals WHERE id = ?").get(req.user.professional_id)
+    : null;
+  const profName = prof?.name ?? req.user.name ?? "";
+
+  const existing = db.prepare("SELECT name, phone, email FROM patients WHERE workspace_id = ?").all(ws);
+  const seenEmail = new Set(existing.map((r) => String(r.email ?? "").trim().toLowerCase()).filter(Boolean));
+  const seenPhone = new Set(existing.map((r) => String(r.phone ?? "").replace(/\D/g, "")).filter((d) => d.length >= 7));
+  const seenName = new Set(existing.map((r) => String(r.name ?? "").trim().toLowerCase()).filter(Boolean));
+
+  const insert = db.prepare(`
+    INSERT INTO patients (id, workspace_id, professional_id, name, doc, age, phone, email, professional,
+                          modality, status, reason, last_contact, risk, address, sex, pronouns,
+                          whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_by)
+    VALUES (@id, @workspace_id, @professional_id, @name, @doc, @age, @phone, @email, @professional,
+            'individual', 'activo', @reason, 'Importado', 'none', @address, @sex, '',
+            @whatsapp_opt_in, @whatsapp_opt_in_at, @whatsapp_opt_in_by)
+  `);
+
+  const created = [];
+  const skipped = [];
+  const tx = db.transaction((items) => {
+    items.forEach((raw, i) => {
+      const name = String(raw?.name ?? "").trim();
+      if (!name) { skipped.push({ index: i, name: "(sin nombre)", reason: "Falta el nombre" }); return; }
+      const phone = normalizePatientPhone(raw?.phone);
+      const phoneDigits = phone.replace(/\D/g, "");
+      const emailRaw = String(raw?.email ?? "").trim();
+      const emailKey = emailRaw.toLowerCase();
+      if (emailKey && seenEmail.has(emailKey)) { skipped.push({ index: i, name, reason: `Ya existe un paciente con el correo ${emailRaw}` }); return; }
+      if (phoneDigits.length >= 7 && seenPhone.has(phoneDigits)) { skipped.push({ index: i, name, reason: `Ya existe un paciente con el teléfono ${phone}` }); return; }
+      if (!emailKey && phoneDigits.length < 7 && seenName.has(name.toLowerCase())) {
+        skipped.push({ index: i, name, reason: "Ya existe un paciente con ese nombre (y la fila no trae correo ni teléfono para diferenciarlo)" });
+        return;
+      }
+      const ageNum = Number.parseInt(String(raw?.age ?? "").replace(/\D/g, ""), 10);
+      const sexRaw = String(raw?.sex ?? "").trim().toUpperCase();
+      const sex = sexRaw.startsWith("M") || sexRaw.startsWith("H") ? "M" : sexRaw.startsWith("F") ? "F" : null;
+      const optIn = Boolean(phone);
+      const id = nextPatientId(ws);
+      insert.run({
+        id,
+        workspace_id: ws,
+        professional_id: prof?.id ?? null,
+        name,
+        doc: String(raw?.doc ?? "").trim(),
+        age: Number.isFinite(ageNum) && ageNum > 0 && ageNum < 130 ? ageNum : 0,
+        phone,
+        email: emailRaw,
+        professional: profName,
+        reason: String(raw?.reason ?? "").trim(),
+        address: String(raw?.address ?? "").trim() || null,
+        sex,
+        whatsapp_opt_in: optIn ? 1 : 0,
+        whatsapp_opt_in_at: optIn ? nowIso : null,
+        whatsapp_opt_in_by: optIn ? "profesional" : null,
+      });
+      if (emailKey) seenEmail.add(emailKey);
+      if (phoneDigits.length >= 7) seenPhone.add(phoneDigits);
+      seenName.add(name.toLowerCase());
+      created.push(id);
+    });
+  });
+  tx(rows);
+
+  if (sendWelcome) {
+    for (const id of created) {
+      const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(id);
+      if (row?.whatsapp_opt_in === 1) notifyPatientOptIn({ patient: row, professionalName: profName || professionalNameFor(row, req) });
+    }
+  }
+
+  console.log(`[patients/import] ws=${ws} total=${rows.length} creados=${created.length} saltados=${skipped.length} welcome=${sendWelcome}`);
+  res.json({ total: rows.length, created: created.length, createdIds: created, skipped });
+});
+
 router.patch("/:id", (req, res) => {
   const existing = db.prepare("SELECT * FROM patients WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Paciente no encontrado" });

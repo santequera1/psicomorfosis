@@ -1422,6 +1422,10 @@ export const api = {
   listPatients: (params: Record<string, string | number | undefined> = {}) =>
     request<ApiPatient[]>(`/api/patients${qs(params)}`),
   getPatient: (id: string) => request<ApiPatient>(`/api/patients/${id}`),
+  /** Importación masiva desde Excel/CSV — filas ya mapeadas a campos. */
+  importPatients: (body: { rows: Array<Record<string, string>>; sendWelcome?: boolean }) =>
+    request<{ total: number; created: number; createdIds: string[]; skipped: Array<{ index: number; name: string; reason: string }> }>(
+      "/api/patients/import", { method: "POST", body: JSON.stringify(body) }),
   createPatient: (body: Partial<ApiPatient>) =>
     request<ApiPatient>("/api/patients", { method: "POST", body: JSON.stringify(body) }),
   updatePatient: (id: string, body: Partial<ApiPatient>) =>

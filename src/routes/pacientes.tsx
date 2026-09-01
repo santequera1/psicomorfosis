@@ -9,7 +9,8 @@ import { useWorkspace } from "@/lib/workspace";
 import { RiskBadge } from "@/components/app/RiskBadge";
 import { RiskPicker } from "@/components/app/RiskPicker";
 import { ViewToggle, usePersistedViewMode } from "@/components/app/ViewToggle";
-import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, Calendar } from "lucide-react";
+import { Search, Filter, Download, Plus, ChevronRight, Tag, X, Loader2, AlertCircle, MoreVertical, Edit3, Trash2, Eye, Calendar, Upload } from "lucide-react";
+import { ImportPatientsModal } from "@/components/app/ImportPatientsModal";
 import { FaWhatsapp } from "react-icons/fa";
 import { whatsappUrl } from "@/lib/display";
 import { cn, displayPatientName } from "@/lib/utils";
@@ -167,6 +168,7 @@ function PatientsPage() {
   const [riskFilter, setRiskFilter] = useState<Risk | "todos">("todos");
   const [tagFilter, setTagFilter] = useState<string>("todos");
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Patient | null>(null);
   // Estado del menú de acciones de paciente. Antes solo guardaba el id,
   // pero el menú se posicionaba con `absolute` dentro de un contenedor
@@ -257,6 +259,9 @@ function PatientsPage() {
           <div className="flex gap-2">
             <button onClick={exportCSV} className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2">
               <Download className="h-4 w-4" /> Exportar
+            </button>
+            <button onClick={() => setImportOpen(true)} className="h-10 px-3 rounded-lg border border-line-200 bg-surface text-ink-700 text-sm hover:border-brand-400 inline-flex items-center gap-2">
+              <Upload className="h-4 w-4" /> Importar
             </button>
             <button data-tour="pacientes-new" onClick={() => setCreateOpen(true)} className="h-10 px-4 rounded-lg bg-brand-700 text-primary-foreground text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-2">
               <Plus className="h-4 w-4" /> Nuevo paciente
@@ -593,6 +598,7 @@ function PatientsPage() {
       {editing && <EditPatientModal patient={editing} onClose={() => setEditing(null)} />}
       {removing && <ArchiveOrDeleteModal patient={removing} onClose={() => setRemoving(null)} />}
       {apptFor && <NewAppointmentModal patients={patients as any} prefilledPatient={apptFor as any} onClose={() => setApptFor(null)} />}
+      <ImportPatientsModal open={importOpen} onClose={() => setImportOpen(false)} />
     </AppShell>
   );
 }

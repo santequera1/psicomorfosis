@@ -230,7 +230,12 @@ function escapeHtml(s) {
  * el cliente de correo del paciente actualice el evento existente en
  * lugar de duplicarlo.
  */
-function generateIcs({ appointment, professional, workspaceName, method = "PUBLISH", status = "CONFIRMED" }) {
+/** Escapa texto para valores ICS (RFC 5545): coma, punto y coma, saltos. */
+function escapeIcs(v) {
+  return String(v ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+
+function generateIcs({ appointment, professional, workspaceName, patient, fromEmail, method = "PUBLISH", status = "CONFIRMED", sequence = 0 }) {
   const [y, m, d] = appointment.date.split("-").map(Number);
   const [hh, mm] = (appointment.time ?? "09:00").split(":").map(Number);
   const dur = Number(appointment.duration_min ?? 50);
@@ -277,12 +282,20 @@ function generateIcs({ appointment, professional, workspaceName, method = "PUBLI
     `DTSTAMP:${fmtUtc(stamp)}`,
     `DTSTART;TZID=America/Bogota:${fmt(start)}`,
     `DTEND;TZID=America/Bogota:${fmt(end)}`,
-    `SUMMARY:${summary}`,
-    location ? `LOCATION:${location}` : null,
-    description ? `DESCRIPTION:${description}` : null,
+    `SUMMARY:${escapeIcs(summary)}`,
+    location ? `LOCATION:${escapeIcs(location)}` : null,
+    description ? `DESCRIPTION:${escapeIcs(description)}` : null,
     meeting ? `URL:${meeting}` : null,
+    // ORGANIZER/ATTENDEE hacen el METHOD:REQUEST válido — sin ellos
+    // Outlook muestra el .ics como adjunto plano en vez de ofrecer
+    // "Añadir al calendario".
+    fromEmail ? `ORGANIZER;CN=${escapeIcs(professional?.name ?? workspaceName ?? "Psicomorfosis")}:mailto:${fromEmail}` : null,
+    patient?.email ? `ATTENDEE;CN=${escapeIcs(patient?.name ?? "")};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION:mailto:${patient.email}` : null,
     `STATUS:${status}`,
-    "SEQUENCE:0",
+    // SEQUENCE creciente en reagendas/cancelaciones para que el
+    // calendario del paciente ACTUALICE el evento (mismo UID) en vez de
+    // ignorar el cambio. Minutos desde 2026 = monotónico entre envíos.
+    `SEQUENCE:${sequence}`,
     "TRANSP:OPAQUE",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -492,8 +505,11 @@ export async function sendAppointmentEmail(opts) {
       appointment,
       professional,
       workspaceName,
+      patient,
+      fromEmail: c.from,
       method: kind === "appointment_cancelled" ? "CANCEL" : "REQUEST",
       status: kind === "appointment_cancelled" ? "CANCELLED" : "CONFIRMED",
+      sequence: kind === "appointment_created" ? 0 : Math.floor((Date.now() - Date.UTC(2026, 0, 1)) / 60_000),
     });
 
     const attachments = [{
