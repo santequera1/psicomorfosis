@@ -6,6 +6,7 @@ import {
   ShieldAlert, XCircle, AlertTriangle, Brain, Activity,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { BankCard } from "@/components/wallet/BankCard";
 import {
@@ -30,12 +31,67 @@ const RISK_COLORS: Record<string, string> = {
 
 const COP = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 
+// ─── Filtro de periodo (pedido 1 sep 2026): "esta semana", "mes anterior",
+// etc., más rango personalizado. Las fechas se calculan en hora local del
+// navegador (los usuarios están en Colombia).
+type PresetKey = "semana" | "mes" | "mes_anterior" | "90d" | "año" | "custom";
+
+const PRESETS: Array<{ key: PresetKey; label: string }> = [
+  { key: "semana", label: "Esta semana" },
+  { key: "mes", label: "Este mes" },
+  { key: "mes_anterior", label: "Mes anterior" },
+  { key: "90d", label: "Últimos 90 días" },
+  { key: "año", label: "Este año" },
+  { key: "custom", label: "Personalizado" },
+];
+
+const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function presetRange(preset: PresetKey): { from: string; to: string } {
+  const now = new Date();
+  const today = isoOf(now);
+  if (preset === "semana") {
+    const d = new Date(now);
+    const dow = d.getDay();
+    d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1)); // lunes
+    return { from: isoOf(d), to: today };
+  }
+  if (preset === "mes") return { from: isoOf(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
+  if (preset === "mes_anterior") {
+    return {
+      from: isoOf(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+      to: isoOf(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  if (preset === "año") return { from: isoOf(new Date(now.getFullYear(), 0, 1)), to: today };
+  const d = new Date(now);
+  d.setDate(d.getDate() - 89);
+  return { from: isoOf(d), to: today };
+}
+
+const fmtDia = (iso: string) =>
+  new Date(`${iso}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+
 function ReportesPage() {
+  const [preset, setPreset] = useState<PresetKey>("90d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  // Con "Personalizado" a medio llenar seguimos mostrando 90d para no
+  // dejar la página en blanco mientras el usuario elige fechas.
+  const range = preset === "custom" && customFrom && customTo
+    ? (customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom })
+    : presetRange(preset === "custom" ? "90d" : preset);
+  const periodLabel = `${fmtDia(range.from)} – ${fmtDia(range.to)}`;
+
   const { data: patients = [] } = useQuery({ queryKey: ["patients"], queryFn: () => api.listPatients() });
   const { data: tasks = [] } = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() as Promise<any> });
   const { data: appointments = [] } = useQuery({ queryKey: ["all-appointments"], queryFn: () => api.listAppointments() });
   const { data: summary } = useQuery({ queryKey: ["invoices-summary"], queryFn: () => api.invoicesSummary() });
-  const { data: reportsStats } = useQuery({ queryKey: ["reports-stats"], queryFn: () => api.getReportsStats() });
+  const { data: reportsStats } = useQuery({
+    queryKey: ["reports-stats", range.from, range.to],
+    queryFn: () => api.getReportsStats(range),
+    placeholderData: (prev) => prev,
+  });
 
   const revenue7d = reportsStats?.revenue7d ?? [];
   const sessionsByModality = reportsStats?.sessionsByModality ?? [];
@@ -54,7 +110,8 @@ function ReportesPage() {
   const revenueHasData = revenue7d.some((r) => r.value > 0);
 
   const activePatients = patients.filter((p) => p.status === "activo").length;
-  const sessionsRealized = (appointments as any[]).filter((a) => a.status === "atendida").length;
+  const sessionsRealized = (appointments as any[])
+    .filter((a) => a.status === "atendida" && a.date >= range.from && a.date <= range.to).length;
   const allTasks = (tasks as any[]);
   const avgAdherence = allTasks.length > 0
     ? Math.round(allTasks.reduce((acc: number, t: any) => acc + (t.adherence ?? 0), 0) / allTasks.length)
@@ -72,7 +129,7 @@ function ReportesPage() {
           <div>
             <div className="text-xs uppercase tracking-[0.14em] text-brand-700 font-semibold">Inteligencia clínica</div>
             <h1 className="font-serif text-2xl md:text-3xl text-ink-900 mt-1">Reportes</h1>
-            <p className="text-sm text-ink-500 mt-1">Vista panorámica del consultorio · últimos 90 días salvo indicación contraria</p>
+            <p className="text-sm text-ink-500 mt-1">Vista panorámica del consultorio · {periodLabel}</p>
           </div>
           <button
             onClick={() => window.print()}
@@ -83,15 +140,53 @@ function ReportesPage() {
           </button>
         </header>
 
+        {/* Selector de periodo: presets + rango personalizado. Aplica a
+            todo lo temporal (ingresos, sesiones, tests, top pacientes);
+            las distribuciones de pacientes son una foto del presente. */}
+        <div className="flex items-center gap-2 flex-wrap mb-6">
+          {PRESETS.map((pr) => (
+            <button
+              key={pr.key}
+              onClick={() => setPreset(pr.key)}
+              className={`h-8 px-3 rounded-full border text-xs font-medium transition-colors ${
+                preset === pr.key
+                  ? "bg-brand-700 border-brand-700 text-white"
+                  : "bg-surface border-line-200 text-ink-600 hover:border-brand-400"
+              }`}
+            >
+              {pr.label}
+            </button>
+          ))}
+          {preset === "custom" && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink-600">
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 px-2 rounded-lg border border-line-200 bg-surface text-xs text-ink-800"
+              />
+              –
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 px-2 rounded-lg border border-line-200 bg-surface text-xs text-ink-800"
+              />
+            </span>
+          )}
+        </div>
+
         {/* KPIs principales — stagger fade + slide-up, 70ms entre cards.
             Solo las cards de KPIs animan; el resto de la página (gráficos,
             tablas) queda con el fade global del <main>. */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
           {[
             <KpiCard icon={<Users className="h-4 w-4" />} label="Pacientes activos" value={String(activePatients)} delta={{ neutral: true, value: "" }} hint={`${patients.length} en total`} />,
-            <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones atendidas" value={String(sessionsRealized)} delta={{ neutral: true, value: "" }} hint={`${ops?.attendance_rate ?? 0}% asistencia (90d)`} />,
+            <KpiCard icon={<CalendarCheck className="h-4 w-4" />} label="Sesiones atendidas" value={String(sessionsRealized)} delta={{ neutral: true, value: "" }} hint={`${ops?.attendance_rate ?? 0}% asistencia en el periodo`} />,
             <KpiCard icon={<HeartHandshake className="h-4 w-4" />} label="Adherencia tareas" value={`${avgAdherence}%`} delta={{ neutral: true, value: "" }} hint="promedio del workspace" />,
-            <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Recaudado" value={COP.format(summary?.paid ?? 0)} delta={{ neutral: true, value: "" }} hint="total pagadas" />,
+            <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Recaudado" value={COP.format(ops?.paid_sum ?? summary?.paid ?? 0)} delta={{ neutral: true, value: "" }} hint="pagadas en el periodo" />,
           ].map((node, i) => (
             <div
               key={i}
@@ -119,7 +214,7 @@ function ReportesPage() {
               label="Cancelaciones"
               value={`${ops?.cancel_rate ?? 0}%`}
               delta={{ neutral: true, value: "" }}
-              hint={`${ops?.total_last_90d ?? 0} citas en 90d`}
+              hint={`${ops?.total_period ?? ops?.total_last_90d ?? 0} citas en el periodo`}
             />,
             <KpiCard
               icon={<AlertTriangle className="h-4 w-4" />}
@@ -148,7 +243,7 @@ function ReportesPage() {
 
         {/* Fila 1: Ingresos + Modalidades */}
         <div className="grid lg:grid-cols-3 gap-5 mb-5">
-          <Card title="Ingresos · semana" subtitle="Tendencia diaria de pagos recibidos" className="lg:col-span-2">
+          <Card title="Ingresos" subtitle={`Pagos recibidos · ${periodLabel}`} className="lg:col-span-2">
             <div className="relative">
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={revenue7d} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -170,16 +265,16 @@ function ReportesPage() {
               </ResponsiveContainer>
               {!revenueHasData && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-xs text-ink-400 italic bg-surface/80 px-3 py-1 rounded">Sin recibos pagados esta semana</p>
+                  <p className="text-xs text-ink-400 italic bg-surface/80 px-3 py-1 rounded">Sin recibos pagados en el periodo</p>
                 </div>
               )}
             </div>
           </Card>
 
-          <Card title="Modalidad de atención" subtitle="Últimos 30 días">
+          <Card title="Modalidad de atención" subtitle={periodLabel}>
             {sessionsByModality.length === 0 ? (
               <div className="h-65 flex items-center justify-center">
-                <p className="text-xs text-ink-400 italic">Aún no hay citas en los últimos 30 días.</p>
+                <p className="text-xs text-ink-400 italic">Aún no hay citas en el periodo.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
@@ -197,10 +292,10 @@ function ReportesPage() {
 
         {/* Fila 2: Carga semanal + Distribución de riesgo */}
         <div className="grid lg:grid-cols-3 gap-5 mb-5">
-          <Card title="Carga semanal" subtitle="Sesiones atendidas por día (90d)" className="lg:col-span-2">
+          <Card title="Carga semanal" subtitle={`Sesiones atendidas por día · ${periodLabel}`} className="lg:col-span-2">
             {sessionsByDow.every((d) => d.value === 0) ? (
               <div className="h-65 flex items-center justify-center">
-                <p className="text-xs text-ink-400 italic">Aún no hay sesiones atendidas en 90d.</p>
+                <p className="text-xs text-ink-400 italic">Aún no hay sesiones atendidas en el periodo.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
@@ -311,7 +406,7 @@ function ReportesPage() {
 
         {/* Fila 5: Tests aplicados + Métodos de pago */}
         <div className="grid lg:grid-cols-2 gap-5 mb-5">
-          <Card title="Tests psicométricos" subtitle="Aplicaciones completadas por mes">
+          <Card title="Tests psicométricos" subtitle={`Completados por mes · ${periodLabel}`}>
             {testsByMonth.every((m) => m.value === 0) ? (
               <div className="h-65 flex items-center justify-center">
                 <Brain className="h-6 w-6 text-ink-300 mr-2" />
@@ -330,10 +425,10 @@ function ReportesPage() {
             )}
           </Card>
 
-          <Card title="Métodos de pago" subtitle="Ingresos por método (30d)">
+          <Card title="Métodos de pago" subtitle={`Ingresos por método · ${periodLabel}`}>
             {revenueByMethod.length === 0 ? (
               <div className="h-65 flex items-center justify-center">
-                <p className="text-xs text-ink-400 italic">Sin pagos en los últimos 30 días.</p>
+                <p className="text-xs text-ink-400 italic">Sin pagos en el periodo.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
@@ -355,11 +450,11 @@ function ReportesPage() {
         {/* Fila 5b: Ingresos por cuenta bancaria (90d) — responde a
             "¿en qué cuenta me pagan más?" con desglose por cuenta +
             efectivo, usando los chips de cuenta del wallet. */}
-        <Card title="Ingresos por cuenta" subtitle="Dónde recibes tus pagos (90d)" className="mb-5">
+        <Card title="Ingresos por cuenta" subtitle={`Dónde recibes tus pagos · ${periodLabel}`} className="mb-5">
           {revenueByAccount.length === 0 ? (
             <div className="py-10 flex items-center justify-center">
               <TrendingUp className="h-6 w-6 text-ink-300 mr-2" />
-              <p className="text-xs text-ink-400 italic">Sin pagos registrados en los últimos 90 días.</p>
+              <p className="text-xs text-ink-400 italic">Sin pagos registrados en el periodo.</p>
             </div>
           ) : (
             <ul className="space-y-3">
@@ -408,11 +503,11 @@ function ReportesPage() {
         </Card>
 
         {/* Fila 6: Top pacientes */}
-        <Card title="Pacientes más activos" subtitle="Top 5 por sesiones atendidas (90d)">
+        <Card title="Pacientes más activos" subtitle={`Top 5 por sesiones atendidas · ${periodLabel}`}>
           {topPatients.length === 0 ? (
             <div className="py-10 flex items-center justify-center">
               <Activity className="h-6 w-6 text-ink-300 mr-2" />
-              <p className="text-xs text-ink-400 italic">Aún no hay pacientes con sesiones atendidas en 90d.</p>
+              <p className="text-xs text-ink-400 italic">Aún no hay pacientes con sesiones atendidas en el periodo.</p>
             </div>
           ) : (
             <ul className="divide-y divide-line-100">

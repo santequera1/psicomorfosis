@@ -1342,7 +1342,8 @@ export const api = {
       daysSince: number;
     }>;
   }>("/api/workspace/dashboard-stats"),
-  getReportsStats: () => request<{
+  getReportsStats: (params?: { from?: string; to?: string }) => request<{
+    range: { from: string; to: string };
     sessionsByModality: Array<{ modality: string; value: number }>;
     reasons: Array<{ reason: string; value: number }>;
     revenue7d: Array<{ day: string; value: number }>;
@@ -1370,9 +1371,11 @@ export const api = {
       cancel_rate: number;
       no_show_rate: number;
       avg_duration_min: number | null;
+      paid_sum: number;
+      total_period: number;
       total_last_90d: number;
     };
-  }>("/api/workspace/reports-stats"),
+  }>(`/api/workspace/reports-stats${params?.from && params?.to ? `?from=${params.from}&to=${params.to}` : ""}`),
   /** Firma del profesional vinculado al usuario actual. */
   getMySignature: () => request<{ professional_id: number; name: string; tarjeta_profesional: string | null; signature_url: string | null }>("/api/workspace/me/signature"),
   setMySignature: (dataUrl: string) =>

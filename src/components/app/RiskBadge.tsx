@@ -32,7 +32,7 @@ export function RiskBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full ring-1 font-medium",
+        "inline-flex items-center gap-1.5 rounded-full ring-1 font-medium whitespace-nowrap shrink-0",
         s.bg, s.text, s.ring,
         compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs",
       )}

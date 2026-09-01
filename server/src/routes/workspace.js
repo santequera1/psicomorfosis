@@ -649,6 +649,67 @@ function statsRevenue7d(ws) {
   return buckets.map(({ day, value }) => ({ day, value }));
 }
 
+/** Citas por modalidad dentro de un rango [from, to] inclusive. */
+function statsModalityRange(ws, from, to) {
+  const rows = db.prepare(`
+    SELECT modality, COUNT(*) AS value
+    FROM appointments
+    WHERE workspace_id = ? AND date >= ? AND date <= ?
+    GROUP BY modality
+  `).all(ws, from, to);
+  const map = Object.fromEntries(rows.map((r) => [r.modality, r.value]));
+  return MODALITY_ORDER
+    .map((m) => ({ modality: MODALITY_LABEL[m], value: map[m] ?? 0 }))
+    .filter((m) => m.value > 0);
+}
+
+/**
+ * Serie de ingresos pagados para un rango: diaria hasta 31 días de span
+ * (con etiqueta corta de día), mensual para rangos más largos. Mantiene
+ * el shape { day, value } que ya pinta el chart de /reportes.
+ */
+function statsRevenueSeries(ws, from, to) {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  const spanDays = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const paid = db.prepare(`
+    SELECT date, amount FROM invoices
+    WHERE workspace_id = ? AND status = 'pagada' AND date >= ? AND date <= ?
+  `).all(ws, from, to);
+  if (spanDays <= 31) {
+    const buckets = [];
+    for (let i = 0; i < spanDays; i++) {
+      const d = new Date(start.getTime() + i * 86_400_000);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const label = spanDays <= 7
+        ? DAYS_LABEL[d.getDay()]
+        : `${d.getDate()} ${MONTHS_LABEL[d.getMonth()].toLowerCase()}`;
+      buckets.push({ day: label, iso, value: 0 });
+    }
+    for (const r of paid) {
+      const b = buckets.find((x) => x.iso === r.date);
+      if (b) b.value += r.amount;
+    }
+    return buckets.map(({ day, value }) => ({ day, value }));
+  }
+  const buckets = [];
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cur <= end && buckets.length < 24) {
+    buckets.push({
+      day: `${MONTHS_LABEL[cur.getMonth()]} ${String(cur.getFullYear()).slice(2)}`,
+      key: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`,
+      value: 0,
+    });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  for (const r of paid) {
+    const key = String(r.date).slice(0, 7);
+    const b = buckets.find((x) => x.key === key);
+    if (b) b.value += r.amount;
+  }
+  return buckets.map(({ day, value }) => ({ day, value }));
+}
+
 /**
  * Retención por mes (últimos N meses, default 6).
  * - nuevos:    pacientes registrados ese mes (created_at del mes)
@@ -827,20 +888,37 @@ function statsPatientsWithoutFollowup(ws, days = 14) {
  */
 router.get("/reports-stats", (req, res) => {
   const ws = req.user.workspace_id;
+  // Rango opcional (?from=YYYY-MM-DD&to=YYYY-MM-DD, inclusive) — pedido
+  // 1 sep 2026: "solo me sale info de este mes… un filtro de fecha a
+  // fecha". Default: últimos 90 días terminando hoy (Bogotá), que era el
+  // comportamiento histórico de la página. Las distribuciones de
+  // pacientes (riesgo/edad/sexo/motivos) y la retención son fotos del
+  // presente y no se filtran por rango.
+  const parseDay = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  let to = parseDay(req.query.to) ?? hoy;
+  let from = parseDay(req.query.from);
+  if (!from) {
+    const d = new Date(`${to}T12:00:00`);
+    d.setDate(d.getDate() - 89);
+    from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  if (from > to) [from, to] = [to, from];
   res.json({
-    sessionsByModality: statsModalityLast30d(ws),
+    range: { from, to },
+    sessionsByModality: statsModalityRange(ws, from, to),
     reasons: statsReasons(ws),
-    revenue7d: statsRevenue7d(ws),
+    revenue7d: statsRevenueSeries(ws, from, to),
     retention: statsRetention(ws, 6),
-    sessionsByDow: statsSessionsByDayOfWeek(ws),
+    sessionsByDow: statsSessionsByDayOfWeek(ws, from, to),
     patientsByRisk: statsPatientsByRisk(ws),
     patientsByAge: statsPatientsByAge(ws),
     patientsBySex: statsPatientsBySex(ws),
-    testsByMonth: statsTestsByMonth(ws, 6),
-    topPatients: statsTopPatientsBySessions(ws),
-    revenueByMethod: statsRevenueByMethod(ws),
-    revenueByAccount: statsRevenueByAccount(ws),
-    operational: statsOperationalKpis(ws),
+    testsByMonth: statsTestsByMonth(ws, from, to),
+    topPatients: statsTopPatientsBySessions(ws, from, to),
+    revenueByMethod: statsRevenueByMethod(ws, from, to),
+    revenueByAccount: statsRevenueByAccount(ws, from, to),
+    operational: statsOperationalKpis(ws, from, to),
   });
 });
 
@@ -894,13 +972,13 @@ router.post("/announcements/:id/read", (req, res) => {
 
 // ─── Helpers de stats avanzadas ───────────────────────────────────────────
 
-/** Cuántas sesiones atendidas hay por día de la semana (últimos 90 días). */
-function statsSessionsByDayOfWeek(ws) {
+/** Cuántas sesiones atendidas hay por día de la semana en el rango. */
+function statsSessionsByDayOfWeek(ws, from, to) {
   const rows = db.prepare(`
     SELECT date FROM appointments
     WHERE workspace_id = ? AND status = 'atendida'
-      AND date >= date('now', '-90 days')
-  `).all(ws);
+      AND date >= ? AND date <= ?
+  `).all(ws, from, to);
   const counts = [0, 0, 0, 0, 0, 0, 0]; // Dom..Sáb (JS getDay)
   for (const r of rows) {
     const d = new Date(`${r.date}T00:00:00`);
@@ -957,19 +1035,24 @@ function statsPatientsBySex(ws) {
   ].filter((s) => s.value > 0);
 }
 
-/** Tests psicométricos completados por mes (últimos N meses). */
-function statsTestsByMonth(ws, months = 6) {
+/** Tests psicométricos completados por mes, sobre los meses del rango. */
+function statsTestsByMonth(ws, from, to) {
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
   const buckets = [];
-  const now = new Date();
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cur <= end && buckets.length < 24) {
+    const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     buckets.push({
-      mes: MONTHS_LABEL[d.getMonth()],
-      from: d.toISOString().slice(0, 10),
-      to: next.toISOString().slice(0, 10),
+      mes: buckets.length === 0 || cur.getMonth() === 0
+        ? `${MONTHS_LABEL[cur.getMonth()]} ${String(cur.getFullYear()).slice(2)}`
+        : MONTHS_LABEL[cur.getMonth()],
+      from: iso(cur),
+      to: iso(next),
       value: 0,
     });
+    cur.setMonth(cur.getMonth() + 1);
   }
   const rows = db.prepare(`
     SELECT completed_at FROM test_applications
@@ -985,30 +1068,30 @@ function statsTestsByMonth(ws, months = 6) {
   return buckets.map(({ mes, value }) => ({ mes, value }));
 }
 
-/** Top 5 pacientes por número de sesiones atendidas (últimos 90 días). */
-function statsTopPatientsBySessions(ws) {
+/** Top 5 pacientes por número de sesiones atendidas en el rango. */
+function statsTopPatientsBySessions(ws, from, to) {
   return db.prepare(`
     SELECT a.patient_id AS id, a.patient_name AS name, COUNT(*) AS sessions
     FROM appointments a
     WHERE a.workspace_id = ? AND a.status = 'atendida'
-      AND a.date >= date('now', '-90 days')
+      AND a.date >= ? AND a.date <= ?
       AND a.patient_id IS NOT NULL
     GROUP BY a.patient_id, a.patient_name
     ORDER BY sessions DESC
     LIMIT 5
-  `).all(ws);
+  `).all(ws, from, to);
 }
 
-/** Ingresos por método de pago (últimos 30 días). */
-function statsRevenueByMethod(ws) {
+/** Ingresos por método de pago en el rango. */
+function statsRevenueByMethod(ws, from, to) {
   return db.prepare(`
     SELECT method, SUM(amount) AS value, COUNT(*) AS count FROM invoices
     WHERE workspace_id = ? AND status = 'pagada'
-      AND date >= date('now', '-30 days')
+      AND date >= ? AND date <= ?
       AND method IS NOT NULL
     GROUP BY method
     ORDER BY value DESC
-  `).all(ws);
+  `).all(ws, from, to);
 }
 
 /**
@@ -1021,7 +1104,7 @@ function statsRevenueByMethod(ws) {
  * sin bank_account_id (cuenta borrada, o registrado antes del wallet).
  * Esos caen al grupo "Sin cuenta asignada".
  */
-function statsRevenueByAccount(ws) {
+function statsRevenueByAccount(ws, from, to) {
   const rows = db.prepare(`
     SELECT
       i.bank_account_id          AS accountId,
@@ -1036,7 +1119,7 @@ function statsRevenueByAccount(ws) {
     FROM invoices i
     LEFT JOIN bank_accounts ba ON ba.id = i.bank_account_id
     WHERE i.workspace_id = ? AND i.status = 'pagada'
-      AND i.date >= date('now', '-90 days')
+      AND i.date >= ? AND i.date <= ?
     GROUP BY
       CASE
         WHEN i.bank_account_id IS NOT NULL THEN 'acc:' || i.bank_account_id
@@ -1044,7 +1127,7 @@ function statsRevenueByAccount(ws) {
         ELSE 'none'
       END
     ORDER BY value DESC
-  `).all(ws);
+  `).all(ws, from, to);
 
   // Normalizamos a una forma que el frontend pinta directo: cada fila
   // sabe si es una cuenta real (con bankId para el chip), efectivo, o
@@ -1079,8 +1162,8 @@ function statsRevenueByAccount(ws) {
   });
 }
 
-/** KPIs operativos derivados: tasa de asistencia/cancelación, duración promedio. */
-function statsOperationalKpis(ws) {
+/** KPIs operativos derivados del rango: asistencia, cancelación, duración, $ pagado. */
+function statsOperationalKpis(ws, from, to) {
   const totals = db.prepare(`
     SELECT
       COUNT(*) AS total,
@@ -1089,10 +1172,16 @@ function statsOperationalKpis(ws) {
       SUM(CASE WHEN status = 'no_show'    THEN 1 ELSE 0 END) AS no_show,
       AVG(duration_min) AS avg_duration
     FROM appointments
-    WHERE workspace_id = ? AND date >= date('now', '-90 days')
-  `).get(ws);
+    WHERE workspace_id = ? AND date >= ? AND date <= ?
+  `).get(ws, from, to);
+  const paidSum = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS s FROM invoices
+    WHERE workspace_id = ? AND status = 'pagada' AND date >= ? AND date <= ?
+  `).get(ws, from, to).s;
   const total = totals?.total ?? 0;
   return {
+    paid_sum: paidSum,
+    total_period: total,
     attendance_rate: total > 0 ? Math.round(((totals?.atendida ?? 0) / total) * 100) : 0,
     cancel_rate:     total > 0 ? Math.round(((totals?.cancelada ?? 0) / total) * 100) : 0,
     no_show_rate:    total > 0 ? Math.round(((totals?.no_show ?? 0) / total) * 100) : 0,
