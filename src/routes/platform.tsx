@@ -8,6 +8,7 @@ import {
   CheckCircle2, Building2, User as UserIcon, Trash2, KeyRound, Edit3, Download,
   UserPlus, RefreshCw, DollarSign, AlertTriangle, ClipboardCheck, Tag,
   ArrowUpDown, Sparkles, Inbox, Mail, Globe, MailCheck, CalendarDays, Clock, SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { KpiCard } from "@/components/app/KpiCard";
@@ -128,7 +129,7 @@ type AuthFilter = "todos" | "google" | "password" | "ambos";
 type OriginFilter = "todos" | "web" | "google" | "manual";
 type VerifiedFilter = "todos" | "si" | "no";
 // Último acceso: ventanas relativas a hoy.
-type LoginFilter = "todos" | "hoy" | "7d" | "30d" | "inactivo" | "nunca";
+type LoginFilter = "todos" | "hoy" | "7d" | "30d" | "inactivo" | "10sem" | "nunca";
 
 const DAY_MS = 86_400_000;
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -209,6 +210,7 @@ function PlatformDashboard() {
         if (loginFilter === "7d" && !(ageDays <= 7)) return false;
         if (loginFilter === "30d" && !(ageDays <= 30)) return false;
         if (loginFilter === "inactivo" && !(ageDays > 30)) return false;
+        if (loginFilter === "10sem" && !(ageDays > 70)) return false;
       }
       if (createdFrom || createdTo) {
         const day = localDay(w.createdAt);
@@ -250,6 +252,27 @@ function PlatformDashboard() {
     return sorted;
   }, [workspaces, query, statusFilter, modeFilter, planFilter, authFilter, originFilter, verifiedFilter, loginFilter, createdFrom, createdTo, sortBy]);
 
+  // "Dormidas": sin login (ni alta, si nunca entró) hace más de 10
+  // semanas (pedido 2 sep 2026). Van en un grupo plegado al final para
+  // que la lista principal muestre solo la gente activa. El corte se
+  // desactiva cuando el admin busca o filtra por último acceso — ahí
+  // quiere ver todo junto.
+  const DORMIDA_DIAS = 70;
+  const splitDormidas = query.trim() === "" && loginFilter === "todos";
+  const { activasList, dormidasList } = useMemo(() => {
+    if (!splitDormidas) return { activasList: filtered, dormidasList: [] as typeof filtered };
+    const now = Date.now();
+    const act: typeof filtered = [];
+    const dor: typeof filtered = [];
+    for (const w of filtered) {
+      const ref = w.lastLoginAt ?? w.createdAt;
+      const age = ref ? (now - new Date(ref).getTime()) / DAY_MS : Infinity;
+      (age > DORMIDA_DIAS ? dor : act).push(w);
+    }
+    return { activasList: act, dormidasList: dor };
+  }, [filtered, splitDormidas]);
+  const [dormidasOpen, setDormidasOpen] = useState(false);
+
   const counts = useMemo(() => ({
     todos: workspaces.length,
     activo: workspaces.filter((w) => !w.disabledAt).length,
@@ -283,7 +306,7 @@ function PlatformDashboard() {
   if (authFilter !== "todos") chips.push({ key: "auth", label: { google: "Entra con Google", password: "Correo y contraseña", ambos: "Google + contraseña", todos: "" }[authFilter], remove: () => setAuthFilter("todos") });
   if (originFilter !== "todos") chips.push({ key: "origin", label: { web: "Registro web", google: "Botón Google", manual: "Creada aquí", todos: "" }[originFilter], remove: () => setOriginFilter("todos") });
   if (verifiedFilter !== "todos") chips.push({ key: "verified", label: verifiedFilter === "si" ? "Correo verificado" : "Correo sin verificar", remove: () => setVerifiedFilter("todos") });
-  if (loginFilter !== "todos") chips.push({ key: "login", label: { hoy: "Entró hoy", "7d": "Entró en 7 días", "30d": "Entró en 30 días", inactivo: "+30 días sin entrar", nunca: "Nunca entró", todos: "" }[loginFilter], remove: () => setLoginFilter("todos") });
+  if (loginFilter !== "todos") chips.push({ key: "login", label: { hoy: "Entró hoy", "7d": "Entró en 7 días", "30d": "Entró en 30 días", inactivo: "+30 días sin entrar", "10sem": "+10 semanas sin entrar", nunca: "Nunca entró", todos: "" }[loginFilter], remove: () => setLoginFilter("todos") });
   if (createdFrom || createdTo) chips.push({
     key: "created",
     label: createdFrom && createdTo ? `Alta ${fmtShort(createdFrom)} – ${fmtShort(createdTo)}` : createdFrom ? `Alta desde ${fmtShort(createdFrom)}` : `Alta hasta ${fmtShort(createdTo)}`,
@@ -362,6 +385,7 @@ function PlatformDashboard() {
             { v: "7d", label: "7 días" },
             { v: "30d", label: "30 días" },
             { v: "inactivo", label: "+30 días sin entrar", icon: <Clock className="h-3 w-3" /> },
+            { v: "10sem", label: "+10 semanas", icon: <Clock className="h-3 w-3" /> },
             { v: "nunca", label: "Nunca entró" },
           ]} />
         </FilterSection>
@@ -630,31 +654,88 @@ function PlatformDashboard() {
                 ? "Aún no hay cuentas. Click en \"Crear cuenta\" para invitar al primer psicólogo."
                 : "Sin coincidencias con los filtros."}
             </div>
-          ) : effectiveView === "cards" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
-              {filtered.map((w, i) => (
-                <WorkspaceCard
-                  key={w.id}
-                  ws={w}
-                  index={i}
-                  onDisable={() => setDisabling(w)}
-                  onDelete={() => setDeleting(w)}
-                />
-              ))}
-            </div>
           ) : (
-            <ul className="divide-y divide-line-100">
-              {filtered.map((w, i) => (
-                <WorkspaceRow
-                  key={w.id}
-                  ws={w}
-                  index={i}
-                  onDisable={() => setDisabling(w)}
-                  onDelete={() => setDeleting(w)}
-                  onEdit={() => setEditing(w)}
-                />
-              ))}
-            </ul>
+            <>
+              {effectiveView === "cards" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4">
+                  {activasList.map((w, i) => (
+                    <WorkspaceCard
+                      key={w.id}
+                      ws={w}
+                      index={i}
+                      onDisable={() => setDisabling(w)}
+                      onDelete={() => setDeleting(w)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <ul className="divide-y divide-line-100">
+                  {activasList.map((w, i) => (
+                    <WorkspaceRow
+                      key={w.id}
+                      ws={w}
+                      index={i}
+                      onDisable={() => setDisabling(w)}
+                      onDelete={() => setDeleting(w)}
+                      onEdit={() => setEditing(w)}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {activasList.length === 0 && dormidasList.length > 0 && (
+                <p className="px-5 py-6 text-center text-xs text-ink-400">
+                  Ninguna cuenta con actividad reciente — todas están en el grupo de abajo.
+                </p>
+              )}
+
+              {/* Dormidas: plegadas por defecto para no alargar la lista. */}
+              {dormidasList.length > 0 && (
+                <div className="border-t border-line-100 bg-bg-50/40">
+                  <button
+                    type="button"
+                    onClick={() => setDormidasOpen((v) => !v)}
+                    aria-expanded={dormidasOpen}
+                    className="w-full flex items-center justify-between px-4 sm:px-5 py-3.5 text-left hover:bg-bg-50 transition-colors"
+                  >
+                    <span className="inline-flex items-center gap-2 text-sm text-ink-600">
+                      <Clock className="h-4 w-4 text-ink-400" />
+                      Inactivas hace más de 10 semanas
+                      <span className="text-xs text-ink-400 tabular">({dormidasList.length})</span>
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 text-ink-400 transition-transform duration-200", dormidasOpen && "rotate-180")} />
+                  </button>
+                  {dormidasOpen && (
+                    effectiveView === "cards" ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3 sm:p-4 pt-0">
+                        {dormidasList.map((w, i) => (
+                          <WorkspaceCard
+                            key={w.id}
+                            ws={w}
+                            index={i}
+                            onDisable={() => setDisabling(w)}
+                            onDelete={() => setDeleting(w)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-line-100 border-t border-line-100">
+                        {dormidasList.map((w, i) => (
+                          <WorkspaceRow
+                            key={w.id}
+                            ws={w}
+                            index={i}
+                            onDisable={() => setDisabling(w)}
+                            onDelete={() => setDeleting(w)}
+                            onEdit={() => setEditing(w)}
+                          />
+                        ))}
+                      </ul>
+                    )
+                  )}
+                </div>
+              )}
+            </>
           )}
         </section>
       </div>
@@ -1033,12 +1114,10 @@ function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
                 <span className="hidden md:inline truncate max-w-[14rem]">{ws.ownerEmail}</span>
               </>
             )}
-            {ws.lastLoginAt && (
-              <>
-                <span className="text-ink-300 hidden lg:inline">·</span>
-                <span className="tabular hidden lg:inline">Login {formatRelative(ws.lastLoginAt)}</span>
-              </>
-            )}
+            <span className="text-ink-300">·</span>
+            <span className={cn("tabular shrink-0", !ws.lastLoginAt && "text-amber-700")}>
+              {ws.lastLoginAt ? `Login ${formatRelative(ws.lastLoginAt)}` : "Nunca ha entrado"}
+            </span>
           </div>
         </Link>
 
@@ -1268,11 +1347,9 @@ function WorkspaceCard({ ws, index, onDisable, onDelete }: { ws: PlatformWorkspa
           </div>
         </div>
 
-        {ws.lastLoginAt && (
-          <div className="mt-2 text-[11px] text-ink-500 tabular">
-            Último login: {formatRelative(ws.lastLoginAt)}
-          </div>
-        )}
+        <div className={cn("mt-2 text-[11px] tabular", ws.lastLoginAt ? "text-ink-500" : "text-amber-700")}>
+          {ws.lastLoginAt ? `Último login: ${formatRelative(ws.lastLoginAt)}` : "Nunca ha entrado"}
+        </div>
         {isDisabled && ws.disabledReason && (
           <div className="mt-2 text-[11px] text-risk-high italic">Motivo: {ws.disabledReason}</div>
         )}
