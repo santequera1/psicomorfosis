@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
 
 /**
- * Video del hero (20 MB): con autoplay directo, en celular la página se
- * quedaba "cargando la mitad" o tardaba en pintar (reporte 2 sep 2026).
- * Arreglo: se muestra de inmediato el still del video (la misma imagen
- * del OG, mismo encuadre y fondo) y el MP4 solo se monta cuando la
- * página ya terminó de cargar todo lo demás; al reproducir hace fade.
+ * Video del hero con carga diferida: se pinta el póster de inmediato
+ * (mismo primer cuadro del video) y el MP4 solo se monta cuando la
+ * página terminó de cargar; al reproducir entra con fade. Nació del
+ * reporte de móvil "queda cargando la mitad" (2 sep 2026) cuando el
+ * video anterior de 20 MB bloqueaba el primer render.
  */
-export function HeroVideo() {
+export function HeroVideo({
+  src,
+  poster,
+  aspect = "1920 / 1080",
+  alt = "Demo de Psicomorfosis",
+}: {
+  src: string;
+  poster: string;
+  aspect?: string;
+  alt?: string;
+}) {
   const [ready, setReady] = useState(false); // ventana cargada → montar el video
   const [playing, setPlaying] = useState(false); // primer frame → fade in
 
@@ -22,16 +32,16 @@ export function HeroVideo() {
   }, []);
 
   return (
-    <div className="relative w-full" style={{ aspectRatio: "1920 / 1117" }}>
+    <div className="relative w-full" style={{ aspectRatio: aspect }}>
       <img
-        src="/landing/preview-psicoapp.jpg"
-        alt="Demo de Psicomorfosis"
+        src={poster}
+        alt={alt}
         fetchPriority="high"
         className="absolute inset-0 w-full h-full object-cover"
       />
       {ready && (
         <video
-          src="/landing/Video-Dashboard-Psic.mp4"
+          src={src}
           autoPlay
           loop
           muted

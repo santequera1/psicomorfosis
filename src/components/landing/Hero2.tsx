@@ -6,11 +6,10 @@ import { HeroVideo } from "./HeroVideo";
 import { GoogleIcon, WhatsAppIcon, GoogleCalendarIcon, GoogleMeetIcon } from "./BrandIcons";
 
 /**
- * Hero v2 (experimento /inicio2, 1 sep 2026). Cambia el ángulo del
- * mensaje: ya no "contra WhatsApp y Excel" sino a favor de lo que la
- * plataforma ES — y estrena la fila de integraciones reales (Google
- * login, Calendar, Meet, WhatsApp) que antes no existían cuando se
- * escribió el hero original. Misma coreografía de entrada que Hero v1.
+ * Hero de la landing. Desktop: texto a la izquierda, video a la
+ * derecha (rediseño 2 sep 2026 — el video nuevo Hero-1Psico dura 8s y
+ * pesa 1.3 MB, loopea perfecto en una columna). Móvil: apilado y
+ * centrado, como estaba.
  */
 const HEADLINE_LINE_1 = ["Una", "plataforma", "para"];
 const HEADLINE_LINE_2 = ["toda", "tu", "práctica", "clínica."];
@@ -27,163 +26,169 @@ export function Hero2() {
   return (
     <section
       id="hero"
-      className="relative pt-20 pb-10 sm:pt-28 sm:pb-24 overflow-hidden"
+      className="relative pt-20 pb-12 sm:pt-28 sm:pb-20 overflow-hidden"
     >
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        {/* Headline — palabra por palabra (el badge de arriba se quitó
-            a pedido: el hero respira mejor sin él) */}
-        <h1 className="font-serif text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
-          <div className="overflow-hidden">
-            {HEADLINE_LINE_1.map((word, i) => (
-              <motion.span
-                key={word}
-                initial={{ opacity: 0, y: "100%" }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.8,
-                  ease: easeOutExpo,
-                  delay: 0.25 + i * 0.08,
-                }}
-                className="inline-block mr-3"
-              >
-                {word}
-              </motion.span>
-            ))}
-          </div>
-          <div className="overflow-hidden">
-            {HEADLINE_LINE_2.map((word, i) => (
-              <motion.span
-                key={word}
-                initial={{ opacity: 0, y: "100%" }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.8,
-                  ease: easeOutExpo,
-                  delay: 0.55 + i * 0.08,
-                }}
-                className="inline-block mr-3 text-brand-700"
-              >
-                {word}
-              </motion.span>
-            ))}
-          </div>
-        </h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
+          {/* Columna de texto — centrada en móvil, a la izquierda en desktop */}
+          <div className="text-center lg:text-left">
+            <h1 className="font-serif text-3xl sm:text-5xl lg:text-[3.4rem] xl:text-6xl leading-[1.05] tracking-tight text-ink-900">
+              <div className="overflow-hidden">
+                {HEADLINE_LINE_1.map((word, i) => (
+                  <motion.span
+                    key={word}
+                    initial={{ opacity: 0, y: "100%" }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.8,
+                      ease: easeOutExpo,
+                      delay: 0.25 + i * 0.08,
+                    }}
+                    className="inline-block mr-3"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </div>
+              <div className="overflow-hidden">
+                {HEADLINE_LINE_2.map((word, i) => (
+                  <motion.span
+                    key={word}
+                    initial={{ opacity: 0, y: "100%" }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.8,
+                      ease: easeOutExpo,
+                      delay: 0.55 + i * 0.08,
+                    }}
+                    className="inline-block mr-3 text-brand-700"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </div>
+            </h1>
 
-        {/* Subheadline */}
-        <motion.p
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: easeOutExpo, delay: 0.95 }}
-          className="mt-4 sm:mt-6 max-w-2xl mx-auto text-sm sm:text-lg text-ink-500 leading-relaxed px-2"
-        >
-          Pacientes, agenda, historia clínica, documentos, psicometría y
-          seguimiento terapéutico — organizados en un solo lugar, conectado
-          con las herramientas que ya usas todos los días.
-        </motion.p>
-
-        {/* CTAs */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: easeOutExpo, delay: 1.1 }}
-          className="mt-6 sm:mt-9 flex items-stretch sm:items-center justify-center gap-2 sm:gap-3 px-2"
-        >
-          <motion.a
-            href="#demo"
-            whileHover={{ y: -2, scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg bg-brand-700 text-white text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-brand-700/20 whitespace-nowrap"
-          >
-            Quiero acceso <ArrowRight className="h-4 w-4 shrink-0" />
-          </motion.a>
-          <motion.a
-            href="#capabilities"
-            whileHover={{ y: -2 }}
-            transition={{ duration: 0.3, ease: easeOutExpo }}
-            className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
-          >
-            <Play className="h-4 w-4 shrink-0" /> Ver plataforma
-          </motion.a>
-        </motion.div>
-
-        {/* Integraciones. En desktop: chips con stagger. En móvil los
-            chips parecían una pila de botones junto a los CTAs (feedback
-            1 sep 2026) → una sola línea muda de texto. */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, ease: easeOutExpo, delay: 1.3 }}
-          className="sm:hidden mt-5 px-6 text-[11px] text-ink-400 leading-relaxed"
-        >
-          Entra con Google · Gratis durante el 2026 · WhatsApp, Google Calendar y Meet conectados
-        </motion.p>
-        <div className="hidden sm:flex mt-6 sm:mt-8 flex-wrap items-center justify-center gap-2 px-2">
-          {INTEGRATIONS.map(({ icon: Icon, label }, i) => (
-            <motion.span
-              key={label}
-              initial={{ opacity: 0, y: 10 }}
+            <motion.p
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: easeOutExpo, delay: 1.3 + i * 0.09 }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface/80 backdrop-blur border border-line-200 text-[11px] sm:text-xs text-ink-700"
+              transition={{ duration: 0.8, ease: easeOutExpo, delay: 0.95 }}
+              className="mt-4 sm:mt-6 max-w-2xl mx-auto lg:mx-0 text-sm sm:text-lg text-ink-500 leading-relaxed px-2 lg:px-0"
             >
-              <Icon className="h-3.5 w-3.5 text-brand-700 shrink-0" />
-              {label}
-            </motion.span>
-          ))}
-        </div>
-      </div>
+              Pacientes, agenda, historia clínica, documentos, psicometría y
+              seguimiento terapéutico — organizados en un solo lugar, conectado
+              con las herramientas que ya usas todos los días.
+            </motion.p>
 
-      {/* Video frame — igual que el hero v1 */}
-      <div className="mt-8 sm:mt-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
-          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 1.2, ease: easeOutExpo, delay: 1.5 }}
-          className="relative"
-        >
-          <motion.div
-            className="absolute -inset-x-20 -top-20 -bottom-20 -z-10 pointer-events-none blur-3xl"
-            style={{
-              background:
-                "radial-gradient(ellipse at center, oklch(0.7 0.12 175 / 0.35), transparent 65%)",
-            }}
-            animate={{ opacity: [0.4, 0.7, 0.4] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            aria-hidden
-          />
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: easeOutExpo, delay: 1.1 }}
+              className="mt-6 sm:mt-8 flex items-stretch sm:items-center justify-center lg:justify-start gap-2 sm:gap-3 px-2 lg:px-0"
+            >
+              <motion.a
+                href="#demo"
+                whileHover={{ y: -2, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.3, ease: easeOutExpo }}
+                className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg bg-brand-700 text-white text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-brand-700/20 whitespace-nowrap"
+              >
+                Quiero acceso <ArrowRight className="h-4 w-4 shrink-0" />
+              </motion.a>
+              <motion.a
+                href="#capabilities"
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.3, ease: easeOutExpo }}
+                className="flex-1 sm:flex-initial h-11 sm:h-12 px-3 sm:px-6 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm font-medium hover:border-brand-400 inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap"
+              >
+                <Play className="h-4 w-4 shrink-0" /> Ver plataforma
+              </motion.a>
+            </motion.div>
 
-          <motion.div animate={floating} className="relative overflow-hidden">
-            <HeroVideo />
-          </motion.div>
-
-          <div className="hidden sm:contents">
-          <FloatingBadge
-            icon={CalendarCheck}
-            label="Sesión agendada"
-            tone="brand"
-            position={{ top: "-1.5rem", left: "-0.5rem" }}
-            delay={2.0}
-            floatPhase={0}
-          />
-          <FloatingBadge
-            icon={BellRing}
-            label="Recordatorio enviado"
-            tone="neutral"
-            position={{ top: "30%", right: "-1rem" }}
-            delay={2.3}
-            floatPhase={1}
-          />
-          <FloatingBadge
-            icon={CheckCircle2}
-            label="PHQ-9 completado"
-            tone="success"
-            position={{ bottom: "-1rem", left: "8%" }}
-            delay={2.6}
-            floatPhase={2}
-          />
+            {/* Integraciones. Móvil: línea muda (los chips parecían botones).
+                Desktop: chips con stagger, alineados a la izquierda. */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, ease: easeOutExpo, delay: 1.3 }}
+              className="sm:hidden mt-5 px-6 text-[11px] text-ink-400 leading-relaxed"
+            >
+              Entra con Google · Gratis durante el 2026 · WhatsApp, Google Calendar y Meet conectados
+            </motion.p>
+            <div className="hidden sm:flex mt-6 flex-wrap items-center justify-center lg:justify-start gap-2">
+              {INTEGRATIONS.map(({ icon: Icon, label }, i) => (
+                <motion.span
+                  key={label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: easeOutExpo, delay: 1.3 + i * 0.09 }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface/80 backdrop-blur border border-line-200 text-[11px] sm:text-xs text-ink-700"
+                >
+                  <Icon className="h-3.5 w-3.5 text-brand-700 shrink-0" />
+                  {label}
+                </motion.span>
+              ))}
+            </div>
           </div>
-        </motion.div>
+
+          {/* Columna del video */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 30, filter: "blur(12px)" }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+            transition={{ duration: 1.2, ease: easeOutExpo, delay: 1.2 }}
+            className="relative"
+          >
+            {/* Glow respirante detrás del frame */}
+            <motion.div
+              className="absolute -inset-x-16 -top-16 -bottom-16 -z-10 pointer-events-none blur-3xl"
+              style={{
+                background:
+                  "radial-gradient(ellipse at center, oklch(0.7 0.12 175 / 0.35), transparent 65%)",
+              }}
+              animate={{ opacity: [0.4, 0.7, 0.4] }}
+              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+              aria-hidden
+            />
+
+            <motion.div
+              animate={floating}
+              className="relative rounded-2xl overflow-hidden border border-line-200 bg-white shadow-2xl shadow-brand-700/15"
+            >
+              <HeroVideo
+                src="/landing/Hero-1Psico.mp4"
+                poster="/landing/hero-1psico-poster.jpg"
+                aspect="1920 / 1080"
+              />
+            </motion.div>
+
+            <div className="hidden sm:contents">
+              <FloatingBadge
+                icon={CalendarCheck}
+                label="Sesión agendada"
+                tone="brand"
+                position={{ top: "-1.25rem", left: "-0.75rem" }}
+                delay={2.0}
+                floatPhase={0}
+              />
+              <FloatingBadge
+                icon={BellRing}
+                label="Recordatorio enviado"
+                tone="neutral"
+                position={{ top: "35%", right: "-1rem" }}
+                delay={2.3}
+                floatPhase={1}
+              />
+              <FloatingBadge
+                icon={CheckCircle2}
+                label="PHQ-9 completado"
+                tone="success"
+                position={{ bottom: "-1rem", left: "10%" }}
+                delay={2.6}
+                floatPhase={2}
+              />
+            </div>
+          </motion.div>
+        </div>
       </div>
     </section>
   );

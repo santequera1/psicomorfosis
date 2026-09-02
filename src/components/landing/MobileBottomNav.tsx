@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Home, LayoutGrid, Palette, Users, ArrowRight } from "lucide-react";
+import { Home, LayoutGrid, Palette, Tag, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeOutExpo } from "./motion";
 
@@ -16,7 +16,7 @@ const ITEMS: { href: string; label: string; icon: typeof Home }[] = [
   { href: "#hero", label: "Inicio", icon: Home },
   { href: "#capabilities", label: "Plataforma", icon: LayoutGrid },
   { href: "#estilo", label: "Estilo", icon: Palette },
-  { href: "#developers", label: "Nosotros", icon: Users },
+  { href: "#precios", label: "Precios", icon: Tag },
   { href: "#demo", label: "Acceso", icon: ArrowRight },
 ];
 

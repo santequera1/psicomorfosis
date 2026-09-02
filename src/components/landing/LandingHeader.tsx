@@ -31,11 +31,11 @@ export function LandingHeader() {
         <nav className="hidden md:flex items-center text-sm text-ink-700">
           <a href="#capabilities" className="px-4 hover:text-brand-700 transition-colors">Plataforma</a>
           <span className="h-3 w-px bg-line-200" aria-hidden />
+          <a href="#flujo" className="px-4 hover:text-brand-700 transition-colors">Cómo funciona</a>
+          <span className="h-3 w-px bg-line-200" aria-hidden />
           <a href="#estilo" className="px-4 hover:text-brand-700 transition-colors">Estilo</a>
           <span className="h-3 w-px bg-line-200" aria-hidden />
-          <a href="#why" className="px-4 hover:text-brand-700 transition-colors">Por qué</a>
-          <span className="h-3 w-px bg-line-200" aria-hidden />
-          <a href="#developers" className="px-4 hover:text-brand-700 transition-colors">Nosotros</a>
+          <a href="#precios" className="px-4 hover:text-brand-700 transition-colors">Precios</a>
           <span className="h-3 w-px bg-line-200" aria-hidden />
           <a href="#demo" className="px-4 hover:text-brand-700 transition-colors">Acceso</a>
         </nav>
