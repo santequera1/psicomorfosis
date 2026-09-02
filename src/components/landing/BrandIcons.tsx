@@ -38,6 +38,14 @@ export function OutlookIcon({ className }: { className?: string }) {
   );
 }
 
+export function MicrosoftIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.623h11.377V24H0zm12.623 0H24V24H12.623z"/>
+    </svg>
+  );
+}
+
 export function GoogleCalendarIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
