@@ -6,7 +6,7 @@ import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
 import { Hero2 } from "@/components/landing/Hero2";
 import { FeatureLinks } from "@/components/landing/FeatureLinks";
 import { Features } from "@/components/landing/Features";
-import { FlowTimeline } from "@/components/landing/FlowTimeline";
+import { TareasShowcase } from "@/components/landing/TareasShowcase";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { Pricing2 } from "@/components/landing/Pricing2";
 import { LegalTrust } from "@/components/landing/LegalTrust";
@@ -87,7 +87,7 @@ function Inicio2Page() {
             subtitle="Cada sección nació de conversaciones con psicólogos en Colombia. Desliza y mírala por dentro."
           />
         </div>
-        <FlowTimeline />
+        <TareasShowcase />
         <ThemeShowcase scrollDriven />
         <Pricing2 />
         <LegalTrust />
