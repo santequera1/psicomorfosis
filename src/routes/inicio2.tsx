@@ -8,8 +8,7 @@ import { FeatureLinks } from "@/components/landing/FeatureLinks";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { Pricing2 } from "@/components/landing/Pricing2";
 import { LegalTrust } from "@/components/landing/LegalTrust";
-import { FinalCTA } from "@/components/landing/FinalCTA";
-import { DemoForm } from "@/components/landing/DemoForm";
+import { SignupCTA } from "@/components/landing/SignupCTA";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
@@ -77,11 +76,7 @@ function Inicio2Page() {
         <ThemeShowcase />
         <Pricing2 />
         <LegalTrust />
-        <FinalCTA
-          title="Tu práctica merece una plataforma propia."
-          subtitle="Tu cuenta se crea en minutos, es gratis durante todo el 2026 y llega conectada con Google Calendar, Meet y WhatsApp desde el primer día."
-        />
-        <DemoForm />
+        <SignupCTA />
       </main>
       <LandingFooter />
     </div>

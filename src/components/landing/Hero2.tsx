@@ -116,10 +116,18 @@ export function Hero2() {
           </motion.a>
         </motion.div>
 
-        {/* Fila de integraciones — lo que la cuenta trae conectado desde
-            el día uno. Chips con stagger para que se lean como un "check
-            check check" al cargar. */}
-        <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-2 px-2">
+        {/* Integraciones. En desktop: chips con stagger. En móvil los
+            chips parecían una pila de botones junto a los CTAs (feedback
+            1 sep 2026) → una sola línea muda de texto. */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, ease: easeOutExpo, delay: 1.3 }}
+          className="sm:hidden mt-5 px-6 text-[11px] text-ink-400 leading-relaxed"
+        >
+          Entra con Google · Gratis durante el 2026 · WhatsApp, Google Calendar y Meet conectados
+        </motion.p>
+        <div className="hidden sm:flex mt-6 sm:mt-8 flex-wrap items-center justify-center gap-2 px-2">
           {INTEGRATIONS.map(({ icon: Icon, label }, i) => (
             <motion.span
               key={label}
@@ -167,6 +175,7 @@ export function Hero2() {
             />
           </motion.div>
 
+          <div className="hidden sm:contents">
           <FloatingBadge
             icon={CalendarCheck}
             label="Sesión agendada"
@@ -191,6 +200,7 @@ export function Hero2() {
             delay={2.6}
             floatPhase={2}
           />
+          </div>
         </motion.div>
       </div>
     </section>

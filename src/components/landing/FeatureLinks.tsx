@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { easeOutExpo, fadeUpSubtle, staggerParent } from "./motion";
@@ -62,19 +62,68 @@ export function FeatureLinks() {
             Todo tu consultorio, una sola pestaña.
           </motion.h2>
           <motion.p variants={fadeUpSubtle} className="mt-3 text-sm sm:text-base text-ink-500 max-w-xl">
-            Pasa el cursor por cada área para verla en la app real.
+            <span className="hidden md:inline">Pasa el cursor por cada área para verla en la app real.</span>
+            <span className="md:hidden">Toca cada área para verla en la app real.</span>
           </motion.p>
         </motion.div>
 
-        <div>
+        {/* Desktop: lista editorial con hover. */}
+        <div className="hidden md:block">
           {LINKS.map((link) => (
             <FeatureLink key={link.heading} {...link} />
           ))}
         </div>
+
+        {/* Móvil: tabs — cambia el contenido en el mismo bloque en vez
+            de apilar seis filas (feedback 1 sep 2026: menos scroll). */}
+        <FeatureTabs />
       </div>
     </section>
   );
 }
+
+function FeatureTabs() {
+  const [active, setActive] = useState(0);
+  const link = LINKS[active];
+  return (
+    <div className="md:hidden">
+      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {LINKS.map((l, i) => (
+          <button
+            key={l.heading}
+            onClick={() => setActive(i)}
+            className={`shrink-0 snap-start h-9 px-3.5 rounded-full border text-xs font-medium transition-colors ${
+              i === active
+                ? "bg-brand-700 border-brand-700 text-white"
+                : "bg-surface border-line-200 text-ink-600"
+            }`}
+          >
+            {l.heading}
+          </button>
+        ))}
+      </div>
+      <motion.div
+        key={active}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: easeOutExpo }}
+        className="mt-3 rounded-2xl border border-line-200 bg-surface overflow-hidden shadow-soft"
+      >
+        <img
+          src={link.img}
+          alt={`Pantalla de ${link.heading} en Psicomorfosis`}
+          loading="lazy"
+          className="w-full aspect-[16/10] object-cover object-left-top border-b border-line-100 bg-white"
+        />
+        <div className="p-4">
+          <h3 className="font-serif text-xl text-ink-900">{link.heading}</h3>
+          <p className="mt-1 text-sm text-ink-500 leading-relaxed">{link.subheading}</p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 
 function FeatureLink({ heading, subheading, img }: { heading: string; subheading: string; img: string }) {
   const ref = useRef<HTMLAnchorElement | null>(null);
