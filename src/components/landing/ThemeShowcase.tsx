@@ -22,7 +22,7 @@ const MODES: { id: Mode; label: string; icon: typeof Sun; src: string }[] = [
 
 const AUTOPLAY_MS = 4000;
 
-export function ThemeShowcase() {
+export function ThemeShowcase({ scrollDriven = false }: { scrollDriven?: boolean } = {}) {
   const [active, setActive] = useState<Mode>("claro");
   const [paused, setPaused] = useState(false);
   const [inView, setInView] = useState(false);
@@ -63,8 +63,28 @@ export function ThemeShowcase() {
     return () => obs.disconnect();
   }, []);
 
+  // Modo scroll-driven (inicio2): el tema acompaña el scroll — al
+  // avanzar por la sección pasa solo de claro a oscuro y luego aurora.
+  // Un clic manual sigue fijando (paused) y apaga el acompañamiento.
   useEffect(() => {
-    if (paused || !inView) return;
+    if (!scrollDriven || paused) return;
+    const el = sectionRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const total = r.height + vh;
+      const progreso = Math.min(1, Math.max(0, (vh - r.top) / total));
+      const next: Mode = progreso < 0.45 ? "claro" : progreso < 0.72 ? "oscuro" : "aurora";
+      setActive((prev) => (prev === next ? prev : next));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [scrollDriven, paused]);
+
+  useEffect(() => {
+    if (paused || !inView || scrollDriven) return;
     timerRef.current = setInterval(() => {
       setActive((prev) => {
         const idx = MODES.findIndex((m) => m.id === prev);
@@ -157,7 +177,7 @@ export function ThemeShowcase() {
               transition={{ duration: 0.6, delay: 0.4 }}
               className="mt-4 text-center text-xs text-ink-400"
             >
-              Cambia solo cada 4 segundos · toca uno para fijarlo
+              {scrollDriven ? "Cambia con tu scroll · toca uno para fijarlo" : "Cambia solo cada 4 segundos · toca uno para fijarlo"}
             </motion.p>
           )}
         </motion.div>

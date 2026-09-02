@@ -5,6 +5,8 @@ import { MobileBottomNav } from "@/components/landing/MobileBottomNav";
 import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
 import { Hero2 } from "@/components/landing/Hero2";
 import { FeatureLinks } from "@/components/landing/FeatureLinks";
+import { Features } from "@/components/landing/Features";
+import { FlowTimeline } from "@/components/landing/FlowTimeline";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { Pricing2 } from "@/components/landing/Pricing2";
 import { LegalTrust } from "@/components/landing/LegalTrust";
@@ -72,8 +74,16 @@ function Inicio2Page() {
       <MobileBottomNav />
       <main>
         <Hero2 />
+        {/* Ancla compartida: FeatureLinks vive solo en desktop y Features
+            (el carrusel original) solo en móvil — el ancla #capabilities
+            debe funcionar en ambos. */}
+        <div id="capabilities" className="scroll-mt-24" aria-hidden />
         <FeatureLinks />
-        <ThemeShowcase />
+        <div className="md:hidden">
+          <Features sectionId="capabilities-movil" />
+        </div>
+        <FlowTimeline />
+        <ThemeShowcase scrollDriven />
         <Pricing2 />
         <LegalTrust />
         <SignupCTA />

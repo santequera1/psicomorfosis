@@ -114,9 +114,9 @@ const CAPABILITIES: Capability[] = [
   },
 ];
 
-export function Features() {
+export function Features({ sectionId = "capabilities" }: { sectionId?: string } = {}) {
   return (
-    <section id="capabilities" className="py-14 sm:py-24 relative">
+    <section id={sectionId} className="py-14 sm:py-24 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="La plataforma"

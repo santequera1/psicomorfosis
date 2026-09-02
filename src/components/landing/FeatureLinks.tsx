@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { ArrowRight, X } from "lucide-react";
 import { easeOutExpo, fadeUpSubtle, staggerParent } from "./motion";
 
 /**
@@ -45,8 +45,10 @@ const LINKS = [
 ];
 
 export function FeatureLinks() {
+  // Lightbox: clic en el pantallazo flotante lo abre en grande.
+  const [lightbox, setLightbox] = useState<(typeof LINKS)[number] | null>(null);
   return (
-    <section id="capabilities" className="py-14 sm:py-24 relative">
+    <section className="py-14 sm:py-24 relative hidden md:block">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           variants={staggerParent}
@@ -62,70 +64,73 @@ export function FeatureLinks() {
             Todo tu consultorio, una sola pestaña.
           </motion.h2>
           <motion.p variants={fadeUpSubtle} className="mt-3 text-sm sm:text-base text-ink-500 max-w-xl">
-            <span className="hidden md:inline">Pasa el cursor por cada área para verla en la app real.</span>
-            <span className="md:hidden">Toca cada área para verla en la app real.</span>
+            Pasa el cursor por cada área para verla en la app real — y haz clic en la imagen para ampliarla.
           </motion.p>
         </motion.div>
 
-        {/* Desktop: lista editorial con hover. */}
-        <div className="hidden md:block">
+        <div>
           {LINKS.map((link) => (
-            <FeatureLink key={link.heading} {...link} />
+            <FeatureLink key={link.heading} {...link} onOpen={() => setLightbox(link)} />
           ))}
         </div>
-
-        {/* Móvil: tabs — cambia el contenido en el mismo bloque en vez
-            de apilar seis filas (feedback 1 sep 2026: menos scroll). */}
-        <FeatureTabs />
       </div>
+
+      <AnimatePresence>
+        {lightbox && <Lightbox {...lightbox} onClose={() => setLightbox(null)} />}
+      </AnimatePresence>
     </section>
   );
 }
 
-function FeatureTabs() {
-  const [active, setActive] = useState(0);
-  const link = LINKS[active];
+/** Pantallazo en grande con animación de spring; Escape o clic fuera cierran. */
+function Lightbox({ heading, subheading, img, onClose }: {
+  heading: string; subheading: string; img: string; onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="md:hidden">
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {LINKS.map((l, i) => (
-          <button
-            key={l.heading}
-            onClick={() => setActive(i)}
-            className={`shrink-0 snap-start h-9 px-3.5 rounded-full border text-xs font-medium transition-colors ${
-              i === active
-                ? "bg-brand-700 border-brand-700 text-white"
-                : "bg-surface border-line-200 text-ink-600"
-            }`}
-          >
-            {l.heading}
-          </button>
-        ))}
-      </div>
-      <motion.div
-        key={active}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: easeOutExpo }}
-        className="mt-3 rounded-2xl border border-line-200 bg-surface overflow-hidden shadow-soft"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-ink-900/70 backdrop-blur-md flex items-center justify-center p-4 sm:p-8 cursor-zoom-out"
+    >
+      <motion.figure
+        initial={{ opacity: 0, scale: 0.88, y: 24, filter: "blur(8px)" }}
+        animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+        exit={{ opacity: 0, scale: 0.94, y: 12, filter: "blur(6px)" }}
+        transition={{ type: "spring", stiffness: 260, damping: 26 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative max-w-6xl w-full cursor-default"
       >
         <img
-          src={link.img}
-          alt={`Pantalla de ${link.heading} en Psicomorfosis`}
-          loading="lazy"
-          className="w-full aspect-[16/10] object-cover object-left-top border-b border-line-100 bg-white"
+          src={img}
+          alt={`Pantalla de ${heading} en Psicomorfosis`}
+          className="w-full h-auto rounded-2xl border border-white/10 shadow-2xl bg-white"
         />
-        <div className="p-4">
-          <h3 className="font-serif text-xl text-ink-900">{link.heading}</h3>
-          <p className="mt-1 text-sm text-ink-500 leading-relaxed">{link.subheading}</p>
-        </div>
-      </motion.div>
-    </div>
+        <figcaption className="mt-4 text-center">
+          <p className="font-serif text-xl text-white">{heading}</p>
+          <p className="mt-1 text-sm text-white/70">{subheading}</p>
+        </figcaption>
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="absolute -top-3 -right-3 h-10 w-10 rounded-full bg-white text-ink-900 shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </motion.figure>
+    </motion.div>
   );
 }
 
-
-function FeatureLink({ heading, subheading, img }: { heading: string; subheading: string; img: string }) {
+function FeatureLink({ heading, subheading, img, onOpen }: { heading: string; subheading: string; img: string; onOpen: () => void }) {
   const ref = useRef<HTMLAnchorElement | null>(null);
 
   // La imagen "persigue" suavemente al mouse dentro de la fila.
@@ -175,16 +180,7 @@ function FeatureLink({ heading, subheading, img }: { heading: string; subheading
         </span>
       </div>
 
-      {/* Miniatura estática en touch (el hover no existe ahí) */}
-      <img
-        src={img}
-        alt=""
-        loading="lazy"
-        aria-hidden
-        className="md:hidden h-16 w-24 shrink-0 rounded-lg border border-line-200 object-cover object-left-top shadow-sm"
-      />
-
-      {/* Pantallazo flotante que sigue al mouse — solo desktop */}
+      {/* Pantallazo flotante que sigue al mouse; clic → lightbox */}
       <motion.img
         style={{ top, left, translateX: "-10%", translateY: "-50%" }}
         variants={{
@@ -195,7 +191,9 @@ function FeatureLink({ heading, subheading, img }: { heading: string; subheading
         src={img}
         loading="lazy"
         alt={`Pantalla de ${heading} en Psicomorfosis`}
-        className="hidden md:block absolute z-20 h-44 w-72 lg:h-56 lg:w-96 rounded-xl border border-line-200 bg-white object-cover object-left-top shadow-2xl pointer-events-none"
+        title="Ver en grande"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpen(); }}
+        className="hidden md:block absolute z-20 h-44 w-72 lg:h-56 lg:w-96 rounded-xl border border-line-200 bg-white object-cover object-left-top shadow-2xl cursor-zoom-in"
       />
 
       <div className="overflow-hidden hidden md:block shrink-0">
