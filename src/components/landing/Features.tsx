@@ -174,7 +174,7 @@ function MobileCarousel() {
       </div>
 
       <div
-        className="flex overflow-x-auto snap-x snap-mandatory gap-4 -mx-4 px-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex overflow-x-auto snap-x snap-mandatory gap-4 -mx-4 px-4 scroll-pl-4 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {CAPABILITIES.map((c, i) => (
           <MobileCard key={c.title} capability={c} index={i} />
@@ -197,7 +197,7 @@ function MobileCard({ capability, index }: { capability: Capability; index: numb
       whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.9, ease: easeOutExpo }}
-      className="snap-start shrink-0 w-[86%] sm:w-[60%] rounded-xl border border-line-200 bg-surface/70 backdrop-blur-sm overflow-hidden shadow-lg shadow-brand-700/5"
+      className="snap-start shrink-0 w-[86%] sm:w-[60%] rounded-t-none rounded-b-xl border border-line-200 bg-surface/70 backdrop-blur-sm overflow-hidden shadow-lg shadow-brand-700/5"
     >
       <img
         src={capability.image}
@@ -355,16 +355,20 @@ function ExtraGrid() {
  * logo de marca real (SVG inline en BrandIcons) y color oficial.
  */
 const INTEGRATIONS: {
-  Icon: React.ComponentType<{ className?: string }>;
+  Icon?: React.ComponentType<{ className?: string }>;
+  img?: string;
   label: string;
-  color: string;
+  color?: string;
 }[] = [
-  { Icon: GoogleCalendarIcon, label: "Google Calendar", color: "#4285F4" },
-  { Icon: GoogleMeetIcon, label: "Google Meet", color: "#00897B" },
-  { Icon: Video, label: "Jitsi Meet", color: "#1D76BA" },
+  { img: "/brands/calendar.svg", label: "Google Calendar" },
+  { img: "/brands/meet.svg", label: "Google Meet" },
+  { img: "/brands/zoom-icon.svg", label: "Zoom" },
   { Icon: WhatsAppIcon, label: "WhatsApp", color: "#25D366" },
   { Icon: GmailIcon, label: "Gmail", color: "#EA4335" },
   { Icon: OutlookIcon, label: "Outlook", color: "#0F6CBD" },
+  { Icon: Video, label: "Jitsi Meet", color: "#1D76BA" },
+  { img: "/brands/word.svg", label: "Word" },
+  { img: "/brands/pdf.svg", label: "PDF" },
 ];
 
 function IntegrationsCard() {
@@ -397,7 +401,9 @@ function IntegrationsCard() {
               className="aspect-square rounded-xl border border-line-200 bg-surface shadow-sm flex flex-col items-center justify-center gap-1 hover:border-brand-400 hover:shadow-md transition-all"
               title={it.label}
             >
-              <it.Icon className="h-5 w-5" style={{ color: it.color } as React.CSSProperties} />
+              {it.img
+                ? <img src={it.img} alt="" draggable={false} className="h-5 w-auto max-w-7 object-contain" />
+                : it.Icon && <it.Icon className="h-5 w-5" style={{ color: it.color } as React.CSSProperties} />}
               <span className="text-[9px] text-ink-700 font-medium leading-tight text-center px-1 truncate w-full">
                 {it.label}
               </span>

@@ -42,10 +42,10 @@ export function LandingFooter() {
               seguimiento terapéutico en un solo lugar — construida con
               psicólogos colombianos.
             </p>
-            <div className="mt-5 flex items-center gap-2">
+            <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <a
                 href="mailto:hola@psicomorfosis.co"
-                className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg border border-line-200 bg-surface text-xs font-medium text-ink-700 hover:border-brand-400 hover:text-brand-700 transition-colors"
+                className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-3.5 rounded-lg border border-line-200 bg-surface text-xs font-medium text-ink-700 hover:border-brand-400 hover:text-brand-700 transition-colors"
               >
                 <Mail className="h-3.5 w-3.5" /> hola@psicomorfosis.co
               </a>
@@ -53,7 +53,7 @@ export function LandingFooter() {
                 href="https://wa.me/573127268780"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg border border-line-200 bg-surface text-xs font-medium text-ink-700 hover:border-brand-400 hover:text-brand-700 transition-colors"
+                className="inline-flex items-center justify-center gap-2 h-10 sm:h-9 px-3.5 rounded-lg border border-line-200 bg-surface text-xs font-medium text-ink-700 hover:border-brand-400 hover:text-brand-700 transition-colors"
               >
                 <WhatsAppIcon className="h-3.5 w-3.5 text-[#25D366]" /> WhatsApp
               </a>
@@ -86,9 +86,9 @@ export function LandingFooter() {
                 ))}
               </ul>
             </nav>
-            <nav aria-label="Legal">
+            <nav aria-label="Legal" className="col-span-2 sm:col-span-1">
               <p className="text-[11px] uppercase tracking-widest text-ink-400 font-semibold mb-3.5">Legal</p>
-              <ul className="space-y-2.5 text-sm">
+              <ul className="flex flex-wrap gap-x-6 gap-y-2 sm:block sm:space-y-2.5 text-sm">
                 <li>
                   <Link to="/privacidad" className="text-ink-700 hover:text-brand-700 transition-colors">Política de privacidad</Link>
                 </li>
@@ -104,7 +104,7 @@ export function LandingFooter() {
         </div>
 
         {/* Barra inferior */}
-        <div className="mt-12 pt-6 border-t border-line-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-ink-400">
+        <div className="mt-10 sm:mt-12 pt-6 border-t border-line-100 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-2 sm:gap-3 text-xs text-ink-400 text-center sm:text-left">
           <p>© {new Date().getFullYear()} Psicomorfosis · Todos los derechos reservados</p>
           <p className="inline-flex items-center gap-1.5">
             Hecho con <Heart className="h-3 w-3 text-brand-700" aria-label="amor" /> en Cartagena, Colombia

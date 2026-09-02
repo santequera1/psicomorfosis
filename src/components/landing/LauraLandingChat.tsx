@@ -151,7 +151,7 @@ export function LauraLandingChat() {
   return (
     <>
       {/* FAB — mismo botón de la app (bg-surface, borde brand, dot beta) */}
-      <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-5 z-40 flex items-end gap-2">
+      <div className="fixed bottom-24 sm:bottom-6 right-4 sm:right-5 z-40 flex items-end gap-2">
         <AnimatePresence>
           {showHint && !open && (
             <motion.button
