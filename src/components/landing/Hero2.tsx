@@ -2,10 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, Mail } from "lucide-react";
 import { easeOutExpo, floating } from "./motion";
 import { HeroVideo } from "./HeroVideo";
-import {
-  GoogleIcon, WhatsAppIcon, GoogleCalendarIcon, GoogleMeetIcon,
-  ZoomIcon, GmailIcon, OutlookIcon, MicrosoftIcon,
-} from "./BrandIcons";
+import { GoogleIcon, WhatsAppIcon, GmailIcon, OutlookIcon } from "./BrandIcons";
 
 /**
  * Hero de la landing. Desktop: texto a la izquierda, video a la
@@ -17,18 +14,26 @@ const HEADLINE_LINE_1 = ["Una", "plataforma", "para"];
 const HEADLINE_LINE_2 = ["toda", "tu", "práctica", "clínica."];
 
 // Fila de logos bajo los CTAs: las herramientas con las que la app
-// convive, sin texto ni promesas — solo están ahí. Grises en reposo,
-// color de marca + mini-lift al pasar el mouse.
-const LOGOS: { icon: React.ComponentType<{ className?: string }>; label: string; color: string }[] = [
-  { icon: GoogleMeetIcon, label: "Google Meet", color: "#00832d" },
-  { icon: GoogleIcon, label: "Google", color: "#4285F4" },
-  { icon: ZoomIcon, label: "Zoom", color: "#2D8CFF" },
-  { icon: GoogleCalendarIcon, label: "Google Calendar", color: "#4285F4" },
-  { icon: Mail, label: "Correo", color: "#64748B" },
-  { icon: GmailIcon, label: "Gmail", color: "#EA4335" },
-  { icon: OutlookIcon, label: "Outlook", color: "#0F6CBD" },
-  { icon: WhatsAppIcon, label: "WhatsApp", color: "#25D366" },
-  { icon: MicrosoftIcon, label: "Microsoft 365", color: "#F25022" },
+// convive, sin texto ni promesas. Los que tienen marca multicolor van
+// como SVG oficial (public/brands) en gris que revive al hover; los
+// monocromos usan currentColor con su color de marca.
+type LogoItem = {
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  color?: string;
+  img?: string;
+};
+const LOGOS: LogoItem[] = [
+  { label: "Google Meet", img: "/brands/meet.svg" },
+  { label: "Google", icon: GoogleIcon, color: "#4285F4" },
+  { label: "Zoom", img: "/brands/zoom-icon.svg" },
+  { label: "Google Calendar", img: "/brands/calendar.svg" },
+  { label: "Correo", icon: Mail, color: "#64748B" },
+  { label: "Gmail", icon: GmailIcon, color: "#EA4335" },
+  { label: "Outlook", icon: OutlookIcon, color: "#0F6CBD" },
+  { label: "WhatsApp", icon: WhatsAppIcon, color: "#25D366" },
+  { label: "Word", img: "/brands/word.svg" },
+  { label: "PDF", img: "/brands/pdf.svg" },
 ];
 
 export function Hero2() {
@@ -41,8 +46,9 @@ export function Hero2() {
         <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
           {/* Columna de texto — centrada en móvil, a la izquierda en desktop */}
           <div className="text-center lg:text-left lg:col-span-5">
-            <h1 className="font-serif text-3xl sm:text-5xl lg:text-[3.4rem] xl:text-6xl leading-[1.05] tracking-tight text-ink-900">
-              <div className="overflow-hidden">
+            <h1 className="font-serif text-3xl sm:text-5xl xl:text-[3.4rem] leading-[1.05] tracking-tight text-ink-900">
+              {/* lg:nowrap para que "para" no quede huérfano en su línea */}
+              <div className="overflow-hidden lg:whitespace-nowrap">
                 {HEADLINE_LINE_1.map((word, i) => (
                   <motion.span
                     key={word}
@@ -115,8 +121,8 @@ export function Hero2() {
             </motion.div>
 
             {/* Logos de las herramientas — presencia silenciosa */}
-            <div className="mt-7 flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-5">
-              {LOGOS.map(({ icon: Icon, label, color }, i) => (
+            <div className="mt-7 flex flex-wrap items-center justify-center lg:justify-start gap-2.5 sm:gap-3">
+              {LOGOS.map(({ icon: Icon, label, color, img }, i) => (
                 <motion.span
                   key={label}
                   title={label}
@@ -124,10 +130,23 @@ export function Hero2() {
                   animate={{ opacity: 1, y: 0 }}
                   whileHover={{ y: -3, scale: 1.25 }}
                   transition={{ duration: 0.4, ease: easeOutExpo, delay: 1.25 + i * 0.06 }}
-                  style={{ "--hc": color } as React.CSSProperties}
-                  className="text-ink-300 hover:text-[var(--hc)] transition-colors duration-300 cursor-default"
+                  style={color ? ({ "--hc": color } as React.CSSProperties) : undefined}
+                  className={
+                    Icon
+                      ? "text-ink-300 hover:text-[var(--hc)] transition-colors duration-300 cursor-default"
+                      : "cursor-default"
+                  }
                 >
-                  <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                  {Icon ? (
+                    <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                  ) : (
+                    <img
+                      src={img}
+                      alt={label}
+                      draggable={false}
+                      className="h-4 sm:h-[18px] w-auto max-w-6 object-contain grayscale opacity-75 hover:grayscale-0 hover:opacity-100 transition-[filter,opacity] duration-300"
+                    />
+                  )}
                 </motion.span>
               ))}
               <motion.span
@@ -135,7 +154,7 @@ export function Hero2() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ y: -3, scale: 1.25 }}
-                transition={{ duration: 0.4, ease: easeOutExpo, delay: 1.25 + 9 * 0.06 }}
+                transition={{ duration: 0.4, ease: easeOutExpo, delay: 1.25 + 10 * 0.06 }}
                 className="cursor-default"
               >
                 <img
