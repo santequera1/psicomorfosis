@@ -49,6 +49,19 @@ const OPCIONES: { q: string; a: string }[] = [
 const RESPUESTA_LIBRE =
   "Eso te lo respondo mejor por dentro 😉 En la landing soy una demo — en la app converso de verdad, con tu agenda y tus pacientes a la mano. Crea tu cuenta gratis y hablamos.";
 
+/** Respuestas con algo de tacto para texto libre: saludo saluda, gracias
+ *  agradece, lo demás invita a la app. */
+function freeAnswer(text: string): string {
+  const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/(^|\s)(hola|holi|buenas|buenos dias|buen dia|buenas tardes|buenas noches|hey|saludos|que mas|que tal|como estas|como vas)/.test(t)) {
+    return "¡Hola! 😊 Qué gusto saludarte. Pregúntame lo que quieras con los botones de abajo — o crea tu cuenta y hablamos con calma por dentro.";
+  }
+  if (/(gracias|genial|perfecto|excelente|listo|me gusta|chevere|bacano)/.test(t)) {
+    return "¡Con gusto! 🙌 Cuando quieras, creas tu cuenta y me pones a trabajar de verdad.";
+  }
+  return RESPUESTA_LIBRE;
+}
+
 export function LauraLandingChat() {
   const [open, setOpen] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -102,6 +115,15 @@ export function LauraLandingChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typing, open]);
 
+  // Con el drawer abierto, la página de atrás NO debe scrollear (en
+  // móvil el scroll del chat movía la landing y la descuadraba).
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   function reply(text: string, answer: string) {
     if (typing) return;
     setMessages((prev) => [...prev, { from: "user", text }]);
@@ -121,7 +143,7 @@ export function LauraLandingChat() {
     const text = draft.trim();
     if (!text || typing) return;
     setDraft("");
-    reply(text, RESPUESTA_LIBRE);
+    reply(text, freeAnswer(text));
   }
 
   const pendientes = OPCIONES.filter((o) => !asked.includes(o.q));
@@ -199,7 +221,7 @@ export function LauraLandingChat() {
             </header>
 
             {/* Mensajes — mismas burbujas de la app */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-3">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-4 py-4 space-y-3">
               {messages.map((m, i) =>
                 m.from === "user" ? (
                   <div key={i} className="flex justify-end">

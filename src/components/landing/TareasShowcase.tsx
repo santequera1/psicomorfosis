@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Circle, Clock, AlertCircle, CheckCircle2, GripVertical, Check,
@@ -75,7 +75,16 @@ const INITIAL: DemoTask[] = [
     },
   },
   { id: 3, col: "IN_PROGRESS", title: "Enviar confirmación por correo", description: "La app la manda sola: con el evento listo para añadir al calendario, y copia para ti.", priority: "HIGH", type: "Automático", due: "Hoy", who: "LA", iconsKey: "correo" },
-  { id: 4, col: "IN_PROGRESS", title: "Actualizar consentimientos", description: "[demo] Tarea de demostración.", priority: "MEDIUM", type: "Administrativo", due: "30 de sep", who: "TÚ" },
+  {
+    id: 9, col: "IN_PROGRESS", title: "Revisar cómo va la consulta",
+    description: "Toca esta tarjeta y mira el módulo de reportes.",
+    priority: "MEDIUM", type: "Reportes", who: "TÚ",
+    detail: {
+      heading: "Saber cómo va tu consulta sin abrir Excel",
+      text: "Sesiones, ingresos, retención, no-shows y riesgo activo — calculado automático, con filtros por periodo (semana, mes, mes anterior, personalizado).",
+      img: "/landing/reportes.png",
+    },
+  },
   { id: 5, col: "REVIEW", title: "Crear evento en Calendar + Meet", description: "Queda en tu Google Calendar y, si la sesión es virtual, con la reunión de Meet creada.", priority: "MEDIUM", type: "Automático", due: "Hoy", who: "LA", iconsKey: "gcal" },
   {
     id: 8, col: "REVIEW", title: "Organizar la biblioteca clínica",
@@ -162,6 +171,20 @@ export function TareasShowcase() {
     setOver(null);
   }
 
+  // Red de seguridad: si el drag termina fuera de cualquier columna (o el
+  // navegador se come el dragend), limpiamos igual para que la card
+  // colapsada reaparezca.
+  useEffect(() => {
+    if (dragId == null) return;
+    const clear = () => endDrag();
+    window.addEventListener("dragend", clear);
+    window.addEventListener("drop", clear);
+    return () => {
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("drop", clear);
+    };
+  }, [dragId]);
+
   function onColDragOver(e: React.DragEvent, colKey: ColKey) {
     e.preventDefault();
     const mids = midCache.current[colKey] ?? [];
@@ -209,7 +232,7 @@ export function TareasShowcase() {
   }
 
   return (
-    <section id="flujo" className="py-14 sm:py-24 relative">
+    <section id="flujo" className="pt-6 pb-14 sm:pt-8 sm:pb-24 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           variants={staggerParent}
@@ -452,13 +475,19 @@ function ShowcaseCard({ task, dragging, style, onDragStart, onDragEnd, onToggleD
     </div>
   );
 
-  // Mini salto periódico para llamar la atención hacia "Agendar la cita"
-  // (solo mientras no esté hecha ni se esté arrastrando).
-  if (task.attention && !isDone && !dragging) {
+  // Mini salto periódico para llamar la atención hacia "Agendar la cita".
+  // OJO: el wrapper existe SIEMPRE que la tarea sea attention — si el
+  // wrapper aparece/desaparece según `dragging`, React remonta el nodo en
+  // pleno drag HTML5, el dragend se pierde y la card queda colapsada
+  // (el bug de "la tarjeta desaparece", 2 sep 2026).
+  if (task.attention) {
+    const jumping = !isDone && !dragging;
     return (
       <motion.div
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 0.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 3 }}
+        animate={jumping ? { y: [0, -6, 0] } : { y: 0 }}
+        transition={jumping
+          ? { duration: 0.5, ease: "easeInOut", repeat: Infinity, repeatDelay: 3 }
+          : { duration: 0.2 }}
       >
         {card}
       </motion.div>

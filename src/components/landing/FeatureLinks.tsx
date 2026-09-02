@@ -48,7 +48,7 @@ export function FeatureLinks() {
   // Lightbox: clic en el pantallazo flotante lo abre en grande.
   const [lightbox, setLightbox] = useState<(typeof LINKS)[number] | null>(null);
   return (
-    <section className="py-14 sm:py-24 relative hidden md:block">
+    <section className="pt-14 pb-8 sm:pt-24 sm:pb-10 relative hidden md:block">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           variants={staggerParent}

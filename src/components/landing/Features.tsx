@@ -2,14 +2,14 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import {
   Users, Calendar, FileSignature, MonitorSmartphone, ClipboardCheck, BarChart3,
-  ChevronRight,
+  ChevronRight, Brain, Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fadeUp, scaleIn, staggerParent, easeOutExpo } from "./motion";
 import { FloatingBadge, type FloatingBadgePosition } from "./FloatingBadge";
 import {
-  GoogleCalendarIcon, ZoomIcon, GoogleMeetIcon, WhatsAppIcon,
-  CalendlyIcon, ILovePDFIcon,
+  GoogleCalendarIcon, GoogleMeetIcon, WhatsAppIcon,
+  GmailIcon, OutlookIcon,
 } from "./BrandIcons";
 
 /**
@@ -65,13 +65,25 @@ const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    eyebrow: "Diagnóstico",
+    title: "DSM-5 y CIE-11 sin googlear códigos",
+    description:
+      "Buscador de códigos integrado a la historia clínica. Agregas el diagnóstico principal y los comórbidos en segundos, con el código correcto siempre.",
+    image: "/landing/diagnostico-dsm5.png",
+    alt: "Modal para agregar diagnóstico DSM-5 y CIE-11",
+    align: "left",
+    badges: [
+      { icon: Brain, label: "F41.1 agregado", tone: "brand", position: { top: "-1rem", right: "1.5rem" } },
+    ],
+  },
+  {
     eyebrow: "Agenda",
     title: "Menos mensajes. Menos olvidos.",
     description:
       "Agenda sesiones individuales, de pareja, familia o tele. El paciente confirma desde su portal y recibe recordatorios automáticos por email. Las cancelaciones quedan registradas.",
     image: "/landing/agenda.png",
     alt: "Vista semanal de agenda con citas, próximo paciente y pendientes",
-    align: "left",
+    align: "right",
     badges: [
       { icon: Calendar, label: "Sesión confirmada", tone: "brand", position: { bottom: "-1rem", right: "2rem" } },
     ],
@@ -83,7 +95,7 @@ const CAPABILITIES: Capability[] = [
       "Consentimientos, certificados y alta terapéutica con plantillas listas para Colombia. El paciente firma desde el portal con sello de hora, IP y verificación. Sin imprimir.",
     image: "/landing/documentos.png",
     alt: "Editor de concepto psicológico con datos del paciente y motivo de consulta",
-    align: "right",
+    align: "left",
     badges: [
       { icon: FileSignature, label: "Firma realizada", tone: "success", position: { top: "-1rem", right: "1.5rem" } },
     ],
@@ -95,7 +107,7 @@ const CAPABILITIES: Capability[] = [
       "Tus pacientes entran a su propio espacio: ven su próxima cita, sus tareas, los documentos compartidos y los tests pendientes. No necesitas escribirles por WhatsApp para nada de eso.",
     image: "/landing/portal-paciente.png",
     alt: "Portal del paciente mostrando próxima cita, tareas y documentos",
-    align: "left",
+    align: "right",
     badges: [
       { icon: MonitorSmartphone, label: "Paciente conectado", tone: "neutral", position: { top: "-1rem", left: "1.5rem" } },
     ],
@@ -107,7 +119,7 @@ const CAPABILITIES: Capability[] = [
       "Asistencia, adherencia a tareas, recaudo, no-show, duración promedio y modalidad de atención — calculado automático. Vista mensual o de 90 días para decidir con datos.",
     image: "/landing/reportes.png",
     alt: "Reportes con KPIs clínicos, ingresos semanales y modalidad de atención",
-    align: "right",
+    align: "left",
     badges: [
       { icon: BarChart3, label: "67% asistencia 90d", tone: "brand", position: { bottom: "-1rem", left: "2rem" } },
     ],
@@ -151,7 +163,7 @@ function MobileCarousel() {
     <div className="lg:hidden mt-10">
       {/* Indicador de scroll horizontal — chevron animado */}
       <div className="flex items-center justify-center gap-2 text-xs text-brand-700 font-medium mb-4">
-        <span>Desliza para ver las 6 capacidades</span>
+        <span>Desliza para ver las capacidades</span>
         <motion.span
           animate={{ x: [0, 6, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
@@ -330,22 +342,8 @@ function ExtraGrid() {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: "-80px" }}
-      className="mt-28 sm:mt-36 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      className="mt-24 sm:mt-32 max-w-xl mx-auto"
     >
-      <ExtraCard
-        eyebrow="Diagnóstico"
-        title="DSM-5 y CIE-11 sin googlear códigos"
-        description="Buscador de códigos integrado a la historia clínica. Agrega el diagnóstico principal y comórbidos en segundos."
-        image="/landing/diagnostico-dsm5.png"
-        alt="Modal para agregar diagnóstico DSM-5"
-      />
-      <ExtraCard
-        eyebrow="Biblioteca clínica"
-        title="Documentos organizados por paciente"
-        description="Vista por paciente con total, pendientes de firma, firmados y borradores. Plantillas listas a la derecha para reutilizar."
-        image="/landing/carpeta-documentos.png"
-        alt="Biblioteca documental por paciente y plantillas clínicas"
-      />
       <IntegrationsCard />
     </motion.div>
   );
@@ -362,11 +360,11 @@ const INTEGRATIONS: {
   color: string;
 }[] = [
   { Icon: GoogleCalendarIcon, label: "Google Calendar", color: "#4285F4" },
-  { Icon: ZoomIcon, label: "Zoom", color: "#2D8CFF" },
   { Icon: GoogleMeetIcon, label: "Google Meet", color: "#00897B" },
-  { Icon: WhatsAppIcon, label: "Recordatorios WhatsApp", color: "#25D366" },
-  { Icon: CalendlyIcon, label: "Calendly", color: "#006BFF" },
-  { Icon: ILovePDFIcon, label: "iLovePDF", color: "#E5322D" },
+  { Icon: Video, label: "Jitsi Meet", color: "#1D76BA" },
+  { Icon: WhatsAppIcon, label: "WhatsApp", color: "#25D366" },
+  { Icon: GmailIcon, label: "Gmail", color: "#EA4335" },
+  { Icon: OutlookIcon, label: "Outlook", color: "#0F6CBD" },
 ];
 
 function IntegrationsCard() {
@@ -408,20 +406,16 @@ function IntegrationsCard() {
         </div>
       </div>
       <div className="p-6 relative">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">
-            Integraciones
-          </p>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-[10px] text-amber-800 font-medium">
-            <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
-            Próximamente
-          </span>
-        </div>
+        <p className="text-xs uppercase tracking-widest text-brand-700 font-semibold">
+          Integraciones
+        </p>
         <h4 className="mt-2 font-serif text-xl text-ink-900 leading-tight">
           Conecta tus herramientas favoritas
         </h4>
         <p className="mt-2 text-sm text-ink-500 leading-relaxed">
-          Google Calendar, Zoom, Google Meet, Calendly e iLovePDF, más recordatorios y confirmaciones automáticas por WhatsApp Business. Exportar a PDF y Excel ya están disponibles.
+          Google Calendar en tiempo real, Google Meet o Jitsi para tus sesiones
+          virtuales, confirmaciones y recordatorios por WhatsApp, y correos que
+          llegan bien a Gmail y Outlook. Exportar a PDF y Excel también.
         </p>
         <p className="mt-3 text-[11px] text-ink-400 italic leading-relaxed">
           *No somos enemigos de WhatsApp. La plataforma lo usa por ti para recordar citas, no para que estés atendiendo pacientes a las 11 p. m.
