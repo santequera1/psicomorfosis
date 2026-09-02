@@ -40,7 +40,7 @@ export function Hero2() {
   return (
     <section
       id="hero"
-      className="relative pt-20 pb-12 sm:pt-28 sm:pb-20 overflow-hidden"
+      className="relative pt-20 pb-12 sm:pt-28 sm:pb-20 lg:pt-35 lg:pb-24 overflow-hidden"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
