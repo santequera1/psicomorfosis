@@ -15,32 +15,32 @@ const LINKS = [
   {
     heading: "Agenda",
     subheading: "Citas con recordatorios automáticos y reservas en línea desde tu perfil público.",
-    img: "/landing/agenda.png",
+    img: "/landing/agenda.webp",
   },
   {
     heading: "Historia clínica",
     subheading: "Notas de sesión, evolución, riesgo y toda la ficha del paciente en un solo expediente.",
-    img: "/landing/perfil-paciente.png",
+    img: "/landing/perfil-paciente.webp",
   },
   {
     heading: "Documentos",
     subheading: "Consentimientos, plantillas y firma del paciente desde su celular.",
-    img: "/landing/documentos.png",
+    img: "/landing/documentos.webp",
   },
   {
     heading: "Psicometría",
     subheading: "Tests aplicados, calificados e interpretados dentro de la plataforma.",
-    img: "/landing/diagnostico-dsm5.png",
+    img: "/landing/diagnostico-dsm5.webp",
   },
   {
     heading: "Portal del paciente",
     subheading: "Tus pacientes ven sus citas, tareas, tests, documentos y pagos.",
-    img: "/landing/portal-paciente.png",
+    img: "/landing/portal-paciente.webp",
   },
   {
     heading: "Reportes",
     subheading: "Cómo va tu consulta: sesiones, ingresos, retención y riesgo activo.",
-    img: "/landing/reportes.png",
+    img: "/landing/reportes.webp",
   },
 ];
 

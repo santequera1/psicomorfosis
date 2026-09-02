@@ -15,9 +15,9 @@ import { SectionHeader } from "./Features";
 type Mode = "claro" | "oscuro" | "aurora";
 
 const MODES: { id: Mode; label: string; icon: typeof Sun; src: string }[] = [
-  { id: "claro", label: "Claro", icon: Sun, src: "/landing/modo-claro.png" },
-  { id: "oscuro", label: "Oscuro", icon: Moon, src: "/landing/modo-oscuro.png" },
-  { id: "aurora", label: "Aurora", icon: Sparkles, src: "/landing/modo-aurora.png" },
+  { id: "claro", label: "Claro", icon: Sun, src: "/landing/modo-claro.webp" },
+  { id: "oscuro", label: "Oscuro", icon: Moon, src: "/landing/modo-oscuro.webp" },
+  { id: "aurora", label: "Aurora", icon: Sparkles, src: "/landing/modo-aurora.webp" },
 ];
 
 const AUTOPLAY_MS = 4000;
@@ -138,7 +138,7 @@ export function ThemeShowcase({ scrollDriven = false }: { scrollDriven?: boolean
                 initial={{ opacity: 0, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.99 }}
-                transition={{ duration: 1.6, ease: easeOutExpo }}
+                transition={{ duration: 0.9, ease: easeOutExpo }}
               />
             </AnimatePresence>
           </div>

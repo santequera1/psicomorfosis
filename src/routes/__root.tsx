@@ -173,7 +173,10 @@ const BOOTSTRAP_SCRIPT = `
       if (token && user && user.role === 'paciente' && !isPublic) {
         location.replace('/p/inicio');
       } else if (!token && !isPublic) {
-        location.replace('/login');
+        // La raíz del dominio es la puerta de Google: el visitante sin
+        // sesión ve la landing y decide; los deep links privados siguen
+        // yendo al login.
+        location.replace(path === '/' ? '/inicio' : '/login');
       } else if (token && user && user.role !== 'paciente' && path === '/login') {
         // Asesor legal aterriza en su dashboard exclusivo.
         location.replace(user.isLegalAdmin ? '/legal-admin' : '/');

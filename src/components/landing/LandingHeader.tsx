@@ -42,15 +42,15 @@ export function LandingHeader() {
         <div className="flex items-center gap-2">
           <Link
             to="/login"
-            className="hidden sm:inline-flex h-9 px-3 rounded-md text-sm text-ink-700 hover:text-ink-900 hover:bg-bg-100/60 items-center transition-colors"
+            className="inline-flex h-9 px-2.5 sm:px-3 rounded-md text-sm text-ink-700 hover:text-ink-900 hover:bg-bg-100/60 items-center transition-colors whitespace-nowrap"
           >
             Iniciar sesión
           </Link>
           <a
             href="#demo"
-            className="h-9 px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 transition-colors"
+            className="h-9 px-3.5 sm:px-4 rounded-md bg-brand-700 text-white text-sm font-medium hover:bg-brand-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
           >
-            Quiero acceso
+            Registrarse
           </a>
         </div>
       </div>

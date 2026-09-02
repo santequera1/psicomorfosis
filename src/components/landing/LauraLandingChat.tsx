@@ -83,11 +83,12 @@ export function LauraLandingChat() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [open, interacted]);
 
-  // Apertura automática al llegar cerca del final (una sola vez, y solo
-  // si el visitante no había abierto/cerrado el chat por su cuenta).
+  // Apertura automática SOLO al llegar al footer (pedido 2 sep: no en la
+  // última sección — al final de verdad), una única vez, y solo si el
+  // visitante no había abierto/cerrado el chat por su cuenta.
   useEffect(() => {
     if (autoOpened || interacted) return;
-    const target = document.getElementById("demo");
+    const target = document.querySelector("footer");
     if (!target || typeof IntersectionObserver === "undefined") return;
     const obs = new IntersectionObserver(
       ([entry]) => {
@@ -105,7 +106,7 @@ export function LauraLandingChat() {
           }]);
         }, 900);
       },
-      { threshold: 0.35 },
+      { threshold: 0.2 },
     );
     obs.observe(target);
     return () => obs.disconnect();

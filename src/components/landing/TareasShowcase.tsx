@@ -71,7 +71,7 @@ const INITIAL: DemoTask[] = [
     detail: {
       heading: "DSM-5 y CIE-11 sin googlear códigos",
       text: "Buscador de códigos integrado a la historia clínica: agregas el diagnóstico principal y los comórbidos en segundos, con el código correcto siempre.",
-      img: "/landing/diagnostico-dsm5.png",
+      img: "/landing/diagnostico-dsm5.webp",
     },
   },
   { id: 3, col: "IN_PROGRESS", title: "Enviar confirmación por correo", description: "La app la manda sola: con el evento listo para añadir al calendario, y copia para ti.", priority: "HIGH", type: "Automático", due: "Hoy", who: "LA", iconsKey: "correo" },
@@ -82,7 +82,7 @@ const INITIAL: DemoTask[] = [
     detail: {
       heading: "Saber cómo va tu consulta sin abrir Excel",
       text: "Sesiones, ingresos, retención, no-shows y riesgo activo — calculado automático, con filtros por periodo (semana, mes, mes anterior, personalizado).",
-      img: "/landing/reportes.png",
+      img: "/landing/reportes.webp",
     },
   },
   { id: 5, col: "REVIEW", title: "Crear evento en Calendar + Meet", description: "Queda en tu Google Calendar y, si la sesión es virtual, con la reunión de Meet creada.", priority: "MEDIUM", type: "Automático", due: "Hoy", who: "LA", iconsKey: "gcal" },
@@ -93,7 +93,7 @@ const INITIAL: DemoTask[] = [
     detail: {
       heading: "Documentos organizados por paciente",
       text: "Vista por paciente con totales, pendientes de firma, firmados y borradores — y tus plantillas listas a la mano para reutilizar.",
-      img: "/landing/carpeta-documentos.png",
+      img: "/landing/carpeta-documentos.webp",
     },
   },
   { id: 6, col: "DONE", title: "Laura avisa por WhatsApp", description: "Confirmación y recordatorio al paciente — y aviso para ti.", priority: "LOW", type: "Automático", due: "Hoy", who: "LA", done: true, iconsKey: "laura" },

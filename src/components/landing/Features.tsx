@@ -45,7 +45,7 @@ const CAPABILITIES: Capability[] = [
     title: "Tu día clínico, listo cuando abres",
     description:
       "Sesiones, pacientes activos, recaudo y riesgo activo a primera vista. Sin armar dashboards en Excel ni revisar 4 herramientas distintas para saber cómo va tu consulta hoy.",
-    image: "/landing/dashboard.png",
+    image: "/landing/dashboard.webp",
     alt: "Dashboard de Psicomorfosis con sesiones del día, KPIs y próximas citas",
     align: "left",
     badges: [
@@ -57,7 +57,7 @@ const CAPABILITIES: Capability[] = [
     title: "Toda la información del paciente, en un solo lugar",
     description:
       "Historia clínica, sesiones, documentos, tareas y tests psicométricos en la misma vista. Dejas de cazar notas en WhatsApp, Drive y libretas.",
-    image: "/landing/perfil-paciente.png",
+    image: "/landing/perfil-paciente.webp",
     alt: "Perfil de paciente con datos, motivo de consulta y resumen clínico",
     align: "right",
     badges: [
@@ -69,7 +69,7 @@ const CAPABILITIES: Capability[] = [
     title: "DSM-5 y CIE-11 sin googlear códigos",
     description:
       "Buscador de códigos integrado a la historia clínica. Agregas el diagnóstico principal y los comórbidos en segundos, con el código correcto siempre.",
-    image: "/landing/diagnostico-dsm5.png",
+    image: "/landing/diagnostico-dsm5.webp",
     alt: "Modal para agregar diagnóstico DSM-5 y CIE-11",
     align: "left",
     badges: [
@@ -81,7 +81,7 @@ const CAPABILITIES: Capability[] = [
     title: "Menos mensajes. Menos olvidos.",
     description:
       "Agenda sesiones individuales, de pareja, familia o tele. El paciente confirma desde su portal y recibe recordatorios automáticos por email. Las cancelaciones quedan registradas.",
-    image: "/landing/agenda.png",
+    image: "/landing/agenda.webp",
     alt: "Vista semanal de agenda con citas, próximo paciente y pendientes",
     align: "right",
     badges: [
@@ -93,7 +93,7 @@ const CAPABILITIES: Capability[] = [
     title: "Plantillas, firmas y biblioteca clínica",
     description:
       "Consentimientos, certificados y alta terapéutica con plantillas listas para Colombia. El paciente firma desde el portal con sello de hora, IP y verificación. Sin imprimir.",
-    image: "/landing/documentos.png",
+    image: "/landing/documentos.webp",
     alt: "Editor de concepto psicológico con datos del paciente y motivo de consulta",
     align: "left",
     badges: [
@@ -105,7 +105,7 @@ const CAPABILITIES: Capability[] = [
     title: "Una experiencia más profesional para tus pacientes",
     description:
       "Tus pacientes entran a su propio espacio: ven su próxima cita, sus tareas, los documentos compartidos y los tests pendientes. No necesitas escribirles por WhatsApp para nada de eso.",
-    image: "/landing/portal-paciente.png",
+    image: "/landing/portal-paciente.webp",
     alt: "Portal del paciente mostrando próxima cita, tareas y documentos",
     align: "right",
     badges: [
@@ -117,7 +117,7 @@ const CAPABILITIES: Capability[] = [
     title: "Saber cómo va tu consulta sin abrir Excel",
     description:
       "Asistencia, adherencia a tareas, recaudo, no-show, duración promedio y modalidad de atención — calculado automático. Vista mensual o de 90 días para decidir con datos.",
-    image: "/landing/reportes.png",
+    image: "/landing/reportes.webp",
     alt: "Reportes con KPIs clínicos, ingresos semanales y modalidad de atención",
     align: "left",
     badges: [
