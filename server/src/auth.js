@@ -232,6 +232,25 @@ function tryBotAuth(req) {
   };
 }
 
+// last_login_at como "última actividad": el login clásico y el de Google
+// lo sellan, pero quien se registra entra con el token del registro y la
+// sesión deslizante lo mantiene vivo semanas sin volver a "loguearse" —
+// su last_login_at quedaba NULL aunque usara la app a diario (bug visto
+// en el panel de plataforma: "Nunca ha entrado" con pacientes creados).
+// Sello perezoso: máximo un UPDATE cada 6h por usuario y por proceso.
+const lastSeenStamp = new Map();
+const LAST_SEEN_MS = 6 * 60 * 60 * 1000;
+function touchLastSeen(userId) {
+  if (!userId) return;
+  const now = Date.now();
+  if (now - (lastSeenStamp.get(userId) ?? 0) < LAST_SEEN_MS) return;
+  lastSeenStamp.set(userId, now);
+  try {
+    db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?")
+      .run(new Date(now).toISOString(), userId);
+  } catch { /* best-effort */ }
+}
+
 export function requireAuth(req, res, next) {
   // 1. Intento JWT primero (path normal)
   const header = req.headers.authorization ?? "";
@@ -243,6 +262,7 @@ export function requireAuth(req, res, next) {
     }
     req.user = payload;
     maybeRefresh(res, payload);
+    touchLastSeen(payload.id);
     return next();
   }
 
