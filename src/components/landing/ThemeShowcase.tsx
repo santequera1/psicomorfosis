@@ -75,7 +75,7 @@ export function ThemeShowcase({ scrollDriven = false }: { scrollDriven?: boolean
       const vh = window.innerHeight || 1;
       const total = r.height + vh;
       const progreso = Math.min(1, Math.max(0, (vh - r.top) / total));
-      const next: Mode = progreso < 0.45 ? "claro" : progreso < 0.72 ? "oscuro" : "aurora";
+      const next: Mode = progreso < 0.5 ? "claro" : progreso < 0.78 ? "oscuro" : "aurora";
       setActive((prev) => (prev === next ? prev : next));
     };
     onScroll();
@@ -138,7 +138,7 @@ export function ThemeShowcase({ scrollDriven = false }: { scrollDriven?: boolean
                 initial={{ opacity: 0, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.99 }}
-                transition={{ duration: 1, ease: easeOutExpo }}
+                transition={{ duration: 1.6, ease: easeOutExpo }}
               />
             </AnimatePresence>
           </div>

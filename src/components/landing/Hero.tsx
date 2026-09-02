@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, BellRing, CheckCircle2, CalendarCheck } from "lucide-react";
 import { easeOutExpo, floating } from "./motion";
 import { FloatingBadge } from "./FloatingBadge";
+import { HeroVideo } from "./HeroVideo";
 
 /**
  * Hero cinematográfico. Secuencia de entrada:
@@ -137,24 +138,13 @@ export function Hero() {
           />
 
           {/* Floating wrapper — solo el frame interno flota, los badges
-              tienen su propia oscilación con fase distinta. Sin shadow
-              ni background: el video viene exportado con fondo #F8F7F2
-              que coincide con la página, así se mezcla como si fuera
-              una ventana embebida en la web. */}
+              tienen su propia oscilación con fase distinta. El video
+              (20 MB) va con póster diferido — ver HeroVideo. */}
           <motion.div
             animate={floating}
             className="relative overflow-hidden"
           >
-            <video
-              src="/landing/Video-Dashboard-Psic.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="metadata"
-              className="w-full h-auto block"
-              aria-label="Demo de Psicomorfosis"
-            />
+            <HeroVideo />
           </motion.div>
 
           {/* Badges flotantes — sugieren actividad real */}

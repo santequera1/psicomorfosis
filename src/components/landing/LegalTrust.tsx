@@ -157,15 +157,24 @@ export function LegalTrust() {
           className="mt-10 text-center max-w-2xl mx-auto"
         >
           <p className="text-sm text-ink-500 leading-relaxed">
-            ¿Necesitas el detalle completo? Revisa nuestra{" "}
-            <a href="/privacidad" className="text-brand-700 font-medium hover:underline">
-              política de privacidad
-            </a>{" "}
-            y{" "}
-            <a href="/terminos" className="text-brand-700 font-medium hover:underline">
-              términos de uso
-            </a>{" "}
-            — escritos en español claro, sin trampas.
+            ¿Necesitas el detalle completo? Léelo tú mismo — escrito en
+            español claro, sin trampas.
+          </p>
+          <div className="mt-4 flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+            <a
+              href="/privacidad"
+              className="h-10 px-4 rounded-lg bg-brand-700 text-white text-xs sm:text-sm font-medium hover:bg-brand-800 inline-flex items-center"
+            >
+              Política de privacidad
+            </a>
+            <a
+              href="/terminos"
+              className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-ink-700 text-xs sm:text-sm font-medium hover:border-brand-400 inline-flex items-center"
+            >
+              Términos de uso
+            </a>
+          </div>
+          <p className="hidden">
           </p>
         </motion.div>
       </div>

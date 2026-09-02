@@ -11,6 +11,7 @@ import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
 import { Pricing2 } from "@/components/landing/Pricing2";
 import { LegalTrust } from "@/components/landing/LegalTrust";
 import { SignupCTA } from "@/components/landing/SignupCTA";
+import { LauraLandingChat } from "@/components/landing/LauraLandingChat";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
@@ -80,7 +81,11 @@ function Inicio2Page() {
         <div id="capabilities" className="scroll-mt-24" aria-hidden />
         <FeatureLinks />
         <div className="md:hidden">
-          <Features sectionId="capabilities-movil" />
+          <Features
+            sectionId="capabilities-movil"
+            title="Todo tu consultorio, una sola pestaña."
+            subtitle="Cada sección nació de conversaciones con psicólogos en Colombia. Desliza y mírala por dentro."
+          />
         </div>
         <FlowTimeline />
         <ThemeShowcase scrollDriven />
@@ -88,6 +93,7 @@ function Inicio2Page() {
         <LegalTrust />
         <SignupCTA />
       </main>
+      <LauraLandingChat />
       <LandingFooter />
     </div>
   );

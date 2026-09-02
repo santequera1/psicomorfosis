@@ -1,35 +1,81 @@
 import { motion } from "framer-motion";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, Mail } from "lucide-react";
 import { easeOutExpo, fadeUpSubtle, staggerParent } from "./motion";
 import { WhatsAppIcon, GoogleMeetIcon, GoogleCalendarIcon } from "./BrandIcons";
 
 /**
- * Timeline horizontal (pedido 1 sep 2026, reemplaza al bloque de
- * "Posicionamiento"): el viaje de una cita por las integraciones, en
- * este orden — Agenda → WhatsApp → Google Meet → Google Calendar.
+ * Timeline horizontal: el viaje de una cita (orden ajustado 2 sep 2026)
+ * — Agenda → Correo → Google Calendar + Meet → Laura por WhatsApp.
  * Desktop: 4 nodos sobre una línea que se dibuja al entrar en viewport.
  * Móvil: carrusel horizontal con snap.
  */
+
+const LAURA_AVATAR = "/laura/laura-profile-2.svg";
+
+function StepAgenda() {
+  return (
+    <span className="h-12 w-12 rounded-full bg-surface border-2 border-brand-300 shadow-soft grid place-content-center text-brand-700">
+      <CalendarPlus className="h-5 w-5" />
+    </span>
+  );
+}
+
+function StepCorreo() {
+  return (
+    <span className="h-12 w-12 rounded-full bg-surface border-2 border-brand-300 shadow-soft grid place-content-center text-brand-700">
+      <Mail className="h-5 w-5" />
+    </span>
+  );
+}
+
+/** Calendar + Meet: dos círculos solapados con los íconos reales. */
+function StepCalendarMeet() {
+  return (
+    <span className="inline-flex -space-x-3">
+      <span className="h-12 w-12 rounded-full bg-surface border-2 border-brand-300 shadow-soft grid place-content-center text-[#4285F4] z-10">
+        <GoogleCalendarIcon className="h-5 w-5" />
+      </span>
+      <span className="h-12 w-12 rounded-full bg-surface border-2 border-brand-300 shadow-soft grid place-content-center text-[#00832d]">
+        <GoogleMeetIcon className="h-5 w-5" />
+      </span>
+    </span>
+  );
+}
+
+/** Laura: su foto con el badge de WhatsApp. */
+function StepLaura() {
+  return (
+    <span className="relative inline-flex">
+      <span className="h-12 w-12 rounded-full overflow-hidden border-2 border-brand-300 shadow-soft bg-brand-700">
+        <img src={LAURA_AVATAR} alt="Laura" className="h-full w-full object-cover" />
+      </span>
+      <span className="absolute -bottom-1 -right-1 h-5.5 w-5.5 rounded-full bg-[#25D366] text-white grid place-content-center ring-2 ring-surface">
+        <WhatsAppIcon className="h-3 w-3" />
+      </span>
+    </span>
+  );
+}
+
 const STEPS = [
   {
-    icon: CalendarPlus,
     label: "Agenda",
+    Icon: StepAgenda,
     text: "El paciente reserva desde tu enlace público, o tú creas la cita en segundos.",
   },
   {
-    icon: WhatsAppIcon,
-    label: "WhatsApp",
-    text: "Laura confirma la cita y le recuerda la sesión al paciente — y a ti también.",
+    label: "Correo",
+    Icon: StepCorreo,
+    text: "La confirmación llega al correo del paciente — y tu copia a ti — con el evento listo para añadir al calendario.",
   },
   {
-    icon: GoogleMeetIcon,
-    label: "Google Meet",
-    text: "Si la sesión es virtual, el enlace se crea y se envía solo.",
+    label: "Calendar + Meet",
+    Icon: StepCalendarMeet,
+    text: "La cita queda en tu Google Calendar y, si la sesión es virtual, la reunión de Meet se crea sola.",
   },
   {
-    icon: GoogleCalendarIcon,
-    label: "Google Calendar",
-    text: "La cita queda en tu calendario. Si cambia o se cancela, se actualiza sola.",
+    label: "Laura por WhatsApp",
+    Icon: StepLaura,
+    text: "Laura confirma y recuerda la sesión por WhatsApp — al paciente y a ti.",
   },
 ];
 
@@ -66,7 +112,7 @@ export function FlowTimeline() {
             aria-hidden
           />
           <div className="grid grid-cols-4 gap-6">
-            {STEPS.map(({ icon: Icon, label, text }, i) => (
+            {STEPS.map(({ Icon, label, text }, i) => (
               <motion.div
                 key={label}
                 initial={{ opacity: 0, y: 24 }}
@@ -76,10 +122,8 @@ export function FlowTimeline() {
                 className="text-center"
               >
                 <div className="relative inline-flex">
-                  <span className="h-12 w-12 rounded-full bg-surface border-2 border-brand-300 shadow-soft grid place-content-center text-brand-700">
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-brand-700 text-white text-[10px] font-semibold grid place-content-center tabular-nums">
+                  <Icon />
+                  <span className="absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-brand-700 text-white text-[10px] font-semibold grid place-content-center tabular-nums">
                     {i + 1}
                   </span>
                 </div>
@@ -92,15 +136,13 @@ export function FlowTimeline() {
 
         {/* Móvil: el mismo timeline, deslizable en horizontal */}
         <div className="mt-10 md:hidden flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {STEPS.map(({ icon: Icon, label, text }, i) => (
+          {STEPS.map(({ Icon, label, text }, i) => (
             <div
               key={label}
               className="snap-center shrink-0 w-[78%] max-w-72 rounded-2xl border border-line-200 bg-surface p-5"
             >
               <div className="flex items-center gap-3">
-                <span className="h-10 w-10 rounded-full bg-brand-50 border border-brand-200 grid place-content-center text-brand-700 shrink-0">
-                  <Icon className="h-4.5 w-4.5" />
-                </span>
+                <span className="scale-90 origin-left shrink-0"><Icon /></span>
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-brand-700 font-semibold">Paso {i + 1}</span>
                   <h3 className="font-serif text-lg text-ink-900 leading-tight">{label}</h3>

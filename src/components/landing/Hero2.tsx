@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, BellRing, CheckCircle2, CalendarCheck, Gift } from "lucide-react";
 import { easeOutExpo, floating } from "./motion";
 import { FloatingBadge } from "./FloatingBadge";
+import { HeroVideo } from "./HeroVideo";
 import { GoogleIcon, WhatsAppIcon, GoogleCalendarIcon, GoogleMeetIcon } from "./BrandIcons";
 
 /**
@@ -29,19 +30,9 @@ export function Hero2() {
       className="relative pt-20 pb-10 sm:pt-28 sm:pb-24 overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        {/* Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: easeOutExpo, delay: 0.1 }}
-          className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs text-brand-800 font-medium"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-700 animate-pulse" />
-          Construida con psicólogos colombianos
-        </motion.div>
-
-        {/* Headline — palabra por palabra */}
-        <h1 className="mt-5 sm:mt-6 font-serif text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
+        {/* Headline — palabra por palabra (el badge de arriba se quitó
+            a pedido: el hero respira mejor sin él) */}
+        <h1 className="font-serif text-3xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-900">
           <div className="overflow-hidden">
             {HEADLINE_LINE_1.map((word, i) => (
               <motion.span
@@ -163,16 +154,7 @@ export function Hero2() {
           />
 
           <motion.div animate={floating} className="relative overflow-hidden">
-            <video
-              src="/landing/Video-Dashboard-Psic.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="metadata"
-              className="w-full h-auto block"
-              aria-label="Demo de Psicomorfosis"
-            />
+            <HeroVideo />
           </motion.div>
 
           <div className="hidden sm:contents">

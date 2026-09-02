@@ -114,14 +114,18 @@ const CAPABILITIES: Capability[] = [
   },
 ];
 
-export function Features({ sectionId = "capabilities" }: { sectionId?: string } = {}) {
+export function Features({
+  sectionId = "capabilities",
+  title = "Pensada como trabajas, no como vende un software",
+  subtitle = "Cada sección nació de una conversación con psicólogos reales en Colombia. Esto es lo que ves desde el primer día.",
+}: { sectionId?: string; title?: string; subtitle?: string } = {}) {
   return (
     <section id={sectionId} className="py-14 sm:py-24 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeader
           eyebrow="La plataforma"
-          title="Pensada como trabajas, no como vende un software"
-          subtitle="Cada sección nació de una conversación con psicólogos reales en Colombia. Esto es lo que ves desde el primer día."
+          title={title}
+          subtitle={subtitle}
         />
 
         {/* Mobile: carousel horizontal scroll-snap. Evita que la
@@ -177,10 +181,10 @@ const BADGE_TONE: Record<"brand" | "success" | "neutral", string> = {
 function MobileCard({ capability, index }: { capability: Capability; index: number }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.6, ease: easeOutExpo }}
+      transition={{ duration: 0.9, ease: easeOutExpo }}
       className="snap-start shrink-0 w-[86%] sm:w-[60%] rounded-xl border border-line-200 bg-surface/70 backdrop-blur-sm overflow-hidden shadow-lg shadow-brand-700/5"
     >
       <img

@@ -14,7 +14,7 @@ const PLANS = [
   {
     name: "Independiente",
     description: "Para psicólogos con consulta propia.",
-    strikePrice: "$59.900 COP/mes",
+    strikePrice: "$50.000 COP/mes",
     popular: true,
     includesTitle: "Tu cuenta incluye:",
     includes: [
