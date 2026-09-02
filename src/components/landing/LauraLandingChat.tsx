@@ -32,6 +32,18 @@ const OPCIONES: { q: string; a: string }[] = [
     q: "¿Cuánto cuesta?",
     a: "Nada durante todo el 2026 🙂 Sin tarjeta. Crea tu cuenta y me conoces trabajando de verdad.",
   },
+  {
+    q: "¿Qué pasa con mis datos?",
+    a: "Son tuyos y se pueden exportar cuando quieras. Todo viaja cifrado, hay backups diarios y cumplimos Habeas Data (Ley 1581), la normativa de historia clínica (Res. 1995) y el secreto profesional. Y yo nunca toco la historia clínica sin tu visto bueno.",
+  },
+  {
+    q: "¿Sirve para consultorios con equipo?",
+    a: "Sí — la cuenta Consultorio permite varios profesionales, sedes, roles y reportes de todo el equipo. También gratis durante el 2026.",
+  },
+  {
+    q: "¿Cómo empiezo?",
+    a: "Creas tu cuenta (con Google o con tu correo), completas tu perfil y en minutos tienes agenda, enlace público de reservas y a mí en tu WhatsApp. ¿Vienes de Excel? Hay un importador de pacientes para traerlos de una.",
+  },
 ];
 
 const RESPUESTA_LIBRE =

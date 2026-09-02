@@ -162,7 +162,7 @@ function FeatureLink({ heading, subheading, img, onOpen }: { heading: string; su
         <motion.span
           variants={{ initial: { x: 0 }, whileHover: { x: -16 } }}
           transition={{ type: "spring", staggerChildren: 0.06, delayChildren: 0.2 }}
-          className="relative z-10 block font-serif text-3xl sm:text-4xl md:text-6xl tracking-tight text-ink-300 transition-colors duration-500 group-hover:text-ink-900"
+          className="relative z-10 block font-serif text-3xl sm:text-4xl md:text-6xl tracking-tight text-ink-500 transition-colors duration-500 group-hover:text-ink-900"
         >
           {heading.split("").map((letter, i) => (
             <motion.span
