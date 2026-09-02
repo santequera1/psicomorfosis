@@ -516,23 +516,31 @@ function NewTaskModal({ onClose, onCreate }: {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Bloquear el scroll de la página mientras el modal está abierto —
+  // en iPhone, el teclado desplazaba toda la landing detrás del modal.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const dueLabel = date
     ? date.toLocaleDateString("es-CO", { day: "numeric", month: "short" })
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink-900/50 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl border border-line-200 shadow-soft-lg overflow-y-auto max-h-[92svh]"
+        className="w-full max-w-sm bg-surface rounded-2xl border border-line-200 shadow-soft-lg overflow-y-auto max-h-[80svh]"
       >
-        <header className="px-5 py-4 border-b border-line-100 flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-line-100 flex items-center justify-between">
           <h3 className="font-serif text-lg text-ink-900">Nueva tarea</h3>
           <button onClick={onClose} className="h-8 w-8 rounded-md hover:bg-bg-100 flex items-center justify-center text-ink-500" aria-label="Cerrar">
             <X className="h-4 w-4" />
           </button>
         </header>
-        <div className="p-5 space-y-4">
+        <div className="p-4 space-y-3">
           <label className="block">
             <span className="text-xs font-medium text-ink-700">Título</span>
             <input
@@ -601,7 +609,7 @@ function NewTaskModal({ onClose, onCreate }: {
             )}
           </div>
         </div>
-        <footer className="px-5 py-4 border-t border-line-100 flex items-center justify-end gap-2">
+        <footer className="px-4 py-3 border-t border-line-100 flex items-center justify-end gap-2">
           <button onClick={onClose} className="h-10 px-4 rounded-lg border border-line-200 text-sm text-ink-700 hover:border-brand-400">
             Cancelar
           </button>

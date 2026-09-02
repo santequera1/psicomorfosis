@@ -3,26 +3,24 @@ import { useEffect } from "react";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { MobileBottomNav } from "@/components/landing/MobileBottomNav";
 import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
-import { Hero } from "@/components/landing/Hero";
-import { BeforeAfter } from "@/components/landing/BeforeAfter";
+import { Hero2 } from "@/components/landing/Hero2";
+import { FeatureLinks } from "@/components/landing/FeatureLinks";
 import { Features } from "@/components/landing/Features";
-import { VoiceDictation } from "@/components/landing/VoiceDictation";
+import { TareasShowcase } from "@/components/landing/TareasShowcase";
 import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
-import { WhyUs } from "@/components/landing/WhyUs";
+import { Pricing2 } from "@/components/landing/Pricing2";
 import { LegalTrust } from "@/components/landing/LegalTrust";
-import { FinalCTA } from "@/components/landing/FinalCTA";
-// import { Developers } from "@/components/landing/Developers"; // oculta temporalmente
-import { DemoForm } from "@/components/landing/DemoForm";
+import { SignupCTA } from "@/components/landing/SignupCTA";
+import { LauraLandingChat } from "@/components/landing/LauraLandingChat";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 
 /**
- * Landing pública. Forzamos tema claro + smooth scroll mientras
- * esté montada. Orden de secciones:
- *   Hero → Antes/Después → Capacidades → Estilo → Por qué → Final CTA → Form.
- *
- * El LandingBackdrop vive detrás de todo (position fixed) con blobs
- * de gradiente animados muy desaturados. El resto de secciones usa
- * fondos transparentes para que esos blobs respiren.
+ * Landing pública OFICIAL — la v2 promovida el 2 sep 2026 tras iterar
+ * en /inicio2 (que ahora solo redirige aquí). Orden de secciones:
+ *   Hero → Capacidades (hover desktop / carrusel móvil) → Tablero de
+ *   Tareas interactivo → Estilo (temas por scroll) → Precios → Legal →
+ *   Registro. Laura flota como demo guiada y se abre sola al llegar
+ *   al final.
  */
 export const Route = createFileRoute("/inicio")({
   head: () => ({
@@ -31,13 +29,13 @@ export const Route = createFileRoute("/inicio")({
       {
         name: "description",
         content:
-          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
+          "Una plataforma para toda tu práctica clínica. Pacientes, agenda, historia clínica, documentos, psicometría y seguimiento terapéutico en un solo lugar — conectada con Google Calendar, Meet y WhatsApp.",
       },
       { property: "og:title", content: "Psicomorfosis · App para psicólogos" },
       {
         property: "og:description",
         content:
-          "Una plataforma diseñada para el día a día del psicólogo. Organiza tus sesiones, administra pacientes, registra información clínica, aplica evaluaciones y mantén el control de tu práctica profesional desde una única herramienta.",
+          "Una plataforma para toda tu práctica clínica. Pacientes, agenda, historia clínica, documentos, psicometría y seguimiento terapéutico en un solo lugar.",
       },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://psicomorfosis.co/inicio" },
@@ -48,7 +46,7 @@ export const Route = createFileRoute("/inicio")({
       { property: "og:image:height", content: "1117" },
       {
         property: "og:image:alt",
-        content: "Psicomorfosis — App para psicólogos. Diseñada para el día a día del psicólogo.",
+        content: "Psicomorfosis — Una plataforma para toda tu práctica clínica.",
       },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "https://psicomorfosis.co/landing/preview-psicoapp.jpg" },
@@ -58,12 +56,8 @@ export const Route = createFileRoute("/inicio")({
 });
 
 function InicioPage() {
-  // La landing siempre debe verse en light + tema "clinico".
-  // Si el usuario llega desde la app con dark/aurora activos, hay que
-  // limpiar TODOS los atributos del <html> que controlan tokens, no
-  // solo la clase .dark. Si solo limpias .dark, aurora se queda con
-  // sus tokens oscuros y los textos quedan casi invisibles sobre el
-  // fondo claro de la landing (bug que vimos en mobile).
+  // La landing siempre en light + tema "clinico", restaurando lo que el
+  // usuario tuviera al salir (ver bootstrap en __root para el primer paint).
   useEffect(() => {
     const root = document.documentElement;
     const prev = {
@@ -92,17 +86,26 @@ function InicioPage() {
       <LandingHeader />
       <MobileBottomNav />
       <main>
-        <Hero />
-        <BeforeAfter />
-        <Features />
-        <VoiceDictation />
-        <ThemeShowcase />
-        <WhyUs />
+        <Hero2 />
+        {/* Ancla compartida: FeatureLinks vive solo en desktop y Features
+            (el carrusel) solo en móvil — el ancla #capabilities debe
+            funcionar en ambos. */}
+        <div id="capabilities" className="scroll-mt-24" aria-hidden />
+        <FeatureLinks />
+        <div className="md:hidden">
+          <Features
+            sectionId="capabilities-movil"
+            title="Todo tu consultorio, una sola pestaña."
+            subtitle="Cada sección nació de conversaciones con psicólogos en Colombia. Desliza y mírala por dentro."
+          />
+        </div>
+        <TareasShowcase />
+        <ThemeShowcase scrollDriven />
+        <Pricing2 />
         <LegalTrust />
-        <FinalCTA />
-        {/* <Developers /> oculta temporalmente */}
-        <DemoForm />
+        <SignupCTA />
       </main>
+      <LauraLandingChat />
       <LandingFooter />
     </div>
   );

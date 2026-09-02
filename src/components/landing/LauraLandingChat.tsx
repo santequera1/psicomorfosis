@@ -185,15 +185,31 @@ export function LauraLandingChat() {
         </button>
       </div>
 
-      {/* Drawer lateral — misma estructura del chat de la app */}
+      {/* Chat — en desktop, drawer lateral como en la app; en móvil, una
+          burbuja grande (~85% de alto) con la página visible detrás y
+          salida fácil: la X, o tocar afuera (reporte 2 sep: el drawer a
+          pantalla completa se sentía como quedar encerrado). */}
       <AnimatePresence>
         {open && (
+          <motion.div
+            key="laura-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={() => { setOpen(false); setInteracted(true); }}
+            className="fixed inset-0 z-40 bg-ink-900/25 sm:hidden"
+            aria-hidden
+          />
+        )}
+        {open && (
           <motion.aside
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.4, ease: easeOutExpo }}
-            className="fixed top-0 right-0 z-50 h-dvh w-full sm:w-[420px] bg-surface border-l border-line-200 shadow-2xl flex flex-col"
+            key="laura-panel"
+            initial={{ opacity: 0, y: 40, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.98 }}
+            transition={{ duration: 0.35, ease: easeOutExpo }}
+            className="fixed z-50 bg-surface shadow-2xl flex flex-col overflow-hidden left-3 right-3 bottom-3 h-[min(85svh,640px)] rounded-3xl border border-line-200 sm:left-auto sm:right-0 sm:bottom-auto sm:top-0 sm:h-dvh sm:w-[420px] sm:rounded-none sm:border-0 sm:border-l sm:border-line-200"
             aria-label="Chat con Laura (demo)"
           >
             <header className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b border-line-100 shrink-0">
