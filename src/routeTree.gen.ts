@@ -21,6 +21,7 @@ import { Route as PacientesRouteImport } from './routes/pacientes'
 import { Route as NathalyFerrerRouteImport } from './routes/nathaly-ferrer'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LegalAdminRouteImport } from './routes/legal-admin'
+import { Route as Inicio2RouteImport } from './routes/inicio2'
 import { Route as InicioRouteImport } from './routes/inicio'
 import { Route as HistoriaClinicaRouteImport } from './routes/historia-clinica'
 import { Route as HistoriaRouteImport } from './routes/historia'
@@ -115,6 +116,11 @@ const LoginRoute = LoginRouteImport.update({
 const LegalAdminRoute = LegalAdminRouteImport.update({
   id: '/legal-admin',
   path: '/legal-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Inicio2Route = Inicio2RouteImport.update({
+  id: '/inicio2',
+  path: '/inicio2',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InicioRoute = InicioRouteImport.update({
@@ -302,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
   '/inicio': typeof InicioRoute
+  '/inicio2': typeof Inicio2Route
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/nathaly-ferrer': typeof NathalyFerrerRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
   '/inicio': typeof InicioRoute
+  '/inicio2': typeof Inicio2Route
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/nathaly-ferrer': typeof NathalyFerrerRoute
@@ -401,6 +409,7 @@ export interface FileRoutesById {
   '/historia': typeof HistoriaRoute
   '/historia-clinica': typeof HistoriaClinicaRoute
   '/inicio': typeof InicioRoute
+  '/inicio2': typeof Inicio2Route
   '/legal-admin': typeof LegalAdminRoute
   '/login': typeof LoginRoute
   '/nathaly-ferrer': typeof NathalyFerrerRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/historia-clinica'
     | '/inicio'
+    | '/inicio2'
     | '/legal-admin'
     | '/login'
     | '/nathaly-ferrer'
@@ -501,6 +511,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/historia-clinica'
     | '/inicio'
+    | '/inicio2'
     | '/legal-admin'
     | '/login'
     | '/nathaly-ferrer'
@@ -550,6 +561,7 @@ export interface FileRouteTypes {
     | '/historia'
     | '/historia-clinica'
     | '/inicio'
+    | '/inicio2'
     | '/legal-admin'
     | '/login'
     | '/nathaly-ferrer'
@@ -600,6 +612,7 @@ export interface RootRouteChildren {
   HistoriaRoute: typeof HistoriaRoute
   HistoriaClinicaRoute: typeof HistoriaClinicaRoute
   InicioRoute: typeof InicioRoute
+  Inicio2Route: typeof Inicio2Route
   LegalAdminRoute: typeof LegalAdminRoute
   LoginRoute: typeof LoginRoute
   NathalyFerrerRoute: typeof NathalyFerrerRoute
@@ -725,6 +738,13 @@ declare module '@tanstack/react-router' {
       path: '/legal-admin'
       fullPath: '/legal-admin'
       preLoaderRoute: typeof LegalAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inicio2': {
+      id: '/inicio2'
+      path: '/inicio2'
+      fullPath: '/inicio2'
+      preLoaderRoute: typeof Inicio2RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inicio': {
@@ -984,6 +1004,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoriaRoute: HistoriaRoute,
   HistoriaClinicaRoute: HistoriaClinicaRoute,
   InicioRoute: InicioRoute,
+  Inicio2Route: Inicio2Route,
   LegalAdminRoute: LegalAdminRoute,
   LoginRoute: LoginRoute,
   NathalyFerrerRoute: NathalyFerrerRoute,

@@ -10,7 +10,10 @@ import { WhatsAppIcon } from "./BrandIcons";
  *
  * Background con glow respirante. Tipografía editorial grande.
  */
-export function FinalCTA() {
+export function FinalCTA({
+  title = "Deja de atender entre chats, papeles y hojas de cálculo.",
+  subtitle = "Tus pacientes merecen una experiencia profesional. Tú mereces tu tiempo de vuelta. Empieza con tu propio workspace en menos de 24 horas.",
+}: { title?: string; subtitle?: string } = {}) {
   return (
     <section id="cierre" className="py-16 sm:py-20 relative">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,14 +64,13 @@ export function FinalCTA() {
               variants={fadeUp}
               className="mt-4 font-serif text-4xl sm:text-5xl lg:text-6xl text-white leading-[1.05] tracking-tight"
             >
-              Deja de atender entre chats, papeles y hojas de cálculo.
+              {title}
             </motion.h2>
             <motion.p
               variants={fadeUp}
               className="mt-6 text-base sm:text-lg text-brand-50/80 leading-relaxed max-w-2xl mx-auto"
             >
-              Tus pacientes merecen una experiencia profesional. Tú mereces tu tiempo
-              de vuelta. Empieza con tu propio workspace en menos de 24 horas.
+              {subtitle}
             </motion.p>
 
             <motion.div

@@ -1,0 +1,89 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { MobileBottomNav } from "@/components/landing/MobileBottomNav";
+import { LandingBackdrop } from "@/components/landing/LandingBackdrop";
+import { Hero2 } from "@/components/landing/Hero2";
+import { FeatureLinks } from "@/components/landing/FeatureLinks";
+import { ThemeShowcase } from "@/components/landing/ThemeShowcase";
+import { Pricing2 } from "@/components/landing/Pricing2";
+import { LegalTrust } from "@/components/landing/LegalTrust";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { DemoForm } from "@/components/landing/DemoForm";
+import { LandingFooter } from "@/components/landing/LandingFooter";
+
+/**
+ * Landing v2 — EXPERIMENTO (1 sep 2026), conviviendo con /inicio para
+ * comparar. Cambios frente a la v1:
+ *   - Hero sin el ángulo "sin WhatsApp ni Excel": ahora habla de lo que
+ *     la plataforma ES, con fila de integraciones reales.
+ *   - Capacidades como lista interactiva con hover (FeatureLinks) en
+ *     lugar de la sección larga de Features.
+ *   - Sección de precios con el precio de mercado tachado y "Gratis
+ *     durante todo el 2026".
+ *   - Fuera Antes/Después, Dictado por voz y Por qué → página más corta.
+ *
+ * noindex: mientras sea experimento no debe competir con /inicio en
+ * Google (acabamos de armar sitemap + Search Console).
+ */
+export const Route = createFileRoute("/inicio2")({
+  head: () => ({
+    meta: [
+      { title: "Psicomorfosis · App para psicólogos" },
+      { name: "robots", content: "noindex, nofollow" },
+      {
+        name: "description",
+        content:
+          "Una plataforma para toda tu práctica clínica. Pacientes, agenda, historia clínica, documentos, psicometría y seguimiento terapéutico en un solo lugar.",
+      },
+    ],
+  }),
+  component: Inicio2Page,
+});
+
+function Inicio2Page() {
+  // Igual que /inicio: la landing siempre en light + tema "clinico",
+  // restaurando lo que el usuario tuviera al salir.
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = {
+      dark: root.classList.contains("dark"),
+      mode: root.getAttribute("data-mode"),
+      theme: root.getAttribute("data-theme"),
+      scrollBehavior: root.style.scrollBehavior,
+    };
+    root.classList.remove("dark");
+    root.setAttribute("data-mode", "light");
+    root.setAttribute("data-theme", "clinico");
+    root.style.scrollBehavior = "smooth";
+    return () => {
+      if (prev.dark) root.classList.add("dark");
+      if (prev.mode) root.setAttribute("data-mode", prev.mode);
+      else root.removeAttribute("data-mode");
+      if (prev.theme) root.setAttribute("data-theme", prev.theme);
+      else root.removeAttribute("data-theme");
+      root.style.scrollBehavior = prev.scrollBehavior;
+    };
+  }, []);
+
+  return (
+    <div className="min-h-screen text-ink-900 relative">
+      <LandingBackdrop />
+      <LandingHeader />
+      <MobileBottomNav />
+      <main>
+        <Hero2 />
+        <FeatureLinks />
+        <ThemeShowcase />
+        <Pricing2 />
+        <LegalTrust />
+        <FinalCTA
+          title="Tu práctica merece una plataforma propia."
+          subtitle="Tu cuenta se crea en minutos, es gratis durante todo el 2026 y llega conectada con Google Calendar, Meet y WhatsApp desde el primer día."
+        />
+        <DemoForm />
+      </main>
+      <LandingFooter />
+    </div>
+  );
+}
