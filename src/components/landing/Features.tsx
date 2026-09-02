@@ -403,7 +403,11 @@ function IntegrationsCard() {
             >
               {it.img
                 ? <img src={it.img} alt="" draggable={false} className="h-5 w-auto max-w-7 object-contain" />
-                : it.Icon && <it.Icon className="h-5 w-5" style={{ color: it.color } as React.CSSProperties} />}
+                : it.Icon && (
+                  <span style={{ color: it.color }} className="inline-flex">
+                    <it.Icon className="h-5 w-5" />
+                  </span>
+                )}
               <span className="text-[9px] text-ink-700 font-medium leading-tight text-center px-1 truncate w-full">
                 {it.label}
               </span>
