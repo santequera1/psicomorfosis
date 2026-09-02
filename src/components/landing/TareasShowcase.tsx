@@ -121,7 +121,7 @@ function TaskIcons({ iconsKey }: { iconsKey: IconsKey }) {
   return (
     <div className="flex items-center gap-1 mb-2" aria-hidden>
       <span className="h-5 w-5 rounded-full overflow-hidden border border-line-100 bg-brand-50 shrink-0">
-        <img src="/laura/laura-profile-2.svg" alt="" className="h-full w-full object-cover" />
+        <img src="/laura/laura-profile-2.svg" alt="" draggable={false} className="h-full w-full object-cover" />
       </span>
       <span className="h-5 w-5 rounded-full bg-[#25D366] text-white grid place-content-center shrink-0">
         <WhatsAppIcon className="h-3 w-3" />
@@ -134,6 +134,10 @@ export function TareasShowcase() {
   const [tasks, setTasks] = useState<DemoTask[]>(INITIAL);
   const [query, setQuery] = useState("");
   const [dragId, setDragId] = useState<number | null>(null);
+  // El colapso del origen se aplica con retraso: si colapsa en el mismo
+  // frame del dragstart, Chrome captura la imagen de arrastre ya
+  // encogida (la "tarjeta chiquita" del reporte 2 sep).
+  const [collapsedId, setCollapsedId] = useState<number | null>(null);
   const [over, setOver] = useState<{ col: ColKey; gap: number } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [detail, setDetail] = useState<DemoTask["detail"] | null>(null);
@@ -150,6 +154,7 @@ export function TareasShowcase() {
 
   function startDrag(id: number) {
     setDragId(id);
+    setTimeout(() => setCollapsedId(id), 60);
     requestAnimationFrame(() => {
       const cache: Record<string, number[]> = {};
       document.querySelectorAll<HTMLElement>("[data-show-col]").forEach((colEl) => {
@@ -168,6 +173,7 @@ export function TareasShowcase() {
 
   function endDrag() {
     setDragId(null);
+    setCollapsedId(null);
     setOver(null);
   }
 
@@ -232,7 +238,7 @@ export function TareasShowcase() {
   }
 
   return (
-    <section id="flujo" className="pt-6 pb-14 sm:pt-8 sm:pb-24 relative">
+    <section id="flujo" className="pt-7 pb-14 sm:pb-24 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           variants={staggerParent}
@@ -315,8 +321,9 @@ export function TareasShowcase() {
                   onDragOver={(e) => onColDragOver(e, col.key)}
                   onDrop={(e) => { e.preventDefault(); if (over?.col === col.key) dropInto(col.key, over.gap); else endDrag(); }}
                   className={cn(
-                    "w-70 sm:w-auto shrink-0 flex flex-col rounded-xl bg-bg border border-line-200 p-3 min-h-75 transition-colors",
+                    "w-70 sm:w-auto shrink-0 flex flex-col rounded-xl bg-bg border border-line-200 p-3 min-h-75 transition-[padding,border-color] duration-200",
                     isOverThis && "border-brand-400",
+                    dragId != null && "pb-28",
                   )}
                 >
                   <div className="flex items-center justify-between mb-3 px-1">
@@ -344,13 +351,14 @@ export function TareasShowcase() {
                         const draggedIdxInCol = dragId != null ? colTasks.findIndex((x) => x.id === dragId) : -1;
                         return colTasks.map((t, idx) => {
                           const isBeingDragged = dragId === t.id;
+                          const isCollapsed = collapsedId === t.id;
                           const visualIdx = isBeingDragged
                             ? -1
                             : (draggedIdxInCol >= 0 && draggedIdxInCol < idx ? idx - 1 : idx);
                           const shouldShift = !isBeingDragged && isOverThis && over != null && visualIdx >= over.gap;
                           const cardStyle: React.CSSProperties = {
                             transition: "transform 220ms ease-out, max-height 220ms ease-out, opacity 150ms ease-out, margin 220ms ease-out",
-                            ...(isBeingDragged
+                            ...(isCollapsed
                               ? { maxHeight: 0, opacity: 0, marginTop: 0, marginBottom: 0, overflow: "hidden" }
                               : shouldShift
                               ? { transform: `translateY(${DRAG_SHIFT_PX}px)` }
@@ -409,7 +417,7 @@ function ShowcaseCard({ task, dragging, style, onDragStart, onDragEnd, onToggleD
       onClick={onOpenDetail}
       style={style}
       className={cn(
-        "group rounded-lg bg-surface border border-line-200 p-3 cursor-grab active:cursor-grabbing",
+        "group rounded-lg bg-surface border border-line-200 p-3 cursor-grab active:cursor-grabbing select-none",
         "transform-gpu transition-all duration-200 ease-out",
         "hover:border-brand-400 hover:shadow-card hover:-translate-y-0.5 hover:-rotate-[1.5deg]",
         "active:rotate-0 active:translate-y-0 active:duration-75",
@@ -464,7 +472,7 @@ function ShowcaseCard({ task, dragging, style, onDragStart, onDragEnd, onToggleD
             </span>
           )}
           {task.who === "LA" ? (
-            <img src="/laura/laura-profile-2.svg" alt="Laura" title="Laura lo hace por ti" className="h-6 w-6 rounded-full bg-brand-50 object-cover" />
+            <img src="/laura/laura-profile-2.svg" alt="Laura" title="Laura lo hace por ti" draggable={false} className="h-6 w-6 rounded-full bg-brand-50 object-cover" />
           ) : (
             <span className="h-6 w-6 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold flex items-center justify-center" title="Tú">
               TÚ

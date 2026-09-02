@@ -33,8 +33,8 @@ const OPCIONES: { q: string; a: string }[] = [
     a: "Nada durante todo el 2026 🙂 Sin tarjeta. Crea tu cuenta y me conoces trabajando de verdad.",
   },
   {
-    q: "¿Qué pasa con mis datos?",
-    a: "Son tuyos y se pueden exportar cuando quieras. Todo viaja cifrado, hay backups diarios y cumplimos Habeas Data (Ley 1581), la normativa de historia clínica (Res. 1995) y el secreto profesional. Y yo nunca toco la historia clínica sin tu visto bueno.",
+    q: "¿Y si no quiero seguir después del 2026?",
+    a: "No pasa nada. Tus datos son tuyos: los exportas cuando quieras en formato legible (Excel y PDF) y te los llevas — nada queda atrapado. Y si los planes llegan a tener precio, lo sabrás con meses de antelación para decidir con calma.",
   },
   {
     q: "¿Sirve para consultorios con equipo?",
