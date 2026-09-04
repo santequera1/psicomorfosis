@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Send, X, ShieldCheck, ArrowRight } from "lucide-react";
+import { Send, X, ShieldCheck, ArrowRight, ChevronDown, MessageCircleQuestion } from "lucide-react";
 import { easeOutExpo } from "./motion";
 
 /**
@@ -73,6 +73,13 @@ export function LauraLandingChat() {
   const [typing, setTyping] = useState(false);
   const [asked, setAsked] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  // Chips de preguntas: desplegable. En móvil arrancan cerradas (seis
+  // chips + CTA + composer no dejaban ver los mensajes en pantallas
+  // chicas); en desktop hay espacio y arrancan abiertas.
+  const [quickOpen, setQuickOpen] = useState(false);
+  useEffect(() => {
+    setQuickOpen(window.matchMedia("(min-width: 640px)").matches);
+  }, []);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Burbuja de saludo a los 3s (se esconde sola).
@@ -269,20 +276,37 @@ export function LauraLandingChat() {
               )}
             </div>
 
-            {/* Chips de la demo + CTA */}
+            {/* Preguntas rápidas (desplegable) + CTA */}
             <div className="px-3 sm:px-4 pb-2 space-y-2 shrink-0">
               {pendientes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {pendientes.map((op) => (
-                    <button
-                      key={op.q}
-                      onClick={() => ask(op)}
-                      disabled={typing}
-                      className="h-8 px-3 rounded-full border border-brand-300 bg-brand-50/60 text-xs text-brand-800 font-medium hover:bg-brand-50 disabled:opacity-50"
-                    >
-                      {op.q}
-                    </button>
-                  ))}
+                <div className="rounded-xl border border-line-200 bg-bg-50/60 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setQuickOpen((v) => !v)}
+                    aria-expanded={quickOpen}
+                    className="w-full h-9 px-3 flex items-center justify-between text-xs font-medium text-ink-700"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <MessageCircleQuestion className="h-3.5 w-3.5 text-brand-700" />
+                      Preguntas rápidas
+                      <span className="text-ink-400">({pendientes.length})</span>
+                    </span>
+                    <ChevronDown className={`h-3.5 w-3.5 text-ink-400 transition-transform duration-200 ${quickOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {quickOpen && (
+                    <div className="flex flex-wrap gap-1.5 px-2.5 pb-2.5">
+                      {pendientes.map((op) => (
+                        <button
+                          key={op.q}
+                          onClick={() => ask(op)}
+                          disabled={typing}
+                          className="h-8 px-3 rounded-full border border-brand-300 bg-surface text-xs text-brand-800 font-medium hover:bg-brand-50 disabled:opacity-50"
+                        >
+                          {op.q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <a
