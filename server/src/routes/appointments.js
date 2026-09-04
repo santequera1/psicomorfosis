@@ -240,7 +240,11 @@ router.post("/", async (req, res) => {
     date,
     a.time, a.duration_min ?? 50, a.patient_name ?? a.patientName ?? patientRow?.name ?? "",
     professionalName, a.modality ?? "individual", a.room ?? "",
-    a.status ?? "pendiente", a.notes ?? ""
+    // Al CREAR solo tienen sentido pendiente/confirmada — el bot (act-as)
+    // llegó a crear citas nacidas "atendida" (handoff 4-sep). Cualquier
+    // otro valor cae a pendiente; los demás estados se alcanzan por PATCH.
+    ["pendiente", "confirmada"].includes(String(a.status)) ? String(a.status) : "pendiente",
+    a.notes ?? ""
   );
   db.prepare("UPDATE appointments SET created_at = datetime('now') WHERE id = ?").run(r.lastInsertRowid);
   let row = ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(r.lastInsertRowid));

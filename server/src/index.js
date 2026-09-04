@@ -193,3 +193,8 @@ io.on("connection", (socket) => {
 http.listen(PORT, () => {
   console.log(`[psicomorfosis-server] http://localhost:${PORT}`);
 });
+
+// Recordatorios de cita 24h/1h por WhatsApp (P0 del handoff del bot).
+import("./lib/reminders.js")
+  .then((m) => m.startReminderScheduler())
+  .catch((e) => console.warn("[reminders] no arrancó:", e?.message));

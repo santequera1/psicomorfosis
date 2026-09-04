@@ -176,6 +176,48 @@ export function notifyAppointmentCreated({ patient, appointment, professionalNam
 /**
  * Cita cancelada por el staff.
  */
+/**
+ * Recordatorio de cita al paciente (24h o 1h antes). El scheduler de la
+ * plataforma (lib/reminders.js) lo dispara; el bot dedupe por
+ * idempotency_key estable (evt_appt<id>_<fecha>_<horizonte>) así que
+ * reintentar es gratis. El de 24h pide confirmación SÍ/NO (el bot ya
+ * procesa la respuesta); el de 1h lleva el enlace si es videollamada.
+ */
+export function notifyAppointmentReminder({ patient, appointment, professionalName, horizon }) {
+  if (!configured() || !canPush(patient)) return;
+  const nombre = (patient.preferred_name || patient.name || "").split(" ")[0] || "hola";
+  const prof = professionalName || "tu psicólogo/a";
+  const esTele = appointment.modality === "tele";
+  const rendered = horizon === "24h"
+    ? `¡Hola ${nombre}! 👋 Te recuerdo tu cita de mañana con *${prof}*:\n\n` +
+      `📅 ${fmtDate(appointment.date)} · ${appointment.time}\n` +
+      (esTele ? "💻 Videollamada" : "📍 Presencial") +
+      `\n\n¿Confirmas tu asistencia? Responde *SÍ* o *NO*.`
+    : `¡Hola ${nombre}! Tu cita con *${prof}* es en una hora (${appointment.time}).` +
+      (esTele && appointment.meeting_url ? `\n\n💻 Únete aquí: ${appointment.meeting_url}` : "") +
+      `\n\n¡Nos vemos!`;
+  const payload = {
+    event: `appointment.reminder.${horizon}`,
+    idempotency_key: `evt_appt${appointment.id}_${appointment.date}_${horizon}`,
+    recipient: {
+      phone: toE164Co(patient.phone),
+      name: patient.name ?? null,
+      role: "paciente",
+      workspace_id: appointment.workspace_id ?? null,
+    },
+    data: {
+      appointment: {
+        id: appointment.id, date: appointment.date, time: appointment.time,
+        modality: appointment.modality ?? null, meeting_url: appointment.meeting_url ?? null,
+      },
+      professional: { name: prof },
+      video_suffix: esTele && appointment.meeting_url ? `\n\n💻 Únete aquí: ${appointment.meeting_url}` : "",
+    },
+    rendered_message: rendered,
+  };
+  setImmediate(() => pushAndLog(payload));
+}
+
 export function notifyAppointmentCancelled({ patient, appointment, professionalName }) {
   if (!configured() || !canPush(patient)) return;
   const name = firstName(patient) || "";

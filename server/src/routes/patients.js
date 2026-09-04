@@ -11,6 +11,12 @@ import { toE164Co, notifyPatientOptIn } from "../lib/psicobot.js";
  * los avisos no dependen de cómo lo escribió cada quien (espacios,
  * guiones, marcas invisibles que mete iOS al pegar).
  */
+/** Nombres sin espacios dobles ni bordes: "Nathaly  Pacheco" rompía
+ *  búsquedas exactas (handoff del bot, 4-sep). */
+function collapseName(v) {
+  return String(v ?? "").replace(/\s+/g, " ").trim();
+}
+
 function normalizePatientPhone(v) {
   const raw = String(v ?? "").trim();
   if (!raw) return "";
@@ -344,8 +350,8 @@ router.post("/", (req, res) => {
     workspace_id: req.user.workspace_id,
     sede_id: p.sedeId ?? null,
     professional_id: p.professionalId ?? null,
-    name: p.name ?? "",
-    preferred_name: p.preferredName ?? null,
+    name: collapseName(p.name),
+    preferred_name: p.preferredName ? collapseName(p.preferredName) : null,
     pronouns: p.pronouns ?? "",
     doc: p.doc ?? "",
     age: p.age ?? 0,
@@ -419,7 +425,7 @@ router.post("/import", (req, res) => {
   const skipped = [];
   const tx = db.transaction((items) => {
     items.forEach((raw, i) => {
-      const name = String(raw?.name ?? "").trim();
+      const name = collapseName(raw?.name);
       if (!name) { skipped.push({ index: i, name: "(sin nombre)", reason: "Falta el nombre" }); return; }
       const phone = normalizePatientPhone(raw?.phone);
       const phoneDigits = phone.replace(/\D/g, "");
@@ -498,8 +504,8 @@ router.patch("/:id", (req, res) => {
   }
   if (!phone && optIn) optIn = false;
   const mapped = {
-    name: p.name ?? existing.name,
-    preferred_name: p.preferredName ?? existing.preferred_name,
+    name: p.name != null ? collapseName(p.name) : existing.name,
+    preferred_name: p.preferredName != null ? collapseName(p.preferredName) : existing.preferred_name,
     pronouns: p.pronouns ?? existing.pronouns,
     doc: p.doc ?? existing.doc,
     age: p.age ?? existing.age,

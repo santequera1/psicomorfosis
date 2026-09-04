@@ -765,6 +765,77 @@ router.post("/bot/tests/:id/mark-submitted", (req, res) => {
 //      enlace público: cita 'solicitada' + campana urgente + correo +
 //      WhatsApp al profesional; el psicólogo confirma desde su agenda).
 
+/** Profesional identificado por su teléfono (Mi perfil). */
+function findProfessionalByLast10(last10) {
+  const rows = db.prepare("SELECT id, workspace_id, name, phone FROM professionals WHERE active = 1 AND phone IS NOT NULL AND phone != ''").all();
+  return rows.find((pr) => normalizePhone(pr.phone).slice(-10) === last10) ?? null;
+}
+
+const isIsoDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ""));
+function botRange(req) {
+  // Default: mes en curso (Bogotá).
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const from = isIsoDay(req.query.from) ? String(req.query.from) : hoy.slice(0, 8) + "01";
+  const to = isIsoDay(req.query.to) ? String(req.query.to) : hoy;
+  return from <= to ? { from, to } : { from: to, to: from };
+}
+
+/**
+ * GET /api/bot/stats/appointments?phone=&from=&to=
+ * "¿Cómo me fue este mes?" — agregados de citas del profesional
+ * identificado por su teléfono. Solo números, nunca nombres de pacientes.
+ */
+router.get("/bot/stats/appointments", (req, res) => {
+  const last10 = normalizePhone(String(req.query.phone ?? "")).slice(-10);
+  if (last10.length < 7) return res.status(400).json({ error: "phone requerido" });
+  const prof = findProfessionalByLast10(last10);
+  if (!prof) return res.status(404).json({ error: "professional_not_found" });
+  const { from, to } = botRange(req);
+  const r = db.prepare(`
+    SELECT COUNT(*) AS total,
+           SUM(CASE WHEN status = 'atendida' THEN 1 ELSE 0 END) AS atendidas,
+           SUM(CASE WHEN status = 'cancelada' THEN 1 ELSE 0 END) AS canceladas,
+           SUM(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) AS no_show,
+           SUM(CASE WHEN status IN ('pendiente', 'confirmada', 'solicitada') THEN 1 ELSE 0 END) AS abiertas
+    FROM appointments
+    WHERE professional_id = ? AND date >= ? AND date <= ?
+  `).get(prof.id, from, to);
+  res.json({
+    professional: prof.name,
+    rango: { from, to },
+    total: r.total ?? 0,
+    atendidas: r.atendidas ?? 0,
+    canceladas: r.canceladas ?? 0,
+    no_show: r.no_show ?? 0,
+    abiertas: r.abiertas ?? 0,
+  });
+});
+
+/**
+ * GET /api/bot/finances/summary?phone=&from=&to=
+ * "¿Cuánto facturé esta semana?" — SOLO agregados del workspace del
+ * profesional (montos y conteos por estado). Nada de detalle por
+ * paciente por este canal.
+ */
+router.get("/bot/finances/summary", (req, res) => {
+  const last10 = normalizePhone(String(req.query.phone ?? "")).slice(-10);
+  if (last10.length < 7) return res.status(400).json({ error: "phone requerido" });
+  const prof = findProfessionalByLast10(last10);
+  if (!prof) return res.status(404).json({ error: "professional_not_found" });
+  const { from, to } = botRange(req);
+  const agg = (status) => db.prepare(
+    "SELECT COUNT(*) AS n, COALESCE(SUM(amount), 0) AS s FROM invoices WHERE workspace_id = ? AND status = ? AND date >= ? AND date <= ?",
+  ).get(prof.workspace_id, status, from, to);
+  const pagada = agg("pagada"), pendiente = agg("pendiente"), vencida = agg("vencida");
+  res.json({
+    professional: prof.name,
+    rango: { from, to },
+    pagado_cop: pagada.s, recibos_pagados: pagada.n,
+    pendiente_cop: pendiente.s, recibos_pendientes: pendiente.n,
+    vencido_cop: vencida.s, recibos_vencidos: vencida.n,
+  });
+});
+
 /** Pacientes activos cuyo teléfono termina en los mismos 10 dígitos. */
 function findPatientsByLast10(last10) {
   const rows = db.prepare(`

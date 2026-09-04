@@ -230,7 +230,7 @@ router.post("/professionals/:slug/booking", bookLimiter, (req, res) => {
       INSERT INTO patients (id, workspace_id, professional_id, name, phone, email, age, doc, pronouns,
                             professional, modality, status, reason, risk, risk_type, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, 'activo', ?, 'none', '[]', 1, datetime('now'), 'paciente')
-    `).run(pid, p.workspace_id, p.id, name, (digits.length === 10 && digits.startsWith("3")) ? `+57${digits}` : (toE164Co(digits) ?? phone), email, age, p.name, modality,
+    `).run(pid, p.workspace_id, p.id, String(name).replace(/\s+/g, " ").trim(), (digits.length === 10 && digits.startsWith("3")) ? `+57${digits}` : (toE164Co(digits) ?? phone), email, age, p.name, modality,
            motivo ? `[reserva-web] ${motivo}` : "[reserva-web] Solicitud desde perfil público");
     patient = { id: pid, name };
   } else {
