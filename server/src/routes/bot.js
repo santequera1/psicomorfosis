@@ -18,7 +18,10 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { syncBeforeNotify } from "../lib/gcal.js";
-import { notifyPatientDeclined } from "../lib/psicobot.js";
+import { isBookableSlot, computeAvailability } from "./public-booking.js";
+import { sendBookingRequestEmails } from "../mailer.js";
+import { ensureMeetingUrl } from "../lib/video.js";
+import { notifyPatientDeclined, notifyBookingRequested } from "../lib/psicobot.js";
 import { notifyAsync as notifyAppointmentAsync } from "./appointments.js";
 
 const router = Router();
@@ -748,6 +751,185 @@ router.post("/bot/tests/:id/mark-submitted", (req, res) => {
     test_application_id: applicationId,
     patient_id: patient.id,
     status: "entregado_offline",
+  });
+});
+
+
+// ─── Agendamiento de citas NUEVAS por WhatsApp (handoff 4 sep 2026) ────
+//
+// Caso Oriana: una paciente escribe "¿cómo programo la siguiente cita?"
+// y el bot no tenía con qué responder. Estos dos endpoints le dan:
+//   1) booking-info  → contexto: quién es, su psicólogo, si hay enlace
+//      público, su próxima cita y horarios libres cercanos.
+//   2) appointment-request → crear la SOLICITUD (misma tubería del
+//      enlace público: cita 'solicitada' + campana urgente + correo +
+//      WhatsApp al profesional; el psicólogo confirma desde su agenda).
+
+/** Pacientes activos cuyo teléfono termina en los mismos 10 dígitos. */
+function findPatientsByLast10(last10) {
+  const rows = db.prepare(`
+    SELECT id, workspace_id, professional_id, name, preferred_name, phone, email, modality
+    FROM patients
+    WHERE archived_at IS NULL AND phone IS NOT NULL AND phone != ''
+  `).all();
+  return rows.filter((p) => normalizePhone(p.phone).slice(-10) === last10);
+}
+
+function professionalFor(pt) {
+  if (pt.professional_id) {
+    const pr = db.prepare("SELECT id, name, email, phone, slug, public_enabled FROM professionals WHERE id = ?").get(pt.professional_id);
+    if (pr) return pr;
+  }
+  return db.prepare("SELECT id, name, email, phone, slug, public_enabled FROM professionals WHERE workspace_id = ? AND active = 1 ORDER BY id LIMIT 1").get(pt.workspace_id) ?? null;
+}
+
+/**
+ * GET /api/bot/booking-info?phone=...
+ * Contexto de agendamiento del paciente identificado por su número.
+ * Puede haber varias coincidencias (misma persona, paciente de dos
+ * psicólogos): el bot desambigua preguntando.
+ */
+router.get("/bot/booking-info", (req, res) => {
+  const last10 = normalizePhone(String(req.query.phone ?? "")).slice(-10);
+  if (last10.length < 7) return res.status(400).json({ error: "phone requerido (mínimo 7 dígitos)" });
+
+  const matches = findPatientsByLast10(last10);
+  if (matches.length === 0) return res.json({ found: false, matches: [] });
+
+  const out = matches.map((pt) => {
+    const prof = professionalFor(pt);
+    const next = db.prepare(`
+      SELECT id, date, time, status, modality FROM appointments
+      WHERE patient_id = ? AND workspace_id = ?
+        AND status NOT IN ('cancelada', 'atendida', 'no_show')
+        AND date >= date('now', '-5 hours')
+      ORDER BY date, time LIMIT 1
+    `).get(pt.id, pt.workspace_id);
+    let slots = null;
+    if (prof) {
+      const av = computeAvailability(prof.id, { days: 5 });
+      slots = av.days.slice(0, 3).map((d) => ({ date: d.date, times: d.slots.slice(0, 5) }));
+    }
+    return {
+      patient: { id: pt.id, name: pt.name, preferred_name: pt.preferred_name },
+      professional: prof
+        ? {
+            name: prof.name,
+            public_enabled: !!(prof.public_enabled && prof.slug),
+            public_url: prof.public_enabled && prof.slug ? `https://psicomorfosis.co/perfil/${prof.slug}` : null,
+          }
+        : null,
+      next_appointment: next ?? null,
+      available_slots: slots,
+    };
+  });
+  res.json({ found: true, matches: out });
+});
+
+/**
+ * POST /api/bot/appointment-request
+ * body: { phone, date: "YYYY-MM-DD", time: "HH:mm", modality?, motivo?, patient_id? }
+ * Crea la solicitud de cita nueva. Si el número coincide con pacientes
+ * de varios workspaces, exige patient_id (el bot desambigua primero).
+ */
+router.post("/bot/appointment-request", (req, res) => {
+  const { phone, date, time, modality, motivo, patient_id } = req.body ?? {};
+  const last10 = normalizePhone(String(phone ?? "")).slice(-10);
+  if (last10.length < 7) return res.status(400).json({ error: "phone requerido" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date ?? "")) || !/^\d{2}:\d{2}$/.test(String(time ?? ""))) {
+    return res.status(400).json({ error: "date (YYYY-MM-DD) y time (HH:mm) requeridos" });
+  }
+
+  let matches = findPatientsByLast10(last10);
+  if (patient_id) matches = matches.filter((m) => m.id === String(patient_id));
+  if (matches.length === 0) return res.status(404).json({ error: "patient_not_found" });
+  if (matches.length > 1) {
+    return res.status(409).json({
+      error: "multiple_patients",
+      hint: "El número coincide con varios pacientes; reintenta con patient_id.",
+      matches: matches.map((m) => ({ patient_id: m.id, name: m.name, professional: professionalFor(m)?.name ?? null })),
+    });
+  }
+  const pt = matches[0];
+  const prof = professionalFor(pt);
+  if (!prof) return res.status(409).json({ error: "no_professional", hint: "El workspace no tiene profesional activo." });
+
+  if (!isBookableSlot(prof.id, String(date), String(time))) {
+    const av = computeAvailability(prof.id, { days: 5 });
+    return res.status(409).json({
+      error: "slot_not_available",
+      reason: "Ese horario está fuera del horario de atención del profesional.",
+      available_slots: av.days.slice(0, 3).map((d) => ({ date: d.date, times: d.slots.slice(0, 5) })),
+    });
+  }
+  const taken = db.prepare(
+    "SELECT 1 FROM appointments WHERE professional_id = ? AND date = ? AND time = ? AND status != 'cancelada'",
+  ).get(prof.id, String(date), String(time));
+  if (taken) {
+    const av = computeAvailability(prof.id, { days: 5 });
+    return res.status(409).json({
+      error: "slot_taken",
+      reason: "Ese horario ya está ocupado.",
+      available_slots: av.days.slice(0, 3).map((d) => ({ date: d.date, times: d.slots.slice(0, 5) })),
+    });
+  }
+
+  const wantsTele = ["tele", "virtual", "videollamada", "online"].includes(String(modality ?? "").toLowerCase());
+  const mod = wantsTele ? "tele" : (String(modality ?? "").toLowerCase() === "presencial" ? "individual" : (pt.modality ?? "individual"));
+  const cleanMotivo = motivo ? String(motivo).slice(0, 300) : null;
+
+  const info = db.prepare(`
+    INSERT INTO appointments (workspace_id, sede_id, professional_id, patient_id, date, time,
+                              duration_min, patient_name, professional, modality, room, status, notes, created_at)
+    VALUES (?, NULL, ?, ?, ?, ?, 50, ?, ?, ?, ?, 'solicitada', ?, datetime('now'))
+  `).run(pt.workspace_id, prof.id, pt.id, String(date), String(time), pt.name, prof.name,
+         mod, mod === "tele" ? null : "Por confirmar",
+         `[solicitud-whatsapp]${cleanMotivo ? ` ${cleanMotivo}` : ""}`);
+  const apptId = info.lastInsertRowid;
+  ensureMeetingUrl(db.prepare("SELECT * FROM appointments WHERE id = ?").get(apptId));
+  console.log(`[bot/appointment-request] appt=${apptId} patient=${pt.id} prof=${prof.id} ${date} ${time}`);
+
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO notifications (id, workspace_id, type, title, description, at, read, urgent)
+      VALUES (?, ?, 'cita', ?, ?, CURRENT_TIMESTAMP, 0, 1)
+    `).run(
+      `appt-${apptId}-solicitud`,
+      pt.workspace_id,
+      `Solicitud de cita: ${pt.name} · ${date} ${time}`,
+      `Pedida por WhatsApp con Laura (${mod === "tele" ? "videollamada" : "presencial"})${cleanMotivo ? ` · "${cleanMotivo.slice(0, 80)}"` : ""}. Confírmala o propón otro horario.`,
+    );
+  } catch (e) {
+    console.warn(`[bot/appointment-request] notif fail: ${e?.message}`);
+  }
+  try {
+    notifyBookingRequested({
+      professional: { name: prof.name, phone: prof.phone },
+      patient: { name: pt.name, phone: pt.phone },
+      appointment: { id: apptId, date: String(date), time: String(time), modality: mod },
+      motivo: cleanMotivo,
+      source: "por WhatsApp con Laura",
+    });
+  } catch (e) {
+    console.warn(`[bot/appointment-request] notify fail: ${e?.message}`);
+  }
+  sendBookingRequestEmails({
+    professional: { name: prof.name, email: prof.email },
+    patient: { name: pt.name, phone: pt.phone, email: pt.email },
+    appointment: { date: String(date), time: String(time), modality: mod },
+    motivo: cleanMotivo,
+  }).catch((e) => console.warn(`[bot/appointment-request] mail fail: ${e?.message}`));
+
+  res.status(201).json({
+    ok: true,
+    appointment_id: apptId,
+    status: "solicitada",
+    patient: { id: pt.id, name: pt.name },
+    professional_name: prof.name,
+    date: String(date),
+    time: String(time),
+    modality: mod,
+    message: `Solicitud registrada. ${prof.name.split(" ")[0]} la verá en su agenda y la confirmará; el paciente recibirá la confirmación por WhatsApp y correo.`,
   });
 });
 

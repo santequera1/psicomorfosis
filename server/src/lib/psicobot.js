@@ -421,14 +421,14 @@ export function notifyCancelledByPatient({ professional, patient, appointment })
  * es el PROFESIONAL — el staff no requiere opt-in (es su herramienta de
  * trabajo). Le avisa al instante para que acepte/rechace desde su agenda.
  */
-export function notifyBookingRequested({ professional, patient, appointment, motivo }) {
+export function notifyBookingRequested({ professional, patient, appointment, motivo, source }) {
   if (!configured()) return;
   if (!professional?.phone || String(professional.phone).replace(/\D/g, "").length < 6) return;
 
   const fecha = fmtDate(appointment.date);
   const mod = appointment.modality === "tele" ? "online" : "presencial";
   const rendered =
-    `📥 *Nueva solicitud de cita* desde tu perfil público\n\n` +
+    `📥 *Nueva solicitud de cita* ${source ?? "desde tu perfil público"}\n\n` +
     `👤 ${patient.name}${patient.age ? ` · ${patient.age} años` : ""}\n📱 ${patient.phone}\n` +
     `📅 ${fecha} · ${appointment.time} · ${mod}` +
     (motivo ? `\n📝 "${motivo}"` : "") +
