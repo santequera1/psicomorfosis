@@ -80,6 +80,37 @@ function apptInstantISO(date, time) {
 function computeNotifications({ wsId, isPlatformAdmin }) {
   const out = [];
 
+  // ─── 0) Campanas persistidas (tabla `notifications`) ────────────────
+  // Las solicitudes del enlace público (y cualquier aviso que otro
+  // módulo inserte) se guardan en la tabla `notifications`, pero este
+  // panel se generaba 100% al vuelo y NUNCA la leía — bug 4 sep 2026:
+  // llegaba el correo y el WhatsApp pero la campana in-app no mostraba
+  // la solicitud. Solo las no leídas: resolver la solicitud (confirmar/
+  // rechazar) las marca read=1 y desaparecen solas.
+  const stored = db.prepare(`
+    SELECT id, type, title, description, at, urgent
+    FROM notifications
+    WHERE workspace_id = ? AND read = 0
+    ORDER BY at DESC
+    LIMIT 20
+  `).all(wsId);
+  for (const n of stored) {
+    // SQLite guarda "YYYY-MM-DD HH:MM:SS" en UTC sin zona; normalizamos
+    // a ISO para que relativeTime no lo lea como hora local.
+    const iso = n.at
+      ? (/[tT]|[zZ]|[+-]\d\d:?\d\d$/.test(n.at) ? n.at : n.at.replace(" ", "T") + "Z")
+      : null;
+    out.push({
+      id: n.id,
+      type: n.type ?? "cita",
+      title: n.title ?? "",
+      description: n.description ?? "",
+      at: relativeTime(iso),
+      raw_at: iso,
+      urgent: !!n.urgent,
+    });
+  }
+
   // ─── 1) Citas próximas (próximas 24h confirmadas, no atendidas) ─────
   const upcoming = db.prepare(`
     SELECT id, patient_name, date, time, modality, status
