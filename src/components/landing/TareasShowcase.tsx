@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Circle, Clock, AlertCircle, CheckCircle2, GripVertical, Check,
-  CalendarDays, UserPlus, Plus, Search, X, Mail, ArrowRight,
+  CalendarDays, UserPlus, Plus, Search, X, Mail, ArrowRight, ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fadeUpSubtle, staggerParent } from "./motion";
@@ -141,6 +141,15 @@ export function TareasShowcase() {
   const [over, setOver] = useState<{ col: ColKey; gap: number } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [detail, setDetail] = useState<DemoTask["detail"] | null>(null);
+  // En táctil el drag nativo de HTML5 no existe: el gesto se lo pelea el
+  // scroll horizontal del carril y algunos navegadores inician un drag a
+  // medias que dejaba la tarjeta colapsada (bug móvil, 4 sep 2026).
+  // Ahí se desactiva draggable y aparece el botón "Mover a…".
+  const [canDrag, setCanDrag] = useState(true);
+  useEffect(() => {
+    setCanDrag(window.matchMedia("(pointer: fine)").matches);
+  }, []);
+  const [moving, setMoving] = useState<DemoTask | null>(null);
   // Midpoints por columna, cacheados al INICIAR el drag (como en la app:
   // si se recalculan en vivo, las cards desplazadas mueven los midpoints
   // y se arma un loop de retroalimentación).
@@ -369,11 +378,13 @@ export function TareasShowcase() {
                               key={t.id}
                               task={t}
                               dragging={isBeingDragged}
+                              canDrag={canDrag}
                               style={cardStyle}
                               onDragStart={() => startDrag(t.id)}
                               onDragEnd={endDrag}
                               onToggleDone={() => toggleDone(t.id)}
                               onOpenDetail={t.detail ? () => setDetail(t.detail) : undefined}
+                              onRequestMove={() => setMoving(t)}
                             />
                           );
                         });
@@ -392,26 +403,61 @@ export function TareasShowcase() {
       </div>
 
       {modalOpen && <NewTaskModal onClose={() => setModalOpen(false)} onCreate={(t) => { addTask(t); setModalOpen(false); }} />}
+      {moving && (
+        <div className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setMoving(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-xs bg-surface rounded-t-2xl sm:rounded-2xl border border-line-200 shadow-soft-lg p-4">
+            <p className="text-sm font-medium text-ink-900 mb-3 px-1 truncate">Mover «{moving.title}» a:</p>
+            <div className="grid gap-1.5">
+              {COLUMNS.map((c) => {
+                const Icon = c.icon;
+                const actual = c.key === moving.col;
+                return (
+                  <button
+                    key={c.key}
+                    disabled={actual}
+                    onClick={() => { moveTo(moving.id, c.key); setMoving(null); }}
+                    className={cn(
+                      "h-11 px-3 rounded-lg border text-sm text-left inline-flex items-center gap-2.5 transition-colors",
+                      actual
+                        ? "border-line-100 bg-bg-50 text-ink-400"
+                        : "border-line-200 bg-surface text-ink-800 hover:border-brand-400",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" style={{ color: c.color }} />
+                    {c.name}
+                    {actual && <span className="ml-auto text-[10px] text-ink-400">actual</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setMoving(null)} className="mt-3 w-full h-10 rounded-lg border border-line-200 text-sm text-ink-600 hover:border-brand-400">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {detail && <DetailModal detail={detail} onClose={() => setDetail(null)} />}
     </section>
   );
 }
 
-function ShowcaseCard({ task, dragging, style, onDragStart, onDragEnd, onToggleDone, onOpenDetail }: {
+function ShowcaseCard({ task, dragging, canDrag, style, onDragStart, onDragEnd, onToggleDone, onOpenDetail, onRequestMove }: {
   task: DemoTask;
   dragging: boolean;
+  canDrag: boolean;
   style?: React.CSSProperties;
   onDragStart: () => void;
   onDragEnd: () => void;
   onToggleDone: () => void;
   onOpenDetail?: () => void;
+  onRequestMove: () => void;
 }) {
   const isDone = Boolean(task.done);
 
   const card = (
     <div
       data-show-card={task.id}
-      draggable
+      draggable={canDrag}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onOpenDetail}
@@ -426,9 +472,20 @@ function ShowcaseCard({ task, dragging, style, onDragStart, onDragEnd, onToggleD
       )}
     >
       <div className="flex items-start gap-2 mb-2">
-        <span className="text-ink-300 group-hover:text-ink-500 transition-colors shrink-0 mt-0.5 cursor-grab" aria-hidden>
-          <GripVertical className="h-4 w-4" />
-        </span>
+        {canDrag ? (
+          <span className="text-ink-300 group-hover:text-ink-500 transition-colors shrink-0 mt-0.5 cursor-grab" aria-hidden>
+            <GripVertical className="h-4 w-4" />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRequestMove(); }}
+            aria-label="Mover a otra columna"
+            className="shrink-0 mt-0.5 h-6 w-6 -m-0.5 rounded-md border border-line-200 bg-bg-50 text-ink-500 grid place-content-center active:scale-95"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleDone(); }}
