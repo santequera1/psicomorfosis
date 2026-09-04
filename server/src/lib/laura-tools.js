@@ -156,6 +156,61 @@ function cobros({ workspaceId }, { patient_id } = {}) {
   return { total_pendiente_cop: total, cantidad: rows.length, recibos: rows };
 }
 
+function perfilPublico({ workspaceId, professionalId }) {
+  const pros = db.prepare(`
+    SELECT id, name, title, email, slug, public_enabled, public_location, approach
+    FROM professionals WHERE workspace_id = ? AND active = 1 ORDER BY id
+  `).all(workspaceId);
+  const mine = pros.find((pr) => pr.id === professionalId) ?? pros[0];
+  if (!mine) return { error: "No hay profesional configurado en este workspace." };
+
+  const activo = !!(mine.public_enabled && mine.slug);
+  const url = mine.slug ? `https://psicomorfosis.co/perfil/${mine.slug}` : null;
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit" }).format(new Date());
+  const ev = (type) => db.prepare(
+    "SELECT COUNT(*) AS n FROM profile_events WHERE professional_id = ? AND type = ? AND day LIKE ?",
+  ).get(mine.id, type, month + "%").n;
+  const apptCount = (extra) => db.prepare(
+    `SELECT COUNT(*) AS n FROM appointments WHERE professional_id = ? AND notes LIKE '[reserva-web]%' AND substr(COALESCE(created_at, date), 1, 7) = ? ${extra}`,
+  ).get(mine.id, month).n;
+  const cobrado = db.prepare(`
+    SELECT COALESCE(SUM(i.amount), 0) AS s
+    FROM invoices i JOIN patients p ON p.id = i.patient_id
+    WHERE i.workspace_id = ? AND i.status = 'pagada' AND p.reason LIKE '[reserva-web]%'
+      AND substr(COALESCE(i.paid_at, i.date), 1, 7) = ?
+  `).get(workspaceId, month).s;
+  const fuentes = db.prepare(
+    "SELECT COALESCE(source, 'directo') AS fuente, COUNT(*) AS visitas FROM profile_events WHERE professional_id = ? AND type = 'visit' AND day LIKE ? GROUP BY 1 ORDER BY 2 DESC LIMIT 5",
+  ).all(mine.id, month + "%");
+
+  return {
+    activo,
+    url,
+    perfil: {
+      nombre: mine.name,
+      titulo: mine.title,
+      ubicacion: mine.public_location,
+      enfoque: mine.approach,
+      slug: mine.slug,
+    },
+    mes: month,
+    estadisticas_mes: {
+      visitas: ev("visit"),
+      clics_reservar: ev("click_agendar"),
+      clics_whatsapp: ev("click_whatsapp"),
+      clics_redes_y_enlaces: ev("click_social") + ev("click_link"),
+      solicitudes_de_cita: apptCount(""),
+      confirmadas: apptCount("AND status IN ('confirmada', 'atendida', 'en_curso')"),
+      atendidas: apptCount("AND status = 'atendida'"),
+      cobrado_cop: cobrado,
+      fuentes_de_visitas: fuentes,
+    },
+    nota: activo
+      ? "Las cifras son del mes en curso y cuentan solo lo que entró por el enlace público."
+      : "El perfil público NO está activo — se activa en Configuración → Perfil público.",
+  };
+}
+
 // ─── Dispatcher ───────────────────────────────────────────────────────
 
 export const QUERY_TOOLS = {
@@ -167,6 +222,7 @@ export const QUERY_TOOLS = {
   query_catalogo_tests: catalogoTests,
   query_tareas: tareas,
   query_cobros: cobros,
+  query_perfil_publico: perfilPublico,
 };
 
 export const isQuery = (name) => typeof name === "string" && name.startsWith("query_");
@@ -202,6 +258,9 @@ export function summarizeQuery(name, input, result) {
     case "query_catalogo_tests": return `Catálogo: ${d.total} tests`;
     case "query_tareas": return d.paciente ? `Tareas de ${d.paciente.nombre}` : `${d.total} tareas pendientes`;
     case "query_cobros": return `${d.cantidad} recibo${d.cantidad === 1 ? "" : "s"} por cobrar`;
+    case "query_perfil_publico": return d.activo
+      ? `Perfil público: ${d.estadisticas_mes?.visitas ?? 0} visitas y ${d.estadisticas_mes?.solicitudes_de_cita ?? 0} solicitudes este mes`
+      : "Perfil público sin activar";
     default: return labelOf(name);
   }
 }
@@ -210,6 +269,7 @@ export function labelOf(name) {
     query_agenda: "Consultando la agenda", query_buscar_paciente: "Buscando paciente", query_ficha: "Abriendo la ficha",
     query_notas: "Leyendo notas", query_tests: "Revisando tests", query_catalogo_tests: "Consultando catálogo de tests",
     query_tareas: "Revisando tareas", query_cobros: "Revisando cobros",
+    query_perfil_publico: "Consultando tu perfil público",
   })[name] ?? "Consultando";
 }
 
@@ -228,6 +288,7 @@ Además de las acciones, puedes CONSULTAR la base de datos del workspace a mitad
 \`[[LAURA_ACTION:query_catalogo_tests:{}]]\` — tests disponibles para asignar (id, nombre, ítems, minutos).
 \`[[LAURA_ACTION:query_tareas:{"patient_id":"P-1015"}]]\` — tareas de un paciente; sin patient_id = tus pendientes.
 \`[[LAURA_ACTION:query_cobros:{"patient_id":"P-1015"}]]\` — recibos pendientes de cobro (sin patient_id = todos).
+\`[[LAURA_ACTION:query_perfil_publico:{}]]\` — el perfil público del profesional: si está activo, su URL de reservas, y las estadísticas del mes (visitas, clics, solicitudes, confirmadas, $ cobrado, fuentes). Úsalo cuando pregunte por su perfil, su link, sus visitas o cuántas citas le han llegado por ahí.
 
 Reglas:
 - Si la respuesta depende de datos reales (qué hay tal día, cómo va X, qué debe Y), **consulta primero**; el resumen del prompt es solo una foto parcial.
