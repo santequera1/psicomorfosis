@@ -73,6 +73,7 @@ export interface PlatformWorkspace {
   ownerName: string | null;
   ownerEmail: string | null;
   ownerUsername: string | null;
+  ownerPhotoUrl?: string | null;
   /** Plan comercial. Hoy todo es 'free'. */
   plan: string;
   /** Cómo se creó: 'web' | 'google' | null (creada a mano en el panel). */
@@ -185,6 +186,7 @@ export interface Professional {
   approach: string | null;
   active: boolean | number;
   sedeIds: number[];
+  photoUrl?: string | null;
   // Perfil público (linktree). Ver Configuración → Perfil público.
   slug?: string | null;
   public_enabled?: number | boolean | null;

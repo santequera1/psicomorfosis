@@ -95,7 +95,8 @@ router.get("/workspaces", (req, res) => {
       (SELECT MAX(last_login_at) FROM users WHERE workspace_id = w.id AND role != 'paciente') AS last_login_at,
       (SELECT name FROM users WHERE workspace_id = w.id AND role != 'paciente' AND is_platform_admin != 1 ORDER BY id LIMIT 1) AS owner_name,
       (SELECT email FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_email,
-      (SELECT username FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_username
+      (SELECT username FROM users WHERE workspace_id = w.id AND role != 'paciente' ORDER BY id LIMIT 1) AS owner_username,
+      (SELECT photo_url FROM users WHERE workspace_id = w.id AND role != 'paciente' AND photo_url IS NOT NULL ORDER BY id LIMIT 1) AS owner_photo_url
     FROM workspaces w
     ORDER BY (w.disabled_at IS NULL) DESC, w.created_at DESC
   `).all(since7d, since30d, since30d, since30d);
@@ -168,6 +169,9 @@ router.get("/workspaces", (req, res) => {
       ownerName: r.owner_name,
       ownerEmail: r.owner_email,
       ownerUsername: r.owner_username,
+      // Foto del dueño (la de Google si entró con Google, o la que subió
+      // en Mi cuenta). NULL → el front cae al ícono de siempre.
+      ownerPhotoUrl: r.owner_photo_url ?? null,
       // Cómo llegó la cuenta: 'web' (formulario), 'google' (OAuth) o
       // null (creada a mano desde este panel, antes del registro público).
       plan: r.plan ?? "free",

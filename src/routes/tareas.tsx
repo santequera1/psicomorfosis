@@ -1003,12 +1003,22 @@ function TareaCard({
             </span>
           )}
           {assignee && (
-            <span
-              className="h-6 w-6 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold flex items-center justify-center"
-              title={assignee.name}
-            >
-              {initials}
-            </span>
+            assignee.photoUrl ? (
+              <img
+                src={assignee.photoUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                title={assignee.name}
+                className="h-6 w-6 rounded-full object-cover ring-1 ring-line-200"
+              />
+            ) : (
+              <span
+                className="h-6 w-6 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold flex items-center justify-center"
+                title={assignee.name}
+              >
+                {initials}
+              </span>
+            )
           )}
         </div>
       </div>

@@ -30,6 +30,26 @@ import { cn } from "@/lib/utils";
  * deja claro al usuario qué decidió.
  */
 
+/**
+ * Tras navegar, busca el elemento [data-tour=<target>] en la página
+ * destino y lo hace brillar (clase .laura-spotlight, ver styles.css).
+ * Reintenta mientras la ruta monta; si el target no existe, no pasa nada.
+ */
+function lauraSpotlight(target: string) {
+  let tries = 0;
+  const tick = () => {
+    const el = document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("laura-spotlight");
+      window.setTimeout(() => el.classList.remove("laura-spotlight"), 3800);
+      return;
+    }
+    if (++tries < 25) window.setTimeout(tick, 160);
+  };
+  window.setTimeout(tick, 300);
+}
+
 export type ProposedAction = {
   tool_id: string;
   name: string;
@@ -113,6 +133,7 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
   if (action.name === "navigate_to") {
     const path = String(action.input.path ?? "/");
     const reason = String(action.input.reason ?? "Te llevo a esa sección.");
+    const highlight = String(action.input.highlight ?? "").trim() || null;
     return (
       <Card icon={<MapPin className="h-3.5 w-3.5" />} title="Ir a una sección" muted={isMuted}>
         <p className="text-xs text-ink-700 leading-relaxed">{reason}</p>
@@ -124,9 +145,12 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
             <>
               <ApproveButton
                 label="Ir"
-                onClick={() => approve(() =>
-                  safeNavigate(() => navigate({ to: path as never }), path)
-                )}
+                onClick={() => {
+                  approve(() =>
+                    safeNavigate(() => navigate({ to: path as never }), path)
+                  );
+                  if (highlight) lauraSpotlight(highlight);
+                }}
               />
               <DismissButton onClick={dismiss} />
             </>

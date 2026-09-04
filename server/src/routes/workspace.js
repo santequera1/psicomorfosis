@@ -212,7 +212,13 @@ router.get("/professionals", (req, res) => {
     if (!map.has(s.professional_id)) map.set(s.professional_id, []);
     map.get(s.professional_id).push(s.sede_id);
   }
-  res.json(rows.map((p) => ({ ...p, active: !!p.active, sedeIds: map.get(p.id) ?? [] })));
+  // Avatar: la foto del usuario staff vinculado al profesional (la de
+  // Google o la subida en Mi cuenta). Para pintar avatares en tareas.
+  const photoMap = new Map(
+    db.prepare("SELECT professional_id, photo_url FROM users WHERE workspace_id = ? AND professional_id IS NOT NULL AND photo_url IS NOT NULL")
+      .all(req.user.workspace_id).map((u) => [u.professional_id, u.photo_url]),
+  );
+  res.json(rows.map((p) => ({ ...p, active: !!p.active, sedeIds: map.get(p.id) ?? [], photoUrl: photoMap.get(p.id) ?? null })));
 });
 
 router.post("/professionals", (req, res) => {

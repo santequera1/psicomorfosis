@@ -1096,7 +1096,9 @@ function WorkspaceRow({ ws, index, onDisable, onDelete, onEdit }: {
             : ws.mode === "organization" ? "bg-lavender-100 text-lavender-500"
             : "bg-brand-50 text-brand-800",
         )}>
-          {ws.mode === "organization" ? <Building2 className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
+          {ws.ownerPhotoUrl ? (
+            <img src={ws.ownerPhotoUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover rounded-[inherit]" />
+          ) : ws.mode === "organization" ? <Building2 className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
         </div>
 
         {/* Contenido — título arriba, propietario resaltado abajo. */}
@@ -1302,7 +1304,9 @@ function WorkspaceCard({ ws, index, onDisable, onDelete }: { ws: PlatformWorkspa
             "h-11 w-11 rounded-lg flex items-center justify-center shrink-0",
             isDisabled ? "bg-bg-100 text-ink-400" : ws.mode === "organization" ? "bg-lavender-100 text-lavender-500" : "bg-brand-50 text-brand-800",
           )}>
-            {ws.mode === "organization" ? <Building2 className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
+            {ws.ownerPhotoUrl ? (
+              <img src={ws.ownerPhotoUrl} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover rounded-[inherit]" />
+            ) : ws.mode === "organization" ? <Building2 className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-ink-900 truncate">{ws.name}</div>

@@ -182,6 +182,7 @@ function ConfiguracionPage() {
             return (
               <button
                 key={s.id}
+                data-tour={`config-${s.id}`}
                 onClick={() => setActive(s.id)}
                 className="w-full bg-surface border border-line-200 rounded-xl p-4 flex items-center gap-3 hover:border-brand-400 transition-colors shadow-xs text-left active:scale-[0.99]"
               >
@@ -214,6 +215,7 @@ function ConfiguracionPage() {
               return (
                 <button
                   key={s.id}
+                  data-tour={`config-${s.id}`}
                   onClick={() => setActive(s.id)}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors w-full text-left",
