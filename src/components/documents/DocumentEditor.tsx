@@ -55,6 +55,7 @@ import { Callout } from "./CalloutExtension";
 import { Attachment } from "./AttachmentExtension";
 import { Signature } from "./SignatureExtension";
 import { VariableNode, VariableContextProvider, migrateVariablesInDoc, type VariableContextValue } from "./VariableNode";
+import { detectVariablesInDoc } from "./variableDetect";
 import { TextAlign } from "@tiptap/extension-text-align";
 import type { TipTapDoc } from "@/lib/api";
 
@@ -224,13 +225,33 @@ export function DocumentEditor({ initialDoc, onChange, editable = true, placehol
         { type: "text", text: " " },
       ]).run();
     };
+    // Detección automática: convierte los espacios "___" precedidos de una
+    // etiqueta reconocible (Nombre:, C.C.:, "Yo, ___"…) en VariableNodes.
+    // Pensado para plantillas traídas de Word donde colocar cada variable a
+    // mano era tedioso. setContent es una transacción normal: Ctrl+Z revierte.
+    const onDetectVariables = () => {
+      if (!editor || !editable) return;
+      const { doc, total, summary } = detectVariablesInDoc(editor.getJSON() as TipTapDoc);
+      if (total === 0) {
+        toast.info("No encontré espacios reconocibles", {
+          description: "Busco rayas (___) después de etiquetas como Nombre:, C.C.:, Edad:, Fecha: o «Yo, ___». También puedes insertar variables con {{ o desde el panel.",
+        });
+        return;
+      }
+      editor.commands.setContent(doc, { emitUpdate: true });
+      toast.success(`${total} variable${total === 1 ? "" : "s"} colocada${total === 1 ? "" : "s"}`, {
+        description: summary,
+      });
+    };
     window.addEventListener("psm:editor:pick-attachment", onPickAttachment);
     window.addEventListener("psm:editor:insert-signature", onInsertSignature);
     window.addEventListener("psm:editor:insert-variable", onInsertVariable);
+    window.addEventListener("psm:editor:detect-variables", onDetectVariables);
     return () => {
       window.removeEventListener("psm:editor:pick-attachment", onPickAttachment);
       window.removeEventListener("psm:editor:insert-signature", onInsertSignature);
       window.removeEventListener("psm:editor:insert-variable", onInsertVariable);
+      window.removeEventListener("psm:editor:detect-variables", onDetectVariables);
     };
   }, [editor, editable]);
 

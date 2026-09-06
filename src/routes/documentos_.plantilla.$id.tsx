@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ChevronLeft, Save, AlertCircle, Loader2, Trash2, Sparkles, Info, Eye, EyeOff, Plus,
+  ChevronLeft, Save, AlertCircle, Loader2, Trash2, Sparkles, Info, Eye, EyeOff, Plus, Wand2,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { ConfirmDialog } from "@/components/app/ConfirmDialog";
@@ -278,6 +278,25 @@ function VariablesPanel({ previewMode, onTogglePreview, disabled }: { previewMod
             {previewMode ? "Ocultar" : "Vista previa"}
           </button>
         </div>
+
+        {/* Detección automática: para plantillas traídas de Word con espacios
+            "___" — convierte "Nombre: ___", "C.C. ___", "Yo, ___"… en
+            variables reales sin colocarlas una a una. */}
+        {!disabled && (
+          <div className="p-2.5 border-b border-line-100">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("psm:editor:detect-variables"))}
+              className="w-full h-8 rounded-md border border-brand-300/60 bg-brand-50/50 text-brand-800 text-[11px] font-medium inline-flex items-center justify-center gap-1.5 hover:bg-brand-50 hover:border-brand-400 transition-colors"
+              title="Busca espacios como «Nombre: ___» o «Yo, ___» y coloca la variable correcta automáticamente"
+            >
+              <Wand2 className="h-3.5 w-3.5" /> Detectar variables automáticamente
+            </button>
+            <p className="mt-1.5 text-[10px] text-ink-400 leading-snug">
+              Convierte «Nombre: ___», «C.C. ___», «Yo, ___»… en variables. Ctrl+Z deshace.
+            </p>
+          </div>
+        )}
 
         <div className="max-h-[60vh] overflow-y-auto">
           {Object.entries(grouped).map(([group, vars]) => (

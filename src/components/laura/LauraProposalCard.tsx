@@ -644,6 +644,62 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
     );
   }
 
+  // ── propose_document ────────────────────────────────────────────────
+  // Crea un documento desde una plantilla (consentimientos, contratos,
+  // remisiones…) con el paciente vinculado: las variables {{paciente.*}}
+  // se resuelven en el servidor al crear. Al aprobar, abre el documento
+  // en el editor para que el psicólogo revise y lo envíe a firmar.
+  if (action.name === "propose_document") {
+    const templateName = str("template_name");
+    const patientId = str("patient_id");
+    const patientName = str("patient_name");
+    const category = str("category");
+    const docName = str("name");
+    const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+    return (
+      <Card icon={<FileText className="h-3.5 w-3.5" />} title="Crear documento desde plantilla" muted={isMuted}>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-ink-900">{templateName || category || "Documento"}</p>
+          {patientName || patientId ? (
+            <p className="text-[11px] text-ink-700">
+              Para <span className="font-medium text-ink-900">{patientName || patientId}</span> — sus datos (nombre, documento, edad…) se rellenan solos.
+            </p>
+          ) : (
+            <p className="text-[11px] text-amber-700">Sin paciente vinculado: las variables del paciente quedarán en blanco.</p>
+          )}
+          <p className="text-[10px] text-ink-500 inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" /> Se crea como borrador. Lo revisas en el editor y desde ahí lo envías a firmar.
+          </p>
+        </div>
+        <Footer muted={isMuted} decision={decision} actions={<>
+          <ApproveButton
+            label={busy ? "Creando…" : "Crear y revisar"}
+            onClick={() => templateName && run("Documento creado — revísalo y envíalo a firmar", async () => {
+              const tpls = await api.listDocumentTemplates();
+              const q = norm(templateName);
+              const tpl =
+                tpls.find((t) => norm(t.name) === q) ??
+                tpls.find((t) => norm(t.name).includes(q) || q.includes(norm(t.name))) ??
+                (category ? tpls.find((t) => t.category === category && t.scope === "system") : undefined);
+              if (!tpl) throw new Error(`No encontré la plantilla "${templateName}". Revísalas en Documentos → Plantillas.`);
+              const doc = await api.createDocument({
+                name: docName || (patientName ? `${tpl.name} — ${patientName}` : tpl.name),
+                patient_id: patientId || null,
+                patient_name: patientName || null,
+                template_id: tpl.id,
+              });
+              safeNavigate(
+                () => navigate({ to: "/documentos/$id", params: { id: doc.id } }),
+                `/documentos/${doc.id}`,
+              );
+            }, ["documents"])}
+          />
+          <DismissButton onClick={dismiss} />
+        </>} />
+      </Card>
+    );
+  }
+
   // Fallback genérico (tool desconocido por el cliente)
   return (
     <Card icon={<FileText className="h-3.5 w-3.5" />} title={`Propuesta: ${action.name}`} muted={isMuted}>
