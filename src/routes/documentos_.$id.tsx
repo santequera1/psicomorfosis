@@ -128,10 +128,18 @@ function DocumentDetailPage() {
   });
   const signMu = useMutation({
     mutationFn: () => api.signDocument(id),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["document", id] });
       qc.invalidateQueries({ queryKey: ["documents"] });
-      toast.success("Documento firmado");
+      const r = res as typeof res & { signature_stamped?: boolean; has_saved_signature?: boolean };
+      if (r.signature_stamped) {
+        toast.success("Documento firmado — tu firma quedó estampada");
+      } else {
+        toast.success("Documento firmado");
+        if (r.has_saved_signature === false) {
+          toast.info("Guarda tu firma en Configuración → Mi firma y se estampará sola al firmar", { duration: 6000 });
+        }
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });

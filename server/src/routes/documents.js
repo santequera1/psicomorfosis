@@ -470,6 +470,45 @@ function extractText(node) {
   return "";
 }
 
+/**
+ * Convierte texto plano a nodos TipTap. Soporta lo mínimo que necesita
+ * Laura para añadir contenido clínico a un documento creado desde
+ * plantilla (append_content): "### Título" → heading, líneas "- x"
+ * consecutivas → bulletList, el resto → párrafos (línea = párrafo,
+ * las vacías separan). Sin marks — el psicólogo ajusta en el editor.
+ */
+function plainTextToTipTapNodes(text) {
+  const nodes = [];
+  const lines = String(text).replace(/\r\n/g, "\n").split("\n");
+  let bullets = null; // acumulador de listItems consecutivos
+  const flushBullets = () => {
+    if (bullets && bullets.length) nodes.push({ type: "bulletList", content: bullets });
+    bullets = null;
+  };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushBullets(); continue; }
+    const heading = line.match(/^#{1,4}\s+(.*)$/);
+    if (heading) {
+      flushBullets();
+      nodes.push({ type: "heading", attrs: { level: 3 }, content: [{ type: "text", text: heading[1] }] });
+      continue;
+    }
+    const bullet = line.match(/^[-•]\s+(.*)$/);
+    if (bullet) {
+      (bullets ??= []).push({
+        type: "listItem",
+        content: [{ type: "paragraph", content: [{ type: "text", text: bullet[1] }] }],
+      });
+      continue;
+    }
+    flushBullets();
+    nodes.push({ type: "paragraph", content: [{ type: "text", text: line }] });
+  }
+  flushBullets();
+  return nodes;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // PLANTILLAS — rutas literales antes que las dinámicas
 // ════════════════════════════════════════════════════════════════════════════
@@ -828,6 +867,20 @@ router.post("/", (req, res) => {
     // {{sesion.numero}} vacío (caso: documento sin nota vinculada).
   }
 
+  // append_content: contenido extra en texto plano que se añade al final
+  // del body ya interpolado. Lo usa Laura (propose_document) para incluir
+  // el resumen clínico de una remisión o el cuerpo de un informe de
+  // evolución sin tener que generar JSON de TipTap.
+  const appendContent = typeof req.body?.append_content === "string"
+    ? req.body.append_content.trim().slice(0, 12000)
+    : "";
+  if (appendContent) {
+    const extra = plainTextToTipTapNodes(appendContent);
+    if (extra.length) {
+      finalBody = { ...finalBody, content: [...(finalBody.content ?? []), ...extra] };
+    }
+  }
+
   const id = newDocId(ws(req));
   const text = extractText(finalBody);
   db.prepare(`
@@ -935,13 +988,52 @@ router.post("/:id/sign", (req, res) => {
   if (!d) return res.status(404).json({ error: "Documento no encontrado" });
   if (d.signed_at) return res.status(409).json({ error: "Documento ya firmado" });
   const signedAt = now();
+
+  // Estampar la firma guardada del profesional (Configuración → Mi firma):
+  // si tiene signature_url y el documento aún no contiene un bloque de
+  // firma, se añade al final — mismo formato que la firma del paciente
+  // (horizontalRule + node signature), así el PDF ya sabe renderizarla.
+  // Sin firma guardada, firmar sigue funcionando como siempre (solo estado).
+  let signatureStamped = false;
+  let hasSavedSignature = false;
+  try {
+    const prof = req.user.professional_id
+      ? db.prepare("SELECT name, title, signature_url FROM professionals WHERE id = ? AND workspace_id = ?")
+          .get(req.user.professional_id, ws(req))
+      : null;
+    hasSavedSignature = !!prof?.signature_url;
+    if (prof?.signature_url && d.kind === "editor") {
+      const body = safeJSON(d.body_json);
+      const alreadySigned = JSON.stringify(body ?? {}).includes('"type":"signature"');
+      if (body && Array.isArray(body.content) && !alreadySigned) {
+        body.content.push(
+          { type: "horizontalRule" },
+          {
+            type: "signature",
+            attrs: {
+              url: prof.signature_url,
+              name: prof.name ?? req.user.name ?? "Profesional",
+              tarjetaProfesional: prof.title ?? "",
+              signedAt,
+            },
+          },
+        );
+        db.prepare("UPDATE documents SET body_json = ?, body_text = ? WHERE id = ?")
+          .run(JSON.stringify(body), extractText(body), req.params.id);
+        signatureStamped = true;
+      }
+    }
+  } catch (err) {
+    console.warn(`[documents/sign] no se pudo estampar firma en ${req.params.id}: ${err?.message}`);
+  }
+
   db.prepare(`
     UPDATE documents SET signed_at = ?, signed_by_user_id = ?, status = 'firmado', updated_at = ?
     WHERE id = ?
   `).run(signedAt, req.user.id, signedAt, req.params.id);
   const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
   req.app.get("io")?.to(`ws-${ws(req)}`).emit("document:signed", rowToDoc(row));
-  res.json(rowToDoc(row));
+  res.json({ ...rowToDoc(row), signature_stamped: signatureStamped, has_saved_signature: hasSavedSignature });
 });
 
 /**

@@ -8,8 +8,9 @@ import {
   User, Bell, Shield, Palette, Building2, Users2, Globe, ChevronRight,
   Check, X, Plus, MapPin,
   Circle, Home, Loader2, Trash2, Edit3, AlertCircle, GraduationCap, RotateCcw,
-  ShieldAlert, Clock, ArrowLeft, Share2, Copy, ExternalLink, Link2,
+  ShieldAlert, Clock, ArrowLeft, Share2, Copy, ExternalLink, Link2, PenLine,
 } from "lucide-react";
+import { SignatureModal } from "@/components/documents/SignatureModal";
 import { cn } from "@/lib/utils";
 import { api, type Sede, type Professional, type WorkspaceMode, type PublicLink, getStoredUser, setSession, getToken, clearSession, refreshToken } from "@/lib/api";
 import { PROFILE_BGS, DEFAULT_BG, SOCIAL_KEYS, SOCIAL_META, type Socials } from "@/lib/public-profile";
@@ -347,6 +348,8 @@ function PerfilPanel() {
         </div>
       </form>
 
+      <MySignatureSection />
+
       {!isOrg && (
         <>
           <div className="mt-10 pt-8 border-t border-line-100">
@@ -383,6 +386,61 @@ function PerfilPanel() {
         <p className="mt-4 text-xs text-success flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Guardado a las {savedAt}</p>
       )}
     </>
+  );
+}
+
+/**
+ * Mi firma: el psicólogo la dibuja, la sube (PNG/JPG/SVG) o la genera
+ * tipográfica — mismo SignatureModal que usa el editor de documentos.
+ * Guardada aquí, al pulsar "Firmar" en un documento se estampa sola
+ * (bloque de firma con nombre, tarjeta y fecha), igual que la del paciente.
+ */
+function MySignatureSection() {
+  const qc = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const { data: sig } = useQuery({
+    queryKey: ["my-signature"],
+    queryFn: () => api.getMySignature(),
+  });
+  const url = sig?.signature_url ?? null;
+
+  return (
+    <div className="mt-10 pt-8 border-t border-line-100" data-tour="config-firma">
+      <SectionHeader
+        title="Mi firma"
+        desc="Dibújala, súbela (PNG/JPG) o génerala con tu nombre. Al firmar un documento o certificado, se estampa automáticamente con tu nombre, tarjeta profesional y fecha."
+      />
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        {url ? (
+          <div className="rounded-lg border border-line-200 bg-white p-3 inline-flex items-center justify-center w-fit">
+            <img src={url} alt="Mi firma" className="max-h-20 max-w-60 object-contain" />
+          </div>
+        ) : (
+          <div className="rounded-lg border-2 border-dashed border-line-200 px-6 py-5 text-sm text-ink-500 w-fit">
+            Aún no has guardado tu firma
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="h-10 px-4 rounded-lg border border-line-200 bg-surface text-sm text-ink-700 hover:border-brand-400 inline-flex items-center gap-2"
+          >
+            <PenLine className="h-4 w-4" /> {url ? "Cambiar firma" : "Crear mi firma"}
+          </button>
+        </div>
+      </div>
+      {modalOpen && (
+        <SignatureModal
+          initialDataUrl={url}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["my-signature"] });
+            setModalOpen(false);
+          }}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 

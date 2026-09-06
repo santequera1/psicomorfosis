@@ -655,6 +655,7 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
     const patientName = str("patient_name");
     const category = str("category");
     const docName = str("name");
+    const appendContent = str("append_content");
     const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
     return (
       <Card icon={<FileText className="h-3.5 w-3.5" />} title="Crear documento desde plantilla" muted={isMuted}>
@@ -666,6 +667,11 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
             </p>
           ) : (
             <p className="text-[11px] text-amber-700">Sin paciente vinculado: las variables del paciente quedarán en blanco.</p>
+          )}
+          {appendContent && (
+            <div className="text-[11px] text-ink-900 leading-relaxed rounded-md border border-line-100 bg-bg-50/70 p-2 whitespace-pre-wrap max-h-40 overflow-y-auto">
+              {appendContent}
+            </div>
           )}
           <p className="text-[10px] text-ink-500 inline-flex items-center gap-1">
             <ShieldCheck className="h-3 w-3" /> Se crea como borrador. Lo revisas en el editor y desde ahí lo envías a firmar.
@@ -687,6 +693,7 @@ export function LauraProposalCard({ action, decision, onDecide, onProposePatient
                 patient_id: patientId || null,
                 patient_name: patientName || null,
                 template_id: tpl.id,
+                ...(appendContent ? { append_content: appendContent } : {}),
               });
               safeNavigate(
                 () => navigate({ to: "/documentos/$id", params: { id: doc.id } }),
