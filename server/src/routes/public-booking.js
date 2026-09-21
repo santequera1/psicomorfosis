@@ -131,11 +131,45 @@ function scheduleFor(professionalId) {
   return { days, slots };
 }
 
-/** ¿Ese día/hora cae dentro del horario de atención del profesional? */
+// Margen mínimo para agendar: una cita debe pedirse con al menos esta
+// anticipación. Reporte de Nathaly (19 sep 2026): el enlace público no
+// ofrecía NADA del mismo día ("desde mañana" fijo) — ahora el mismo día
+// sí aparece, pero solo las horas a ≥60 min de la hora actual (a las
+// 11 am puedes agendar hoy 5 pm, no hoy 12 m).
+const MIN_LEAD_MINUTES = 60;
+
+/** Fecha y minutos del día ACTUALES en Bogotá (la BD guarda hora local). */
+function bogotaNow() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota", hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "00";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    minutes: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+}
+
+const slotMinutes = (time) => {
+  const [h, m] = String(time).split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+/**
+ * ¿Ese día/hora cae dentro del horario de atención del profesional y es
+ * agendable en el tiempo? Rechaza fechas pasadas y, para hoy, cualquier
+ * hora a menos de MIN_LEAD_MINUTES de la hora actual. Protege el POST
+ * del enlace público y el appointment-request del bot por igual.
+ */
 export function isBookableSlot(professionalId, date, time) {
   const sched = scheduleFor(professionalId);
   const d = new Date(`${date}T12:00:00`);
-  return sched.slots.includes(String(time)) && sched.days.has(d.getDay());
+  if (!sched.slots.includes(String(time)) || !sched.days.has(d.getDay())) return false;
+  const now = bogotaNow();
+  if (String(date) < now.date) return false;
+  if (String(date) === now.date && slotMinutes(time) < now.minutes + MIN_LEAD_MINUTES) return false;
+  return true;
 }
 
 /**
@@ -151,10 +185,12 @@ export function computeAvailability(professionalId, { days = 14, excludeAppointm
   const hoyBogota = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const base = new Date(`${hoyBogota}T12:00:00`);
   const out = [];
+  const now = bogotaNow();
   // Margen amplio: un profesional que solo atiende 1-2 días por semana
   // necesita mirar más lejos para juntar `days` días con huecos.
-  for (let i = 1; i <= days * 7 && out.length < days; i++) {
-    const d = new Date(base.getTime() + i * 86_400_000); // desde mañana
+  // i = 0 incluye HOY: sus horas se filtran al margen mínimo más abajo.
+  for (let i = 0; i <= days * 7 && out.length < days; i++) {
+    const d = new Date(base.getTime() + i * 86_400_000);
     if (!sched.days.has(d.getDay())) continue;
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const taken = new Set(
@@ -163,7 +199,12 @@ export function computeAvailability(professionalId, { days = 14, excludeAppointm
         WHERE professional_id = ? AND date = ? AND status != 'cancelada' AND id != ?
       `).all(professionalId, date, excludeAppointmentId ?? -1).map((r) => String(r.time).slice(0, 5)),
     );
-    const slots = sched.slots.filter((t) => !taken.has(t));
+    const slots = sched.slots.filter((t) => {
+      if (taken.has(t)) return false;
+      // Hoy: solo horas con al menos MIN_LEAD_MINUTES de anticipación.
+      if (date === now.date && slotMinutes(t) < now.minutes + MIN_LEAD_MINUTES) return false;
+      return true;
+    });
     if (slots.length) out.push({ date, slots });
   }
   return { days: out, duration_min: 50 };
