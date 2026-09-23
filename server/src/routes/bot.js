@@ -925,6 +925,35 @@ router.post("/bot/appointment-request", (req, res) => {
   const prof = professionalFor(pt);
   if (!prof) return res.status(409).json({ error: "no_professional", hint: "El workspace no tiene profesional activo." });
 
+  // Guard anti-eco (caso Oriana, 22 sep 2026): si el bot repite la misma
+  // petición (reintento, o el flujo se re-dispara con un "solo eso"), la
+  // cita YA creada ocupaba el slot y respondíamos slot_taken con
+  // alternativas — Laura se contradecía ("listo, la pasé" → "no está
+  // disponible") y antes de eso llegó a crear duplicados (appts 555/556).
+  // Si este paciente ya tiene una cita ACTIVA ese mismo día y hora, la
+  // respuesta correcta es "ya está registrada", nunca crear otra ni
+  // ofrecer alternativas.
+  const existing = db.prepare(`
+    SELECT id, status FROM appointments
+    WHERE patient_id = ? AND workspace_id = ? AND date = ?
+      AND substr(time, 1, 5) = ?
+      AND status NOT IN ('cancelada', 'atendida', 'no_show')
+    LIMIT 1
+  `).get(pt.id, pt.workspace_id, String(date), String(time));
+  if (existing) {
+    return res.status(409).json({
+      error: "already_requested",
+      appointment_id: existing.id,
+      status: existing.status,
+      professional_name: prof.name,
+      date: String(date),
+      time: String(time),
+      hint: existing.status === "solicitada"
+        ? "El paciente YA tiene esta solicitud registrada y el profesional la verá. NO crear otra ni ofrecer alternativas: confírmale con calma que ya quedó en curso."
+        : `El paciente YA tiene esta cita en estado '${existing.status}'. NO crear otra ni ofrecer alternativas: confírmale que su cita está ${existing.status}.`,
+    });
+  }
+
   if (!isBookableSlot(prof.id, String(date), String(time))) {
     const av = computeAvailability(prof.id, { days: 5 });
     return res.status(409).json({
