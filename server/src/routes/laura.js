@@ -25,7 +25,7 @@ import {
   buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage,
   buildBriefingPrompt, gatherBriefingContext,
   buildProgressPrompt, gatherProgressContext,
-  buildRewritePrompt, LAURA_MODEL, fallbackStatus,
+  buildRewritePrompt, lauraModel, fallbackStatus,
 } from "../lib/laura.js";
 
 const router = Router();
@@ -51,7 +51,7 @@ router.get("/laura/health", requireAuth, async (_req, res) => {
   const [h, ds] = await Promise.all([healthCheck(), darioStatus()]);
   res.json({
     ...h,
-    model: LAURA_MODEL,
+    model: lauraModel(),
     // Respaldo Gemini: configured = hay GEMINI_API_KEY; active = Claude
     // falló por cuota/caída y las respuestas van por Gemini ahora mismo.
     fallback: fallbackStatus(),
@@ -470,7 +470,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
     `).run(
       convId,
       accumulated,
-      usage?.model ?? LAURA_MODEL,
+      usage?.model ?? lauraModel(),
       usage?.input_tokens ?? null,
       usage?.output_tokens ?? null,
       usage?.stop_reason ?? null,
@@ -481,7 +481,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
     db.prepare(`
       INSERT INTO laura_messages (conversation_id, role, content, model, error)
       VALUES (?, 'assistant', '', ?, ?)
-    `).run(convId, LAURA_MODEL, errorMsg);
+    `).run(convId, lauraModel(), errorMsg);
   }
 
   // Actualizar updated_at de la conversación

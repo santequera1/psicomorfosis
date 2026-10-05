@@ -38,7 +38,10 @@ function getClient() {
   return _client;
 }
 
-export const LAURA_MODEL = process.env.LAURA_MODEL || "claude-sonnet-4-5";
+// Lectura LAZY: un const top-level se evalúa al importar el módulo, ANTES
+// de dotenv.config() (los imports ESM se hoistean) — así Laura corrió
+// siempre en el default aunque el .env pidiera otro modelo.
+export const lauraModel = () => process.env.LAURA_MODEL?.trim() || "claude-sonnet-4-5";
 
 // ─── Condicionantes (cargadas una vez en boot) ─────────────────────────
 //
@@ -1169,7 +1172,7 @@ Tu output será insertado DIRECTAMENTE en el editor de notas del psicólogo. Cui
 
 export async function* streamMessage({
   systemPrompt, history, userMessage, userImages = [],
-  model = LAURA_MODEL, maxTokens = 3500,
+  model = lauraModel(), maxTokens = 3500,
 }) {
   // Si hay imágenes, el content del último mensaje es array con
   // image blocks + text block al final. Si no, el content es string
