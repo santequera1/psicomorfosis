@@ -1288,20 +1288,27 @@ async function* claudeChunks({ systemPrompt, messages, model, maxTokens }, meta)
 //
 // Variables (.env, lectura lazy):
 //   GEMINI_API_KEY   — llave de Google AI Studio (sin ella no hay respaldo)
-//   GEMINI_MODEL     — default gemini-2.5-flash
+//   GEMINI_MODEL     — cadena separada por comas; se prueba en orden y se
+//                      salta al siguiente si uno está saturado (503/429) o
+//                      retirado (404). Gemini tiene picos de "high demand"
+//                      intermitentes por modelo: un solo modelo no basta.
 //   GEMINI_BASE_URL  — default https://generativelanguage.googleapis.com
 const CIRCUIT_MS = 15 * 60 * 1000;
 const CIRCUIT_ERRORS = /quota|rate.?limit|usage.?limit|out of credits|overloaded|\b(401|403|429|529)\b|ECONNREFUSED|ECONNRESET|fetch failed|Connection error|timed? ?out|authentication|expired|subscription/i;
 let _claudeBlockedUntil = 0;
 
 export const geminiConfigured = () => !!process.env.GEMINI_API_KEY?.trim();
-const geminiModel = () => process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+const DEFAULT_GEMINI_CHAIN = "gemini-3.5-flash,gemini-3.8-flash,gemini-3.7-flash,gemini-flash-latest";
+const geminiChain = () => (process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_CHAIN)
+  .split(",").map((m) => m.trim()).filter(Boolean);
+const geminiModel = () => geminiChain()[0];
 
 /** Estado del respaldo para /api/laura/health. */
 export function fallbackStatus() {
   return {
     configured: geminiConfigured(),
     model: geminiConfigured() ? geminiModel() : null,
+    chain: geminiConfigured() ? geminiChain() : [],
     active: Date.now() < _claudeBlockedUntil,
     active_until: _claudeBlockedUntil > Date.now() ? new Date(_claudeBlockedUntil).toISOString() : null,
   };
@@ -1334,29 +1341,46 @@ function toGeminiContents(messages) {
 
 const GEMINI_STOP = { STOP: "end_turn", MAX_TOKENS: "max_tokens", SAFETY: "refusal", RECITATION: "refusal" };
 
+/** Config de "pensamiento" por familia: lo mínimo útil para chat (latencia y presupuesto). */
+function thinkingFor(model) {
+  if (/^gemini-2\.5-flash/.test(model)) return { thinkingBudget: 0 };
+  if (/^gemini-(3|flash-latest|flash-lite-latest)/.test(model)) return { thinkingLevel: "low" };
+  return undefined;
+}
+
 async function* geminiChunks({ systemPrompt, messages, maxTokens }, meta) {
   const key = process.env.GEMINI_API_KEY?.trim();
   const base = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
-  const model = geminiModel();
-  const generationConfig = { maxOutputTokens: maxTokens, temperature: 0.7 };
-  // Las variantes flash 2.5 "piensan" por defecto y ese pensamiento gasta
-  // el presupuesto de salida y añade latencia; para chat no lo necesitamos.
-  if (/^gemini-2\.5-flash/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  const contents = toGeminiContents(messages);
 
-  const res = await fetch(`${base}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: toGeminiContents(messages),
-      generationConfig,
-    }),
-    signal: AbortSignal.timeout(120_000),
-  });
-  if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`gemini ${res.status}: ${detail.slice(0, 300)}`);
+  // Probar la cadena en orden hasta que un modelo acepte (aún no se ha
+  // emitido nada, así que saltar de modelo es seguro).
+  let res = null;
+  let lastErr = "";
+  for (const model of geminiChain()) {
+    const generationConfig = { maxOutputTokens: maxTokens, temperature: 0.7 };
+    const thinking = thinkingFor(model);
+    if (thinking) generationConfig.thinkingConfig = thinking;
+    try {
+      const r = await fetch(`${base}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents, generationConfig }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (r.ok && r.body) { res = r; meta.model = model; break; }
+      const detail = (await r.text().catch(() => "")).slice(0, 200);
+      lastErr = `gemini ${model} ${r.status}: ${detail}`;
+      // 400 = petición inválida (no cambia con otro modelo, salvo config no soportada).
+      if (r.status === 400 && !/thinking|not supported/i.test(detail)) throw new Error(lastErr);
+      console.warn(`[laura] ${lastErr.replace(/\s+/g, " ").slice(0, 160)} — siguiente modelo`);
+    } catch (err) {
+      if (String(err?.message ?? "").startsWith("gemini ") && /400/.test(err.message)) throw err;
+      lastErr = `gemini ${model}: ${err?.message ?? err}`;
+      console.warn(`[laura] ${lastErr.slice(0, 160)} — siguiente modelo`);
+    }
   }
+  if (!res) throw new Error(lastErr || "gemini: ningún modelo disponible");
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
