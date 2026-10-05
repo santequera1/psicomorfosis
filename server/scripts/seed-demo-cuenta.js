@@ -19,6 +19,7 @@
  *   node server/scripts/seed-demo-cuenta.js --email=... --wipe               (limpia y resiembra)
  *   node server/scripts/seed-demo-cuenta.js --email=... --wipe --only-wipe   (solo limpia)
  *   node server/scripts/seed-demo-cuenta.js --email=... --pool=A            (elige el juego de pacientes A o B)
+ *   node server/scripts/seed-demo-cuenta.js --email=... --meses-atras=1     (historial desde el mes anterior)
  */
 
 import path from "node:path";
@@ -50,7 +51,10 @@ const bogota = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota", ye
   .format(new Date());
 const TODAY = new Date(`${bogota}T12:00:00`);
 const todayIso = iso(TODAY);
-const monthStart = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1, 12);
+// --meses-atras=N arranca el historial N meses antes (más citas atendidas,
+// notas y recibos para Reportes/Cobros cuando se siembra a inicio de mes).
+const mesesAtras = Math.max(0, Math.min(6, parseInt(String(args["meses-atras"] ?? "0"), 10) || 0));
+const monthStart = new Date(TODAY.getFullYear(), TODAY.getMonth() - mesesAtras, 1, 12);
 const nextMonthEnd = new Date(TODAY.getFullYear(), TODAY.getMonth() + 2, 0, 12);
 
 // ─── Usuario / workspace ────────────────────────────────────────
