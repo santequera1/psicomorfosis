@@ -263,8 +263,8 @@ function PerfilPanel() {
 
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: () => api.getSettings() });
 
-  const [profForm, setProfForm] = useState<{ name: string; title: string; email: string; phone: string; approach: string }>({
-    name: "", title: "", email: "", phone: "", approach: "",
+  const [profForm, setProfForm] = useState<{ name: string; title: string; email: string; phone: string; approach: string; tarjeta_profesional: string }>({
+    name: "", title: "", email: "", phone: "", approach: "", tarjeta_profesional: "",
   });
   const [consultorio, setConsultorio] = useState<{ consultorio_name: string; address: string; phone: string; city: string; tarifa_sesion: string }>({
     consultorio_name: "", address: "", phone: "", city: "", tarifa_sesion: "",
@@ -281,6 +281,7 @@ function PerfilPanel() {
         email: mainProf.email ?? "",
         phone: mainProf.phone ?? "",
         approach: mainProf.approach ?? "",
+        tarjeta_profesional: mainProf.tarjeta_profesional ?? "",
       });
     }
     if (settings && !loaded) {
@@ -330,6 +331,13 @@ function PerfilPanel() {
           <LabeledInput label="Nombre completo" value={profForm.name} onChange={(v) => setProfForm((p) => ({ ...p, name: v }))} />
           <LabeledInput label="Título profesional" value={profForm.title} onChange={(v) => setProfForm((p) => ({ ...p, title: v }))} />
           <LabeledInput label="Enfoque terapéutico" value={profForm.approach} onChange={(v) => setProfForm((p) => ({ ...p, approach: v }))} />
+          <LabeledInput
+            label="Tarjeta profesional (T.P.)"
+            placeholder="Ej: 123456"
+            hint="Aparece en certificados, consentimientos e informes junto a tu firma."
+            value={profForm.tarjeta_profesional}
+            onChange={(v) => setProfForm((p) => ({ ...p, tarjeta_profesional: v }))}
+          />
           <LabeledInput label="Correo profesional" type="email" value={profForm.email} onChange={(v) => setProfForm((p) => ({ ...p, email: v }))} />
           <LabeledInput
             label="WhatsApp / Teléfono"

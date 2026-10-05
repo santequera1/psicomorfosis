@@ -184,6 +184,7 @@ export interface Professional {
   email: string | null;
   phone: string | null;
   approach: string | null;
+  tarjeta_profesional?: string | null;
   active: boolean | number;
   sedeIds: number[];
   photoUrl?: string | null;

@@ -405,7 +405,8 @@ export function buildInterpolationContext(workspaceId, patientId, professionalNa
     },
     profesional: {
       nombre: prof?.name ?? "________________",
-      tarjeta_profesional: prof?.title ?? "________________",
+      // Solo el número real de T.P.; vacío → la plantilla lo marca como pendiente.
+      tarjeta_profesional: prof?.tarjeta_profesional ?? "",
       email: prof?.email ?? "",
       telefono: prof?.phone ?? "",
       enfoque: prof?.approach ?? "",
@@ -1013,7 +1014,7 @@ router.post("/:id/sign", (req, res) => {
   let hasSavedSignature = false;
   try {
     const prof = req.user.professional_id
-      ? db.prepare("SELECT name, title, signature_url FROM professionals WHERE id = ? AND workspace_id = ?")
+      ? db.prepare("SELECT name, title, tarjeta_profesional, signature_url FROM professionals WHERE id = ? AND workspace_id = ?")
           .get(req.user.professional_id, ws(req))
       : null;
     hasSavedSignature = !!prof?.signature_url;
@@ -1028,7 +1029,7 @@ router.post("/:id/sign", (req, res) => {
             attrs: {
               url: prof.signature_url,
               name: prof.name ?? req.user.name ?? "Profesional",
-              tarjetaProfesional: prof.title ?? "",
+              tarjetaProfesional: prof.tarjeta_profesional ? `T.P. ${prof.tarjeta_profesional}` : (prof.title ?? ""),
               signedAt,
             },
           },

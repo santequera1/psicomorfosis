@@ -254,8 +254,9 @@ router.patch("/professionals/:id", (req, res) => {
   // Teléfono en E.164 colombiano (+57…): así el bot y los avisos no
   // dependen de cómo lo escribió cada quien (con/sin 57, espacios, guiones).
   if (typeof m.phone === "string" && m.phone.trim()) m.phone = toE164Co(m.phone) ?? m.phone.trim();
-  db.prepare("UPDATE professionals SET name = ?, title = ?, email = ?, phone = ?, approach = ?, active = ? WHERE id = ?")
-    .run(m.name, m.title, m.email, m.phone, m.approach, m.active ? 1 : 0, req.params.id);
+  const tp = typeof m.tarjeta_profesional === "string" ? m.tarjeta_profesional.trim().slice(0, 40) || null : (m.tarjeta_profesional ?? null);
+  db.prepare("UPDATE professionals SET name = ?, title = ?, email = ?, phone = ?, approach = ?, active = ?, tarjeta_profesional = ? WHERE id = ?")
+    .run(m.name, m.title, m.email, m.phone, m.approach, m.active ? 1 : 0, tp, req.params.id);
 
   // WhatsApp nuevo o cambiado → Laura le da la bienvenida y lo suscribe
   // a los avisos. Solo cuando el número queda con valor y es distinto.

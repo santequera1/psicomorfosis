@@ -512,6 +512,9 @@ function runMigrations() {
     "ALTER TABLE users ADD COLUMN professional_id INTEGER REFERENCES professionals(id) ON DELETE SET NULL",
     // Firma del profesional (canvas dibujado, imagen subida o tipográfica)
     "ALTER TABLE professionals ADD COLUMN signature_url TEXT",
+    // Número de tarjeta profesional (T.P.). Antes la variable
+    // {{profesional.tarjeta_profesional}} usaba `title` ("Psicólogo/a").
+    "ALTER TABLE professionals ADD COLUMN tarjeta_profesional TEXT",
     // Añadidas en tanda del 26 de abril noche (módulo Documentos — gestión de contenido)
     "ALTER TABLE documents ADD COLUMN kind TEXT NOT NULL DEFAULT 'file'",
     "ALTER TABLE documents ADD COLUMN filename TEXT",
