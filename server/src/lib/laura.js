@@ -1298,7 +1298,9 @@ const CIRCUIT_ERRORS = /quota|rate.?limit|usage.?limit|out of credits|overloaded
 let _claudeBlockedUntil = 0;
 
 export const geminiConfigured = () => !!process.env.GEMINI_API_KEY?.trim();
-const DEFAULT_GEMINI_CHAIN = "gemini-3.5-flash,gemini-3.8-flash,gemini-3.7-flash,gemini-flash-latest";
+// Flash primero (calidad), lite al final (menos demanda: casi nunca
+// responden 503). gemini-3.7-flash fuera: se colgaba >90 s bajo carga.
+const DEFAULT_GEMINI_CHAIN = "gemini-3.5-flash,gemini-3.8-flash,gemini-flash-latest,gemini-3.5-flash-lite,gemini-flash-lite-latest";
 const geminiChain = () => (process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_CHAIN)
   .split(",").map((m) => m.trim()).filter(Boolean);
 const geminiModel = () => geminiChain()[0];
@@ -1386,7 +1388,7 @@ async function geminiAttempt({ base, key, model, systemPrompt, contents, generat
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents, generationConfig }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(45_000), // uno colgado no debe bloquear la cadena
   });
   if (!res.ok || !res.body) {
     const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
