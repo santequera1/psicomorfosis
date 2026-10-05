@@ -1353,38 +1353,52 @@ async function* geminiChunks({ systemPrompt, messages, maxTokens }, meta) {
   const base = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
   const contents = toGeminiContents(messages);
 
-  // Probar la cadena en orden hasta que un modelo acepte (aún no se ha
-  // emitido nada, así que saltar de modelo es seguro).
-  let res = null;
+  // En modo respaldo la respuesta se ACUMULA completa antes de emitirse:
+  // bajo carga, Gemini a veces corta el stream a mitad (sin finishReason)
+  // y la tarjeta [[LAURA_ACTION…]] del final se perdía. Acumulando, un
+  // intento cortado, saturado (503/429), retirado (404) o colgado se
+  // descarta en silencio y se prueba el siguiente modelo de la cadena.
   let lastErr = "";
   for (const model of geminiChain()) {
     const generationConfig = { maxOutputTokens: maxTokens, temperature: 0.7 };
     const thinking = thinkingFor(model);
     if (thinking) generationConfig.thinkingConfig = thinking;
     try {
-      const r = await fetch(`${base}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents, generationConfig }),
-        signal: AbortSignal.timeout(120_000),
-      });
-      if (r.ok && r.body) { res = r; meta.model = model; break; }
-      const detail = (await r.text().catch(() => "")).slice(0, 200);
-      lastErr = `gemini ${model} ${r.status}: ${detail}`;
-      // 400 = petición inválida (no cambia con otro modelo, salvo config no soportada).
-      if (r.status === 400 && !/thinking|not supported/i.test(detail)) throw new Error(lastErr);
-      console.warn(`[laura] ${lastErr.replace(/\s+/g, " ").slice(0, 160)} — siguiente modelo`);
+      const attempt = await geminiAttempt({ base, key, model, systemPrompt, contents, generationConfig });
+      meta.model = model;
+      meta.stop_reason = attempt.stop_reason;
+      meta.input_tokens = attempt.input_tokens;
+      meta.output_tokens = attempt.output_tokens;
+      yield attempt.text;
+      return;
     } catch (err) {
-      if (String(err?.message ?? "").startsWith("gemini ") && /400/.test(err.message)) throw err;
-      lastErr = `gemini ${model}: ${err?.message ?? err}`;
-      console.warn(`[laura] ${lastErr.slice(0, 160)} — siguiente modelo`);
+      lastErr = String(err?.message ?? err);
+      if (err?.fatal) throw err;
+      console.warn(`[laura] ${lastErr.replace(/\s+/g, " ").slice(0, 160)} — siguiente modelo`);
     }
   }
-  if (!res) throw new Error(lastErr || "gemini: ningún modelo disponible");
+  throw new Error(lastErr || "gemini: ningún modelo disponible");
+}
+
+/** Un intento contra un modelo: devuelve la respuesta completa o lanza. */
+async function geminiAttempt({ base, key, model, systemPrompt, contents, generationConfig }) {
+  const res = await fetch(`${base}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, contents, generationConfig }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!res.ok || !res.body) {
+    const detail = (await res.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    const err = new Error(`gemini ${model} ${res.status}: ${detail}`);
+    // 400 = petición inválida: otro modelo no lo arregla (salvo config de thinking).
+    if (res.status === 400 && !/thinking|not supported/i.test(detail)) err.fatal = true;
+    throw err;
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buf = "";
+  let buf = "", text = "", finish = null, input_tokens = 0, output_tokens = 0;
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -1398,15 +1412,18 @@ async function* geminiChunks({ systemPrompt, messages, maxTokens }, meta) {
       try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
       const cand = data.candidates?.[0];
       for (const p of cand?.content?.parts ?? []) {
-        if (p.text && !p.thought) yield p.text;
+        if (p.text && !p.thought) text += p.text;
       }
-      if (cand?.finishReason) meta.stop_reason = GEMINI_STOP[cand.finishReason] ?? String(cand.finishReason).toLowerCase();
+      if (cand?.finishReason) finish = cand.finishReason;
       if (data.usageMetadata) {
-        meta.input_tokens = data.usageMetadata.promptTokenCount ?? meta.input_tokens;
-        meta.output_tokens = data.usageMetadata.candidatesTokenCount ?? meta.output_tokens;
+        input_tokens = data.usageMetadata.promptTokenCount ?? input_tokens;
+        output_tokens = data.usageMetadata.candidatesTokenCount ?? output_tokens;
       }
     }
   }
+  if (!finish) throw new Error(`gemini ${model}: stream cortado sin finishReason (${text.length} chars)`);
+  if (!text.trim()) throw new Error(`gemini ${model}: respuesta vacía (${finish})`);
+  return { text, stop_reason: GEMINI_STOP[finish] ?? String(finish).toLowerCase(), input_tokens, output_tokens };
 }
 
 // ─── Parser de markers (independiente del proveedor) ───────────────────
