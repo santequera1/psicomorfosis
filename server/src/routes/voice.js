@@ -32,7 +32,7 @@ router.use(requireAuth);
 const MODEL = "gpt-4o-transcribe";
 const MAX_BYTES = 25 * 1024 * 1024; // 25MB — límite de OpenAI Whisper API
 
-const upload = multer({
+export const voiceUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1 },
 });
@@ -54,7 +54,7 @@ function getOpenAIKey() {
   return process.env.OPENAI_API_KEY?.trim() || null;
 }
 
-async function transcribeHandler(req, res) {
+export async function transcribeHandler(req, res) {
   const key = getOpenAIKey();
   if (!key) {
     return res.status(503).json({
@@ -119,7 +119,7 @@ async function transcribeHandler(req, res) {
     });
   }
 }
-router.post("/transcribe", transcribeLimiter, upload.single("audio"), transcribeHandler);
+router.post("/transcribe", transcribeLimiter, voiceUpload.single("audio"), transcribeHandler);
 
 /**
  * Transcripción PÚBLICA — dictado del "¿Qué te trae a consulta?" en el
@@ -137,7 +137,7 @@ const publicVoiceLimiter = rateLimit({
   keyGenerator: (req) => `pvoice:${ipKeyGenerator(req)}`,
   message: { success: false, error: "Demasiados audios desde esta conexión. Escribe el texto o intenta más tarde." },
 });
-publicVoiceRouter.post("/transcribe", publicVoiceLimiter, upload.single("audio"), transcribeHandler);
+publicVoiceRouter.post("/transcribe", publicVoiceLimiter, voiceUpload.single("audio"), transcribeHandler);
 
 function guessFilename(mime) {
   if (!mime) return "audio.webm";

@@ -23,6 +23,8 @@ import { sendBookingRequestEmails } from "../mailer.js";
 import { ensureMeetingUrl } from "../lib/video.js";
 import { notifyPatientDeclined, notifyBookingRequested } from "../lib/psicobot.js";
 import { notifyAsync as notifyAppointmentAsync } from "./appointments.js";
+import { transcribeHandler, voiceUpload } from "./voice.js";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
 
@@ -59,6 +61,23 @@ function requireBotApiKey(req, res, next) {
 // 401 "X-Bot-Api-Key inválida" a usuarios con sesión válida. Misma clase
 // de bug que el de laura.js con requireAuth global (jul 2026).
 router.use("/bot", requireBotApiKey);
+
+/**
+ * POST /api/bot/transcribe — notas de voz de WhatsApp → texto.
+ * multipart/form-data, campo "audio" (ogg/opus de WhatsApp, mp3, m4a…,
+ * máx 25 MB). Mismo transcriptor que el dictado de la app
+ * (gpt-4o-transcribe, español). El audio vive solo en memoria: no se
+ * guarda en disco ni en BD. Respuesta: { success, text }.
+ * Sirve para pacientes y profesionales (no requiere actor).
+ */
+const botTranscribeLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: "Demasiadas transcripciones seguidas." },
+});
+router.post("/bot/transcribe", botTranscribeLimiter, voiceUpload.single("audio"), transcribeHandler);
 
 /**
  * POST /api/bot/identify

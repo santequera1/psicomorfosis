@@ -1194,74 +1194,241 @@ export async function* streamMessage({
     { role: "user", content: userContent },
   ];
 
-  // NOTA: DARIO (proxy local del Claude Code login) **strippea los
-  // tools** del request antes de llegar al modelo — comprobado con
-  // tests directos a localhost:3456. Por eso ya no enviamos tools ni
-  // tool_choice. En lugar de eso, Laura emite "markers" en su texto
-  // con el formato [[LAURA_ACTION:nombre:{...json}]] que parseamos
-  // acá y convertimos en eventos tool_call para el frontend.
+  // Proveedor: Claude (vía DARIO) primero; Gemini como respaldo SOLO si
+  // Claude falla ANTES de emitir texto (no se puede cambiar de modelo a
+  // mitad de una respuesta sin duplicar). Si el fallo fue de cuota o de
+  // DARIO caído, el circuito queda abierto unos minutos y las siguientes
+  // respuestas van directo a Gemini sin pagar la latencia del intento.
+  const meta = { input_tokens: 0, output_tokens: 0, stop_reason: null, model, provider: "claude" };
+  const parser = makeMarkerParser();
+  let emitted = false;
+
+  const runSource = async function* (source) {
+    for await (const text of source) {
+      for (const ev of parser.push(text)) { emitted = true; yield ev; }
+    }
+    for (const ev of parser.flush()) { emitted = true; yield ev; }
+  };
+
+  const claudeAllowed = Date.now() >= _claudeBlockedUntil;
+  if (claudeAllowed || !geminiConfigured()) {
+    try {
+      yield* runSource(claudeChunks({ systemPrompt, messages, model, maxTokens }, meta));
+      if (_claudeBlockedUntil) {
+        console.log("[laura] Claude respondió de nuevo — circuito cerrado");
+        _claudeBlockedUntil = 0;
+      }
+      yield { type: "done", usage: { ...meta } };
+      return;
+    } catch (err) {
+      const msg = String(err?.message ?? err);
+      if (emitted || !geminiConfigured()) throw err;
+      if (CIRCUIT_ERRORS.test(msg)) {
+        _claudeBlockedUntil = Date.now() + CIRCUIT_MS;
+        console.warn(`[laura] Claude no disponible (${msg.slice(0, 120)}) — respaldo Gemini por ${CIRCUIT_MS / 60000} min`);
+      } else {
+        console.warn(`[laura] Claude falló (${msg.slice(0, 120)}) — reintento con Gemini`);
+      }
+    }
+  }
+
+  // Respaldo: Gemini con el MISMO prompt, historial y protocolo de markers.
+  meta.provider = "gemini";
+  meta.model = geminiModel();
+  meta.input_tokens = 0; meta.output_tokens = 0; meta.stop_reason = null;
+  yield* runSource(geminiChunks({ systemPrompt, messages, maxTokens }, meta));
+  yield { type: "done", usage: { ...meta } };
+}
+
+// ─── Proveedor 1: Claude vía DARIO ─────────────────────────────────────
+//
+// NOTA: DARIO (proxy local del Claude Code login) **strippea los
+// tools** del request antes de llegar al modelo — comprobado con
+// tests directos a localhost:3456. Por eso no enviamos tools ni
+// tool_choice: Laura emite "markers" [[LAURA_ACTION:nombre:{...}]] en
+// su texto, que makeMarkerParser convierte en eventos tool_call. El
+// protocolo es texto puro → funciona igual con cualquier proveedor.
+async function* claudeChunks({ systemPrompt, messages, model, maxTokens }, meta) {
   const stream = getClient().messages.stream({
     model,
     max_tokens: maxTokens,
     system: systemPrompt,
     messages,
   });
+  for await (const event of stream) {
+    if (event.type === "message_start") {
+      meta.input_tokens = event.message?.usage?.input_tokens ?? 0;
+    } else if (event.type === "content_block_delta") {
+      if (event.delta?.type === "text_delta") yield event.delta.text;
+    } else if (event.type === "message_delta") {
+      if (typeof event.usage?.output_tokens === "number") meta.output_tokens = event.usage.output_tokens;
+      if (event.delta?.stop_reason) meta.stop_reason = event.delta.stop_reason;
+    }
+  }
+  // Algunas versiones del SDK solo exponen el usage en el mensaje final.
+  try {
+    const finalMessage = await stream.finalMessage?.();
+    if (finalMessage?.usage?.output_tokens != null) meta.output_tokens = finalMessage.usage.output_tokens;
+    if (finalMessage?.usage?.input_tokens != null && !meta.input_tokens) meta.input_tokens = finalMessage.usage.input_tokens;
+    if (finalMessage?.stop_reason && !meta.stop_reason) meta.stop_reason = finalMessage.stop_reason;
+  } catch { /* ignorar — no rompemos el stream */ }
+}
 
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let stopReason = null;
+// ─── Proveedor 2 (respaldo): Google Gemini ─────────────────────────────
+//
+// Llamada directa server-to-server a la API oficial de Google AI Studio.
+// No hace falta un Cloudflare Worker: la llave vive en el .env del VPS
+// (nunca llega al navegador) y no hay CORS entre servidores. Si algún
+// día se quiere observabilidad/caché, GEMINI_BASE_URL acepta la URL de
+// Cloudflare AI Gateway (patrón B de laura/gemini_cloudflare_proxy_guide.md)
+// sin tocar código.
+//
+// Variables (.env, lectura lazy):
+//   GEMINI_API_KEY   — llave de Google AI Studio (sin ella no hay respaldo)
+//   GEMINI_MODEL     — default gemini-2.5-flash
+//   GEMINI_BASE_URL  — default https://generativelanguage.googleapis.com
+const CIRCUIT_MS = 15 * 60 * 1000;
+const CIRCUIT_ERRORS = /quota|rate.?limit|usage.?limit|out of credits|overloaded|\b(401|403|429|529)\b|ECONNREFUSED|ECONNRESET|fetch failed|Connection error|timed? ?out|authentication|expired|subscription/i;
+let _claudeBlockedUntil = 0;
 
-  // Parser de markers — buffer que acumula tokens del stream y
-  // detecta secuencias [[LAURA_ACTION:nombre:{...}]]. Yields:
-  //   - { type: "delta", text } con texto limpio (sin markers)
-  //   - { type: "tool_call", tool_id, name, input } cuando completa
+export const geminiConfigured = () => !!process.env.GEMINI_API_KEY?.trim();
+const geminiModel = () => process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+
+/** Estado del respaldo para /api/laura/health. */
+export function fallbackStatus() {
+  return {
+    configured: geminiConfigured(),
+    model: geminiConfigured() ? geminiModel() : null,
+    active: Date.now() < _claudeBlockedUntil,
+    active_until: _claudeBlockedUntil > Date.now() ? new Date(_claudeBlockedUntil).toISOString() : null,
+  };
+}
+
+/** Mensajes estilo Anthropic → contents de Gemini (roles user/model, partes de texto e imagen). */
+function toGeminiContents(messages) {
+  const out = [];
+  for (const m of messages) {
+    const role = m.role === "assistant" ? "model" : "user";
+    const parts = [];
+    if (typeof m.content === "string") {
+      if (m.content) parts.push({ text: m.content });
+    } else if (Array.isArray(m.content)) {
+      for (const b of m.content) {
+        if (b?.type === "text" && b.text) parts.push({ text: b.text });
+        else if (b?.type === "image" && b.source?.type === "base64") {
+          parts.push({ inlineData: { mimeType: b.source.media_type, data: b.source.data } });
+        }
+      }
+    }
+    if (!parts.length) continue;
+    // Gemini exige turnos alternados: fusionamos consecutivos del mismo rol.
+    const last = out[out.length - 1];
+    if (last && last.role === role) last.parts.push(...parts);
+    else out.push({ role, parts });
+  }
+  return out;
+}
+
+const GEMINI_STOP = { STOP: "end_turn", MAX_TOKENS: "max_tokens", SAFETY: "refusal", RECITATION: "refusal" };
+
+async function* geminiChunks({ systemPrompt, messages, maxTokens }, meta) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  const base = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
+  const model = geminiModel();
+  const generationConfig = { maxOutputTokens: maxTokens, temperature: 0.7 };
+  // Las variantes flash 2.5 "piensan" por defecto y ese pensamiento gasta
+  // el presupuesto de salida y añade latencia; para chat no lo necesitamos.
+  if (/^gemini-2\.5-flash/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+
+  const res = await fetch(`${base}/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: toGeminiContents(messages),
+      generationConfig,
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`gemini ${res.status}: ${detail.slice(0, 300)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) !== -1) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      let data;
+      try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
+      const cand = data.candidates?.[0];
+      for (const p of cand?.content?.parts ?? []) {
+        if (p.text && !p.thought) yield p.text;
+      }
+      if (cand?.finishReason) meta.stop_reason = GEMINI_STOP[cand.finishReason] ?? String(cand.finishReason).toLowerCase();
+      if (data.usageMetadata) {
+        meta.input_tokens = data.usageMetadata.promptTokenCount ?? meta.input_tokens;
+        meta.output_tokens = data.usageMetadata.candidatesTokenCount ?? meta.output_tokens;
+      }
+    }
+  }
+}
+
+// ─── Parser de markers (independiente del proveedor) ───────────────────
+//
+// Acumula texto del stream y detecta [[LAURA_ACTION:nombre:{...}]].
+// push(texto) / flush() devuelven arrays de eventos:
+//   { type: "delta", text }                     — texto limpio (sin markers)
+//   { type: "tool_call", tool_id, name, input } — marker completo
+function makeMarkerParser() {
+  const OPEN_TAG = "[[LAURA_ACTION:";
   let textBuffer = "";
   let markerCounter = 0;
-  const OPEN_TAG = "[[LAURA_ACTION:";
 
-  // Devuelve los eventos a emitir y MUTA textBuffer.
-  function* drainBuffer(finalFlush) {
+  function drain(finalFlush) {
+    const out = [];
     while (true) {
       const openIdx = textBuffer.indexOf(OPEN_TAG);
       if (openIdx === -1) {
-        // No hay marker. Pero podría empezar al final del buffer
-        // (los tokens vienen partidos). Retenemos los últimos
-        // OPEN_TAG.length-1 caracteres por si forman el inicio.
+        // Sin marker. Pero podría empezar al final del buffer (los tokens
+        // vienen partidos): retenemos los últimos OPEN_TAG.length-1 chars.
         if (finalFlush) {
-          if (textBuffer.length) yield { type: "delta", text: textBuffer };
+          if (textBuffer.length) out.push({ type: "delta", text: textBuffer });
           textBuffer = "";
-          return;
+          return out;
         }
         const keepLen = OPEN_TAG.length - 1;
         if (textBuffer.length > keepLen) {
-          const flushable = textBuffer.slice(0, textBuffer.length - keepLen);
+          out.push({ type: "delta", text: textBuffer.slice(0, textBuffer.length - keepLen) });
           textBuffer = textBuffer.slice(textBuffer.length - keepLen);
-          yield { type: "delta", text: flushable };
         }
-        return;
+        return out;
       }
-      // Hay un OPEN_TAG. Flush todo antes.
       if (openIdx > 0) {
-        const before = textBuffer.slice(0, openIdx);
+        out.push({ type: "delta", text: textBuffer.slice(0, openIdx) });
         textBuffer = textBuffer.slice(openIdx);
-        yield { type: "delta", text: before };
       }
-      // Ahora textBuffer empieza con OPEN_TAG. Buscar cierre ]]
-      // a partir de la posición OPEN_TAG.length (no antes, evitamos
-      // confundir con corchetes dentro del JSON).
+      // textBuffer empieza con OPEN_TAG. Buscar el cierre ]] después del
+      // tag (no antes, para no confundir con corchetes dentro del JSON).
       const closeIdx = textBuffer.indexOf("]]", OPEN_TAG.length);
       if (closeIdx === -1) {
         if (finalFlush) {
-          // Marker que nunca cerró — lo escupimos como texto plano,
-          // mejor eso que perderlo.
-          yield { type: "delta", text: textBuffer };
+          // Marker que nunca cerró — se emite como texto, mejor que perderlo.
+          out.push({ type: "delta", text: textBuffer });
           textBuffer = "";
         }
-        return;
+        return out;
       }
       const inside = textBuffer.slice(OPEN_TAG.length, closeIdx);
       textBuffer = textBuffer.slice(closeIdx + 2);
-      // inside = "nombre:{...json...}"
       const colonIdx = inside.indexOf(":");
       if (colonIdx === -1) {
         console.warn("[laura] marker sin separador name:json, raw:", inside);
@@ -1274,61 +1441,16 @@ export async function* streamMessage({
         input = JSON.parse(jsonStr);
       } catch (e) {
         console.warn("[laura] marker JSON parse error:", e.message, "json:", jsonStr.slice(0, 200));
-        // Fallback: emitir el texto crudo del marker para que el
-        // usuario al menos vea algo y pueda reportar.
-        yield { type: "delta", text: `\n[acción no procesada: ${name}]\n` };
+        out.push({ type: "delta", text: `\n[acción no procesada: ${name}]\n` });
         continue;
       }
-      yield {
-        type: "tool_call",
-        tool_id: `marker_${Date.now()}_${++markerCounter}`,
-        name,
-        input,
-      };
+      out.push({ type: "tool_call", tool_id: `marker_${Date.now()}_${++markerCounter}`, name, input });
     }
   }
 
-  for await (const event of stream) {
-    if (event.type === "message_start") {
-      inputTokens = event.message?.usage?.input_tokens ?? 0;
-    } else if (event.type === "content_block_delta") {
-      if (event.delta?.type === "text_delta") {
-        textBuffer += event.delta.text;
-        yield* drainBuffer(false);
-      }
-    } else if (event.type === "message_delta") {
-      if (typeof event.usage?.output_tokens === "number") {
-        outputTokens = event.usage.output_tokens;
-      }
-      if (event.delta?.stop_reason) {
-        stopReason = event.delta.stop_reason;
-      }
-    }
-  }
-  // Fin del stream — flush lo que quede.
-  yield* drainBuffer(true);
-
-  // Como fallback adicional, intentamos extraer el usage del mensaje
-  // final del stream (algunas versiones del SDK lo exponen ahí). Si
-  // el output_tokens sigue en 0 pero el stream emitió deltas, es solo
-  // que DARIO no reportó tokens reales — no es bug, no hay nada que
-  // arreglar en cliente.
-  try {
-    const finalMessage = await stream.finalMessage?.();
-    if (finalMessage?.usage?.output_tokens != null) {
-      outputTokens = finalMessage.usage.output_tokens;
-    }
-    if (finalMessage?.usage?.input_tokens != null && !inputTokens) {
-      inputTokens = finalMessage.usage.input_tokens;
-    }
-    if (finalMessage?.stop_reason && !stopReason) {
-      stopReason = finalMessage.stop_reason;
-    }
-  } catch { /* ignorar — no rompemos el stream */ }
-
-  yield {
-    type: "done",
-    usage: { input_tokens: inputTokens, output_tokens: outputTokens, stop_reason: stopReason },
+  return {
+    push(text) { textBuffer += text; return drain(false); },
+    flush() { return drain(true); },
   };
 }
 

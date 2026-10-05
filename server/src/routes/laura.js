@@ -25,7 +25,7 @@ import {
   buildSystemPrompt, streamMessage, healthCheck, darioStatus, claudeUsage,
   buildBriefingPrompt, gatherBriefingContext,
   buildProgressPrompt, gatherProgressContext,
-  buildRewritePrompt, LAURA_MODEL,
+  buildRewritePrompt, LAURA_MODEL, fallbackStatus,
 } from "../lib/laura.js";
 
 const router = Router();
@@ -52,6 +52,9 @@ router.get("/laura/health", requireAuth, async (_req, res) => {
   res.json({
     ...h,
     model: LAURA_MODEL,
+    // Respaldo Gemini: configured = hay GEMINI_API_KEY; active = Claude
+    // falló por cuota/caída y las respuestas van por Gemini ahora mismo.
+    fallback: fallbackStatus(),
     subscription: {
       status: ds.status ?? null,
       expires_in: ds.expires_in ?? null,
@@ -414,7 +417,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
           }
         } else if (ev.type === "done") {
           usage = usage
-            ? { ...usage, input_tokens: (usage.input_tokens ?? 0) + (ev.usage?.input_tokens ?? 0), output_tokens: (usage.output_tokens ?? 0) + (ev.usage?.output_tokens ?? 0), stop_reason: ev.usage?.stop_reason ?? usage.stop_reason }
+            ? { ...usage, input_tokens: (usage.input_tokens ?? 0) + (ev.usage?.input_tokens ?? 0), output_tokens: (usage.output_tokens ?? 0) + (ev.usage?.output_tokens ?? 0), stop_reason: ev.usage?.stop_reason ?? usage.stop_reason, model: ev.usage?.model ?? usage.model, provider: ev.usage?.provider ?? usage.provider }
             : ev.usage;
         }
       }
@@ -443,7 +446,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
       // Separador visual suave entre lo escrito antes y después de la consulta.
       if (hopText && !/\s$/.test(hopText)) { accumulated += "\n"; emit({ type: "delta", text: "\n" }); }
     }
-    console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} hops=${hops} tools=${proposedActions.length} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
+    console.log(`[laura/chat] done conv=${convId} deltas=${deltaCount} hops=${hops} tools=${proposedActions.length} provider=${usage?.provider ?? "?"} in=${usage?.input_tokens} out=${usage?.output_tokens} stop=${usage?.stop_reason}`);
   } catch (err) {
     console.error(`[laura/chat] STREAM ERROR conv=${convId}:`, err);
     errorMsg = err?.message ?? String(err);
@@ -467,7 +470,7 @@ router.post("/laura/chat", requireAuth, async (req, res) => {
     `).run(
       convId,
       accumulated,
-      LAURA_MODEL,
+      usage?.model ?? LAURA_MODEL,
       usage?.input_tokens ?? null,
       usage?.output_tokens ?? null,
       usage?.stop_reason ?? null,

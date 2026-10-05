@@ -17,6 +17,10 @@ const router = Router();
 // Necesario para que el editor pueda mostrar imágenes inline (<img src=...>)
 // sin que el navegador tenga forma de adjuntar el header.
 function requireAuthOrToken(req, res, next) {
+  // El bot de WhatsApp (X-Bot-Api-Key + X-Bot-Actor-User-Id) también
+  // descarga archivos para enviárselos al psicólogo: requireAuth ya sabe
+  // validar ese esquema.
+  if (req.headers["x-bot-api-key"] && req.headers["x-bot-actor-user-id"]) return requireAuth(req, res, next);
   const header = req.headers.authorization ?? "";
   const headerToken = header.startsWith("Bearer ") ? header.slice(7) : null;
   const token = headerToken ?? req.query.t ?? null;
@@ -664,7 +668,18 @@ router.delete("/templates/:id", (req, res) => {
 
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Archivo requerido" });
-  const { patient_id, patient_name, type } = req.body ?? {};
+  const { patient_id, type } = req.body ?? {};
+  let { patient_name } = req.body ?? {};
+  // El paciente debe ser de este workspace; y si solo llegó el id (caso
+  // del bot de WhatsApp), resolvemos el nombre para el encabezado.
+  if (patient_id) {
+    const p = db.prepare("SELECT name FROM patients WHERE id = ? AND workspace_id = ?").get(patient_id, ws(req));
+    if (!p) {
+      fs.rmSync(req.file.path, { force: true });
+      return res.status(400).json({ error: "El paciente no existe en este consultorio" });
+    }
+    patient_name = patient_name || p.name;
+  }
   const id = newDocId(ws(req));
   const baseName = req.body.name || req.file.originalname.replace(/\.[^.]+$/, "");
   const isDocx = /\.docx$/i.test(req.file.originalname) ||
