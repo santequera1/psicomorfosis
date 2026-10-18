@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -343,6 +343,19 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
   });
 
   const availDates = useMemo(() => new Set((avail?.days ?? []).map((d) => d.date)), [avail]);
+
+  // Al elegir un día, llevar la vista a los horarios: en el celular quedan
+  // debajo del calendario, fuera de pantalla, y la gente no sabía que tenía
+  // que bajar para escoger la hora (reporte 18 oct 2026).
+  const slotsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!date) return;
+    const id = requestAnimationFrame(() => {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      slotsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [date]);
   const daySlots = useMemo(
     () => avail?.days.find((d) => d.date === date)?.slots ?? [],
     [avail, date],
@@ -500,7 +513,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                     <p className="mt-2 text-[11px] text-ink-400 text-center">Los días apagados no tienen horarios libres.</p>
                   </div>
                   {date && (
-                    <>
+                    <div ref={slotsRef} className="scroll-mt-24">
                       <p className="mt-5 text-[11px] uppercase tracking-widest text-ink-400 font-semibold">Horarios disponibles</p>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         {daySlots.map((t) => {
@@ -519,7 +532,7 @@ function BookingWizard({ profile, onClose }: { profile: PublicProfile; onClose: 
                           );
                         })}
                       </div>
-                    </>
+                    </div>
                   )}
                 </>
               )}
