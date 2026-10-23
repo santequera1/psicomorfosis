@@ -266,6 +266,20 @@ router.patch("/:id", async (req, res) => {
   const existing = db.prepare("SELECT * FROM appointments WHERE id = ? AND workspace_id = ?").get(req.params.id, req.user.workspace_id);
   if (!existing) return res.status(404).json({ error: "Cita no encontrada" });
   const a = { ...existing, ...req.body };
+  // El bot de WhatsApp no puede marcar "atendida" una sesión que no ha
+  // terminado (inicio + duración, hora de Colombia). Incidente 23 oct:
+  // "confirma la asistencia de Norma" se interpretó como marcarla atendida
+  // a las 13:28 sobre una cita de las 15:00. Desde la app sí se permite:
+  // la psicóloga puede cerrar una sesión antes de la hora a propósito.
+  if (req.user._bot && a.status === "atendida" && existing.status !== "atendida") {
+    const endMs = Date.parse(`${a.date}T${a.time}:00-05:00`) + (Number(a.duration_min) || 0) * 60_000;
+    if (Number.isFinite(endMs) && endMs > Date.now()) {
+      return res.status(409).json({
+        error: `La sesión aún no ha terminado (empieza a las ${a.time} del ${a.date}). No se puede marcar como atendida antes de que termine.`,
+        code: "session_not_finished",
+      });
+    }
+  }
   db.prepare(`
     UPDATE appointments SET date=?, time=?, duration_min=?, patient_id=?, patient_name=?, professional=?, professional_id=?, sede_id=?, modality=?, room=?, status=?, notes=?
     WHERE id = ? AND workspace_id = ?
